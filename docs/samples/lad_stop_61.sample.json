@@ -1,0 +1,77 @@
+{
+    "name": "\u041f\u043b\u043e\u0449\u0430 \u0420\u0438\u043d\u043e\u043a",
+    "eng_name": "Rynok square",
+    "longitude": 24.032271,
+    "latitude": 49.841463,
+    "transfers": [
+        {
+            "id": "1627",
+            "color": "#E42D24",
+            "route": "\u042201",
+            "vehicle_type": "tram",
+            "shape_id": "37964",
+            "direction_id": 1,
+            "end_stop_name": "\u041f\u043e\u0433\u0443\u043b\u044f\u043d\u043a\u0430",
+            "end_stop_eng_name": "Pohulianka",
+            "end_stop_code": 197
+        },
+        {
+            "id": "1734",
+            "color": "#93573D",
+            "route": "\u042202",
+            "vehicle_type": "tram",
+            "shape_id": "37966",
+            "direction_id": 1,
+            "end_stop_name": "\u041f\u0430\u0441\u0456\u0447\u043d\u0430",
+            "end_stop_eng_name": "Pasichna",
+            "end_stop_code": 286
+        }
+    ],
+    "code": 61,
+    "timetable": [
+        {
+            "route_id": "1734",
+            "direction": 1,
+            "lowfloor": false,
+            "end_stop": "\u041f\u0430\u0441\u0456\u0447\u043d\u0430",
+            "arrival_time": "Sat, 05 Sep 2026 17:03:28 GMT",
+            "time_left": "1\u0445\u0432",
+            "vehicle_id": "1915",
+            "location": [
+                49.84017,
+                24.02729
+            ],
+            "bearing": 147,
+            "color": "#93573D",
+            "route": "\u042202",
+            "vehicle_type": "tram",
+            "shape_id": "37966",
+            "direction_id": 1,
+            "end_stop_name": "\u041f\u0430\u0441\u0456\u0447\u043d\u0430",
+            "end_stop_eng_name": "Pasichna",
+            "end_stop_code": 286
+        },
+        {
+            "route_id": "1734",
+            "direction": 1,
+            "lowfloor": false,
+            "end_stop": "\u041f\u0430\u0441\u0456\u0447\u043d\u0430",
+            "arrival_time": "Sat, 05 Sep 2026 17:14:03 GMT",
+            "time_left": "12\u0445\u0432",
+            "vehicle_id": "1924",
+            "location": [
+                49.82919,
+                24.00622
+            ],
+            "bearing": 109,
+            "color": "#93573D",
+            "route": "\u042202",
+            "vehicle_type": "tram",
+            "shape_id": "37966",
+            "direction_id": 1,
+            "end_stop_name": "\u041f\u0430\u0441\u0456\u0447\u043d\u0430",
+            "end_stop_eng_name": "Pasichna",
+            "end_stop_code": 286
+        }
+    ]
+}

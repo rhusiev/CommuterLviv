@@ -1,0 +1,617 @@
+[
+    {
+        "id": "4071",
+        "color": "#E51467",
+        "route": "\u042232",
+        "vehicle_type": "trolleybus",
+        "routeId": "176",
+        "direction": 1,
+        "location": [
+            49.83918380737305,
+            24.01822853088379
+        ],
+        "bearing": 228,
+        "speed": 4.722222328186035,
+        "lowfloor": false
+    },
+    {
+        "id": "4075",
+        "color": "#E85222",
+        "route": "\u042225",
+        "vehicle_type": "trolleybus",
+        "routeId": "1628",
+        "direction": 1,
+        "location": [
+            49.831809997558594,
+            24.03468132019043
+        ],
+        "bearing": 199,
+        "speed": 5.277778148651123,
+        "lowfloor": false
+    },
+    {
+        "id": "1901",
+        "color": "#93573D",
+        "route": "\u042202",
+        "vehicle_type": "tram",
+        "routeId": "1734",
+        "direction": 1,
+        "location": [
+            49.83910369873047,
+            24.0252685546875
+        ],
+        "bearing": 53,
+        "speed": 0,
+        "lowfloor": false
+    },
+    {
+        "id": "5686",
+        "color": "#9E9E9E",
+        "route": "\u042208",
+        "vehicle_type": "tram",
+        "routeId": "903",
+        "direction": 1,
+        "location": [
+            49.833778381347656,
+            24.034116744995117
+        ],
+        "bearing": 199,
+        "speed": 3.055555582046509,
+        "lowfloor": false
+    },
+    {
+        "id": "6058",
+        "color": "#E42D24",
+        "route": "\u042201",
+        "vehicle_type": "tram",
+        "routeId": "1627",
+        "direction": 1,
+        "location": [
+            49.839752197265625,
+            24.03799819946289
+        ],
+        "bearing": 96,
+        "speed": 5.833333492279053,
+        "lowfloor": false
+    },
+    {
+        "id": "5983",
+        "color": "#954592",
+        "route": "\u042206",
+        "vehicle_type": "tram",
+        "routeId": "878",
+        "direction": 1,
+        "location": [
+            49.8433837890625,
+            24.023067474365234
+        ],
+        "bearing": 249,
+        "speed": 3.3333334922790527,
+        "lowfloor": false
+    },
+    {
+        "id": "5910",
+        "color": "#0971B7",
+        "route": "\u042207",
+        "vehicle_type": "tram",
+        "routeId": "91",
+        "direction": 1,
+        "location": [
+            49.84225082397461,
+            24.017423629760742
+        ],
+        "bearing": 58,
+        "speed": 3.055555582046509,
+        "lowfloor": false
+    },
+    {
+        "id": "5907",
+        "color": "#0971B7",
+        "route": "\u042207",
+        "vehicle_type": "tram",
+        "routeId": "91",
+        "direction": 0,
+        "location": [
+            49.844749450683594,
+            24.029766082763672
+        ],
+        "bearing": 277,
+        "speed": 1.9444445371627808,
+        "lowfloor": false
+    },
+    {
+        "id": "2598",
+        "color": "#0E4F95",
+        "route": "\u041029",
+        "vehicle_type": "bus",
+        "routeId": "1014",
+        "direction": 0,
+        "location": [
+            49.84459686279297,
+            24.0313663482666
+        ],
+        "bearing": 96,
+        "speed": 4.722222328186035,
+        "lowfloor": true
+    },
+    {
+        "id": "5381",
+        "color": "#0E4F95",
+        "route": "\u041045",
+        "vehicle_type": "bus",
+        "routeId": "131",
+        "direction": 1,
+        "location": [
+            49.83920669555664,
+            24.031455993652344
+        ],
+        "bearing": 255,
+        "speed": 6.94444465637207,
+        "lowfloor": false
+    },
+    {
+        "id": "3335",
+        "color": "#0E4F95",
+        "route": "\u041092",
+        "vehicle_type": "bus",
+        "routeId": "97",
+        "direction": 0,
+        "location": [
+            49.8443489074707,
+            24.02493667602539
+        ],
+        "bearing": 252,
+        "speed": 5.555555820465088,
+        "lowfloor": false
+    },
+    {
+        "id": "3871",
+        "color": "#E42D24",
+        "route": "\u042201",
+        "vehicle_type": "tram",
+        "routeId": "1627",
+        "direction": 0,
+        "location": [
+            49.840267181396484,
+            24.04336929321289
+        ],
+        "bearing": 232,
+        "speed": 0,
+        "lowfloor": false
+    },
+    {
+        "id": "1981",
+        "color": "#EF88AA",
+        "route": "\u042230",
+        "vehicle_type": "trolleybus",
+        "routeId": "1634",
+        "direction": 1,
+        "location": [
+            49.83929443359375,
+            24.022676467895508
+        ],
+        "bearing": 29,
+        "speed": 1.6666667461395264,
+        "lowfloor": false
+    },
+    {
+        "id": "4491",
+        "color": "#3E9B7D",
+        "route": "\u042222",
+        "vehicle_type": "trolleybus",
+        "routeId": "142",
+        "direction": 1,
+        "location": [
+            49.83974838256836,
+            24.022354125976562
+        ],
+        "bearing": 321,
+        "speed": 0,
+        "lowfloor": false
+    },
+    {
+        "id": "5358",
+        "color": "#9E9E9E",
+        "route": "\u042208",
+        "vehicle_type": "tram",
+        "routeId": "903",
+        "direction": 0,
+        "location": [
+            49.83442687988281,
+            24.03436851501465
+        ],
+        "bearing": 13,
+        "speed": 2.222222328186035,
+        "lowfloor": false
+    },
+    {
+        "id": "4062",
+        "color": "#229038",
+        "route": "\u042231",
+        "vehicle_type": "trolleybus",
+        "routeId": "1594",
+        "direction": 0,
+        "location": [
+            49.83312225341797,
+            24.036827087402344
+        ],
+        "bearing": 69,
+        "speed": 2.5,
+        "lowfloor": false
+    },
+    {
+        "id": "1904",
+        "color": "#93573D",
+        "route": "\u042202",
+        "vehicle_type": "tram",
+        "routeId": "1734",
+        "direction": 0,
+        "location": [
+            49.84035110473633,
+            24.02729034423828
+        ],
+        "bearing": 238,
+        "speed": 4.44444465637207,
+        "lowfloor": false
+    },
+    {
+        "id": "823",
+        "color": "#0E4F95",
+        "route": "\u041033",
+        "vehicle_type": "bus",
+        "routeId": "129",
+        "direction": 1,
+        "location": [
+            49.839561462402344,
+            24.018836975097656
+        ],
+        "bearing": 223,
+        "speed": 5,
+        "lowfloor": false
+    },
+    {
+        "id": "1303",
+        "color": "#0E4F95",
+        "route": "\u041025",
+        "vehicle_type": "bus",
+        "routeId": "88",
+        "direction": 0,
+        "location": [
+            49.846134185791016,
+            24.02538299560547
+        ],
+        "bearing": 345,
+        "speed": 0,
+        "lowfloor": false
+    },
+    {
+        "id": "3108",
+        "color": "#0E4F95",
+        "route": "\u041034",
+        "vehicle_type": "bus",
+        "routeId": "146",
+        "direction": 0,
+        "location": [
+            49.84313201904297,
+            24.022605895996094
+        ],
+        "bearing": 80,
+        "speed": 0,
+        "lowfloor": false
+    },
+    {
+        "id": "2697",
+        "color": "#0E4F95",
+        "route": "\u041001",
+        "vehicle_type": "bus",
+        "routeId": "90",
+        "direction": 1,
+        "location": [
+            49.839202880859375,
+            24.032550811767578
+        ],
+        "bearing": 117,
+        "speed": 0,
+        "lowfloor": true
+    },
+    {
+        "id": "3455",
+        "color": "#0E4F95",
+        "route": "\u041003",
+        "vehicle_type": "bus",
+        "routeId": "94",
+        "direction": 0,
+        "location": [
+            49.83806228637695,
+            24.03495216369629
+        ],
+        "bearing": 4,
+        "speed": 0,
+        "lowfloor": true
+    },
+    {
+        "id": "3579",
+        "color": "#0E4F95",
+        "route": "\u041006",
+        "vehicle_type": "bus",
+        "routeId": "111",
+        "direction": 1,
+        "location": [
+            49.83910369873047,
+            24.03422737121582
+        ],
+        "bearing": 111,
+        "speed": 5.833333492279053,
+        "lowfloor": true
+    },
+    {
+        "id": "3337",
+        "color": "#0E4F95",
+        "route": "\u041006",
+        "vehicle_type": "bus",
+        "routeId": "111",
+        "direction": 0,
+        "location": [
+            49.844322204589844,
+            24.025056838989258
+        ],
+        "bearing": 56,
+        "speed": 1.9444445371627808,
+        "lowfloor": true
+    },
+    {
+        "id": "2708",
+        "color": "#0E4F95",
+        "route": "\u041009",
+        "vehicle_type": "bus",
+        "routeId": "148",
+        "direction": 0,
+        "location": [
+            49.83964920043945,
+            24.026105880737305
+        ],
+        "bearing": 48,
+        "speed": 5.833333492279053,
+        "lowfloor": true
+    },
+    {
+        "id": "3407",
+        "color": "#0E4F95",
+        "route": "\u041018",
+        "vehicle_type": "bus",
+        "routeId": "1007",
+        "direction": 0,
+        "location": [
+            49.83974075317383,
+            24.036657333374023
+        ],
+        "bearing": 52,
+        "speed": 1.6666667461395264,
+        "lowfloor": true
+    },
+    {
+        "id": "1230",
+        "color": "#0E4F95",
+        "route": "\u041020",
+        "vehicle_type": "bus",
+        "routeId": "2059",
+        "direction": 0,
+        "location": [
+            49.846378326416016,
+            24.025564193725586
+        ],
+        "bearing": 10,
+        "speed": 3.6111111640930176,
+        "lowfloor": false
+    },
+    {
+        "id": "3359",
+        "color": "#0E4F95",
+        "route": "\u041029",
+        "vehicle_type": "bus",
+        "routeId": "1014",
+        "direction": 1,
+        "location": [
+            49.84476089477539,
+            24.02713394165039
+        ],
+        "bearing": 267,
+        "speed": 0,
+        "lowfloor": true
+    },
+    {
+        "id": "3551",
+        "color": "#0E4F95",
+        "route": "\u041037",
+        "vehicle_type": "bus",
+        "routeId": "126",
+        "direction": 1,
+        "location": [
+            49.83906555175781,
+            24.035425186157227
+        ],
+        "bearing": 35,
+        "speed": 3.3333334922790527,
+        "lowfloor": false
+    },
+    {
+        "id": "2175",
+        "color": "#0E4F95",
+        "route": "\u041046",
+        "vehicle_type": "bus",
+        "routeId": "124",
+        "direction": 0,
+        "location": [
+            49.84648513793945,
+            24.025596618652344
+        ],
+        "bearing": 13,
+        "speed": 0,
+        "lowfloor": true
+    },
+    {
+        "id": "2700",
+        "color": "#0E4F95",
+        "route": "\u041046",
+        "vehicle_type": "bus",
+        "routeId": "124",
+        "direction": 1,
+        "location": [
+            49.84151840209961,
+            24.027381896972656
+        ],
+        "bearing": 151,
+        "speed": 5,
+        "lowfloor": true
+    },
+    {
+        "id": "2705",
+        "color": "#0E4F95",
+        "route": "\u041047",
+        "vehicle_type": "bus",
+        "routeId": "102",
+        "direction": 0,
+        "location": [
+            49.846519470214844,
+            24.02565574645996
+        ],
+        "bearing": 29,
+        "speed": 0,
+        "lowfloor": true
+    },
+    {
+        "id": "3408",
+        "color": "#0E4F95",
+        "route": "\u041047",
+        "vehicle_type": "bus",
+        "routeId": "102",
+        "direction": 1,
+        "location": [
+            49.84009552001953,
+            24.042739868164062
+        ],
+        "bearing": 67,
+        "speed": 0,
+        "lowfloor": true
+    },
+    {
+        "id": "3584",
+        "color": "#0E4F95",
+        "route": "\u041052",
+        "vehicle_type": "bus",
+        "routeId": "117",
+        "direction": 0,
+        "location": [
+            49.843441009521484,
+            24.023387908935547
+        ],
+        "bearing": 59,
+        "speed": 0,
+        "lowfloor": true
+    },
+    {
+        "id": "2710",
+        "color": "#0E4F95",
+        "route": "\u041092",
+        "vehicle_type": "bus",
+        "routeId": "97",
+        "direction": 1,
+        "location": [
+            49.83848571777344,
+            24.02269172668457
+        ],
+        "bearing": 98,
+        "speed": 2.5,
+        "lowfloor": false
+    },
+    {
+        "id": "1217",
+        "color": "#0E4F95",
+        "route": "\u041051",
+        "vehicle_type": "bus",
+        "routeId": "1024",
+        "direction": 0,
+        "location": [
+            49.84336853027344,
+            24.023038864135742
+        ],
+        "bearing": 73,
+        "speed": 0,
+        "lowfloor": false
+    },
+    {
+        "id": "5976",
+        "color": "#0E4F95",
+        "route": "\u041048",
+        "vehicle_type": "bus",
+        "routeId": "145",
+        "direction": 1,
+        "location": [
+            49.836814880371094,
+            24.022029876708984
+        ],
+        "bearing": 137,
+        "speed": 2.222222328186035,
+        "lowfloor": false
+    },
+    {
+        "id": "6229",
+        "color": "#0E4F95",
+        "route": "\u041048",
+        "vehicle_type": "bus",
+        "routeId": "145",
+        "direction": 0,
+        "location": [
+            49.84117126464844,
+            24.02857208251953
+        ],
+        "bearing": 335,
+        "speed": 2.222222328186035,
+        "lowfloor": false
+    },
+    {
+        "id": "5838",
+        "color": "#0E4F95",
+        "route": "\u041067",
+        "vehicle_type": "bus",
+        "routeId": "137",
+        "direction": 1,
+        "location": [
+            49.84364318847656,
+            24.022729873657227
+        ],
+        "bearing": 180,
+        "speed": 3.3333334922790527,
+        "lowfloor": false
+    },
+    {
+        "id": "5598",
+        "color": "#0E4F95",
+        "route": "\u041053",
+        "vehicle_type": "bus",
+        "routeId": "2464",
+        "direction": 1,
+        "location": [
+            49.84473419189453,
+            24.02540397644043
+        ],
+        "bearing": 148,
+        "speed": 0,
+        "lowfloor": false
+    },
+    {
+        "id": "838",
+        "color": "#0E4F95",
+        "route": "\u041021",
+        "vehicle_type": "bus",
+        "routeId": "99",
+        "direction": 0,
+        "location": [
+            49.84652328491211,
+            24.025657653808594
+        ],
+        "bearing": 18,
+        "speed": 0,
+        "lowfloor": false
+    }
+]
