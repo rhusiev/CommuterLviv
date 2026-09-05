@@ -26,9 +26,11 @@ PATH = os.path.join(gtfs.DATA, "model.npz")
 PARTS = ("cf", "cs", "rf", "rs", "g")
 
 
-def signature(net):
-    """Identifies the geometry the cell indices refer to."""
+def signature(net, model):
+    """Identifies what the stored arrays mean: the geometry the indices refer
+    to, and the variant that decided what is learned per index."""
     h = hashlib.blake2b(digest_size=16)
+    h.update(f"{model.cfg.name}|".encode())
     for sid in sorted(net.shapes):
         s = net.shapes[sid]
         h.update(f"{sid}:{s.cells}:{s.length:.1f};".encode())
@@ -44,7 +46,7 @@ def _ewmas(model):
 
 
 def save(model, net, path=PATH):
-    out = {"signature": np.array(signature(net))}
+    out = {"signature": np.array(signature(net, model))}
     for name, e in _ewmas(model):
         out[f"{name}.mean"] = e.mean
         out[f"{name}.w"] = e.w
@@ -60,7 +62,7 @@ def load(model, net, path=PATH):
     if not os.path.exists(path):
         return False
     with np.load(path, allow_pickle=False) as z:
-        if str(z["signature"]) != signature(net):
+        if str(z["signature"]) != signature(net, model):
             return False
         for name, e in _ewmas(model):
             e.mean = z[f"{name}.mean"]

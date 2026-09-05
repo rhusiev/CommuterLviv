@@ -46,26 +46,45 @@ def coverage(named, truth):
     print()
 
 
+def stats(v):
+    """The one summary of a set of errors, so printing and saving agree."""
+    a = np.abs(v)
+    return {"n": int(len(v)), "mae": float(a.mean()),
+            "median": float(np.median(a)), "rmse": float(np.sqrt((v ** 2).mean())),
+            "bias": float(v.mean()), "p60": float((a < 60).mean()),
+            "p120": float((a < 120).mean())}
+
+
+def buckets(named, truth=None, ci=False):
+    """Every predictor's stats in every horizon bucket, as plain data."""
+    out = {}
+    for lo, hi in BUCKETS:
+        for name, s in named.items():
+            m = (s.horizon >= lo) & (s.horizon < hi)
+            if not m.any():
+                continue
+            row = stats(s.error[m])
+            if ci:
+                a, b = bootstrap(np.abs(s.error[m]), truth.trip[s.event[m]])
+                row["ci"] = [float(a), float(b)]
+            out.setdefault(f"{lo // 60}-{hi // 60}", {})[name] = row
+    return out
+
+
 def table(named, truth=None, ci=False):
     w = max(len(n) for n in named)
     head = (f"{'horizon':>12}  {'name':<{w}}  {'n':>7} {'MAE':>7} {'med':>7} "
             f"{'RMSE':>7} {'bias':>7} {'<60s':>6} {'<120s':>6}")
     print(head + (f"  {'95% CI on MAE':>17}" if ci else ""))
-    for lo, hi in BUCKETS:
-        for name, s in named.items():
-            m = (s.horizon >= lo) & (s.horizon < hi)
-            n = int(m.sum())
-            if not n:
-                continue
-            v = s.error[m]
-            line = (f"{lo // 60:>4}-{hi // 60:<3} min  {name:<{w}}  {n:>7} "
-                    f"{np.abs(v).mean():>7.0f} {np.median(np.abs(v)):>7.0f} "
-                    f"{np.sqrt((v ** 2).mean()):>7.0f} {v.mean():>+7.0f} "
-                    f"{100 * (np.abs(v) < 60).mean():>5.1f}% "
-                    f"{100 * (np.abs(v) < 120).mean():>5.1f}%")
+    for label, rows in buckets(named, truth, ci).items():
+        lo, hi = label.split("-")
+        for name, r in rows.items():
+            line = (f"{lo:>4}-{hi:<3} min  {name:<{w}}  {r['n']:>7} "
+                    f"{r['mae']:>7.0f} {r['median']:>7.0f} {r['rmse']:>7.0f} "
+                    f"{r['bias']:>+7.0f} {100 * r['p60']:>5.1f}% "
+                    f"{100 * r['p120']:>5.1f}%")
             if ci:
-                a, b = bootstrap(np.abs(v), truth.trip[s.event[m]])
-                line += f"  {a:>7.0f} .. {b:<7.0f}"
+                line += f"  {r['ci'][0]:>7.0f} .. {r['ci'][1]:<7.0f}"
             print(line)
         print()
 

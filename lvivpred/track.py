@@ -68,7 +68,7 @@ class Cell:
 
 
 class Track:
-    __slots__ = ("veh", "trip", "shape_id", "shape", "stops", "sdist", "clen",
+    __slots__ = ("veh", "trip", "shape_id", "shape", "stops", "sdist", "sched", "clen",
                  "s", "v", "P", "ts", "odo", "next_stop", "run", "cell")
 
     def __init__(self, veh):
@@ -82,7 +82,7 @@ class Track:
         self.run += 1
         self.shape_id = net.trip_shape[trip]
         self.shape = net.shapes[self.shape_id]
-        self.stops, self.sdist, _ = net.trip_stops[trip]
+        self.stops, self.sdist, self.sched = net.trip_stops[trip]
         self.clen = self.shape.length / self.shape.cells
         self.s = None
         self.v = 0.0

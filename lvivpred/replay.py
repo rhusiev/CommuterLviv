@@ -71,8 +71,9 @@ class Result:
 
 
 def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
-        progress=None, model=None):
-    model = model or PaceModel(net)
+        progress=None, model=None, cfg=None):
+    model = model or PaceModel(net, cfg)
+    offset = {} if model.cfg.vehicle_offset else None
     tracks = {}
     closed = []
     veh_idx, trip_idx = {}, {}
@@ -102,7 +103,7 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
             res = Result(t_start)
         while ts >= next_epoch:
             _flush(model, res, tracks, closed, next_epoch, veh_idx, trip_idx,
-                   emit=next_epoch - t_start >= warmup)
+                   emit=next_epoch - t_start >= warmup, offset=offset)
             next_epoch += epoch
             if progress and res.epochs % progress == 0:
                 print(f"  t+{(next_epoch - t_start) / 60:5.0f} min  "
@@ -115,7 +116,7 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
                                        speed, odo, trip)
         if done:
             base = model.shape_base[tr.shape_id]
-            closed.extend((base + c.i, c) for c in done)
+            closed.extend((base + c.i, c, veh) for c in done)
         if passings:
             vi = _idx(veh_idx, res.veh_ids, veh)
             ti = _idx(trip_idx, res.trip_ids, tr.trip)
@@ -126,7 +127,8 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
                     res.gap[k] = gap
 
     if res is not None:
-        _flush(model, res, tracks, closed, next_epoch, veh_idx, trip_idx, emit=True)
+        _flush(model, res, tracks, closed, next_epoch, veh_idx, trip_idx,
+               emit=True, offset=offset)
     con.close()
     return model, res
 
@@ -139,23 +141,26 @@ def _idx(m, names, key):
     return i
 
 
-def _drain(model, tracks, closed, now):
+def _drain(model, tracks, closed, now, offset):
     """Hand the epoch's cell crossings to the model.
 
     Finished crossings report whatever weight they have left. Crossings still
     in progress report the part that has elapsed, so a vehicle stuck in a jam
     informs the model while it is stuck rather than once it is through.
     """
-    parts = [(gi, c, True) for gi, c in closed]
-    parts += [(model.shape_base[t.shape_id] + t.cell.i, t.cell, False)
-              for t in tracks.values() if t.cell is not None]
+    parts = [(gi, c, veh, True) for gi, c, veh in closed]
+    if model.cfg.incremental:
+        parts += [(model.shape_base[t.shape_id] + t.cell.i, t.cell, veh, False)
+                  for veh, t in tracks.items() if t.cell is not None]
     closed.clear()
     if not parts:
         return
 
     idx = np.array([p[0] for p in parts])
-    rows = [c.take(e, final) for (_, c, final), e
-            in zip(parts, model.expected(idx))]
+    exp = model.expected(idx)
+    rows = [c.take(e, final) for (_, c, _, final), e in zip(parts, exp)]
+    if offset is not None:
+        _residuals(parts, rows, exp, offset)
     keep = np.array([r is not None for r in rows])
     if not keep.any():
         return
@@ -163,8 +168,52 @@ def _drain(model, tracks, closed, now):
     model.observe(idx[keep], a[:, 0], a[:, 1], a[:, 2], a[:, 3], now)
 
 
-def _flush(model, res, tracks, closed, now, veh_idx, trip_idx, emit=True):
-    _drain(model, tracks, closed, now)
+def _residuals(parts, rows, exp, offset, forget=0.9):
+    """How fast each vehicle has been running against the road model.
+
+    Kept as two decaying sums so the ratio is a weighted mean over this
+    vehicle's recent crossings rather than over its whole trip - a bus that was
+    slow twenty minutes ago is weak evidence about the next stop.
+    """
+    for (_, _, veh, _), r, e in zip(parts, rows, exp):
+        if r is None:
+            continue
+        d, pace, hold, w = r
+        if w <= 0.0:
+            continue
+        obs, ex = offset.get(veh, (0.0, 0.0))
+        offset[veh] = (obs * forget + (d * pace + hold) * w,
+                       ex * forget + e * w)
+
+
+def _factor(offset, veh, lo=0.6, hi=1.7, k=60.0):
+    """The vehicle's ratio, shrunk towards 1 until it has earned some weight."""
+    obs, ex = offset.get(veh, (0.0, 0.0))
+    if ex <= 0.0:
+        return 1.0
+    return float(np.clip((obs + k) / (ex + k), lo, hi))
+
+
+def _lateness_eta(tr, s_now):
+    """Seconds to each remaining stop under the official API's method.
+
+    The road is not consulted at all. Where the vehicle is now says what time
+    the timetable expected it to be there; the difference is one lateness, and
+    it is carried unchanged to every stop still ahead.
+
+    That lateness then cancels out of the wait, which is the whole point: this
+    predictor's answer is the *scheduled* travel time from here on, no matter
+    how late the vehicle is or what the traffic is doing. The service day never
+    has to be worked out either, since only differences of timetable times are
+    ever taken.
+    """
+    sched_now = float(np.interp(s_now, tr.sdist, tr.sched))
+    return np.maximum(tr.sched[tr.next_stop:] - sched_now, 0.0)
+
+
+def _flush(model, res, tracks, closed, now, veh_idx, trip_idx, emit=True,
+           offset=None):
+    _drain(model, tracks, closed, now, offset)
     res.epochs += 1
     if not emit:
         return
@@ -176,13 +225,20 @@ def _flush(model, res, tracks, closed, now, veh_idx, trip_idx, emit=True):
         i = tr.next_stop
         if i >= len(tr.sdist):
             continue
+        # Numbered before anything the model says is consulted, so two variants
+        # replaying the same recording agree on what event 7 is.
+        vi = _idx(veh_idx, res.veh_ids, veh)
+        ti = _idx(trip_idx, res.trip_ids, tr.trip)
         s_now = min(tr.s + tr.v * min(now - tr.ts, EXTRAP), tr.shape.length)
-        dt = model.time_between(tr.shape_id, s_now, tr.sdist[i:])
+        if model.cfg.eta == "lateness":
+            dt = _lateness_eta(tr, s_now)
+        else:
+            dt = model.time_between(tr.shape_id, s_now, tr.sdist[i:])
+            if offset is not None:
+                dt = dt * _factor(offset, veh)
         k = np.nonzero(dt <= HORIZON)[0]
         if not len(k):
             continue
-        vi = _idx(veh_idx, res.veh_ids, veh)
-        ti = _idx(trip_idx, res.trip_ids, tr.trip)
         res.pos.append((ep, vi, ti, tr.run, s_now))
         res.buf.extend(ep, vi, ti, tr.run, i + k,
                        np.rint(now - res.t0 + dt[k]).astype("i4"))

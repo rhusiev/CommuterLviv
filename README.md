@@ -6,6 +6,7 @@ compares with the city's own.
 ```
 python3 -m lvivpred collect      # record the live feeds into data/feed.db
 python3 -m lvivpred evaluate     # replay what was recorded and score everything
+python3 -m lvivpred experiment   # score every approach on the same recording
 python3 -m lvivpred check        # model, tracking or truth: which one is wrong
 python3 -m lvivpred diag         # what methodology is the official API using
 ```
@@ -365,6 +366,27 @@ EOF
 
 `pred` and `lad` have no primary key, so merging the same file twice duplicates
 them; merge each source once.
+
+## The approaches, and switching between them
+
+Every design decision in the model is a claim that something is worth doing.
+`config.py` turns each of them into a switch, so the claim can be checked
+against a recording instead of argued about:
+
+```
+python3 -m lvivpred experiment                        # all of them
+python3 -m lvivpred experiment --only full sections   # just these two
+```
+
+Each variant is replayed cold - no snapshot loaded, none saved - over the same
+slice of `data/feed.db`, and all of them are then scored on the predictions
+every one of them made. The results land in `reports/approaches.md` (readable)
+and `reports/approaches.json` (per-bucket metrics with confidence intervals).
+
+The nine variants are `full`, `no-prior`, `no-hold`, `no-corridor`, `no-fast`,
+`no-incremental`, `sections`, `vehicle-offset` and `schedule-offset`; the report
+explains what each one is. `reports/approaches.md` is checked in, so what the
+model scored on a given day is part of the history rather than a memory.
 
 ## Documentation
 
