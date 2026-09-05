@@ -266,6 +266,106 @@ a *static* timetable, and this applies a *road-level*, *live* correction to the
 same timetable. Same starting point, and the difference in where the correction
 is attached is worth roughly a factor of three in median error.
 
+## Running the collector for days
+
+The collector is meant to be left alone. It is a single process with one writer
+thread and one thread per feed, and everything that could end a long run is
+handled explicitly:
+
+| failure | what happens |
+|---|---|
+| a feed starts erroring | each consecutive failure doubles the wait, up to 2 min; one success clears it |
+| a write fails | retried once after 2 s, then that batch alone is dropped; the writer lives on |
+| the writer stalls | the queue is capped at 500k rows and new rows are dropped and counted, so memory cannot run away |
+| the write-ahead log grows | checkpointed and truncated every 5 min |
+| the disk fills | collection stops cleanly at `--min-free-gb` (default 2 G) while the database can still be closed |
+| the process is asked to stop | SIGTERM stops the pollers, drains the queue and closes the file |
+| the machine reboots, or the process dies | systemd restarts it; the database is append-only, so a restart just resumes |
+| the static feed changes overnight | an unchanged download is not rewritten, a changed one is, and `data/network.pkl` rebuilds off its timestamp |
+
+Every 5 minutes it prints one line - rows and polls per feed, error counts, queue
+depth, rows dropped, database size, disk free. That line is the whole health
+check.
+
+### Disk
+
+This is the only resource that actually binds. Measured on live feeds:
+
+| feed | rows/day | share |
+|---|---|---|
+| `pred` (trip_updates) | ~3.4 M | 58% |
+| `veh` (vehicle_position) | ~2.0 M | 35% |
+| `lad` (arrivals board) | ~0.4 M | 7% |
+
+About **0.7 GB/day**, so 5 GB for a week and 22 GB for a month. Budget double.
+
+`pred` used to be three times that. The feed republishes every stop of every
+trip on every poll, and most of what changes between polls is a second or two of
+jitter on a number scored against a 60 s grid, so `--pred-deadband` (default 5 s)
+stores a prediction only once it has moved further than that. It cuts the feed to
+a third and costs nothing measurable, since 5 s is a seventh of the API's own
+median error at the shortest horizon. Set it to `0` to record the feed verbatim.
+
+`--keep-days N` drops rows older than N days once an hour and hands the space
+back to the filesystem. It only shrinks the file on a database created by this
+version, which asks SQLite for incremental auto-vacuum up front; on an older file
+the pages are freed inside the file but never returned.
+
+### On a VPS
+
+Anything with 1 GB of RAM and 2 vCPU is ample - the process sits near 100 MB and
+is almost entirely idle waiting on sockets. Disk is what you buy.
+
+```sh
+sudo adduser --system --group --home /opt/lvivpred lvivpred
+sudo -u lvivpred git clone <this repo> /opt/lvivpred
+cd /opt/lvivpred
+sudo -u lvivpred python3 -m venv .venv
+sudo -u lvivpred .venv/bin/pip install -r requirements.txt
+
+sudo cp deploy/lvivpred.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now lvivpred
+```
+
+Then:
+
+```sh
+systemctl status lvivpred          # is it up
+journalctl -u lvivpred -f          # the heartbeat line, live
+journalctl -u lvivpred --since -1d | grep -c error
+```
+
+Python 3.10 or newer. Leave the machine on UTC - every timestamp stored is a Unix
+epoch and nothing in the code reads the system timezone, so this only matters for
+reading logs. Logging goes to journald, which rotates itself; cap it with
+`SystemMaxUse=` in `/etc/systemd/journald.conf` if the VPS disk is small.
+
+Nothing needs to be reachable from outside, so the firewall can stay closed to
+everything except SSH; the collector only makes outbound requests.
+
+### Two collectors at once
+
+Don't. Both would poll the same feeds twice as often for no extra information.
+Once the VPS one is up, stop the local one.
+
+The databases can be merged afterwards - rows are append-only and `veh` is keyed
+on `(veh_id, veh_ts)`, so overlapping periods deduplicate themselves:
+
+```sh
+python3 - <<'EOF'
+import sqlite3
+db = sqlite3.connect("data/feed.db")
+db.execute("ATTACH 'other.db' AS o")
+for t in ("poll", "veh", "pred", "lad"):
+    db.execute(f"INSERT OR IGNORE INTO {t} SELECT * FROM o.{t}")
+db.commit()
+EOF
+```
+
+`pred` and `lad` have no primary key, so merging the same file twice duplicates
+them; merge each source once.
+
 ## Documentation
 
 `docs/` describes the upstream feeds themselves - the realtime protobuf, the
