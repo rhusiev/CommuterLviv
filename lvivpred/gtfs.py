@@ -17,13 +17,23 @@ LAT_M = 111320.0
 
 
 def static_zip():
+    """The cached static feed, re-fetched once a day.
+
+    An unchanged feed keeps its file untouched and only has its timestamp
+    bumped, so anything caching work derived from it - the network geometry
+    above all - can tell a genuinely new feed from a daily re-download by
+    modification time alone.
+    """
     if not os.path.exists(ZIP) or time.time() - os.path.getmtime(ZIP) > MAX_AGE:
         os.makedirs(DATA, exist_ok=True)
         body = requests.get(f"{BASE}/static.zip", timeout=180).content
-        tmp = ZIP + ".tmp"
-        with open(tmp, "wb") as f:
-            f.write(body)
-        os.replace(tmp, ZIP)
+        if os.path.exists(ZIP) and open(ZIP, "rb").read() == body:
+            os.utime(ZIP)
+        else:
+            tmp = ZIP + ".tmp"
+            with open(tmp, "wb") as f:
+                f.write(body)
+            os.replace(tmp, ZIP)
     return zipfile.ZipFile(ZIP)
 
 

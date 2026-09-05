@@ -194,11 +194,20 @@ def build():
     return net
 
 
+def fresh():
+    """Whether the cached geometry was built from the static feed we now have."""
+    return (os.path.exists(CACHE) and os.path.exists(gtfs.ZIP)
+            and os.path.getmtime(CACHE) >= os.path.getmtime(gtfs.ZIP))
+
+
 def load(rebuild=False):
-    if not rebuild and os.path.exists(CACHE):
+    gtfs.static_zip()   # so a feed that changed overnight invalidates the cache
+    if not rebuild and fresh():
         with open(CACHE, "rb") as f:
             return pickle.load(f)
     net = build()
-    with open(CACHE, "wb") as f:
+    tmp = CACHE + ".tmp"
+    with open(tmp, "wb") as f:
         pickle.dump(net, f, pickle.HIGHEST_PROTOCOL)
+    os.replace(tmp, CACHE)
     return net

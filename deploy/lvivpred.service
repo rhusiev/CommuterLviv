@@ -1,0 +1,32 @@
+[Unit]
+Description=lvivpred feed collector
+After=network-online.target
+Wants=network-online.target
+# Systemd gives up restarting a service that fails too often. A collector that
+# cannot start is usually waiting on something that will come back - the network
+# after a reboot, the far end after an outage - so it must keep trying forever.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=lvivpred
+WorkingDirectory=/opt/lvivpred
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/lvivpred/.venv/bin/python -m lvivpred collect --keep-days 30 --min-free-gb 3
+
+# The collector handles SIGTERM itself: it stops the pollers, drains the write
+# queue and closes the database. Give it room to do that before being killed.
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
+Restart=always
+RestartSec=15
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/lvivpred/data
+
+[Install]
+WantedBy=multi-user.target
