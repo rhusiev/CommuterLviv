@@ -202,14 +202,14 @@ def collect_lad(period, limit):
         stop_flag.wait(max(0.5, period - (time.time() - cycle)))
 
 
-def main():
-    ap = argparse.ArgumentParser()
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="lvivpred collect")
     ap.add_argument("--veh-period", type=float, default=5.0)
     ap.add_argument("--trip-period", type=float, default=15.0)
     ap.add_argument("--lad-period", type=float, default=60.0)
     ap.add_argument("--lad-stops", type=int, default=40)
     ap.add_argument("--hours", type=float, default=0)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     os.makedirs(DATA, exist_ok=True)
     w = threading.Thread(target=writer, daemon=False)

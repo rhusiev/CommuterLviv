@@ -11,8 +11,7 @@ import sys
 
 def _collect(rest):
     from . import collect
-    sys.argv = ["collect"] + rest
-    collect.main()
+    collect.main(rest)
 
 
 def _evaluate(rest):
@@ -28,12 +27,19 @@ def _evaluate(rest):
 
 def _check(rest):
     from . import check
+    _no_args("check", rest)
     check.report()
 
 
 def _diag(rest):
     from . import diag
+    _no_args("diag", rest)
     diag.main()
+
+
+def _no_args(name, rest):
+    if rest:
+        raise SystemExit(f"lvivpred {name} takes no arguments, got {' '.join(rest)}")
 
 
 COMMANDS = {"collect": _collect, "evaluate": _evaluate,
