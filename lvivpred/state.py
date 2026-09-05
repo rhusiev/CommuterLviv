@@ -1,0 +1,69 @@
+"""Model snapshots, so a restart does not begin in ignorance.
+
+A cold model needs roughly fifteen minutes of traffic before it stops guessing,
+and everything it predicts in the meantime is worse than it needs to be. A
+snapshot removes that entirely: the model comes up knowing what the roads were
+doing when it was last switched off.
+
+Two details make reloading safe.
+
+Cell indices are positional - cell 4711 means "the twelfth cell of shape X"
+only for one particular build of the static feed - so a snapshot carries a
+signature of the geometry it was learned on and is refused if that changed.
+
+Age needs no check at all. Every weight is stamped with the time it was earned
+and decays from that stamp, so a stale snapshot fades back to the timetable
+prior on its own rather than asserting yesterday's traffic.
+"""
+import hashlib
+import os
+
+import numpy as np
+
+from . import gtfs
+
+PATH = os.path.join(gtfs.DATA, "model.npz")
+PARTS = ("cf", "cs", "rf", "rs", "g")
+
+
+def signature(net):
+    """Identifies the geometry the cell indices refer to."""
+    h = hashlib.blake2b(digest_size=16)
+    for sid in sorted(net.shapes):
+        s = net.shapes[sid]
+        h.update(f"{sid}:{s.cells}:{s.length:.1f};".encode())
+    return h.hexdigest()
+
+
+def _ewmas(model):
+    """Every learned array in the model, named. The only place that reaches
+    into the model's internals, so the model itself stays free of storage."""
+    for layer in ("pace", "hold"):
+        for part in PARTS:
+            yield f"{layer}.{part}", getattr(getattr(model, layer), part)
+
+
+def save(model, net, path=PATH):
+    out = {"signature": np.array(signature(net))}
+    for name, e in _ewmas(model):
+        out[f"{name}.mean"] = e.mean
+        out[f"{name}.w"] = e.w
+        out[f"{name}.t"] = e.t
+    tmp = path + ".tmp.npz"      # savez appends .npz unless the name has it
+    np.savez_compressed(tmp, **out)
+    os.replace(tmp, path)
+    return path
+
+
+def load(model, net, path=PATH):
+    """Restore in place. Returns False if there is nothing usable to restore."""
+    if not os.path.exists(path):
+        return False
+    with np.load(path, allow_pickle=False) as z:
+        if str(z["signature"]) != signature(net):
+            return False
+        for name, e in _ewmas(model):
+            e.mean = z[f"{name}.mean"]
+            e.w = z[f"{name}.w"]
+            e.t = z[f"{name}.t"]
+    return True

@@ -1,0 +1,73 @@
+attribution_id,agency_id,route_id,trip_id,organization_name,is_producer,is_operator,is_authority,attribution_url,attribution_email,attribution_phone
+2,31,88,,Міра і К,0,1,0,http://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/6006,,
+3,52,90,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+4,89,91,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+5,52,92,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+6,52,93,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+7,52,94,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+8,52,97,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+9,148,98,,Фіакр-Львів,0,1,0,http://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/6008,,
+10,32,99,,Львівське АТП-14630,0,1,0,http://latp.com.ua/,,
+11,31,100,,Міра і К,0,1,0,http://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/6006,,
+12,52,102,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+13,52,103,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+14,89,104,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+15,148,105,,Фіакр-Львів,0,1,0,http://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/6008,,
+16,52,106,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+17,52,107,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+18,31,108,,Міра і К,0,1,0,http://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/6006,,
+19,52,109,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+20,52,111,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+21,52,112,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+22,31,113,,Міра і К,0,1,0,http://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/6006,,
+23,32,114,,Львівське АТП-14630,0,1,0,http://latp.com.ua/,,
+24,327,115,,ТОВ Епітранс,0,1,0,https://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/7024,,
+25,52,117,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+26,52,118,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+27,31,119,,Міра і К,0,1,0,http://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/6006,,
+28,32,121,,Львівське АТП-14630,0,1,0,http://latp.com.ua/,,
+29,32,122,,Львівське АТП-14630,0,1,0,http://latp.com.ua/,,
+30,52,123,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+31,52,124,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+32,327,125,,ТОВ Епітранс,0,1,0,https://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/7024,,
+33,52,126,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+34,10,128,,Успіх БМ,0,1,0,http://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/6007,,
+35,31,129,,Міра і К,0,1,0,http://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/6006,,
+36,52,131,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+37,52,133,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+38,327,137,,ТОВ Епітранс,0,1,0,https://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/7024,,
+39,52,138,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+40,89,142,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+41,327,145,,ТОВ Епітранс,0,1,0,https://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/7024,,
+42,148,146,,Фіакр-Львів,0,1,0,http://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/6008,,
+43,32,147,,Львівське АТП-14630,0,1,0,http://latp.com.ua/,,
+44,52,148,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+45,327,149,,ТОВ Епітранс,0,1,0,https://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/7024,,
+46,89,176,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+47,89,182,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+48,89,878,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+49,10,881,,Успіх БМ,0,1,0,http://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/6007,,
+50,89,903,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+51,89,972,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+52,89,977,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+53,148,992,,Фіакр-Львів,0,1,0,http://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/6008,,
+54,32,1006,,Львівське АТП-14630,0,1,0,http://latp.com.ua/,,
+55,52,1007,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+56,52,1014,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+57,10,1024,,Успіх БМ,0,1,0,http://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/6007,,
+58,148,1062,,Фіакр-Львів,0,1,0,http://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/6008,,
+59,89,1594,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+60,89,1627,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+61,89,1628,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+62,89,1631,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+63,52,1633,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+64,89,1634,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+65,89,1734,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+66,89,2054,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+67,52,2059,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+68,148,2299,,Фіакр-Львів,0,1,0,http://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/6008,,
+69,52,2300,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+70,52,2302,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+71,89,2334,,ЛКП Львівелектротранс,0,1,0,http://lvivelectrotrans.com.ua/,lvivelektrotrans@gmail.com,+380987570729
+72,52,2355,,АТП-1,0,1,0,https://atp1.lviv.ua/,,
+73,10,2464,,Успіх БМ,0,1,0,http://city-adm.lviv.ua/portal/catalog/transport/marshrutni-taksi/6007,,

@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+
+# Downloaded feeds, the recorded database and the learned model: all rebuildable
+# or re-collectable, and far too large to version.
+data/

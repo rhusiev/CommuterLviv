@@ -1,0 +1,78 @@
+# header
+gtfs_realtime_version: "2.0"
+incrementality: FULL_DATASET
+timestamp: 1788626487
+
+# 436 entities, first 3:
+
+id: "3790543"
+vehicle {
+  trip {
+    trip_id: "32262_2_1"
+    schedule_relationship: SCHEDULED
+    route_id: "142"
+  }
+  position {
+    latitude: 49.8031693
+    longitude: 24.0079823
+    bearing: 286
+    odometer: 110285.02424686779
+    speed: 5.55555582
+  }
+  timestamp: 1788626478
+  congestion_level: UNKNOWN_CONGESTION_LEVEL
+  vehicle {
+    id: "5476"
+    label: "high_floor"
+    license_plate: "603"
+    wheelchair_accessible: WHEELCHAIR_INACCESSIBLE
+  }
+}
+
+id: "3790549"
+vehicle {
+  trip {
+    trip_id: "32245_5_0"
+    schedule_relationship: SCHEDULED
+    route_id: "1634"
+  }
+  position {
+    latitude: 49.8364296
+    longitude: 23.9993229
+    bearing: 252
+    odometer: 292460.76962623256
+    speed: 4.72222233
+  }
+  timestamp: 1788626481
+  congestion_level: UNKNOWN_CONGESTION_LEVEL
+  vehicle {
+    id: "4035"
+    label: "high_floor"
+    license_plate: "139"
+    wheelchair_accessible: WHEELCHAIR_INACCESSIBLE
+  }
+}
+
+id: "3790553"
+vehicle {
+  trip {
+    trip_id: "22200_4_0"
+    schedule_relationship: SCHEDULED
+    route_id: "176"
+  }
+  position {
+    latitude: 49.8420715
+    longitude: 23.9702873
+    bearing: 265
+    odometer: 291380.828215386
+    speed: 6.11111116
+  }
+  timestamp: 1788626477
+  congestion_level: UNKNOWN_CONGESTION_LEVEL
+  vehicle {
+    id: "4036"
+    label: "high_floor"
+    license_plate: "135"
+    wheelchair_accessible: WHEELCHAIR_INACCESSIBLE
+  }
+}

@@ -1,0 +1,210 @@
+# header
+gtfs_realtime_version: "1.0"
+incrementality: FULL_DATASET
+timestamp: 1788626482
+
+# 537 entities, first 2:
+
+id: "32524_8_0"
+trip_update {
+  trip {
+    trip_id: "32524_8_0"
+    start_date: "20260905"
+    schedule_relationship: SCHEDULED
+    route_id: "147"
+  }
+  stop_time_update {
+    stop_sequence: 338
+    departure {
+      time: 1788627120
+    }
+    stop_id: "4728"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 339
+    arrival {
+      time: 1788627229
+    }
+    stop_id: "4729"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 340
+    arrival {
+      time: 1788627409
+    }
+    stop_id: "4628"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 341
+    arrival {
+      time: 1788627529
+    }
+    stop_id: "4629"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 342
+    arrival {
+      time: 1788627709
+    }
+    stop_id: "4630"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 343
+    arrival {
+      time: 1788627829
+    }
+    stop_id: "4631"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 344
+    arrival {
+      time: 1788628009
+    }
+    stop_id: "4632"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 345
+    arrival {
+      time: 1788628129
+    }
+    stop_id: "4633"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 346
+    arrival {
+      time: 1788628249
+    }
+    stop_id: "4634"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 347
+    arrival {
+      time: 1788628369
+    }
+    stop_id: "4635"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 348
+    arrival {
+      time: 1788628489
+    }
+    stop_id: "4636"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 349
+    arrival {
+      time: 1788628609
+    }
+    stop_id: "4637"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 350
+    arrival {
+      time: 1788628729
+    }
+    stop_id: "4638"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 351
+    arrival {
+      time: 1788628909
+    }
+    stop_id: "4639"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 352
+    arrival {
+      time: 1788629029
+    }
+    stop_id: "4640"
+    schedule_relationship: SCHEDULED
+  }
+  vehicle {
+    id: "5251"
+  }
+  timestamp: 1788626451
+}
+
+id: "26900_4_0"
+trip_update {
+  trip {
+    trip_id: "26900_4_0"
+    start_date: "20260905"
+    schedule_relationship: SCHEDULED
+    route_id: "903"
+  }
+  stop_time_update {
+    stop_sequence: 121
+    departure {
+      time: 1788628500
+    }
+    stop_id: "42765"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 122
+    arrival {
+      time: 1788628550
+    }
+    stop_id: "4899"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 123
+    arrival {
+      time: 1788628669
+    }
+    stop_id: "4982"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 124
+    arrival {
+      time: 1788628849
+    }
+    stop_id: "4865"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 125
+    arrival {
+      time: 1788628969
+    }
+    stop_id: "42768"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 126
+    arrival {
+      time: 1788629029
+    }
+    stop_id: "43634"
+    schedule_relationship: SCHEDULED
+  }
+  stop_time_update {
+    stop_sequence: 127
+    arrival {
+      time: 1788629149
+    }
+    stop_id: "43638"
+    schedule_relationship: SCHEDULED
+  }
+  vehicle {
+    id: "2327"
+  }
+  timestamp: 1788626466
+}
