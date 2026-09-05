@@ -1,9 +1,10 @@
-"""One entry point for the four things this project does.
+"""One entry point for the five things this project does.
 
-    collect    record the live feeds into data/feed.db, indefinitely
-    evaluate   replay what was recorded and score every predictor on it
-    check      take the model apart: is it the model, the tracking or the truth
-    diag       ask what methodology the official API is actually using
+    collect     record the live feeds into data/feed.db, indefinitely
+    evaluate    replay what was recorded and score every predictor on it
+    experiment  score every switchable approach on the same recording
+    check       take the model apart: is it the model, the tracking or the truth
+    diag        ask what methodology the official API is actually using
 """
 import argparse
 import sys
@@ -25,6 +26,18 @@ def _evaluate(rest):
     evaluate.main(warmup=a.warmup, save=not a.no_save)
 
 
+def _experiment(rest):
+    from . import config, experiments
+    ap = argparse.ArgumentParser(prog="lvivpred experiment")
+    ap.add_argument("--warmup", type=float, default=1800.0,
+                    help="seconds of replay to learn from before scoring begins")
+    ap.add_argument("--only", nargs="+", metavar="NAME", choices=list(config.BY_NAME),
+                    help=f"approaches to run (default all): {', '.join(config.BY_NAME)}")
+    a = ap.parse_args(rest)
+    variants = [config.BY_NAME[n] for n in a.only] if a.only else None
+    experiments.run_all(variants=variants, warmup=a.warmup)
+
+
 def _check(rest):
     from . import check
     _no_args("check", rest)
@@ -43,7 +56,7 @@ def _no_args(name, rest):
 
 
 COMMANDS = {"collect": _collect, "evaluate": _evaluate,
-            "check": _check, "diag": _diag}
+            "experiment": _experiment, "check": _check, "diag": _diag}
 
 
 def main(argv=None):

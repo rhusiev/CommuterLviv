@@ -41,6 +41,8 @@ import zoneinfo
 
 import numpy as np
 
+from . import config
+
 PACE_CLIP = (0.020, 2.0)     # s/m: 180 km/h .. 1.8 km/h while actually rolling
 HOLD_CLIP = (0.0, 240.0)     # s standing per crossing
 RATIO_CLIP = (0.15, 8.0)     # observed pace over timetabled pace
@@ -98,42 +100,61 @@ class Ewma:
 
 
 class Layer:
-    """One quantity, learned at cell / corridor / global scale."""
+    """One quantity, learned at unit / corridor / global scale.
 
-    def __init__(self, ncell, ncorr, cell_corr, init, fast_hl, slow_hl):
-        self.cell_corr = cell_corr
-        self.cf = Ewma(ncell, fast_hl, init)
-        self.cs = Ewma(ncell, slow_hl, init)
+    A unit is whatever travel time is learned per - a 100 m cell by default.
+    Either of the two upper layers can be switched off, in which case the one
+    below simply backs off further; there is always the global number.
+    """
+
+    def __init__(self, nunit, ncorr, unit_corr, init, fast_hl, slow_hl,
+                 fast=True, corridor=True):
+        self.unit_corr = unit_corr
+        self.fast, self.corridor = fast, corridor
+        self.cf = Ewma(nunit, fast_hl, init)
+        self.cs = Ewma(nunit, slow_hl, init)
         self.rf = Ewma(ncorr, fast_hl, init)
         self.rs = Ewma(ncorr, slow_hl, init)
         self.g = Ewma(1, slow_hl, init)
 
-    def update(self, cells, vals, now, weights, corr):
+    def update(self, units, vals, now, weights, corr):
         total = weights.sum()
         if total <= 0.0:
             return
-        self.cf.update(cells, vals, now, weights)
-        self.cs.update(cells, vals, now, weights)
-        cu, vu, wu = corr
-        self.rf.update(cu, vu, now, wu)
-        self.rs.update(cu, vu, now, wu)
+        self.cs.update(units, vals, now, weights)
+        if self.fast:
+            self.cf.update(units, vals, now, weights)
+        if self.corridor:
+            cu, vu, wu = corr
+            self.rs.update(cu, vu, now, wu)
+            if self.fast:
+                self.rf.update(cu, vu, now, wu)
         self.g.update(np.zeros(1, dtype=int),
                       np.array([np.average(vals, weights=weights)]),
                       now, np.array([total]))
 
+    def _blend(self, now, layers, base, k):
+        num, den = base * k, float(k)
+        for ewma in layers:
+            m, w = ewma.read(now)
+            num, den = num + m * w, den + w
+        return num / den
+
     def read(self, now):
-        gm, gw = self.g.read(now)
-        rfm, rfw = self.rf.read(now)
-        rsm, rsw = self.rs.read(now)
-        corr = (rfm * rfw + rsm * rsw + gm[0] * K_CORR) / (rfw + rsw + K_CORR)
-        cfm, cfw = self.cf.read(now)
-        csm, csw = self.cs.read(now)
-        base = corr[self.cell_corr]
-        return (cfm * cfw + csm * csw + base * K_CELL) / (cfw + csw + K_CELL)
+        gm, _ = self.g.read(now)
+        if self.corridor:
+            corr = self._blend(now, (self.rf, self.rs) if self.fast
+                               else (self.rs,), gm[0], K_CORR)
+            base = corr[self.unit_corr]
+        else:
+            base = gm[0]
+        return self._blend(now, (self.cf, self.cs) if self.fast
+                           else (self.cs,), base, K_CELL)
 
 
 class PaceModel:
-    def __init__(self, net, fast_hl=480.0, slow_hl=5400.0):
+    def __init__(self, net, cfg=None, fast_hl=480.0, slow_hl=5400.0):
+        self.cfg = cfg = cfg or config.FULL
         self.net = net
         self.shape_base = {}
         base = 0
@@ -153,14 +174,55 @@ class PaceModel:
             s = net.shapes[sid]
             self.cell_len[b:b + s.cells] = s.length / s.cells
 
-        args = (self.ncell, self.ncorr, self.cell_corr)
-        self.pace = Layer(*args, 1.0, fast_hl, slow_hl)
-        self.hold = Layer(*args, 0.0, fast_hl, slow_hl)
-        self.prior = self._schedule_prior()
+        self.unit = (self._sections() if cfg.unit == "section"
+                     else np.arange(self.ncell))
+        self.nunit = int(self.unit.max()) + 1
+        self.unit_len = np.bincount(self.unit, self.cell_len, self.nunit)
+        unit_corr = np.zeros(self.nunit, dtype=np.int64)
+        unit_corr[self.unit] = self.cell_corr
+
+        args = (self.nunit, self.ncorr, unit_corr)
+        opts = dict(fast=cfg.fast, corridor=cfg.corridor)
+        self.pace = Layer(*args, 1.0, fast_hl, slow_hl, **opts)
+        self.hold = Layer(*args, 0.0, fast_hl, slow_hl, **opts)
+        self.prior = (self._schedule_prior() if cfg.prior
+                      else np.full((SLOTS, self.ncell), PACE0))
 
         self._cum = np.zeros(self.ncell + 1)
         self._prior_t = None
         self._per_cell = self.prior[0] * self.cell_len
+
+    def _sections(self):
+        """Map every cell to the stop-to-stop section it falls in.
+
+        Sections are cut where the stops are, so a shape served by more than one
+        stop pattern has to pick one; the pattern running the most trips on that
+        shape wins. Cells before the first stop or after the last join the
+        section next to them.
+        """
+        seen = {}
+        for trip, key in self.net.pattern_of.items():
+            n, _ = seen.get(key, (0, None))
+            seen[key] = (n + 1, trip)
+        best = {}
+        for (sid, _), (n, trip) in seen.items():
+            if n > best.get(sid, (0, None))[0]:
+                best[sid] = (n, trip)
+
+        out = np.zeros(self.ncell, dtype=np.int64)
+        nxt = 0
+        for sid, b in self.shape_base.items():
+            s = self.net.shapes[sid]
+            if sid not in best:
+                k = np.arange(s.cells)       # no pattern here: leave it as cells
+            else:
+                edges = self.net.trip_stops[best[sid][1]][1]
+                centre = (np.arange(s.cells) + 0.5) * (s.length / s.cells)
+                k = np.clip(np.searchsorted(edges, centre) - 1,
+                            0, max(len(edges) - 2, 0))
+            out[b:b + s.cells] = nxt + k
+            nxt += int(k.max()) + 1
+        return out
 
     def _schedule_prior(self):
         """Timetabled pace for every cell, at every hour of the day.
@@ -240,12 +302,18 @@ class PaceModel:
         earned so far; the rest arrives when it finishes.
         """
         cells = np.asarray(cells)
-        w_pace = dist / self.cell_len[cells]
-        ratio = np.clip(pace / self.prior_at(now)[cells], *RATIO_CLIP)
         held = np.clip(hold, *HOLD_CLIP)
+        if not self.cfg.hold:
+            # One quantity instead of two: standing time is charged to the
+            # distance it was spent over, and so scales with distance.
+            pace = pace + held / np.maximum(dist, 1.0)
+            held = np.zeros_like(held)
+        ratio = np.clip(pace / self.prior_at(now)[cells], *RATIO_CLIP)
+        units = self.unit[cells]
+        w_pace = dist / self.unit_len[units]
         corr = self.cell_corr[cells]
-        self.pace.update(cells, ratio, now, w_pace, group(corr, ratio, w_pace))
-        self.hold.update(cells, held, now, hold_w, group(corr, held, hold_w))
+        self.pace.update(units, ratio, now, w_pace, group(corr, ratio, w_pace))
+        self.hold.update(units, held, now, hold_w, group(corr, held, hold_w))
 
     def expected(self, cells):
         """Seconds a crossing of these cells is currently believed to take."""
@@ -253,8 +321,8 @@ class PaceModel:
 
     def refresh(self, now):
         """Cumulative travel time along every shape, so an ETA is a subtraction."""
-        self._pace = self.pace.read(now) * self.prior_at(now)
-        self._hold = self.hold.read(now)
+        self._pace = self.pace.read(now)[self.unit] * self.prior_at(now)
+        self._hold = self.hold.read(now)[self.unit]
         self._per_cell = self._pace * self.cell_len + self._hold
         np.cumsum(self._per_cell, out=self._cum[1:])
 
