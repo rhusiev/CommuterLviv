@@ -5,7 +5,9 @@ results contradicted a claim the model makes about itself. A sixth finding, on
 what the nightly shutdown does to the model, came out of asking whether such a
 sparse subset can be trusted. The seventh is of a different kind: two defects in
 how the predictors were being paired, which invalidated the scores that led to
-the other six being investigated at all. Each one below was measured on the same
+the other six being investigated at all. The eighth collapses three of the
+others into one, and is the only one that says what to change. Each one below
+was measured on the same
 recording of `data/feed.db` - 245 307 cell crossings over 19 228 distinct
 cells - not argued from the code.
 
@@ -321,25 +323,76 @@ is several times better than it, and the closest thing to a real competitor this
 comparison has - `full` scores 85 s on those same events, a 24% margin. Finding
 5's table was reading the board's stale-value tail, not the board.
 
-## The shape of the six model findings
+## 8. Findings 1, 2 and 3 are one finding, and tuning collects all of it
+
+Three of the findings above are separate observations about the same knob.
+Finding 1 says the timetable prior costs 4% because its level is wrong; finding
+2 says a coarser unit does about as well as the fine one; finding 3 says the
+fast half-life is far too short. Each was measured by deleting a piece of the
+model. Setting the four shrinkage and half-life constants instead - `k_unit`
+4 to 1, `k_corr` 4 to 0.5, `fast_hl` 480 s to 7200, `slow_hl` 5400 s to 43200,
+the `tuned` variant - collects the whole of it and more:
+
+| bucket | `full` | `tuned` | `tuned-no-prior` | `no-prior` |
+|---|---|---|---|---|
+| 0-1 min | 18 | 15 | 15 | 16 |
+| 1-2 min | 30 | 25 | 24 | 25 |
+| 2-5 min | 49 | 40 | 39 | 41 |
+| 5-10 min | 80 | 67 | 65 | 69 |
+| 10-20 min | 130 | 115 | 113 | 117 |
+| 20-45 min | 224 | 234 | 239 | 230 |
+
+MAE in seconds, all four scored on one common support of 94 376 crossings
+(`check_prior.py`).
+
+Read the middle two columns together. Deleting the timetable prior costs `full`
+2 s at 0-1 min and 13 s at 10-20; it costs `tuned` 0 s and 2 s. **Once the
+shrinkage is loosened the prior is nearly inert.** That is the mechanism behind
+finding 1: the prior was never harmful in itself, it was harmful because
+`k_unit = 4` kept pulling cells back onto it long after those cells had enough
+live evidence of their own. Delete the prior or stop shrinking towards it - the
+model ends up in the same place, and `no-prior` was measuring the shrinkage
+constant all along.
+
+The last row is the price and it is a real one. `tuned` runs a bias of -66 s
+against `full`'s -10, and loses the 20-45 minute bucket by 10 s. Trusting live
+evidence sooner and forgetting it later means the model tracks the road as it is
+now and carries that state 45 minutes ahead, which is free at three minutes and
+wrong at thirty. This is mechanism 3 below, arrived at from the opposite
+direction: the same mismatch between how long evidence is good for and how far
+it is carried, only now it is *our* evidence being over-carried rather than the
+vehicle offset or the operator's position.
+
+**What to do.** Nothing yet, and this is the important part. Four constants
+tuned on one day's recording are fitted to that day, and the direction they all
+moved - less shrinkage, longer memory, a half-life longer than the recording
+itself - is exactly what a recording too short to contain any real within-day
+variation would produce. Whether Lviv genuinely has little within-day variation
+or the recording is simply too short to show it cannot be told apart here. That
+is the first thing to re-run once the recording spans three weekdays.
+
+## The shape of the seven model findings
 
 Finding 7 stands apart - it is a defect in the measuring, not a property of the
-city or the model. Three distinct mechanisms account for the other six.
+city or the model. Three distinct mechanisms account for the other seven.
 
-1. **A prior is only worth its bias.** Findings 1, 2 and 6. The timetable is
+1. **A prior is only worth its bias.** Findings 1, 2, 6 and 8. The timetable is
    used as a level and its level is wrong by 6%, so every cell without live
    evidence inherits that error. Shrinkage does not rescue a biased target; it
    delivers it - and the nightly shutdown puts the whole network back into that
-   state once a day.
-2. **Resolution is worthless faster than it is refreshed.** Findings 2 and 3.
+   state once a day. Finding 8 sharpens this: the harm is in the shrinkage, not
+   in the prior, and loosening the one makes the other stop mattering.
+2. **Resolution is worthless faster than it is refreshed.** Findings 2, 3 and 8.
    Cells and short half-lives both describe the city more finely than 11.5
    crossings per cell per recording can support, and a fixed shrinkage
    constant then throws most of that description away.
-3. **A correction is only valid over the time it persists.** Findings 4, 5 and
-   6. A vehicle's offset lasts 5 minutes and is applied over 45; the operator's
-   position error lasts as long as its position is wrong and is applied to
-   everything downstream of it; and the road model's own memory lasts 90
-   minutes, which is shorter than the night it has to be carried across.
+3. **A correction is only valid over the time it persists.** Findings 4, 5, 6
+   and 8. A vehicle's offset lasts 5 minutes and is applied over 45; the
+   operator's position error lasts as long as its position is wrong and is
+   applied to everything downstream of it; the road model's own memory lasts 90
+   minutes, which is shorter than the night it has to be carried across; and a
+   tuned model that remembers for twelve hours carries the current state of the
+   road 45 minutes ahead of itself, which is where its only loss is.
 
 The one thing to take away: every one of these is a mismatch between how long a
 piece of evidence is good for and how far it is being carried.
