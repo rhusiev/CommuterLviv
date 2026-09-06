@@ -7,11 +7,16 @@ forty points of a grid.
 
 The method is otherwise identical: every point is a cold replay of the same
 recording, scored against the same ground truth, on the predictions every point
-in the sweep answered. Only the swept field differs from `full`, so a difference
-in the score is a difference in that field or it is noise - which is why the
-95% interval is printed next to every value and not left in a file.
+in the sweep answered. Only the swept field differs from the base approach, so a
+difference in the score is a difference in that field or it is noise - which is
+why the 95% interval is printed next to every value and not left in a file.
+
+The base is `full` unless `--base` says otherwise, and a constant's best value
+is not the same on every base: what a shrinkage constant wants depends on what
+it is shrinking towards.
 
     python3 -m lvivpred sweep k_unit 1 2 4 8 16
+    python3 -m lvivpred sweep k_unit --base sections-no-prior
 """
 import json
 import os
@@ -29,8 +34,11 @@ from .truth import Truth
 GRIDS = {
     "k_unit": [0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
     "k_corr": [0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
-    "fast_hl": [120.0, 300.0, 480.0, 900.0, 1800.0],
-    "slow_hl": [1800.0, 5400.0, 14400.0, 43200.0],
+    # Both half-life grids ran to their upper edge on the first recording, so
+    # both now extend past the length of a day, where decay stops meaning much.
+    "fast_hl": [120.0, 300.0, 480.0, 900.0, 1800.0, 3600.0, 7200.0],
+    "slow_hl": [1800.0, 5400.0, 14400.0, 43200.0, 86400.0, 172800.0],
+    "knn": [3, 5, 10, 20, 40],
 }
 
 
@@ -41,10 +49,16 @@ def run(field, values=None, net=None, out=REPORTS, db=replay.DB, base=None, **kw
     if not hasattr(base, field):
         raise SystemExit(f"Config has no field {field!r}; "
                          f"try one of {', '.join(GRIDS)}")
+    if field == "knn" and base.learn != "knn":
+        raise SystemExit(f"`{base.name}` does not use knn, so every point of "
+                         f"this sweep would replay the same model; --base knn")
+    # The CLI cannot know whether a grid is over counts or over seconds, so the
+    # field itself says: a ring buffer indexed by a float is not an index.
+    cast = type(getattr(base, field))
     kw.setdefault("t_to", _end(db))
 
     named, truth, first = {}, None, None
-    for v in values:
+    for v in map(cast, values):
         cfg = replace(base, name=f"{field}={v:g}", **{field: v})
         t = time.time()
         _, res = replay.run(net, cfg=cfg, db=db, **kw)
@@ -59,8 +73,8 @@ def run(field, values=None, net=None, out=REPORTS, db=replay.DB, base=None, **kw
     paired = score.common(named)
     rows = {n: score.stats(s.error) for n, s in paired.items()}
     ref = paired[min(rows, key=lambda n: rows[n]["mae"])]
-    data = {"field": field, "values": list(values), "crossings": truth.n,
-            "epochs": first.epochs, "overall": rows,
+    data = {"field": field, "base": base.name, "values": list(values),
+            "crossings": truth.n, "epochs": first.epochs, "overall": rows,
             "ci": {n: [float(x) for x in
                        score.bootstrap(np.abs(s.error), truth.trip[s.event])]
                    for n, s in paired.items()},
@@ -72,7 +86,9 @@ def run(field, values=None, net=None, out=REPORTS, db=replay.DB, base=None, **kw
     if os.path.exists(path):
         with open(path) as f:
             all_sweeps = json.load(f)
-    all_sweeps[field] = data
+    # Keyed by base too: the same grid on a different starting point is a
+    # different sweep and must not silently replace the one before it.
+    all_sweeps[field if base.name == "full" else f"{field}@{base.name}"] = data
     with open(path, "w") as f:
         json.dump(all_sweeps, f, indent=1)
 
@@ -97,7 +113,7 @@ def _paired_ci(s, ref, truth):
 
 def _print(d):
     best = min(d["overall"], key=lambda n: d["overall"][n]["mae"])
-    print(f"\n{d['field']}, scored on the common support "
+    print(f"\n{d['field']} on `{d['base']}`, scored on the common support "
           f"({d['crossings']} crossings, {d['epochs']} epochs)\n")
     print(f"  {'value':<16} {'MAE s':>7} {'median':>7} {'bias':>7}"
           f"  {'MAE - best, 95%':>20}")

@@ -58,19 +58,22 @@ def _experiment(rest):
 
 
 def _sweep(rest):
-    from . import sweep
+    from . import config, sweep
     ap = argparse.ArgumentParser(prog="lvivpred sweep")
     ap.add_argument("field", choices=list(sweep.GRIDS),
                     help="the estimator constant to vary")
     ap.add_argument("values", nargs="*", type=float, metavar="VALUE",
                     help="values to try (default: the grid in sweep.py)")
+    ap.add_argument("--base", default="full", choices=list(config.BY_NAME),
+                    help="the approach to vary the constant on (default full)")
     ap.add_argument("--warmup", type=float, default=1800.0,
                     help="seconds of replay to learn from before scoring begins")
     ap.add_argument("--from", dest="t_from", type=_when, metavar="TIME")
     ap.add_argument("--to", dest="t_to", type=_when, metavar="TIME")
     a = ap.parse_args(rest)
     kw = {} if a.t_to is None else {"t_to": a.t_to}
-    sweep.run(a.field, a.values or None, warmup=a.warmup, t_from=a.t_from, **kw)
+    sweep.run(a.field, a.values or None, base=config.BY_NAME[a.base],
+              warmup=a.warmup, t_from=a.t_from, **kw)
 
 
 def _check(rest):
