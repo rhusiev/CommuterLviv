@@ -17,13 +17,17 @@ after step 2 - and it replaces a few million tiny array updates with one
 vectorised update per minute.
 """
 import datetime
+import hashlib
+import multiprocessing
 import os
 import sqlite3
+import time
 
 import numpy as np
 
-from . import baselines, config, gtfs, track
+from . import baselines, config, gtfs, predictors, track
 from .model import PaceModel
+from .truth import Truth
 
 DB = os.path.join(gtfs.DATA, "feed.db")
 HORIZON = 45 * 60.0      # match the API's own forecast horizon
@@ -161,6 +165,93 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
     _flush(model, res, tracks, runs, closed, next_epoch, veh_idx, trip_idx,
            emit=True, offset=offset)
     return model, res
+
+
+class Recording:
+    """The part of a Result that does not depend on which variant produced it.
+
+    A whole Result carries a few tens of megabytes of predictions and believed
+    positions that only the process which produced them has any use for. What
+    has to cross back between processes is what every variant agrees on: the
+    crossings, and the numbering of vehicles and trips they are named by. That
+    is also everything the three outside predictors need, so they are scored
+    against this rather than against any one variant's replay.
+    """
+
+    __slots__ = ("truth", "gap", "trip_ids", "veh_ids", "epochs", "net")
+
+    def __init__(self, res):
+        self.truth = res.truth
+        self.gap = res.gap
+        self.trip_ids = res.trip_ids
+        self.veh_ids = res.veh_ids
+        self.epochs = res.epochs
+        self.net = None   # not picklable in bulk; the parent puts it back
+
+
+def _fingerprint(res):
+    """A short check that two replays tracked the same crossings in the same order.
+
+    Order matters as much as membership: the ground truth numbers its events by
+    the order this dict was filled, so a worker's event 7 has to be the parent's
+    event 7 as well.
+    """
+    return hashlib.blake2b(np.array(list(res.truth), dtype=np.int64).tobytes(),
+                           digest_size=8).hexdigest()
+
+
+_JOB = None   # (net, db, kw), set before forking so `net` is never pickled
+
+
+def _replay_one(job):
+    i, cfg = job
+    net, db, kw = _JOB
+    t = time.time()
+    _, res = run(net, cfg=cfg, db=db, **kw)
+    res.net = net
+    series = predictors.ours(res, Truth(net, res))
+    return (cfg.name, series, _fingerprint(res),
+            Recording(res) if i == 0 else None, time.time() - t)
+
+
+def run_many(net, cfgs, db=DB, workers=None, **kw):
+    """Replay one recording under several configs, cold, in parallel.
+
+    Tracking does not depend on the config. Every one of these replays rebuilds
+    the same vehicle tracks from the same fixes, which is about three quarters
+    of the work and is why a seventeen-variant comparison took the better part
+    of an hour. The replays share nothing, so the way to stop paying for that
+    seventeen times over is to pay in parallel.
+
+    Workers are forked rather than spawned, so the network geometry is handed to
+    them by the operating system instead of being pickled to each one. What
+    comes back is one flattened predictor per config, not the replay Result:
+    that is large and of no use outside the process that built it.
+
+    Two cores are left free, for the collector and for whatever else is running.
+
+    Returns (named, truth, recording).
+    """
+    global _JOB
+
+    jobs = list(enumerate(cfgs))
+    workers = workers or min(len(jobs), max(1, (os.cpu_count() or 3) - 2))
+    _JOB = (net, db, kw)
+    try:
+        with multiprocessing.get_context("fork").Pool(workers) as pool:
+            out = list(pool.imap(_replay_one, jobs, chunksize=1))
+    finally:
+        _JOB = None
+
+    named = {}
+    _, _, first, rec, _ = out[0]
+    rec.net = net
+    for name, series, fp, _, took in out:
+        if fp != first:
+            raise RuntimeError(f"{name} tracked a different set of crossings")
+        named[name] = series
+        print(f"  {name:<16} {len(series):>8} predictions  {took:5.1f}s", flush=True)
+    return named, Truth(net, rec), rec
 
 
 def _idx(m, names, key):
