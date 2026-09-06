@@ -86,7 +86,7 @@ class Result:
 def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
         progress=None, model=None, cfg=None):
     model = model or PaceModel(net, cfg)
-    offset = {} if model.cfg.vehicle_offset else None
+    offset = {} if model.cfg.vehicle_offset != "off" else None
     tracks = {}
     runs = {}
     closed = []
@@ -212,6 +212,23 @@ def _factor(offset, veh, lo=0.6, hi=1.7, k=60.0):
     return float(np.clip((obs + k) / (ex + k), lo, hi))
 
 
+def _fade(dt, f, tau=300.0):
+    """Apply a vehicle's speed ratio only as far along the path as it holds.
+
+    Multiplying the whole remaining ETA by the ratio assumes a vehicle running
+    30% slow now will still be running 30% slow in forty minutes. It will not:
+    the autocorrelation of a vehicle's own ratio falls to 0.05 by twenty
+    minutes, an e-folding time near 4.5 minutes.
+
+    So the trip is corrected leg by leg. Each leg is scaled by however much of
+    the ratio is still credible at the moment the vehicle would be driving it,
+    which is the full ratio for the next stop and none of it for the far end.
+    """
+    inc = np.diff(dt, prepend=0.0)
+    mid = dt - 0.5 * inc          # lead time at the middle of each leg
+    return np.cumsum(inc * (1.0 + (f - 1.0) * np.exp(-mid / tau)))
+
+
 def _lateness_eta(tr, s_now):
     """Seconds to each remaining stop under the official API's method.
 
@@ -271,7 +288,9 @@ def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True,
         else:
             dt = model.time_between(tr.shape_id, s_now, tr.sdist[i:])
             if offset is not None:
-                dt = dt * _factor(offset, veh)
+                f = _factor(offset, veh)
+                dt = (_fade(dt, f) if model.cfg.vehicle_offset == "decay"
+                      else dt * f)
         k = np.nonzero(dt <= HORIZON)[0]
         if not len(k):
             continue

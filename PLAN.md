@@ -68,40 +68,62 @@ current numbers are a screening pass, not the answer.
 These come out of `reports/findings.md` and cost nothing to test. Do them first;
 they may move the baseline that everything else is compared against.
 
-- [ ] **`no-prior` + `sections`** - finding 2 says `sections` mostly wins by not
+All three land as `sections-no-prior`, `prior-shape` and `offset-decay` in
+`config.py`. Screening scores below are one hour of replay (2026-09-06
+07:00-08:30, warmup 1800 s, 23667 paired predictions) and are not the final
+numbers - Phase 1 has to be rerun with the rest of the comparison.
+
+- [x] **`no-prior` + `sections`** - finding 2 says `sections` mostly wins by not
       paying the prior's bias, so the combination should beat either. Pure config
-      change: `replace(FULL, unit="section", corridor=False, prior=False)`.
-- [ ] **`prior-shape`** - finding 1's remedy. Keep the timetable prior as a shape
+      change: `replace(FULL, unit="section", corridor=False, prior="off")`.
+      **MAE 100 s against `full`'s 106 s, and the bias goes +26 to -33.** The
+      best of the three, and it stays best at every horizon over 2 minutes.
+- [x] **`prior-shape`** - finding 1's remedy. Keep the timetable prior as a shape
       but not as a level: normalise it so its length-weighted mean equals the
-      learned global pace rather than the timetable's own. Touches
-      `PaceModel.refresh` / `prior_at`; needs a new `Config` field
-      (`prior: "level" | "shape" | False`, replacing the bool).
-- [ ] **`offset-decay`** - finding 4's remedy. `_factor` in `replay.py:207`
-      multiplies the whole remaining ETA flat, but a vehicle's own speed ratio
-      has an e-folding time near 4.5 minutes. Weight the correction by
-      `exp(-h / 300)` for lead time `h`, so the next stop gets it in full and the
-      far end gets none. `_factor` currently returns a scalar; it has to become a
-      per-stop array, which means it needs `dt` before it is applied.
+      learned global pace rather than the timetable's own. `PaceModel._level`
+      does the rescale once at construction; `Config.prior` is now
+      `"level" | "shape" | "off"`. **MAE 104 s, bias +26 to +18.** So the level
+      is part of what the prior costs but not all of it - `sections-no-prior`
+      drops the prior entirely and still wins by 4 s.
+- [x] **`offset-decay`** - finding 4's remedy. `_factor` in `replay.py` multiplies
+      the whole remaining ETA flat, but a vehicle's own speed ratio has an
+      e-folding time near 4.5 minutes. `replay._fade` now scales each leg by
+      `exp(-h / 300)` at that leg's own lead time `h`, so the next stop gets the
+      ratio in full and the far end gets none. **MAE 130 s to 103 s** - it turns
+      the worst variant into the second best. At 20-45 min `vehicle-offset`
+      scores 383 s and `offset-decay` 269 s, which is the fade doing exactly
+      what it was built to do.
 
 ## Phase 2 - hyperparameters of the estimator that ships
 
-Currently these are module constants and cannot be swept. **First move them into
-`Config`** with the present values as defaults, so nothing changes until a
-variant asks. Then sweep one at a time on the fixed window.
+- [x] **Move them into `Config`.** `K_CELL` and `K_CORR` are gone from `model.py`
+      and are now `Config.k_unit` / `Config.k_corr`; `fast_hl` and `slow_hl` are
+      no longer `PaceModel.__init__` arguments but `Config` fields. Defaults are
+      the shipped values, so nothing moved. `Layer` takes `k_unit` and `k_corr`
+      per instance.
+- [x] **A command to sweep them.** `python3 -m lvivpred sweep <field> [values]`
+      cold-replays one point per value and prints a paired 95% interval against
+      the best point, appending the grid to `reports/sweeps.json`. Paired rather
+      than absolute because on a grid this tight the shared variance is nearly
+      all of it and six absolute intervals would all overlap.
 
 | constant | where | now | sweep | what it decides |
 |---|---|---|---|---|
-| `K_CELL` | `model.py:50` | 4.0 | 0.5, 1, 2, 4, 8 | how much evidence a cell needs before it outweighs its corridor |
-| `K_CORR` | `model.py:51` | 4.0 | 0.5, 1, 2, 4, 8 | same, corridor against global |
-| `fast_hl` | `PaceModel.__init__` | 480 s | 120, 300, 480, 900, 1800 | how live "live traffic" is |
-| `slow_hl` | `PaceModel.__init__` | 5400 s | 1800, 5400, 14400, 43200 | how long the baseline remembers |
-| `RATIO_CLIP` | `model.py:48` | (0.15, 8.0) | (0.4, 2.5), (0.25, 4) | how much of an outlier a crossing may be |
+| `k_unit` | `config.py` | 4.0 | 0.5, 1, 2, 4, 8, 16 | how much evidence a cell needs before it outweighs its corridor |
+| `k_corr` | `config.py` | 4.0 | 0.5, 1, 2, 4, 8, 16 | same, corridor against global |
+| `fast_hl` | `config.py` | 480 s | 120, 300, 480, 900, 1800 | how live "live traffic" is |
+| `slow_hl` | `config.py` | 5400 s | 1800, 5400, 14400, 43200 | how long the baseline remembers |
+| `RATIO_CLIP` | `model.py:46` | (0.15, 8.0) | (0.4, 2.5), (0.25, 4) | how much of an outlier a crossing may be |
 | `MAX_HOLD` | `track.py:29` | 240 s | 60, 120, 240, 600 | where a layover stops counting as traffic |
+
+The last two are still module constants; move them the same way when their turn
+comes.
 
 Finding 3 is the specific hypothesis to test here: the cell-fast term supplies
 8.3% of the blend and is diluted almost to nothing by `K_CELL = 4.0`, so a
 **per-layer K** - small at the corridor, large at the cell - should beat one
-shared constant. That is the first thing to try, before the grid.
+shared constant. That is the `k-split` variant (`k_unit=16`, `k_corr=1`), to be
+scored with the rest of the comparison before the grid is run.
 
 Geometry constants cost a network rebuild and go last, in their own pass:
 
