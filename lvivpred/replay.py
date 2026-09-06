@@ -22,7 +22,7 @@ import sqlite3
 
 import numpy as np
 
-from . import gtfs, track
+from . import baselines, config, gtfs, track
 from .model import PaceModel
 
 DB = os.path.join(gtfs.DATA, "feed.db")
@@ -37,6 +37,16 @@ DTYPE = np.dtype([("epoch", "i4"), ("veh", "i4"), ("trip", "i4"),
 
 class NoData(Exception):
     """The requested window contains nothing to replay."""
+
+
+def build(net, cfg=None):
+    """The estimator a config asks for."""
+    cfg = cfg or config.FULL
+    if cfg.learn == "knn":
+        return baselines.KnnModel(net, cfg)
+    if cfg.learn.startswith("table"):
+        return baselines.TableModel(net, cfg)
+    return PaceModel(net, cfg)
 
 
 def _window(t_from, t_to):
@@ -85,7 +95,7 @@ class Result:
 
 def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
         progress=None, model=None, cfg=None):
-    model = model or PaceModel(net, cfg)
+    model = model or build(net, cfg)
     offset = {} if model.cfg.vehicle_offset != "off" else None
     tracks = {}
     runs = {}
@@ -265,6 +275,10 @@ def _prune(tracks, runs, now):
 
 def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True,
            offset=None):
+    # An estimator that fits once and freezes needs to know where the warmup
+    # ends, and this is the only place that knows it. Set before the drain, so
+    # the epoch that first scores is already past the estimator's training.
+    model.emitting = emit
     _drain(model, tracks, closed, now, offset)
     res.epochs += 1
     _prune(tracks, runs, now)

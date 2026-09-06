@@ -2,9 +2,10 @@
 
 Every design decision in the model is a claim that something is worth doing.
 Each switch here turns one of them off, so the claim can be checked against the
-same recording rather than argued about. `full` is the model as shipped; every
-other variant differs from it in exactly one place, except the last two, which
-replace the prediction step rather than the learning.
+same recording rather than argued about. `full` is the model as shipped; most
+other variants differ from it in exactly one place. Three replace the learning
+outright with an estimator from `baselines.py`, and the last replaces the
+prediction step instead.
 
 Run them with `python3 -m lvivpred experiment`.
 """
@@ -23,6 +24,8 @@ class Config:
     unit: str = "cell"          # what a travel time is learned per: cell|section
     vehicle_offset: str = "off"    # scale the ETA by this vehicle: off|flat|decay
     eta: str = "model"          # how a prediction is formed: model|lateness
+    learn: str = "online"       # what does the learning: online|table|table-live|knn
+    knn: int = 10               # crossings the knn estimator keeps per unit
 
     # Shrinkage: observations a layer needs before it outweighs the one it backs
     # off to. Half-lives: how live "now" is, and how long the baseline remembers.
@@ -88,6 +91,26 @@ VARIANTS = [
                 "to persist about 4.5 minutes, so each leg of the trip is "
                 "corrected only by what is left of that ratio by the time the "
                 "vehicle gets there."),
+    replace(FULL, name="table", learn="table", unit="section", corridor=False,
+            doc="No online learning at all: one pace and one hold per section "
+                "per hour of the day, fitted during the warmup and then frozen. "
+                "The historical average every transit paper starts from. What "
+                "separates it from `full` is the whole value of learning as "
+                "fixes arrive - so run it with a warmup that is a real training "
+                "window, an evening scored the next morning."),
+    replace(FULL, name="table-live", learn="table-live", unit="section",
+            corridor=False,
+            doc="The frozen table times one online number: how fast today is "
+                "running against it, city-wide. One parameter of live learning "
+                "instead of tens of thousands, so what separates it from "
+                "`table` is the value of knowing today is slow and nothing "
+                "else."),
+    replace(FULL, name="knn", learn="knn", unit="section", corridor=False,
+            doc="The median of the last 10 crossings of this section by any "
+                "vehicle, with no corridor, no global fallback and no "
+                "half-life. Tests the back-off hierarchy against a plain "
+                "recency window, and the mean against the median - MAE is "
+                "minimised by the median, which nothing else here uses."),
     Config("schedule-offset",
            "Not a road model at all: the timetable plus this vehicle's current "
            "lateness, held constant to the end of the trip. This is what the "
