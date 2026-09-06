@@ -1,0 +1,230 @@
+# Plan: a fuller comparison of approaches
+
+**Reread this file after every compaction.** It is the working plan for the
+approach exploration, not a report. `reports/approaches.md` holds the scores and
+`reports/findings.md` holds why they came out that way.
+
+Status key: `[ ]` not started, `[~]` in progress, `[x]` done and scored,
+`[-]` tried and dropped (with the reason kept).
+
+## The question all of this answers
+
+Which way of turning recorded GPS fixes into an arrival time is most accurate on
+this network, and how much of the accuracy comes from the physical model, from
+online learning, and from offline learning?
+
+Three families have to be represented, because the answer is not obvious in
+advance:
+
+- **no learning** - the timetable, and the timetable plus a lateness
+- **online learning** - what ships now: exponentially weighted means over the
+  road, updated as fixes arrive, never fitted offline
+- **offline learning** - a model fitted on past days and applied to a later one,
+  which is what "ML" means here
+- **hybrid** - a physical model for the level, an offline model for the residual
+
+## What the data allows, and what it does not
+
+`data/feed.db` at the time of writing covers two windows: 2026-09-05 20:00-23:59
+and 2026-09-06 00:00-09:32, of which about 8.5 hours carry moving traffic. There
+is no data at all for 10:00-19:00, and none for a second weekday. The collector
+is running and this grows by roughly 14 usable hours a day.
+
+Three consequences, and they bind every ML item below:
+
+1. **An offline model fitted and scored on this recording is measuring itself.**
+   Any variant that fits parameters offline must be fitted on the evening window
+   and scored on the morning window, never on both. That split is conservative -
+   an evening peak is not a morning peak - which is the right direction to err.
+2. **Anything keyed by day-of-week or by hour-of-day outside 05-09 and 20-23 is
+   currently unfittable.** Finding 6's proposed fix - a hour-of-day by day-of-week
+   profile learned across days - cannot be evaluated until the recording spans
+   several days. Build it, hold the score.
+3. **Sample size.** 8672 crossings and 16462 paired predictions in the current
+   scored window. A model with more than a few hundred effective parameters will
+   fit noise. Report bootstrap intervals, which `score.bootstrap` already does by
+   resampling whole trips, and treat any gap smaller than its interval as no
+   result.
+
+**Rerun the whole comparison once the recording covers three full weekdays.** The
+current numbers are a screening pass, not the answer.
+
+## Rules every new approach must obey
+
+- **Tracking must stay variant-independent.** `experiments.py:57` asserts that
+  every variant produced the same `res.truth` keys, and the paired scoring in
+  `score.common` depends on it. So no approach may change `track.py`. Anything
+  that wants different ground truth is a different experiment, not a variant.
+- **Causality.** `replay.run` is one forward pass and the model is only ever read
+  after the epoch's observations are folded in. An offline-fitted model is
+  causal only if its training data ends before the scored window starts. Assert
+  that in code, do not rely on remembering it.
+- **One change at a time.** Every variant differs from `full` in exactly one
+  place, except where the point is the combination, and then the single-change
+  variants for both halves must exist too.
+
+## Phase 1 - the three fixes the findings already argued for
+
+These come out of `reports/findings.md` and cost nothing to test. Do them first;
+they may move the baseline that everything else is compared against.
+
+- [ ] **`no-prior` + `sections`** - finding 2 says `sections` mostly wins by not
+      paying the prior's bias, so the combination should beat either. Pure config
+      change: `replace(FULL, unit="section", corridor=False, prior=False)`.
+- [ ] **`prior-shape`** - finding 1's remedy. Keep the timetable prior as a shape
+      but not as a level: normalise it so its length-weighted mean equals the
+      learned global pace rather than the timetable's own. Touches
+      `PaceModel.refresh` / `prior_at`; needs a new `Config` field
+      (`prior: "level" | "shape" | False`, replacing the bool).
+- [ ] **`offset-decay`** - finding 4's remedy. `_factor` in `replay.py:207`
+      multiplies the whole remaining ETA flat, but a vehicle's own speed ratio
+      has an e-folding time near 4.5 minutes. Weight the correction by
+      `exp(-h / 300)` for lead time `h`, so the next stop gets it in full and the
+      far end gets none. `_factor` currently returns a scalar; it has to become a
+      per-stop array, which means it needs `dt` before it is applied.
+
+## Phase 2 - hyperparameters of the estimator that ships
+
+Currently these are module constants and cannot be swept. **First move them into
+`Config`** with the present values as defaults, so nothing changes until a
+variant asks. Then sweep one at a time on the fixed window.
+
+| constant | where | now | sweep | what it decides |
+|---|---|---|---|---|
+| `K_CELL` | `model.py:50` | 4.0 | 0.5, 1, 2, 4, 8 | how much evidence a cell needs before it outweighs its corridor |
+| `K_CORR` | `model.py:51` | 4.0 | 0.5, 1, 2, 4, 8 | same, corridor against global |
+| `fast_hl` | `PaceModel.__init__` | 480 s | 120, 300, 480, 900, 1800 | how live "live traffic" is |
+| `slow_hl` | `PaceModel.__init__` | 5400 s | 1800, 5400, 14400, 43200 | how long the baseline remembers |
+| `RATIO_CLIP` | `model.py:48` | (0.15, 8.0) | (0.4, 2.5), (0.25, 4) | how much of an outlier a crossing may be |
+| `MAX_HOLD` | `track.py:29` | 240 s | 60, 120, 240, 600 | where a layover stops counting as traffic |
+
+Finding 3 is the specific hypothesis to test here: the cell-fast term supplies
+8.3% of the blend and is diluted almost to nothing by `K_CELL = 4.0`, so a
+**per-layer K** - small at the corridor, large at the cell - should beat one
+shared constant. That is the first thing to try, before the grid.
+
+Geometry constants cost a network rebuild and go last, in their own pass:
+
+- [ ] `CELL` (`network.py:19`, 100 m) at 50, 100, 200, 400 m. Finding 2 measured
+      the between-cell variance at 59% of the total against 37% between-section,
+      so there is a resolution optimum somewhere between the two and neither end
+      is it.
+- [ ] `CORRIDOR_GRID` (`network.py:20`, 120 m) at 60, 120, 250 m, and the bearing
+      resolution at 4, 8, 16 octants.
+
+Sweeps are not free: each is a full replay. Run them as a batch overnight rather
+than interactively, and write the grid to `reports/sweeps.json`.
+
+## Phase 3 - approaches with no online learning at all
+
+The point of these is to bound how much the online part is worth. If a static
+table fitted on yesterday matches the live model, the live model is doing
+nothing that a lookup could not.
+
+- [ ] **`table`** - one travel time per (section, hour-of-day), fitted offline on
+      the training window, applied frozen. No decay, no updates, no back-off.
+      This is the classic "historical average" baseline every transit paper uses
+      and it is missing from the comparison.
+- [ ] **`table-live`** - the same table, plus a single global multiplier tracking
+      today's overall speed against it. One number of online learning, to see how
+      much of the benefit is just knowing whether today is fast or slow.
+- [ ] **`knn`** - for the section and hour being predicted, the median of the
+      last `k` crossings of that section by any vehicle, with no shrinkage
+      hierarchy at all. `k` in 3, 5, 10, 20. Tests whether the whole
+      cell/corridor/global back-off structure earns its complexity against a
+      plain recency window.
+- [ ] **`median`** - swap every EWMA mean for a decayed weighted median. MAE is
+      minimised by the median, not the mean, and the current model optimises the
+      wrong loss throughout. Cheap to state, awkward to implement vectorised -
+      approximate with a decayed P-square or a small per-unit ring buffer.
+
+## Phase 4 - offline learning on the residual
+
+This is where "ML" earns or fails to earn its place. The target is not the
+arrival time - predicting that from scratch throws away a physical model that is
+already within 2 minutes - but **the residual of the shipped model**, in log
+space so it is a multiplicative correction.
+
+Setup, common to all of Phase 4:
+
+- **Target** `log((actual - now) / max(predicted - now, 1))`, clipped at ±1.5
+- **Split** fit on 2026-09-05 20:00-23:59, score on 2026-09-06 05:30-09:32
+- **Rows** one per emitted prediction, which is 16462 in the scored window; the
+  training window has its own count, expect the same order
+- **Features**, all available causally at emit time:
+  `horizon` (seconds to the predicted arrival), `n_stops_ahead`,
+  `dist_remaining`, `hour + minute/60`, `model_eta`, the vehicle's own speed
+  ratio `_factor` and its age, the cell-fast and cell-slow effective weights
+  along the path, the corridor-fast weight, `route_id`, `sched_headway`,
+  the timetabled travel time for the same span, and current lateness against the
+  timetable
+- **Weighting** by `1 / truth.gap` so a crossing interpolated across a 40 s hole
+  counts less than one pinned to 10 s
+
+Models, in increasing order of what they can express. Each is scored against the
+uncorrected `full` and against the one above it, so the comparison says what the
+extra capacity bought:
+
+- [ ] **`resid-const`** - one number: the mean residual. A sanity floor. If this
+      beats `full` the model has a bias, which finding 1 says it does (+36 s).
+- [ ] **`resid-linear`** - ridge regression on the features above. Closed form in
+      numpy, no dependency. Tells whether the residual is a linear function of
+      horizon and lateness, which is the shape finding 4 predicts.
+- [ ] **`resid-gbm`** - gradient-boosted regression trees, squared loss and then
+      absolute loss. Needs `scikit-learn` (`HistGradientBoostingRegressor`);
+      **add it as an optional extra, not to `requirements.txt`**, so the
+      collector's VPS footprint does not change. Tune `max_depth` in 3-8,
+      `learning_rate` in 0.03-0.3, `max_iter` by early stopping on a held-out
+      slice of the *training* window.
+- [ ] **`resid-quantile`** - the same GBM at quantile 0.5, and at 0.1/0.9 to get
+      a prediction interval. An interval is a genuinely new output: "the bus
+      arrives in 6-11 minutes" is more useful than a point estimate that is
+      wrong by 90 seconds, and nothing currently produces one.
+- [ ] **`resid-mlp`** - a small dense network, two hidden layers of 32-64 units.
+      Expected to lose on 16k rows; run it anyway so the report can say by how
+      much rather than assert it. Needs `torch`, or write the backward pass in
+      numpy - it is small enough that numpy is the lighter option.
+
+Feature ablation on whichever of these wins, so the report can say *which*
+feature carried it rather than just naming the model.
+
+## Phase 5 - hybrid and ensemble
+
+- [ ] **`stack`** - fit per-horizon-bucket blend weights over `full`,
+      `no-prior`, `sections` and `api`, on the training window. The buckets are
+      already defined in `score.py:BUCKETS`. Finding 4 showed `vehicle-offset`
+      wins at 0-1 min and loses at 20-45, and finding 5 showed `api` has a good
+      median and a bad tail, so a horizon-aware blend of things that fail
+      differently is the most likely single win in this whole plan.
+- [ ] **`stack-robust`** - the same, but blending medians rather than means, to
+      stop the `api` tail from poisoning the mix.
+- [ ] **`full` + `resid-gbm`** - the best physical model with the best residual
+      model on top. This is the headline hybrid.
+
+## Phase 6 - the multi-day items, blocked on data
+
+Build now, score when the recording covers three weekdays. Note in the report
+that they are unscored rather than quietly omitting them.
+
+- [ ] **`profile`** - finding 6's fix. A persistent hour-of-day by day-of-week
+      pace profile per section, learned across days, sitting beneath the two
+      EWMAs as the thing they back off to instead of the timetable prior. This
+      directly addresses the nightly reset, which finding 6 measured as `full`
+      opening the morning peak believing the city is 15% slower than it is.
+- [ ] **`slow-day`** - the cheaper half of the same idea: a third EWMA with a
+      half-life of a day or two, so something survives the overnight gap without
+      needing a full profile.
+- [ ] **Per-hour scoring.** No per-hour table is published today, which finding 6
+      noted is why nothing shipped is misleading despite the sparse hours. Once
+      there are enough hours, publish MAE by hour with counts, and suppress any
+      hour with fewer than a few hundred paired predictions rather than printing
+      a number nobody should read.
+
+## Deliverables
+
+- `reports/approaches.md` regenerated with every scored variant, keeping the
+  existing paired-on-common-support method and bootstrap intervals
+- `reports/sweeps.json` with the hyperparameter grids
+- a section in `reports/findings.md` for whatever the new results contradict
+- this file, kept current: mark each item as it lands, and keep the reason when
+  something is dropped
