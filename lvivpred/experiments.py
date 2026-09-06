@@ -15,10 +15,8 @@ are scored too, so the variants are ranked against something that is not us.
 import json
 import os
 import sqlite3
-import time
 
 from . import config, network, predictors, replay, score
-from .truth import Truth
 
 REPORTS = "reports"
 LATE = 300.0     # the oldest fix the replay's own filter still accepts
@@ -47,26 +45,15 @@ def run_all(net=None, variants=None, out=REPORTS, db=replay.DB, **kw):
     variants = variants or config.VARIANTS
     kw.setdefault("t_to", _end(db))
 
-    named, truth, first = {}, None, None
-    for cfg in variants:
-        t = time.time()
-        _, res = replay.run(net, cfg=cfg, db=db, **kw)
-        res.net = net
-        if truth is None:
-            truth, first = Truth(net, res), res
-        elif res.truth.keys() != first.truth.keys():
-            raise RuntimeError(f"{cfg.name} tracked a different set of crossings")
-        named[cfg.name] = predictors.ours(res, truth)
-        print(f"  {cfg.name:<16} {len(named[cfg.name]):>8} predictions  "
-              f"{time.time() - t:5.1f}s", flush=True)
+    named, truth, rec = replay.run_many(net, variants, db=db, **kw)
 
-    named["api"] = predictors.api(first, truth)
-    named["lad"] = predictors.lad(first, net, truth)
-    named["schedule"] = predictors.schedule(first, truth, net)
+    named["api"] = predictors.api(rec, truth)
+    named["lad"] = predictors.lad(rec, net, truth)
+    named["schedule"] = predictors.schedule(rec, truth, net)
 
     paired = score.paired(named)
     lad = score.common({n: named[n] for n in ("lad", "full", "api", "schedule")})
-    data = {"crossings": truth.n, "epochs": first.epochs,
+    data = {"crossings": truth.n, "epochs": rec.epochs,
             "answered": {n: len(s) for n, s in named.items()},
             "scored_on": {n: len(s) for n, s in paired.items()},
             "buckets": score.buckets(paired, truth, ci=True),

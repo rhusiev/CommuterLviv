@@ -73,14 +73,29 @@ on the 161 466 events it also answers, `lad` scores 111 s and `api` 408 s, with
 
 ## Speed of the comparison
 
-A seventeen-variant run takes about 49 minutes because 73% of each replay is
+A seventeen-variant run took about 49 minutes because 73% of each replay is
 `track.observe` rebuilding vehicle tracks, and `observe` takes no config, so all
-seventeen rebuild identical tracks. A `replay.run_many` that forks one worker per
-variant exists on the **`perf/replay-once`** branch (worktree
-`../transport-perf`, commit `7d3fcd2`), verified bit-identical by
-`check_parallel.py` and measured at 52.7 s to 20.9 s on three variants. See
-`NOTE-perf-branch.md`. Cherry-pick it before Phase 4, which needs many more runs
-than Phase 3 did.
+seventeen rebuilt identical tracks. `replay.run_many` now forks one worker per
+variant instead, and `experiments.run_all` and `sweep.run` both go through it.
+`check_parallel.py` is the guard: it replays three variants both ways and
+compares every array element by element, including the three outside predictors.
+Bit-identical, 45.7 s to 18.2 s on those three. Run it after anything that
+touches `replay.py`.
+
+- [ ] **Retime a full seventeen-variant run** and record the real figure here.
+      The three-variant measurement extrapolates to about 9 minutes at the
+      default `cpu_count() - 2` workers, but that is arithmetic, not a
+      measurement, and memory bandwidth is the obvious way for it to be wrong.
+- [-] **A single tracking pass shared by every variant.** Dropped. It would take
+      the remaining 9 minutes to about 5, and costs a restructuring of
+      `replay.py` - the file every published number rests on - plus per-variant
+      shadow state for `Cell.sent_d`/`sent_w` and a tape of roughly 3M Python
+      tuples that fork's copy-on-write would then duplicate in every worker. Not
+      worth four minutes. It composes with the parallelism if that ever changes.
+- [-] **A closed-form 2x2 Kalman inverse** (~10% of `observe`) and **precomputing
+      `ab`/`l2` on `Shape`** (~8%). Dropped: both change results in the last bits,
+      and this comparison's whole method is that every variant sees identical
+      tracking. The second also invalidates the pickled `network.pkl`.
 
 ## The question all of this answers
 
@@ -128,10 +143,12 @@ current numbers are a screening pass, not the answer.
 
 ## Rules every new approach must obey
 
-- **Tracking must stay variant-independent.** `experiments.py:57` asserts that
-  every variant produced the same `res.truth` keys, and the paired scoring in
-  `score.paired` depends on it. So no approach may change `track.py`. Anything
-  that wants different ground truth is a different experiment, not a variant.
+- **Tracking must stay variant-independent.** `replay.run_many` hashes each
+  variant's ordered `res.truth` keys and refuses a set that disagrees, and the
+  paired scoring in `score.paired` depends on that holding. It is also what
+  makes the parallel replay safe. So no approach may change `track.py`.
+  Anything that wants different ground truth is a different experiment, not a
+  variant.
 - **Causality.** `replay.run` is one forward pass and the model is only ever read
   after the epoch's observations are folded in. An offline-fitted model is
   causal only if its training data ends before the scored window starts. Assert

@@ -20,14 +20,12 @@ it is shrinking towards.
 """
 import json
 import os
-import time
 from dataclasses import replace
 
 import numpy as np
 
-from . import config, network, predictors, replay, score
+from . import config, network, replay, score
 from .experiments import REPORTS, _end
-from .truth import Truth
 
 # The constants worth sweeping, and the values worth trying. Anything in Config
 # can be swept by name; these are the ones with a reason behind them.
@@ -57,24 +55,15 @@ def run(field, values=None, net=None, out=REPORTS, db=replay.DB, base=None, **kw
     cast = type(getattr(base, field))
     kw.setdefault("t_to", _end(db))
 
-    named, truth, first = {}, None, None
-    for v in map(cast, values):
-        cfg = replace(base, name=f"{field}={v:g}", **{field: v})
-        t = time.time()
-        _, res = replay.run(net, cfg=cfg, db=db, **kw)
-        if truth is None:
-            truth, first = Truth(net, res), res
-        elif res.truth.keys() != first.truth.keys():
-            raise RuntimeError(f"{cfg.name} tracked a different set of crossings")
-        named[cfg.name] = predictors.ours(res, truth)
-        print(f"  {cfg.name:<16} {len(named[cfg.name]):>8} predictions  "
-              f"{time.time() - t:5.1f}s", flush=True)
+    cfgs = [replace(base, name=f"{field}={v:g}", **{field: v})
+            for v in map(cast, values)]
+    named, truth, rec = replay.run_many(net, cfgs, db=db, **kw)
 
     paired = score.common(named)
     rows = {n: score.stats(s.error) for n, s in paired.items()}
     ref = paired[min(rows, key=lambda n: rows[n]["mae"])]
     data = {"field": field, "base": base.name, "values": list(values),
-            "crossings": truth.n, "epochs": first.epochs, "overall": rows,
+            "crossings": truth.n, "epochs": rec.epochs, "overall": rows,
             "ci": {n: [float(x) for x in
                        score.bootstrap(np.abs(s.error), truth.trip[s.event])]
                    for n, s in paired.items()},
