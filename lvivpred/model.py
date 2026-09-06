@@ -385,11 +385,15 @@ class PaceModel(BaseModel):
 
     def __init__(self, net, cfg=None):
         super().__init__(net, cfg)
-        args = (self.nunit, self.ncorr, self.unit_corr)
-        opts = dict(k_unit=self.cfg.k_unit, k_corr=self.cfg.k_corr,
-                    fast=self.cfg.fast, corridor=self.cfg.corridor)
-        self.pace = Layer(*args, 1.0, self.cfg.fast_hl, self.cfg.slow_hl, **opts)
-        self.hold = Layer(*args, 0.0, self.cfg.fast_hl, self.cfg.slow_hl, **opts)
+        self.pace = self._layer(1.0)
+        self.hold = self._layer(0.0)
+
+    def _layer(self, init):
+        """One layer of the two. The only thing `MedianModel` changes."""
+        return Layer(self.nunit, self.ncorr, self.unit_corr, init,
+                     self.cfg.fast_hl, self.cfg.slow_hl,
+                     k_unit=self.cfg.k_unit, k_corr=self.cfg.k_corr,
+                     fast=self.cfg.fast, corridor=self.cfg.corridor)
 
     def _absorb(self, units, corr, ratio, held, w_pace, w_hold, now):
         self.pace.update(units, ratio, now, w_pace, group(corr, ratio, w_pace))
