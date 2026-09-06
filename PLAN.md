@@ -80,8 +80,8 @@ and wrong at thirty.
 115 with bias -66 against -63 and sit within a second of each other in five of
 six buckets, having got there by opposite routes: one keeps the timetable prior
 and stops shrinking towards it, the other deletes it. Turning the prior off *on
-top of* the tuned constants settles it (`check_prior.py`, four variants on one common
-support of 94 376 crossings):
+top of* the tuned constants settles it (`check_prior.py`, four variants on one
+common support of 94 376 crossings):
 
 | bucket | `full` | `tuned` | `tuned-no-prior` | `no-prior` |
 |---|---|---|---|---|
@@ -127,13 +127,18 @@ touches `replay.py`.
       per-variant time is roughly 30% above the 170-180 s the same variants take
       when only four run at once, so contention is real and the speedup is
       nearer 6x than the 8x the worker count suggests - which is the direction
-      the earlier three-variant extrapolation got wrong.
+      the earlier three-variant extrapolation got wrong. End to end - replay,
+      the three outside predictors, paired scoring and the bootstrap intervals -
+      the run took 16 min 41 s, 15:19:38 to 15:36:19, so scoring is about a
+      quarter of the wall time and is the next thing that would have to be
+      attacked, not the replay.
 - [-] **A single tracking pass shared by every variant.** Dropped. It would take
-      the remaining 9 minutes to about 5, and costs a restructuring of
-      `replay.py` - the file every published number rests on - plus per-variant
-      shadow state for `Cell.sent_d`/`sent_w` and a tape of roughly 3M Python
-      tuples that fork's copy-on-write would then duplicate in every worker. Not
-      worth four minutes. It composes with the parallelism if that ever changes.
+      the replay phase from about 12 minutes to about 6, and costs a
+      restructuring of `replay.py` - the file every published number rests on -
+      plus per-variant shadow state for `Cell.sent_d`/`sent_w` and a tape of
+      roughly 3M Python tuples that fork's copy-on-write would duplicate in
+      every worker. Not worth six minutes, and less so now that scoring is a
+      quarter of the run. It composes with the parallelism if that ever changes.
 - [-] **A closed-form 2x2 Kalman inverse** (~10% of `observe`) and **precomputing
       `ab`/`l2` on `Shape`** (~8%). Dropped: both change results in the last bits,
       and this comparison's whole method is that every variant sees identical
@@ -262,7 +267,7 @@ variants in the comparison as evidence; ship none of them.
 | constant | where | now | sweep | what it decides |
 |---|---|---|---|---|
 | `k_unit` | `config.py` | 4.0 | 0.5, 1, 2, 4, 8, 16 | how much evidence a cell needs before it outweighs its corridor |
-| `k_corr` | `config.py` | 4.0 | 0.5, 1, 2, 4, 8, 16 | same, corridor against global |
+| `k_corr` | `config.py` | 4.0 | 0.125 to 4 | same, corridor against global |
 | `fast_hl` | `config.py` | 480 s | 480 to 57600 | how live "live traffic" is |
 | `slow_hl` | `config.py` | 5400 s | 5400 to 691200 | how long the baseline remembers |
 | `RATIO_CLIP` | `model.py:46` | (0.15, 8.0) | (0.4, 2.5), (0.25, 4) | how much of an outlier a crossing may be |
