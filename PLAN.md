@@ -410,9 +410,16 @@ space so it is a multiplicative correction.
 Setup, common to all of Phase 4:
 
 - **Target** `log((actual - now) / max(predicted - now, 1))`, clipped at ±1.5
-- **Split** fit on 2026-09-05 20:00-23:59, score on 2026-09-06 05:30-09:32
-- **Rows** one per emitted prediction, which is about 920 000 in the scored
-  window; the training window has its own count, expect the same order
+- **Split** one replay of the whole recording, not two, with rows split by the
+  time they were emitted: fit on rows before 2026-09-06 00:00 and test from
+  05:30 to the end of the recording. Written when the recording ended at 09:32,
+  it now runs to 16:00 and the test window should take all of it. One replay
+  keeps this causal - the physical model is causal and the residual model only
+  ever sees earlier rows - and it means the model state at 05:30 carries the
+  evening's learning, as it would in deployment. Drop the first 30-40 minutes
+  of training rows, where the model is still cold.
+- **Rows** one per emitted prediction: about 1.9 million over the whole
+  recording, of which the test window is the larger part
 - **Features**, all available causally at emit time:
   `horizon` (seconds to the predicted arrival), `n_stops_ahead`,
   `dist_remaining`, `hour + minute/60`, `model_eta`, the vehicle's own speed
@@ -422,6 +429,20 @@ Setup, common to all of Phase 4:
   timetable
 - **Weighting** by `1 / truth.gap` so a crossing interpolated across a 40 s hole
   counts less than one pinned to 10 s
+
+- [x] **The rows themselves.** `lvivpred/features.py` and a `feats=` hook in
+      `replay.run` write one row per emitted prediction, appended in the same
+      loop and under the same mask as the prediction, so feature row *i* is
+      prediction row *i* and the join to the truth is by position and never by a
+      key; `predictors.event_of` supplies the crossing id. Run it with
+      `python3 -m lvivpred features --out reports/feats.npz`. Two deviations
+      from the feature list above: `horizon` and `model_eta` are the same
+      quantity and only one is recorded, and `fix_age` - how stale the believed
+      position is - was added because it is causally available and clearly
+      relevant. Three refactors went with it and change no score:
+      `predictors.event_of`, `model.integrate` generalised out of `time_between`
+      so the same partly-crossed-cell arithmetic serves the evidence-weight
+      integrals, and the hook itself. `check_parallel.py` still passes.
 
 Models, in increasing order of what they can express. Each is scored against the
 uncorrected `full` and against the one above it, so the comparison says what the

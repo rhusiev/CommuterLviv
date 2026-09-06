@@ -365,8 +365,17 @@ class BaseModel:
         self._per_cell = self._pace * self.cell_len + self._hold
         np.cumsum(self._per_cell, out=self._cum[1:])
 
-    def time_between(self, shape_id, d0, d1):
-        """Seconds to go from d0 to d1 metres along a shape (vectorised in d1)."""
+    def integrate(self, shape_id, d0, d1, per_cell=None, cum=None):
+        """Integrate a per-cell quantity along a shape, from d0 to d1.
+
+        Travel time is the case that matters and the default, but the residual
+        features in `features.py` need the same integral over the model's own
+        evidence weights, and the arithmetic of a partly-crossed cell is fiddly
+        enough that it should exist in one place. `cum` is the running sum of
+        `per_cell` with a leading zero, as `_apply` builds it.
+        """
+        per_cell = self._per_cell if per_cell is None else per_cell
+        cum = self._cum if cum is None else cum
         s = self.net.shapes[shape_id]
         b = self.shape_base[shape_id]
         cl = s.length / s.cells
@@ -374,10 +383,13 @@ class BaseModel:
         def upto(d):
             d = np.clip(np.asarray(d, dtype=float), 0.0, s.length)
             i = np.minimum((d / cl).astype(int), s.cells - 1)
-            return (self._cum[b + i] - self._cum[b]
-                    + (d / cl - i) * self._per_cell[b + i])
+            return cum[b + i] - cum[b] + (d / cl - i) * per_cell[b + i]
 
         return np.maximum(upto(d1) - upto(d0), 0.0)
+
+    def time_between(self, shape_id, d0, d1):
+        """Seconds to go from d0 to d1 metres along a shape (vectorised in d1)."""
+        return self.integrate(shape_id, d0, d1)
 
 
 class PaceModel(BaseModel):

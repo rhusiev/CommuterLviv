@@ -1,6 +1,7 @@
-"""One entry point for the six things this project does.
+"""One entry point for the seven things this project does.
 
     collect     record the live feeds into data/feed.db, indefinitely
+    features    replay once and dump one feature row per prediction
     evaluate    replay what was recorded and score every predictor on it
     experiment  score every switchable approach on the same recording
     sweep       vary one estimator constant and score every value of it
@@ -14,6 +15,19 @@ import sys
 def _collect(rest):
     from . import collect
     collect.main(rest)
+
+
+def _features(rest):
+    from . import features
+    ap = argparse.ArgumentParser(prog="lvivpred features")
+    ap.add_argument("--out", default="reports/feats.npz", metavar="FILE")
+    ap.add_argument("--warmup", type=float, default=0.0,
+                    help="seconds of replay to learn from before rows are kept")
+    ap.add_argument("--from", dest="t_from", type=_when, metavar="TIME")
+    ap.add_argument("--to", dest="t_to", type=_when, metavar="TIME")
+    a = ap.parse_args(rest)
+    kw = {} if a.t_to is None else {"t_to": a.t_to}
+    features.dump(a.out, warmup=a.warmup, t_from=a.t_from, **kw)
 
 
 def _evaluate(rest):
@@ -93,7 +107,7 @@ def _no_args(name, rest):
         raise SystemExit(f"lvivpred {name} takes no arguments, got {' '.join(rest)}")
 
 
-COMMANDS = {"collect": _collect, "evaluate": _evaluate,
+COMMANDS = {"collect": _collect, "features": _features, "evaluate": _evaluate,
             "experiment": _experiment, "sweep": _sweep,
             "check": _check, "diag": _diag}
 

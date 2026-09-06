@@ -100,9 +100,12 @@ class Result:
 
 
 def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
-        progress=None, model=None, cfg=None):
+        progress=None, model=None, cfg=None, feats=None):
     model = model or build(net, cfg)
-    offset = {} if model.cfg.vehicle_offset != "off" else None
+    # Tracked whenever anything wants to read it, applied only where the config
+    # asks for it: the residual features want the ratio out of a model that is
+    # not corrected by it.
+    offset = {} if model.cfg.vehicle_offset != "off" or feats else None
     tracks = {}
     runs = {}
     closed = []
@@ -133,7 +136,8 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
             res = Result(t_start)
         while ts >= next_epoch:
             _flush(model, res, tracks, runs, closed, next_epoch, veh_idx,
-                   trip_idx, emit=next_epoch - t_start >= warmup, offset=offset)
+                   trip_idx, emit=next_epoch - t_start >= warmup, offset=offset,
+                   feats=feats)
             next_epoch += epoch
             if progress and res.epochs % progress == 0:
                 print(f"  t+{(next_epoch - t_start) / 60:5.0f} min  "
@@ -163,7 +167,7 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
                      "so a window inside the nightly shutdown is empty by "
                      "construction rather than by any fault of the recording.")
     _flush(model, res, tracks, runs, closed, next_epoch, veh_idx, trip_idx,
-           emit=True, offset=offset)
+           emit=True, offset=offset, feats=feats)
     return model, res
 
 
@@ -281,7 +285,7 @@ def _drain(model, tracks, closed, now, offset):
     exp = model.expected(idx)
     rows = [c.take(e, final) for (_, c, _, final), e in zip(parts, exp)]
     if offset is not None:
-        _residuals(parts, rows, exp, offset)
+        _residuals(parts, rows, exp, offset, now)
     keep = np.array([r is not None for r in rows])
     if not keep.any():
         return
@@ -289,7 +293,7 @@ def _drain(model, tracks, closed, now, offset):
     model.observe(idx[keep], a[:, 0], a[:, 1], a[:, 2], a[:, 3], now)
 
 
-def _residuals(parts, rows, exp, offset, forget=0.9):
+def _residuals(parts, rows, exp, offset, now, forget=0.9):
     """How fast each vehicle has been running against the road model.
 
     Kept as two decaying sums so the ratio is a weighted mean over this
@@ -302,17 +306,21 @@ def _residuals(parts, rows, exp, offset, forget=0.9):
         d, pace, hold, w = r
         if w <= 0.0:
             continue
-        obs, ex = offset.get(veh, (0.0, 0.0))
+        obs, ex, _ = offset.get(veh, (0.0, 0.0, -np.inf))
         offset[veh] = (obs * forget + (d * pace + hold) * w,
-                       ex * forget + e * w)
+                       ex * forget + e * w, now)
 
 
-def _factor(offset, veh, lo=0.6, hi=1.7, k=60.0):
+def _ratio(offset, veh, k=60.0):
     """The vehicle's ratio, shrunk towards 1 until it has earned some weight."""
-    obs, ex = offset.get(veh, (0.0, 0.0))
-    if ex <= 0.0:
-        return 1.0
-    return float(np.clip((obs + k) / (ex + k), lo, hi))
+    obs, ex, _ = offset.get(veh, (0.0, 0.0, -np.inf))
+    return (obs + k) / (ex + k) if ex > 0.0 else 1.0
+
+
+def _factor(offset, veh, lo=0.6, hi=1.7):
+    """The ratio as the ETA is allowed to use it: bounded, because a vehicle
+    that has just left a terminus can otherwise scale the whole trip by 3."""
+    return float(np.clip(_ratio(offset, veh), lo, hi))
 
 
 def _fade(dt, f, tau=300.0):
@@ -367,7 +375,7 @@ def _prune(tracks, runs, now):
 
 
 def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True,
-           offset=None):
+           offset=None, feats=None):
     # An estimator that fits once and freezes needs to know where the warmup
     # ends, and this is the only place that knows it. Set before the drain, so
     # the epoch that first scores is already past the estimator's training.
@@ -378,6 +386,8 @@ def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True,
     if not emit:
         return
     model.refresh(now)
+    if feats is not None:
+        feats.refresh(model, now)
     ep = int(now - res.t0)
     for veh, tr in tracks.items():
         if tr.ts is None or tr.s is None or now - tr.ts > STALE:
@@ -394,7 +404,7 @@ def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True,
             dt = _lateness_eta(tr, s_now)
         else:
             dt = model.time_between(tr.shape_id, s_now, tr.sdist[i:])
-            if offset is not None:
+            if model.cfg.vehicle_offset != "off":
                 f = _factor(offset, veh)
                 dt = (_fade(dt, f) if model.cfg.vehicle_offset == "decay"
                       else dt * f)
@@ -404,3 +414,5 @@ def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True,
         res.pos.append((ep, vi, ti, tr.run, s_now))
         res.buf.extend(ep, vi, ti, tr.run, i + k,
                        np.rint(now - res.t0 + dt[k]).astype("i4"))
+        if feats is not None:
+            feats.add(tr, veh, now, s_now, i + k, dt[k], offset)
