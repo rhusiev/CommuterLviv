@@ -221,8 +221,8 @@ variants in the comparison as evidence; ship none of them.
 |---|---|---|---|---|
 | `k_unit` | `config.py` | 4.0 | 0.5, 1, 2, 4, 8, 16 | how much evidence a cell needs before it outweighs its corridor |
 | `k_corr` | `config.py` | 4.0 | 0.5, 1, 2, 4, 8, 16 | same, corridor against global |
-| `fast_hl` | `config.py` | 480 s | 120, 300, 480, 900, 1800 | how live "live traffic" is |
-| `slow_hl` | `config.py` | 5400 s | 1800, 5400, 14400, 43200 | how long the baseline remembers |
+| `fast_hl` | `config.py` | 480 s | 480 to 57600 | how live "live traffic" is |
+| `slow_hl` | `config.py` | 5400 s | 5400 to 691200 | how long the baseline remembers |
 | `RATIO_CLIP` | `model.py:46` | (0.15, 8.0) | (0.4, 2.5), (0.25, 4) | how much of an outlier a crossing may be |
 | `MAX_HOLD` | `track.py:29` | 240 s | 60, 120, 240, 600 | where a layover stops counting as traffic |
 
@@ -235,18 +235,53 @@ comes.
       `k_unit` 4.0 to **1.0** (149 s to 139 s; 0.5 not separated from 1.0),
       `fast_hl` 480 s to **7200 s** and `slow_hl` 5400 s to **172800 s**, both
       of which ran to the top of their grid, `knn` **10**, which is what it
-      already was. Extended grids and `k_corr` are running.
+      already was.
+- [x] **Second pass, extended grids and `k_corr`** (87 036 crossings, 1 099
+      epochs, so its MAE is on a different support from pass 1's and from the
+      experiment's - compare within a pass only). Two of the three grids stopped
+      running to their edge:
+      `fast_hl` **plateaus**: 480 → 168.4, 1800 → 165.0, **7200 → 164.2**,
+      14400 → 164.4, 28800 → 164.3, 57600 → 164.3, with nothing at or above
+      7200 separated. Bias worsens monotonically across the whole grid, -56.1 to
+      -96.4, so the plateau is where a longer memory stops helping the size of
+      the error and keeps hurting its sign.
+      `slow_hl` is **flat past 43200**: 5400 → 168.4, 43200 → 166.5,
+      **172800 → 166.4**, 345600 → 166.4, 691200 → 166.4. A half-life longer
+      than the recording is indistinguishable from no decay at all, which is
+      what those last three points are.
+      `k_corr` is **still at the lower edge**: **0.5 → 166.5**, 1 → 166.7,
+      2 → 167.1, 4 → 167.8, 8 → 169.0, 16 → 170.6 - monotone, and every step
+      separated.
+- [ ] **Extend the `k_corr` grid downward** to 0.125 and 0.25. It is the one
+      grid that has not turned over, so its optimum is not yet measured, only
+      bounded above.
+- [ ] **Score a combined `tuned` variant** - `k_unit=1`, `k_corr=0.5`,
+      `fast_hl=7200`, `slow_hl=43200` - against `full`, `no-prior` and `knn` on
+      the experiment's support. The four grids were each swept with everything
+      else shipped, so their gains are not known to add. This is also the
+      decisive question of the whole comparison so far: whether tuning the
+      structure beats removing it. Cheap now that variants run in parallel.
 - [x] **The `fast_hl` confound is settled.** At `fast_hl = 7200` the fast term
       nearly coincides with the 5400 s slow one, so the gain could have been
       half as much shrinkage rather than longer memory. Sweeping `fast` on a
       base with `fast_hl = 7200`: off costs +9.1 s [+7.8, +10.2]. The term earns
       its place; it just wants a much longer half-life than it ships with.
-- [ ] **Read the direction, not the numbers.** A slow half-life of two days on
-      an 8.5-hour recording is not decay at all, and `k_unit = 1` on top of it
-      says the cell should be trusted almost immediately. Both are the same
-      claim: on this much data the model is throwing away evidence. Whether that
-      survives a recording spanning several days is Phase 6's question, and no
-      default should move before then.
+- [ ] **Read the direction, not the numbers.** All four grids say the same
+      thing - less shrinkage, longer memory - and a slow half-life longer than
+      the recording is not decay at all. On a single day that is exactly the
+      shape you would see if there were no genuine within-day variation worth
+      tracking: nothing to forget, so forget nothing, and nothing local to
+      learn, so pool everything. It is also exactly the shape you would see if
+      the recording were simply too short to show that variation. Those two are
+      not distinguishable here; Phase 6 is what separates them, and no default
+      should move before then.
+
+      The same reading applies to `knn` (118 s) sitting a second ahead of
+      `full` (119 s) in the comparison. It has no hierarchy, no decay and no
+      prior - a plain median of the last 10 crossings - so it is the strongest
+      single piece of evidence that this recording's structure is thinner than
+      the model assumes. It is the first thing to re-score on a multi-day
+      recording.
 
 Finding 3 is the specific hypothesis to test here: the cell-fast term supplies
 8.3% of the blend and is diluted almost to nothing by `K_CELL = 4.0`, so a
