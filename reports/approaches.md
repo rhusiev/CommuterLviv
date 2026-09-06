@@ -1,6 +1,6 @@
 # Approaches, and what each one scored
 
-One recording: 80572 stop crossings over 1056 minutes of replay. Every approach is scored on the 1318685 predictions all of them made, so the numbers below answer the same questions.
+One recording: 93796 stop crossings over 1143 minutes of replay. Every approach is scored on the 1756722 predictions all of them made, so the numbers below answer the same questions.
 
 `lad` is not in that support and not in these tables. It answers about only the 40 stops the collector polls, so intersecting over it too would judge every other approach on a small subsample chosen by which stops we happen to poll. It has its own table at the end, against the approaches it can be compared to.
 
@@ -10,62 +10,64 @@ A switch that scores better than `full` is a claim the shipped model makes and t
 
 | approach | MAE s | vs full | median s | RMSE s | bias s | <60 s | <120 s |
 |---|---|---|---|---|---|---|---|
-| no-prior | 114 | -5% | 64 | 205 | -61 | 48.0% | 70.3% |
-| prior-shape | 118 | -1% | 65 | 210 | -18 | 47.5% | 69.5% |
-| knn | 118 | -1% | 66 | 212 | -42 | 47.0% | 69.6% |
-| full | 119 | - | 66 | 211 | -9 | 47.1% | 69.0% |
-| offset-decay | 121 | +1% | 68 | 214 | -36 | 46.0% | 68.6% |
-| sections | 121 | +1% | 67 | 214 | -52 | 46.3% | 68.6% |
-| no-fast | 122 | +2% | 67 | 214 | -6 | 46.6% | 68.4% |
-| no-incremental | 122 | +2% | 68 | 211 | +17 | 46.2% | 67.9% |
-| sections-no-prior | 127 | +6% | 74 | 217 | -46 | 43.5% | 65.7% |
-| no-hold | 130 | +9% | 73 | 221 | +26 | 44.0% | 65.6% |
-| no-corridor | 132 | +11% | 73 | 225 | +22 | 43.9% | 65.5% |
-| table-live | 134 | +12% | 75 | 232 | -52 | 43.3% | 65.1% |
-| table | 134 | +13% | 75 | 231 | -20 | 43.2% | 64.9% |
-| k-split | 140 | +17% | 78 | 235 | +24 | 42.3% | 63.2% |
-| vehicle-offset | 163 | +36% | 95 | 265 | -105 | 37.3% | 57.1% |
-| median | 174 | +46% | 105 | 277 | -146 | 34.5% | 54.0% |
-| schedule-offset | 208 | +75% | 126 | 313 | +102 | 30.7% | 48.5% |
-| api | 467 | +291% | 159 | 1328 | -74 | 26.4% | 42.8% |
-| schedule | 860 | +621% | 625 | 1265 | +496 | 12.3% | 20.8% |
+| tuned | 114 | -5% | 61 | 206 | -66 | 49.3% | 70.6% |
+| no-prior | 115 | -4% | 65 | 206 | -63 | 47.7% | 69.7% |
+| prior-shape | 119 | -1% | 65 | 210 | -19 | 47.4% | 69.2% |
+| full | 120 | - | 66 | 212 | -10 | 46.9% | 68.7% |
+| knn | 121 | +0% | 67 | 215 | -40 | 46.4% | 68.9% |
+| sections | 122 | +1% | 68 | 215 | -53 | 46.2% | 68.3% |
+| offset-decay | 122 | +1% | 69 | 215 | -38 | 45.6% | 68.1% |
+| no-fast | 123 | +2% | 68 | 214 | -7 | 46.4% | 68.0% |
+| no-incremental | 123 | +2% | 68 | 212 | +18 | 46.0% | 67.7% |
+| sections-no-prior | 128 | +6% | 75 | 218 | -50 | 43.2% | 65.2% |
+| no-hold | 131 | +9% | 74 | 222 | +27 | 43.7% | 65.3% |
+| no-corridor | 132 | +9% | 74 | 224 | +20 | 43.8% | 65.5% |
+| k-split | 140 | +17% | 77 | 235 | +23 | 42.5% | 63.4% |
+| table-live | 144 | +20% | 82 | 242 | -40 | 40.6% | 62.0% |
+| table | 149 | +24% | 85 | 246 | -5 | 39.8% | 60.9% |
+| vehicle-offset | 165 | +37% | 97 | 267 | -109 | 36.8% | 56.4% |
+| median | 177 | +47% | 108 | 280 | -150 | 33.9% | 53.3% |
+| schedule-offset | 199 | +66% | 119 | 304 | +89 | 31.9% | 50.4% |
+| api | 471 | +292% | 147 | 1406 | -105 | 27.7% | 44.7% |
+| schedule | 843 | +601% | 579 | 1268 | +431 | 13.2% | 22.4% |
 
 ## MAE by how far ahead the prediction was
 
 | approach | 0-1 min | 1-2 min | 2-5 min | 5-10 min | 10-20 min | 20-45 min |
 |---|---|---|---|---|---|---|
-| no-prior | 15 | 24 | 39 | 66 | 114 | 218 |
-| prior-shape | 17 | 28 | 46 | 75 | 123 | 212 |
-| knn | 18 | 30 | 46 | 75 | 120 | 216 |
-| full | 17 | 29 | 47 | 77 | 126 | 212 |
-| offset-decay | 16 | 27 | 45 | 76 | 127 | 219 |
-| sections | 19 | 30 | 46 | 74 | 122 | 225 |
-| no-fast | 17 | 29 | 47 | 78 | 128 | 216 |
-| no-incremental | 18 | 30 | 49 | 80 | 131 | 212 |
-| sections-no-prior | 18 | 29 | 47 | 78 | 131 | 231 |
-| no-hold | 18 | 31 | 51 | 85 | 140 | 226 |
-| no-corridor | 19 | 33 | 54 | 89 | 144 | 225 |
-| table-live | 19 | 31 | 50 | 83 | 137 | 247 |
-| table | 20 | 33 | 52 | 87 | 141 | 239 |
-| k-split | 19 | 33 | 55 | 92 | 152 | 244 |
-| vehicle-offset | 15 | 26 | 46 | 86 | 163 | 325 |
-| median | 16 | 28 | 50 | 92 | 169 | 353 |
-| schedule-offset | 27 | 51 | 86 | 146 | 238 | 340 |
-| api | 297 | 314 | 347 | 404 | 486 | 607 |
-| schedule | 806 | 807 | 813 | 827 | 865 | 920 |
+| tuned | 15 | 24 | 39 | 65 | 111 | 223 |
+| no-prior | 15 | 25 | 40 | 67 | 114 | 221 |
+| prior-shape | 17 | 29 | 46 | 76 | 123 | 213 |
+| full | 18 | 30 | 48 | 78 | 126 | 214 |
+| knn | 19 | 31 | 48 | 76 | 122 | 219 |
+| sections | 19 | 30 | 47 | 75 | 122 | 227 |
+| offset-decay | 16 | 27 | 46 | 77 | 127 | 221 |
+| no-fast | 18 | 30 | 48 | 79 | 129 | 217 |
+| no-incremental | 18 | 31 | 50 | 81 | 132 | 213 |
+| sections-no-prior | 18 | 30 | 47 | 79 | 132 | 234 |
+| no-hold | 19 | 32 | 52 | 86 | 141 | 227 |
+| no-corridor | 20 | 33 | 54 | 89 | 143 | 225 |
+| k-split | 19 | 34 | 55 | 93 | 151 | 244 |
+| table-live | 20 | 34 | 56 | 93 | 150 | 258 |
+| table | 21 | 36 | 60 | 99 | 160 | 258 |
+| vehicle-offset | 16 | 27 | 47 | 87 | 165 | 330 |
+| median | 16 | 28 | 50 | 93 | 171 | 359 |
+| schedule-offset | 27 | 50 | 84 | 141 | 226 | 324 |
+| api | 305 | 321 | 352 | 406 | 485 | 618 |
+| schedule | 789 | 791 | 795 | 807 | 843 | 912 |
 
 ## The public arrivals board, where it answers at all
 
-The same events again, restricted to the 161466 predictions `lad` also made. Nothing here is comparable to the tables above - this is a different, much smaller set of events, and the three familiar approaches are repeated on it so that the board has something to be read against.
+The same events again, restricted to the 212763 predictions `lad` also made. Nothing here is comparable to the tables above - this is a different, much smaller set of events, and the three familiar approaches are repeated on it so that the board has something to be read against.
 
 The board and `api` are both the operator's, and they are not the same quality: the board is several times the better of the two. Whatever produces it is doing more than replaying `trip_updates`. It is still beaten here, but by much less than the gap to `api` would suggest, and it is the harder of the two to beat.
 
 | approach | MAE s | vs full | median s | RMSE s | bias s | <60 s | <120 s |
 |---|---|---|---|---|---|---|---|
-| full | 85 | - | 48 | 153 | -21 | 57.3% | 79.9% |
-| lad | 111 | +31% | 63 | 178 | -42 | 48.0% | 72.0% |
-| api | 408 | +382% | 107 | 1319 | -140 | 33.0% | 53.8% |
-| schedule | 907 | +969% | 647 | 1301 | +562 | 8.4% | 14.4% |
+| full | 87 | - | 49 | 158 | -22 | 56.6% | 79.1% |
+| lad | 114 | +30% | 65 | 182 | -50 | 47.0% | 71.1% |
+| api | 429 | +391% | 104 | 1437 | -184 | 33.5% | 54.5% |
+| schedule | 914 | +947% | 622 | 1330 | +499 | 8.8% | 15.7% |
 
 ## What each approach is
 
@@ -101,13 +103,17 @@ A crossing is reported only once finished. Fast crossings then report before slo
 
 One shrinkage constant for both layers is measured to be the wrong shape: a cell is crossed 11.5 times a day and its fast term supplies 8% of the blend, while a corridor has ten times the evidence and is shrunk just as hard. This trusts the corridor sooner and the cell later.
 
+### tuned
+
+The shipped model at the best value each of its four constants found when swept alone. Every one of those sweeps moved the same way - less shrinkage, longer memory - and the four gains do add: this is the only variant that beats the shipped model at every horizon out to 20 minutes. It pays for that in the 20-45 minute bucket, where trusting live evidence sooner and forgetting it later carries the current state of the road much further ahead than it holds.
+
 ### sections
 
 Learn one travel time per stop-to-stop section rather than per 100 m cell. Corridor pooling is off because a section spans many corridors and cannot be assigned to one.
 
 ### sections-no-prior
 
-Sections and no timetable prior together. Each alone beats the full model, and the measured reason is the same one - the prior's bias reaches a cell only where live evidence is thin - so the two gains may well be the same gain counted twice.
+Sections and no timetable prior together. Dropping the prior alone beats the full model and coarsening to sections alone does not, so this asks whether the one gain survives the other change. It does not: the pair scores worse than either.
 
 ### vehicle-offset
 
