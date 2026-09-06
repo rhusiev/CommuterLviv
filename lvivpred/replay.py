@@ -16,6 +16,7 @@ one at a time. That is still causal - the model is only ever read at step 4,
 after step 2 - and it replaces a few million tiny array updates with one
 vectorised update per minute.
 """
+import datetime
 import os
 import sqlite3
 
@@ -32,6 +33,18 @@ EXTRAP = 60.0            # s of dead reckoning allowed at an epoch
 
 DTYPE = np.dtype([("epoch", "i4"), ("veh", "i4"), ("trip", "i4"),
                   ("run", "i2"), ("stop_i", "i2"), ("eta", "i4")])
+
+
+class NoData(Exception):
+    """The requested window contains nothing to replay."""
+
+
+def _window(t_from, t_to):
+    """The replay window as local times, for an error a human has to read."""
+    def when(t, unbounded):
+        return (datetime.datetime.fromtimestamp(t).isoformat(" ", "seconds")
+                if t else unbounded)
+    return f"{when(t_from, 'the first fix')} .. {when(t_to, 'the last fix')}"
 
 
 class Buf:
@@ -75,6 +88,7 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
     model = model or PaceModel(net, cfg)
     offset = {} if model.cfg.vehicle_offset else None
     tracks = {}
+    runs = {}
     closed = []
     veh_idx, trip_idx = {}, {}
 
@@ -102,8 +116,8 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
             next_epoch = np.ceil(t_start / epoch) * epoch
             res = Result(t_start)
         while ts >= next_epoch:
-            _flush(model, res, tracks, closed, next_epoch, veh_idx, trip_idx,
-                   emit=next_epoch - t_start >= warmup, offset=offset)
+            _flush(model, res, tracks, runs, closed, next_epoch, veh_idx,
+                   trip_idx, emit=next_epoch - t_start >= warmup, offset=offset)
             next_epoch += epoch
             if progress and res.epochs % progress == 0:
                 print(f"  t+{(next_epoch - t_start) / 60:5.0f} min  "
@@ -111,7 +125,7 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
 
         tr = tracks.get(veh)
         if tr is None:
-            tr = tracks[veh] = track.Track(veh)
+            tr = tracks[veh] = track.Track(veh, runs.get(veh, 0))
         done, passings = track.observe(tr, net, float(ts), lat, lon,
                                        speed, odo, trip)
         if done:
@@ -126,10 +140,14 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
                     res.truth[k] = t
                     res.gap[k] = gap
 
-    if res is not None:
-        _flush(model, res, tracks, closed, next_epoch, veh_idx, trip_idx,
-               emit=True, offset=offset)
     con.close()
+    if res is None:
+        raise NoData(f"{db} holds no usable vehicle fixes in {_window(t_from, t_to)}. "
+                     "The city runs no service between roughly 00:00 and 05:30, "
+                     "so a window inside the nightly shutdown is empty by "
+                     "construction rather than by any fault of the recording.")
+    _flush(model, res, tracks, runs, closed, next_epoch, veh_idx, trip_idx,
+           emit=True, offset=offset)
     return model, res
 
 
@@ -211,10 +229,28 @@ def _lateness_eta(tr, s_now):
     return np.maximum(tr.sched[tr.next_stop:] - sched_now, 0.0)
 
 
-def _flush(model, res, tracks, closed, now, veh_idx, trip_idx, emit=True,
+def _prune(tracks, runs, now):
+    """Forget vehicles that have gone quiet.
+
+    A fix arriving more than GAP_RESET after the last one restarts the track
+    anyway, so dropping it here changes no prediction. What it changes is that
+    `tracks` stops growing for the life of the process, which over days would
+    otherwise leave `_drain` walking thousands of vehicles that stopped
+    reporting yesterday. The run counter outlives the track, because truth is
+    keyed by it and a vehicle returning to the same trip must not reuse a
+    number it has already spent.
+    """
+    dead = [v for v, t in tracks.items()
+            if t.ts is None or now - t.ts > track.GAP_RESET]
+    for veh in dead:
+        runs[veh] = tracks.pop(veh).run
+
+
+def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True,
            offset=None):
     _drain(model, tracks, closed, now, offset)
     res.epochs += 1
+    _prune(tracks, runs, now)
     if not emit:
         return
     model.refresh(now)
