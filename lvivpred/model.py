@@ -151,7 +151,22 @@ class Layer:
                            else (self.cs,), base, self.k_unit)
 
 
-class PaceModel:
+class BaseModel:
+    """Everything an estimator needs that is not the estimating.
+
+    The geometry - which cells belong to which shape, how long each is, which
+    corridor and which unit it falls in - is the same whatever learns on top of
+    it, and so is the timetable prior and the arithmetic that turns a pace into
+    an arrival time. Only two things differ between the families in this project
+    and in `baselines.py`: what a subclass does with an observation (`_absorb`)
+    and where it gets a ratio and a hold from when asked (`refresh`).
+
+    Keeping the split here is what makes the comparison honest. Two estimators
+    that share this class cannot differ in their geometry, their prior or their
+    ETA arithmetic even by accident, so a difference in the score is a
+    difference in the learning.
+    """
+
     def __init__(self, net, cfg=None):
         self.cfg = cfg = cfg or config.FULL
         self.net = net
@@ -177,14 +192,9 @@ class PaceModel:
                      else np.arange(self.ncell))
         self.nunit = int(self.unit.max()) + 1
         self.unit_len = np.bincount(self.unit, self.cell_len, self.nunit)
-        unit_corr = np.zeros(self.nunit, dtype=np.int64)
-        unit_corr[self.unit] = self.cell_corr
+        self.unit_corr = np.zeros(self.nunit, dtype=np.int64)
+        self.unit_corr[self.unit] = self.cell_corr
 
-        args = (self.nunit, self.ncorr, unit_corr)
-        opts = dict(k_unit=cfg.k_unit, k_corr=cfg.k_corr,
-                    fast=cfg.fast, corridor=cfg.corridor)
-        self.pace = Layer(*args, 1.0, cfg.fast_hl, cfg.slow_hl, **opts)
-        self.hold = Layer(*args, 0.0, cfg.fast_hl, cfg.slow_hl, **opts)
         self.prior = (np.full((SLOTS, self.ncell), PACE0) if cfg.prior == "off"
                       else self._schedule_prior())
         if cfg.prior == "shape":
@@ -193,6 +203,9 @@ class PaceModel:
         self._cum = np.zeros(self.ncell + 1)
         self._prior_t = None
         self._per_cell = self.prior[0] * self.cell_len
+        # Set by the replay at every epoch: whether this one is being scored.
+        # Only an estimator that stops learning when scoring starts reads it.
+        self.emitting = False
 
     def _level(self, prior):
         """The one number a whole prior array is worth: its length-weighted mean.
@@ -290,6 +303,15 @@ class PaceModel:
         out = np.where(den > 0, num / np.maximum(den, 1e-9), cell)
         return np.clip(out, *PACE_CLIP)
 
+    @staticmethod
+    def _hours(now):
+        """The local time of day as a fractional hour."""
+        local = datetime.datetime.fromtimestamp(now, TZ)
+        return local.hour + local.minute / 60.0
+
+    def _slot(self, now):
+        return int(self._hours(now))
+
     def prior_at(self, now):
         """The timetabled pace of every cell at this instant.
 
@@ -298,8 +320,7 @@ class PaceModel:
         eight o'clock timetable and jump when the clock ticked over.
         """
         if now != self._prior_t:
-            local = datetime.datetime.fromtimestamp(now, TZ)
-            k = local.hour + local.minute / 60.0
+            k = self._hours(now)
             i, f = int(k), k - int(k)
             self._prior_row = ((1.0 - f) * self.prior[i]
                                + f * self.prior[(i + 1) % SLOTS])
@@ -324,19 +345,23 @@ class PaceModel:
             held = np.zeros_like(held)
         ratio = np.clip(pace / self.prior_at(now)[cells], *RATIO_CLIP)
         units = self.unit[cells]
-        w_pace = dist / self.unit_len[units]
-        corr = self.cell_corr[cells]
-        self.pace.update(units, ratio, now, w_pace, group(corr, ratio, w_pace))
-        self.hold.update(units, held, now, hold_w, group(corr, held, hold_w))
+        self._absorb(units, self.cell_corr[cells], ratio, held,
+                     dist / self.unit_len[units], hold_w, now)
 
     def expected(self, cells):
         """Seconds a crossing of these cells is currently believed to take."""
         return self._per_cell[cells]
 
-    def refresh(self, now):
-        """Cumulative travel time along every shape, so an ETA is a subtraction."""
-        self._pace = self.pace.read(now)[self.unit] * self.prior_at(now)
-        self._hold = self.hold.read(now)[self.unit]
+    def _apply(self, ratio, hold, now):
+        """Cumulative travel time along every shape, so an ETA is a subtraction.
+
+        `ratio` and `hold` are per unit; everything downstream is per cell, and
+        a unit wider than a cell simply hands the same number to each of its
+        cells. Pace comes back as a multiple of the timetable's, so this is
+        where the prior re-enters and where a subclass need not think about it.
+        """
+        self._pace = ratio[self.unit] * self.prior_at(now)
+        self._hold = hold[self.unit]
         self._per_cell = self._pace * self.cell_len + self._hold
         np.cumsum(self._per_cell, out=self._cum[1:])
 
@@ -353,3 +378,22 @@ class PaceModel:
                     + (d / cl - i) * self._per_cell[b + i])
 
         return np.maximum(upto(d1) - upto(d0), 0.0)
+
+
+class PaceModel(BaseModel):
+    """The shipped estimator: two quantities, three layers, two half-lives."""
+
+    def __init__(self, net, cfg=None):
+        super().__init__(net, cfg)
+        args = (self.nunit, self.ncorr, self.unit_corr)
+        opts = dict(k_unit=self.cfg.k_unit, k_corr=self.cfg.k_corr,
+                    fast=self.cfg.fast, corridor=self.cfg.corridor)
+        self.pace = Layer(*args, 1.0, self.cfg.fast_hl, self.cfg.slow_hl, **opts)
+        self.hold = Layer(*args, 0.0, self.cfg.fast_hl, self.cfg.slow_hl, **opts)
+
+    def _absorb(self, units, corr, ratio, held, w_pace, w_hold, now):
+        self.pace.update(units, ratio, now, w_pace, group(corr, ratio, w_pace))
+        self.hold.update(units, held, now, w_hold, group(corr, held, w_hold))
+
+    def refresh(self, now):
+        self._apply(self.pace.read(now), self.hold.read(now), now)

@@ -143,18 +143,21 @@ The point of these is to bound how much the online part is worth. If a static
 table fitted on yesterday matches the live model, the live model is doing
 nothing that a lookup could not.
 
-- [ ] **`table`** - one travel time per (section, hour-of-day), fitted offline on
+- [x] **`table`** - one travel time per (section, hour-of-day), fitted offline on
       the training window, applied frozen. No decay, no updates, no back-off.
       This is the classic "historical average" baseline every transit paper uses
-      and it is missing from the comparison.
-- [ ] **`table-live`** - the same table, plus a single global multiplier tracking
+      and it is missing from the comparison. Implemented as
+      `baselines.TableModel`; the fit stops the epoch scoring starts, which
+      `replay._flush` signals by setting `model.emitting`.
+- [x] **`table-live`** - the same table, plus a single global multiplier tracking
       today's overall speed against it. One number of online learning, to see how
       much of the benefit is just knowing whether today is fast or slow.
-- [ ] **`knn`** - for the section and hour being predicted, the median of the
+- [x] **`knn`** - for the section and hour being predicted, the median of the
       last `k` crossings of that section by any vehicle, with no shrinkage
       hierarchy at all. `k` in 3, 5, 10, 20. Tests whether the whole
       cell/corridor/global back-off structure earns its complexity against a
-      plain recency window.
+      plain recency window. Implemented as `baselines.KnnModel`; `k` still to be
+      swept.
 - [ ] **`median`** - swap every EWMA mean for a decayed weighted median. MAE is
       minimised by the median, not the mean, and the current model optimises the
       wrong loss throughout. Cheap to state, awkward to implement vectorised -
