@@ -5,52 +5,75 @@ position on the shape, interpolated between the two fixes either side of it.
 It comes from the vehicle stream alone, so it is independent of every
 predictor scored against it.
 
-The awkward part is naming. One crossing is one *event*, but the predictors
-do not agree on how to address it: our own model and the API's trip_updates
-name a trip and a stop, while the arrivals board names a vehicle and a stop
-and never says which trip the vehicle is running. An event is kept only if
-both namings pick it out uniquely - a trip served by two vehicles at once, or
-a vehicle passing the same stop twice, is dropped from all four predictors
-together. After that a single event number means the same crossing to
-everyone, which is what makes a paired comparison possible at all.
+The awkward part is naming. One crossing is one *event*, and a crossing is
+named in full by the vehicle, the trip, which pass of that trip it was on, and
+which stop - but no predictor says all four. Ours does, because it is our own
+tracker that assigns them. The API's trip_updates names a trip and a stop; the
+arrivals board names a vehicle and a stop and never says which trip or which
+pass. Neither says which pass, and over a night and a morning a vehicle passes
+each of its stops many times, so a name on its own can stand for a dozen
+crossings.
+
+What settles it is *when* the prediction was made. A board that says "arrives
+in 4 minutes" at 20:31 is talking about the next crossing at or after 20:31,
+not about one eleven hours later. So each naming is an `Index`, asked with a
+key and an instant, and the crossing it returns is the next one. That rule uses
+only the time the predictor spoke, never the value it gave, so it cannot be
+tuned to flatter anybody.
+
+The alternative - keeping only the crossings a name happens to pick out
+uniquely - was what this file used to do, and it threw away 89% of the ground
+truth to accommodate the one predictor that answers about 40 stops.
 """
+import bisect
+
 import numpy as np
 
 
 class Truth:
-    """Unambiguous crossing events, addressable by any predictor's naming."""
+    """Every crossing, plus one index per naming that predictors can address."""
 
     def __init__(self, net, res):
-        by_trip = _unique((ti, si) for (_, ti, _, si) in res.truth)
-        by_veh = _unique((vi, net.trip_stops[res.trip_ids[ti]][0][si])
-                         for (vi, ti, _, si) in res.truth)
-
-        self.time = []          # event -> crossing time
-        self.gap = []           # event -> width of the interpolated interval
-        self.trip = []          # event -> trip index, for resampling by trip
-        self.by_trip_stop = {}  # (trip index, stop position) -> event
-        self.by_veh_stop = {}   # (vehicle index, stop id) -> event
-        for key, t in res.truth.items():
-            vi, ti, _, si = key
-            kt = (ti, si)
-            kv = (vi, net.trip_stops[res.trip_ids[ti]][0][si])
-            if kt not in by_trip or kv not in by_veh:
-                continue
-            e = len(self.time)
-            self.time.append(t)
-            self.gap.append(res.gap[key])
-            self.trip.append(ti)
-            self.by_trip_stop[kt] = e
-            self.by_veh_stop[kv] = e
-        self.time = np.array(self.time)
-        self.gap = np.array(self.gap)
-        self.trip = np.array(self.trip, dtype=np.int64)
+        keys = list(res.truth)
+        self.time = np.array([res.truth[k] for k in keys])
+        self.gap = np.array([res.gap[k] for k in keys])
+        self.trip = np.array([k[1] for k in keys], dtype=np.int64)
         self.n = len(self.time)
 
+        # The full name of a crossing, and the two partial ones.
+        self.event = {k: e for e, k in enumerate(keys)}
+        self.by_trip_stop = Index(((ti, si) for (_, ti, _, si) in keys), self.time)
+        self.by_veh_stop = Index(
+            ((vi, net.trip_stops[res.trip_ids[ti]][0][si])
+             for (vi, ti, _, si) in keys), self.time)
 
-def _unique(keys):
-    """The keys that occur exactly once. Anything repeated is ambiguous."""
-    seen, dup = set(), set()
-    for k in keys:
-        (dup if k in seen else seen).add(k)
-    return seen - dup
+
+class Index:
+    """The crossings one partial name stands for, in time order.
+
+    Built from one name per crossing, in event order, so the n-th name is the
+    name event n goes by.
+    """
+
+    def __init__(self, names, time):
+        self._by_key = {}
+        for e, key in enumerate(names):
+            self._by_key.setdefault(key, []).append((float(time[e]), e))
+        for v in self._by_key.values():
+            v.sort()
+
+    def at(self, key, t):
+        """The crossing whoever spoke at `t` meant: the next one, or None."""
+        v = self._by_key.get(key)
+        if v is None:
+            return None
+        i = bisect.bisect_left(v, (t,))
+        return v[i][1] if i < len(v) else None
+
+    def __iter__(self):
+        for key, v in self._by_key.items():
+            for _, e in v:
+                yield key, e
+
+    def __len__(self):
+        return len(self._by_key)

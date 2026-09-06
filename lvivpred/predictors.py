@@ -20,6 +20,7 @@ from . import gtfs
 DB = os.path.join(gtfs.DATA, "feed.db")
 EPOCH = 60.0
 MAX_HORIZON = 45 * 60.0
+LAD_STALE = 120.0   # two poll periods; see _from_log
 
 
 class Series:
@@ -44,25 +45,18 @@ class Series:
 
 
 def ours(res, truth):
+    """Our own predictions, which name a crossing in full and never ambiguously."""
     a = res.buf.done()
-    key = a["trip"].astype(np.int64) * 1000 + a["stop_i"]
-    order = np.argsort(key, kind="stable")
-    key, ep, eta = key[order], a["epoch"][order], a["eta"][order]
-    edge = np.append(np.searchsorted(key, np.unique(key)), len(key))
+    cols = np.stack([a[f] for f in ("veh", "trip", "run", "stop_i")], axis=1)
+    uniq, inv = np.unique(cols.astype(np.int64), axis=0, return_inverse=True)
+    ev = np.array([truth.event.get(tuple(map(int, k)), -1) for k in uniq],
+                  dtype=np.int64)[inv.ravel()]
 
-    parts = []
-    for j, k in enumerate(key[edge[:-1]]):
-        e = truth.by_trip_stop.get((int(k // 1000), int(k % 1000)))
-        if e is None:
-            continue
-        t = truth.time[e]
-        s = slice(edge[j], edge[j + 1])
-        at = ep[s] + res.t0
-        keep = at < t
-        at = at[keep]
-        parts.append((np.full(len(at), e), at, t - at,
-                      eta[s][keep] + res.t0 - t))
-    return Series(parts)
+    ok = ev >= 0
+    ev, at, eta = ev[ok], a["epoch"][ok] + res.t0, a["eta"][ok] + res.t0
+    t = truth.time[ev]
+    m = at < t
+    return Series([(ev[m], at[m], (t - at)[m], (eta - t)[m])])
 
 
 def api(res, truth, db=DB, epoch=EPOCH):
@@ -80,18 +74,20 @@ def api(res, truth, db=DB, epoch=EPOCH):
         si = stop_no.get((i, stop))
         if si is None:
             continue
-        e = truth.by_trip_stop.get((i, si))
+        e = truth.by_trip_stop.at((i, si), poll_ts)
         if e is not None:
             log.setdefault(e, ([], []))[0].append(poll_ts)
             log[e][1].append(t)
     return _from_log(log, truth, epoch)
 
 
-def lad(res, net, truth, db=DB, epoch=EPOCH):
+def lad(res, net, truth, db=DB, epoch=EPOCH, stale=LAD_STALE):
     """The arrivals board, keyed by vehicle and stop because that is all it says.
 
-    Only the stops the collector polls appear, so this predictor is scored on a
-    much smaller slice of the network than the other three.
+    It never says which pass, so what it was talking about is taken to be the
+    next crossing after the poll - it is a next-arrival board. Only the stops
+    the collector polls appear, so this predictor is scored on a much smaller
+    slice of the network than the other three.
     """
     veh_no = {v: i for i, v in enumerate(res.veh_ids)}
     by_code = {}
@@ -105,11 +101,11 @@ def lad(res, net, truth, db=DB, epoch=EPOCH):
                                              "FROM lad WHERE veh_id IS NOT NULL "
                                              "ORDER BY poll_ts"):
         stop = by_code.get(str(code).lstrip("0"))
-        e = truth.by_veh_stop.get((veh_no.get(veh), stop))
+        e = truth.by_veh_stop.at((veh_no.get(veh), stop), poll_ts)
         if e is not None:
             log.setdefault(e, ([], []))[0].append(poll_ts)
             log[e][1].append(arr)
-    return _from_log(log, truth, epoch)
+    return _from_log(log, truth, epoch, stale)
 
 
 def schedule(res, truth, net, epoch=EPOCH):
@@ -118,7 +114,7 @@ def schedule(res, truth, net, epoch=EPOCH):
     from .model import TZ
 
     parts = []
-    for (ti, si), e in truth.by_trip_stop.items():
+    for (ti, si), e in truth.by_trip_stop:
         info = net.trip_stops.get(res.trip_ids[ti])
         if info is None:
             continue
@@ -139,20 +135,35 @@ def _rows(db, sql):
         con.close()
 
 
-def _from_log(log, truth, epoch):
+def _from_log(log, truth, epoch, stale=None):
     """Score a recorded prediction log at our own epochs.
 
-    The feeds publish a value and leave it standing until they change it, so
-    what they were predicting at an epoch is whatever they last said before it.
+    What a feed was predicting at an epoch is whatever it last said before it.
+    How long that last word stands depends on the feed. `trip_updates` is
+    recorded as a change log, so a value stands until it is replaced and there
+    is no bound. The arrivals board is recorded as a snapshot of what it
+    displayed, so a vehicle missing from the next poll is a board that has
+    stopped answering, not one repeating itself: `stale` says how long a value
+    survives without being republished.
+
+    Epochs earlier than `MAX_HORIZON` before the crossing are dropped, because
+    that is as far ahead as our own replay predicts and the four have to be
+    asked the same questions.
     """
     parts = []
     for e, (polls, values) in log.items():
         t = truth.time[e]
         polls = np.asarray(polls, dtype=float)
-        at = np.arange(np.ceil(polls[0] / epoch) * epoch, t, epoch)
+        start = max(polls[0], t - MAX_HORIZON)
+        at = np.arange(np.ceil(start / epoch) * epoch, t, epoch)
         if not len(at):
             continue
         last = np.searchsorted(polls, at, "right") - 1
+        if stale is not None:
+            fresh = at - polls[last] <= stale
+            at, last = at[fresh], last[fresh]
+            if not len(at):
+                continue
         parts.append((np.full(len(at), e), at, t - at,
                       np.asarray(values, dtype=float)[last] - t))
     return Series(parts)

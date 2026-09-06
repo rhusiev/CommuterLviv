@@ -13,6 +13,10 @@ wonderful error rate. The paired table then scores every predictor on only the
 crossings and instants that all of them answered, which is the one comparison
 where the numbers mean the same thing.
 
+Who is in that intersection is itself a decision. A predictor that answers about
+a small corner of the network drags everyone down into that corner, so the
+narrow ones are held out of it and scored on a support of their own.
+
 Confidence intervals resample whole trips rather than single predictions. A
 vehicle running late is late at every stop still ahead of it, so its errors
 are one fact repeated, not thirty independent ones; resampling predictions
@@ -22,6 +26,7 @@ import numpy as np
 
 BUCKETS = [(0, 60), (60, 120), (120, 300), (300, 600), (600, 1200), (1200, 2700)]
 EPOCH = 60.0
+NARROW = ("lad",)   # predictors too narrow to set the support; see paired()
 
 
 def _keys(s):
@@ -30,12 +35,27 @@ def _keys(s):
 
 
 def common(named):
-    """Restrict every predictor to the events and instants all of them answered."""
+    """Restrict every predictor to the events and instants all of them answered.
+
+    Which predictors go in decides what every one of them is judged on, so a
+    predictor that answers about few stops belongs in a call of its own rather
+    than in the one the main comparison uses.
+    """
     keys = {n: _keys(s) for n, s in named.items()}
     shared = None
     for k in keys.values():
         shared = k if shared is None else np.intersect1d(shared, k)
     return {n: s.select(np.isin(keys[n], shared)) for n, s in named.items()}
+
+
+def paired(named):
+    """The main comparison's support: everyone but the narrow predictors.
+
+    The arrivals board answers about only the 40 stops the collector polls, so
+    intersecting over it too would judge every other approach on a subsample
+    chosen by which stops we happen to poll. It is scored on its own support.
+    """
+    return common({n: s for n, s in named.items() if n not in NARROW})
 
 
 def coverage(named, truth):
@@ -105,5 +125,6 @@ def report(named, truth):
     coverage(named, truth)
     print("each predictor on everything it answered\n")
     table(named)
-    print("all predictors on the crossings and instants every one of them answered\n")
-    table(common(named), truth, ci=True)
+    print(f"all predictors but {', '.join(NARROW)} on the crossings and "
+          "instants every one of them answered\n")
+    table(paired(named), truth, ci=True)

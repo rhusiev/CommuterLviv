@@ -7,6 +7,44 @@ approach exploration, not a report. `reports/approaches.md` holds the scores and
 Status key: `[ ]` not started, `[~]` in progress, `[x]` done and scored,
 `[-]` tried and dropped (with the reason kept).
 
+## Phase 0 - three scoring defects, found while running Phase 3
+
+All three were in how an answer is matched to a crossing, not in any model, and
+all were fixed before any Phase 4 work. **Every score quoted below them in this
+file, and every number in `reports/approaches.md` and `reports/sweeps.json`
+written before 2026-09-06, was produced under one or more of them.** Finding 7
+in `reports/findings.md` is the full account.
+
+- [x] **The arrivals board was setting the common support.** `lad` answers about
+      only the 40 stops the collector polls, and it was inside the intersection,
+      so the headline table judged every approach on 12% of its predictions - all
+      of them near those 40 stops. `score.paired` now excludes it by name and it
+      gets its own table.
+- [x] **Ground truth was being deleted by the arrivals board's naming.** A
+      crossing was kept only if *both* (trip, stop) and (vehicle, stop) named it
+      uniquely. Over a six-hour window a vehicle passes each of its stops several
+      times, so (vehicle, stop) is unique for only 11% of crossings against 94%
+      for (trip, stop): 89% of the ground truth was being thrown away to
+      accommodate the one predictor that needs the weaker naming. Worse, our own
+      predictions were addressed by (trip, stop) too, so a prediction about one
+      pass could be scored against a different pass of the same trip. `Truth` now
+      keeps every crossing keyed by (vehicle, trip, pass, stop) and
+      `predictors.ours` uses that full key.
+- [x] **A partial name is settled by when the predictor spoke, not by
+      uniqueness.** Keeping only the crossings a name picks out uniquely was the
+      first repair and it was the wrong one - it still discarded crossings for
+      the benefit of the weakest namer. A prediction made at `t` about a stop is
+      about the next crossing of that stop at or after `t`, which uses only the
+      time the predictor spoke and never the value it gave. `Truth.Index` is that
+      lookup. Coverage: `schedule` 94% to 100%, `api` to 95%, `lad` 1.7% to 17.8%.
+- [x] **A snapshot feed was being read as a change log.** `_from_log` let a
+      published value stand until replaced, which is right for `trip_updates` (a
+      change log) and wrong for the arrivals board (a 60 s snapshot of what it
+      displayed). Board values hours old were being scored. `_from_log` now takes
+      a staleness bound, 120 s for the board. This is the fix that changes a
+      published conclusion: the board is several times better than `api`, not
+      beside it.
+
 ## The question all of this answers
 
 Which way of turning recorded GPS fixes into an arrival time is most accurate on
@@ -40,11 +78,13 @@ Three consequences, and they bind every ML item below:
    currently unfittable.** Finding 6's proposed fix - a hour-of-day by day-of-week
    profile learned across days - cannot be evaluated until the recording spans
    several days. Build it, hold the score.
-3. **Sample size.** 8672 crossings and 16462 paired predictions in the current
-   scored window. A model with more than a few hundred effective parameters will
-   fit noise. Report bootstrap intervals, which `score.bootstrap` already does by
-   resampling whole trips, and treat any gap smaller than its interval as no
-   result.
+3. **Sample size.** About 63 000 crossings and 920 000 paired predictions in the
+   current scored window, but they are not 920 000 independent facts: a vehicle
+   running late is late at every stop ahead of it, and the effective count is
+   nearer the number of trips. A model with more than a few hundred effective
+   parameters will fit noise. Report bootstrap intervals, which `score.bootstrap`
+   already does by resampling whole trips, and treat any gap smaller than its
+   interval as no result.
 
 **Rerun the whole comparison once the recording covers three full weekdays.** The
 current numbers are a screening pass, not the answer.
@@ -53,7 +93,7 @@ current numbers are a screening pass, not the answer.
 
 - **Tracking must stay variant-independent.** `experiments.py:57` asserts that
   every variant produced the same `res.truth` keys, and the paired scoring in
-  `score.common` depends on it. So no approach may change `track.py`. Anything
+  `score.paired` depends on it. So no approach may change `track.py`. Anything
   that wants different ground truth is a different experiment, not a variant.
 - **Causality.** `replay.run` is one forward pass and the model is only ever read
   after the epoch's observations are folded in. An offline-fitted model is
@@ -119,6 +159,25 @@ numbers - Phase 1 has to be rerun with the rest of the comparison.
 The last two are still module constants; move them the same way when their turn
 comes.
 
+- [x] **First pass, on the fixed ground truth** (69 929 crossings, 986 epochs,
+      `reports/sweeps.json`). Every shipped value lost, and three of the four
+      grids point the same way - **less shrinkage, longer memory**:
+      `k_unit` 4.0 to **1.0** (149 s to 139 s; 0.5 not separated from 1.0),
+      `fast_hl` 480 s to **7200 s** and `slow_hl` 5400 s to **172800 s**, both
+      of which ran to the top of their grid, `knn` **10**, which is what it
+      already was. Extended grids and `k_corr` are running.
+- [x] **The `fast_hl` confound is settled.** At `fast_hl = 7200` the fast term
+      nearly coincides with the 5400 s slow one, so the gain could have been
+      half as much shrinkage rather than longer memory. Sweeping `fast` on a
+      base with `fast_hl = 7200`: off costs +9.1 s [+7.8, +10.2]. The term earns
+      its place; it just wants a much longer half-life than it ships with.
+- [ ] **Read the direction, not the numbers.** A slow half-life of two days on
+      an 8.5-hour recording is not decay at all, and `k_unit = 1` on top of it
+      says the cell should be trusted almost immediately. Both are the same
+      claim: on this much data the model is throwing away evidence. Whether that
+      survives a recording spanning several days is Phase 6's question, and no
+      default should move before then.
+
 Finding 3 is the specific hypothesis to test here: the cell-fast term supplies
 8.3% of the blend and is diluted almost to nothing by `K_CELL = 4.0`, so a
 **per-layer K** - small at the corridor, large at the cell - should beat one
@@ -179,8 +238,8 @@ Setup, common to all of Phase 4:
 
 - **Target** `log((actual - now) / max(predicted - now, 1))`, clipped at ±1.5
 - **Split** fit on 2026-09-05 20:00-23:59, score on 2026-09-06 05:30-09:32
-- **Rows** one per emitted prediction, which is 16462 in the scored window; the
-  training window has its own count, expect the same order
+- **Rows** one per emitted prediction, which is about 920 000 in the scored
+  window; the training window has its own count, expect the same order
 - **Features**, all available causally at emit time:
   `horizon` (seconds to the predicted arrival), `n_stops_ahead`,
   `dist_remaining`, `hour + minute/60`, `model_eta`, the vehicle's own speed

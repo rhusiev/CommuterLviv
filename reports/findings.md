@@ -3,9 +3,11 @@
 `approaches.md` says which variants won. It does not say why, and five of the
 results contradicted a claim the model makes about itself. A sixth finding, on
 what the nightly shutdown does to the model, came out of asking whether such a
-sparse subset can be trusted. Each one below was measured on the same recording
-of `data/feed.db` - 245 307 cell crossings over 19 228 distinct cells - not
-argued from the code.
+sparse subset can be trusted. The seventh is of a different kind: two defects in
+how the predictors were being paired, which invalidated the scores that led to
+the other six being investigated at all. Each one below was measured on the same
+recording of `data/feed.db` - 245 307 cell crossings over 19 228 distinct
+cells - not argued from the code.
 
 The scripts behind these numbers were one-off instrumentation of `replay.run`,
 not checked in. What is checked in is the conclusion and the number that
@@ -27,7 +29,14 @@ this is a single recording measured once. Treat every finding here as
 provisional: a plausible read of two short windows on one weekend, not a result
 confirmed across recordings.
 
-## 1. The timetable prior costs 12% MAE, and it is not close
+## 1. The timetable prior costs 4% MAE, and the reasons given for it do not hold
+
+The headline was 12% before finding 7's scoring defects were fixed; on the
+corrected run it is `no-prior` 114 s against `full` 119 s. The direction did not
+change and none of the mechanism below did - every measurement in this section
+is taken off the replay itself, not off the scoring - but the size did, and 4%
+is small enough that it is the argument and not the margin that decides this.
+
 
 `model.py` claims the prior earns its place twice: it knows where the city is
 slow, and it knows when. Neither holds.
@@ -65,7 +74,10 @@ pace against the observed pace, length-weighted:
 | `no-prior` | 19.8 km/h | 19.8 km/h | +0.1108 |
 
 `full` believes the city is 6% slower than it is, which is +70 s on a 20-minute
-ETA and matches its +36 s overall bias. The mechanism is a double count.
+ETA. That shows up as bias only at the short horizons, where `full` runs +6 s at
+0-1 min and +10 s at 1-2 min against `no-prior`'s +2 s: pooled over all horizons
+it is cancelled by the long buckets, where every variant runs negative. The
+mechanism is a double count.
 `_schedule_prior` builds an *effective* pace from stop-to-stop scheduled times,
 so it already contains the scheduled dwell and the timetable's padding. `hold`
 is then learned separately and added on top. Where a cell has evidence the
@@ -80,7 +92,9 @@ level.
 ## 2. `sections` is competitive with no corridor pooling at all
 
 Not a subtlety - a section-level model has *nothing* to back off to but one
-city-wide number, and it still beat `full` by 5%.
+city-wide number, and it lands within 2% of `full` anyway: 121 s against 119 s.
+(Before finding 7's fixes it appeared to beat `full` by 5%. It does not; it
+ties.)
 
 The cell layer really does carry more signal. Of the total length-weighted
 variance of log pace, 0.3751, the between-cell component is 0.2226 (59%) and
@@ -93,9 +107,15 @@ K_CELL = 4.0, so it supplies 8.3% of the blend; the section-level fast term is
 no better in weight but each observation stands for five times as much road.
 
 So the finer unit is a better description of the city that the data cannot keep
-current. Combined with finding 1, `sections` mostly wins by not paying the
-prior's bias - the obvious next experiment is `sections` *and* `no-prior`
-together, which no variant currently tests.
+current.
+
+The obvious next experiment - `sections` *and* `no-prior` together - has since
+been run as `sections-no-prior`, and it does not work: 127 s, worse than either
+of its parents and 6% worse than `full`. Dropping the prior helps a cell-level
+model, which has a corridor to fall back on; it hurts a section-level one, which
+has only the global mean. The two changes are not additive because they both
+spend the same thing, which is what the model falls back to where it has no
+evidence.
 
 ## 3. The fast half-life earns almost nothing
 
@@ -120,9 +140,10 @@ same shrinkage.
 
 ## 4. `vehicle-offset` inverts with horizon because the offset does not last
 
-Best of ours at 0-1 min (24 s vs `full`'s 29), worst at 20-45 min (408 s vs
-319). The cause is that `_factor` multiplies the *entire* remaining ETA by a
-ratio measured from the last few minutes.
+Tied for best of ours at 0-1 min (15 s, with `no-prior`, against `full`'s 17)
+and worst of ours by a wide margin at 20-45 min (325 s against 212). The cause
+is that `_factor` multiplies the *entire* remaining ETA by a ratio measured from
+the last few minutes.
 
 Autocorrelation of a vehicle's own speed ratio, in 5-minute windows, over 13 847
 window pairs:
@@ -140,30 +161,52 @@ it flat: weight it by roughly `exp(-h / 300)` for a lead time `h` in seconds, so
 the next stop gets the full correction and the far end of the trip gets none.
 That should keep the 0-2 min gain and delete the 10-45 min loss.
 
-## 5. `schedule-offset` beats the operator's own API because of a tail
+That was done, as `offset-decay`, and it behaves exactly as predicted: 16 s at
+0-1 min and 27 s at 1-2 min, keeping most of `vehicle-offset`'s short-horizon
+edge over `full` (17 and 29), while 20-45 min falls from 325 s to 219 s, level
+with `full`'s 212. Overall it is 121 s against `full`'s 119. So the diagnosis
+was right and the fix works, and it still does not buy anything: what the
+vehicle's own recent speed knows about the next two minutes, the corridor's
+fast term already knows too.
 
-Both use the same method - `diag` established that `trip_updates` carries the
-vehicle's current lateness forward unchanged - so the 166 s vs 224 s gap is
-about the *input*, not the method. But it is not that the API is uniformly
-worse. At the 0-1 minute horizon, one minute before the bus actually arrived:
+## 5. The timetable with a lateness offset beats the operator's own API, because of a tail
 
-| predictor | median AE | MAE | RMSE | within 120 s |
-|---|---|---|---|---|
-| `full` | 14 s | 29 | 54 | 96% |
-| `schedule-offset` | 17 s | 33 | 60 | 95% |
-| `api` | 40 s | 130 | 304 | 81% |
-| `lad` | 39 s | 96 | 190 | 82% |
+Numbers below are from the first full run with finding 7's three scoring
+defects fixed: 80572 crossings over 1056 minutes, 1318685 predictions every
+approach answered.
 
-The API's typical answer is fine - 40 seconds out, one minute before arrival.
-Its mean is wrecked by the 19% of answers that are more than two minutes wrong
-at that range, when nothing but a wrong vehicle position can be responsible.
-Its bias there is -31 s and the board's is -73 s: the tail predicts arrival
-*earlier* than it happened, which is what a stale position or a bus that has
-already been reassigned off the trip looks like.
+`schedule-offset` scores 208 s and `api` 467 s, and `diag` established that both
+carry the vehicle's current lateness forward unchanged. Same method, so the gap
+is about the *input*. But the API is not uniformly worse. At the 0-1 minute
+horizon, one minute before the bus actually arrived:
 
-The feed is not stale in the ordinary sense - `pred` revises every 15-30 s,
-and only 0.3% of revisions leave the value unchanged. Whatever produces the
-tail survives being refreshed twice a minute.
+| predictor | median AE | MAE | RMSE | bias | within 120 s |
+|---|---|---|---|---|---|
+| `full` | 11 s | 17 | 31 | +6 | 98.9% |
+| `schedule-offset` | 16 s | 27 | 46 | +13 | 97.7% |
+| `api` | 39 s | 297 | 1140 | -112 | 79.1% |
+
+The API's typical answer is fine - 39 seconds out, one minute before arrival,
+which is within a bus length of right. Its mean is wrecked by the 21% of
+answers that are more than two minutes wrong at that range, when nothing but a
+wrong vehicle position can be responsible. Its bias there is -112 s: the tail
+predicts arrival *earlier* than it happened, which is what a stale position or
+a bus already reassigned off the trip looks like. The tail does not thin out
+with horizon either - `api` sits between 297 and 607 s across all six buckets
+while everything else grows from 17 to 212, so at 20-45 minutes it is only
+twice as bad as at one minute. That is the signature of a constant fraction of
+answers being wrong about *which bus*, not of a forecast losing accuracy.
+
+The feed is not stale in the ordinary sense - `pred` revises every 15-30 s, and
+only 0.3% of revisions leave the value unchanged. Whatever produces the tail
+survives being refreshed twice a minute.
+
+The public arrivals board is a different story, and finding 7 is what made it
+readable: scored fresh on the 161466 predictions it also answered, `lad` is
+111 s against `api`'s 408 s on those same events. Both are the operator's.
+Whatever produces the board is doing substantially more than replaying
+`trip_updates`, and it is the harder of the two to beat - `full` scores 85 s
+there, a 24% margin rather than a fourfold one.
 
 ## 6. The nightly shutdown resets the model onto the prior every morning
 
@@ -203,9 +246,85 @@ returning zero vehicles, no errors, and the frequent short empty replies during
 the day (8.6% of polls at 08:00) never run longer than 3 polls, well under
 STALE = 120 s.
 
-## The shape of all six
+## 7. Three defects in the scoring, all in how an answer is matched to a crossing
 
-Three distinct mechanisms account for the lot.
+This one is not about the model. It is about the measurement, and it invalidates
+every number written before 2026-09-06 in `approaches.md` and `sweeps.json`.
+
+A crossing is one event, and the predictors do not agree on how to name one.
+Ours knows the vehicle, the trip, which pass of that trip it is on, and the
+stop. `trip_updates` names a trip and a stop. The arrivals board names a vehicle
+and a stop, and never says which trip or which pass. `truth.py` handled that by
+keeping only the crossings that *both* namings picked out uniquely, and
+`score.py` intersected all four predictors' answers into one common support.
+Both decisions let the weakest namer set the terms for everyone.
+
+**The common support.** The board answers about only the 40 stops the collector
+polls. With it inside the intersection, the headline table scored every approach
+on 23 929 of about 199 000 predictions - 12% - and all of them near those 40
+stops. Which stops the collector happens to poll was deciding every published
+comparison.
+
+**The ground truth.** Uniqueness was checked on `(trip, stop)` and on
+`(vehicle, stop)`, neither of which includes the pass. Over 90 minutes a vehicle
+rarely revisits a stop and almost everything survived. Over a six-hour window it
+passes each of its stops several times. Measured on one window of 48 418
+crossings:
+
+| naming | crossings it names uniquely |
+|---|---|
+| `(trip, stop)` | 45 645 (94.3%) |
+| `(vehicle, stop)` | 5 277 (10.9%) |
+
+So 89% of the ground truth was being discarded to accommodate the one predictor
+that answers about 40 stops. The kept fraction fell with window length - 80%
+over 2.75 hours, 11.5% over 6 - which is what first made it visible: identical
+configs returned fewer and fewer scored predictions as the recording grew.
+
+The second half of that defect is worse than the deletion. Our own predictions
+were addressed by `(trip, stop)` as well, so a prediction about one pass could
+be scored against a *different* pass of the same trip. On a window whose warmup
+outlasted the data, every single one of 1.6 M predictions was matched that way -
+zero of them to the pass they were actually about.
+
+Both are fixed. `Truth` keeps every crossing, keyed in full by
+`(vehicle, trip, pass, stop)`, and `predictors.ours` uses that full key.
+`score.paired` excludes the board from the main support by name and scores it on
+its own.
+
+Uniqueness turned out to be the wrong repair for the partial namings. What
+settles which pass a predictor meant is *when it spoke*: a board saying "arrives
+in 4 minutes" at 20:31 means the next crossing at or after 20:31. Each partial
+naming is now a time-ordered `Truth.Index` asked with a key and an instant, which
+uses only the time the predictor spoke and never the value it gave, so it cannot
+be tuned to flatter anybody. Every crossing becomes addressable by every naming:
+`schedule` went from 94% coverage to 100%, `api` to 95%, and the board from 1.7%
+to 17.8%.
+
+**The standing value.** `_from_log` held a published value valid until the feed
+replaced it. That is right for `trip_updates`, which the collector records as a
+change log with a 5 s deadband. It is wrong for the arrivals board, which is
+recorded as a *snapshot* of what the board displayed at each 60 s poll: a
+vehicle missing from the next poll is a board that has stopped answering, not
+one repeating itself. So a value published at 21:00 was still being scored at
+07:00 the next morning. It cost the board an MAE of 4451 s against a median
+absolute error of 96 s - about 11% of its scored epochs were reading a value
+hours old. `_from_log` now takes a staleness bound, unset for the change log and
+120 s - two poll periods - for the board.
+
+That third fix changes the answer to a question the report had already
+published. On 2026-09-06 07:00-09:00 the board scores 37 s MAE one minute ahead
+and 101 s five to ten minutes ahead, against `api`'s 147 s and 257 s on the same
+window; over the full corrected run it is 111 s against `api`'s 408 s on the
+161466 events both answered. The public board is not a worse `trip_updates`; it
+is several times better than it, and the closest thing to a real competitor this
+comparison has - `full` scores 85 s on those same events, a 24% margin. Finding
+5's table was reading the board's stale-value tail, not the board.
+
+## The shape of the six model findings
+
+Finding 7 stands apart - it is a defect in the measuring, not a property of the
+city or the model. Three distinct mechanisms account for the other six.
 
 1. **A prior is only worth its bias.** Findings 1, 2 and 6. The timetable is
    used as a level and its level is wrong by 6%, so every cell without live
