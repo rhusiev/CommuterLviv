@@ -47,8 +47,6 @@ PACE_CLIP = (0.020, 2.0)     # s/m: 180 km/h .. 1.8 km/h while actually rolling
 HOLD_CLIP = (0.0, 240.0)     # s standing per crossing
 RATIO_CLIP = (0.15, 8.0)     # observed pace over timetabled pace
 PACE0 = 1 / 7.0              # s/m, fallback where the timetable says nothing
-K_CELL = 4.0                 # observations before a cell outweighs its corridor
-K_CORR = 4.0
 SLOTS = 24                   # timetable prior resolution: one slot per hour
 TZ = zoneinfo.ZoneInfo("Europe/Kyiv")
 
@@ -108,9 +106,10 @@ class Layer:
     """
 
     def __init__(self, nunit, ncorr, unit_corr, init, fast_hl, slow_hl,
-                 fast=True, corridor=True):
+                 k_unit=4.0, k_corr=4.0, fast=True, corridor=True):
         self.unit_corr = unit_corr
         self.fast, self.corridor = fast, corridor
+        self.k_unit, self.k_corr = k_unit, k_corr
         self.cf = Ewma(nunit, fast_hl, init)
         self.cs = Ewma(nunit, slow_hl, init)
         self.rf = Ewma(ncorr, fast_hl, init)
@@ -144,16 +143,16 @@ class Layer:
         gm, _ = self.g.read(now)
         if self.corridor:
             corr = self._blend(now, (self.rf, self.rs) if self.fast
-                               else (self.rs,), gm[0], K_CORR)
+                               else (self.rs,), gm[0], self.k_corr)
             base = corr[self.unit_corr]
         else:
             base = gm[0]
         return self._blend(now, (self.cf, self.cs) if self.fast
-                           else (self.cs,), base, K_CELL)
+                           else (self.cs,), base, self.k_unit)
 
 
 class PaceModel:
-    def __init__(self, net, cfg=None, fast_hl=480.0, slow_hl=5400.0):
+    def __init__(self, net, cfg=None):
         self.cfg = cfg = cfg or config.FULL
         self.net = net
         self.shape_base = {}
@@ -182,15 +181,30 @@ class PaceModel:
         unit_corr[self.unit] = self.cell_corr
 
         args = (self.nunit, self.ncorr, unit_corr)
-        opts = dict(fast=cfg.fast, corridor=cfg.corridor)
-        self.pace = Layer(*args, 1.0, fast_hl, slow_hl, **opts)
-        self.hold = Layer(*args, 0.0, fast_hl, slow_hl, **opts)
-        self.prior = (self._schedule_prior() if cfg.prior
-                      else np.full((SLOTS, self.ncell), PACE0))
+        opts = dict(k_unit=cfg.k_unit, k_corr=cfg.k_corr,
+                    fast=cfg.fast, corridor=cfg.corridor)
+        self.pace = Layer(*args, 1.0, cfg.fast_hl, cfg.slow_hl, **opts)
+        self.hold = Layer(*args, 0.0, cfg.fast_hl, cfg.slow_hl, **opts)
+        self.prior = (np.full((SLOTS, self.ncell), PACE0) if cfg.prior == "off"
+                      else self._schedule_prior())
+        if cfg.prior == "shape":
+            self.prior = self.prior * (PACE0 / self._level(self.prior))
 
         self._cum = np.zeros(self.ncell + 1)
         self._prior_t = None
         self._per_cell = self.prior[0] * self.cell_len
+
+    def _level(self, prior):
+        """The one number a whole prior array is worth: its length-weighted mean.
+
+        Length-weighted because a pace is a cost per metre, so the average the
+        city actually experiences is the one where a 400 m cell counts four
+        times a 100 m one. One scalar for all 24 slots, not one per slot, so
+        rescaling by it moves the level and leaves both the map and the
+        time-of-day pattern exactly as they were.
+        """
+        return float(np.average(prior, weights=np.broadcast_to(
+            self.cell_len, prior.shape)))
 
     def _sections(self):
         """Map every cell to the stop-to-stop section it falls in.
