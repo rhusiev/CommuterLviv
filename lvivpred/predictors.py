@@ -44,14 +44,24 @@ class Series:
         return out
 
 
-def ours(res, truth):
-    """Our own predictions, which name a crossing in full and never ambiguously."""
+def event_of(res, truth):
+    """Which crossing each emitted prediction row was about; -1 where none.
+
+    One entry per row of `res.buf`, in that order, so anything else collected
+    row by row during the same replay - the features in `features.py` - joins
+    to the ground truth by position and never by a key.
+    """
     a = res.buf.done()
     cols = np.stack([a[f] for f in ("veh", "trip", "run", "stop_i")], axis=1)
     uniq, inv = np.unique(cols.astype(np.int64), axis=0, return_inverse=True)
-    ev = np.array([truth.event.get(tuple(map(int, k)), -1) for k in uniq],
-                  dtype=np.int64)[inv.ravel()]
+    return np.array([truth.event.get(tuple(map(int, k)), -1) for k in uniq],
+                    dtype=np.int64)[inv.ravel()]
 
+
+def ours(res, truth):
+    """Our own predictions, which name a crossing in full and never ambiguously."""
+    a = res.buf.done()
+    ev = event_of(res, truth)
     ok = ev >= 0
     ev, at, eta = ev[ok], a["epoch"][ok] + res.t0, a["eta"][ok] + res.t0
     t = truth.time[ev]

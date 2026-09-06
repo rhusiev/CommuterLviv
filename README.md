@@ -390,5 +390,10 @@ model scored on a given day is part of the history rather than a memory.
 
 ## Documentation
 
+`HANDOFF.md` is the entry point: what state the work is in, which document
+answers which question, and what to do next. `PLAN.md` is the working plan for
+the approach comparison and `reports/findings.md` is what the numbers turned out
+to mean.
+
 `docs/` describes the upstream feeds themselves - the realtime protobuf, the
 static GTFS, the `api.lad.lviv.ua` JSON board, and the gotchas found in each.
