@@ -71,11 +71,11 @@ class Track:
     __slots__ = ("veh", "trip", "shape_id", "shape", "stops", "sdist", "sched", "clen",
                  "s", "v", "P", "ts", "odo", "next_stop", "run", "cell")
 
-    def __init__(self, veh):
+    def __init__(self, veh, run=0):
         self.veh = veh
         self.trip = None
         self.ts = None
-        self.run = 0
+        self.run = run
 
     def reset(self, trip, net, ts):
         self.trip = trip
