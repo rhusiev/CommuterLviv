@@ -45,6 +45,43 @@ in `reports/findings.md` is the full account.
       published conclusion: the board is several times better than `api`, not
       beside it.
 
+## Where the comparison stands, on the corrected run
+
+2026-09-06, 80 572 crossings over 1056 minutes, 1 318 685 predictions every
+approach answered. Overall MAE, best first, from `reports/approaches.md`:
+
+| | s | | s | | s |
+|---|---|---|---|---|---|
+| `no-prior` | 114 | `no-fast` | 122 | `table` | 134 |
+| `prior-shape` | 118 | `no-incremental` | 122 | `k-split` | 140 |
+| `knn` | 118 | `sections-no-prior` | 127 | `vehicle-offset` | 163 |
+| **`full`** | **119** | `no-hold` | 130 | `median` | 174 |
+| `offset-decay` | 121 | `no-corridor` | 132 | `schedule-offset` | 208 |
+| `sections` | 121 | `table-live` | 134 | `api` | 467 |
+
+Nothing beats `full` by more than 4%, and the two that do - `no-prior` and
+`knn` - both win by *removing* structure. Read that as the standing summary: on
+8.5 hours of one day, every piece of machinery in the shipped model is either
+neutral or slightly harmful, and the ablations that cost real accuracy are only
+`hold` (+9%), `corridor` (+11%) and the shared shrinkage constant (`k-split`,
++17%). The plan from here is not to find a better model but to find out which of
+these survive a recording that spans several days, which is Phase 6.
+
+The one outside predictor worth beating is the public arrivals board, not `api`:
+on the 161 466 events it also answers, `lad` scores 111 s and `api` 408 s, with
+`full` at 85 s.
+
+## Speed of the comparison
+
+A seventeen-variant run takes about 49 minutes because 73% of each replay is
+`track.observe` rebuilding vehicle tracks, and `observe` takes no config, so all
+seventeen rebuild identical tracks. A `replay.run_many` that forks one worker per
+variant exists on the **`perf/replay-once`** branch (worktree
+`../transport-perf`, commit `7d3fcd2`), verified bit-identical by
+`check_parallel.py` and measured at 52.7 s to 20.9 s on three variants. See
+`NOTE-perf-branch.md`. Cherry-pick it before Phase 4, which needs many more runs
+than Phase 3 did.
+
 ## The question all of this answers
 
 Which way of turning recorded GPS fixes into an arrival time is most accurate on
@@ -78,8 +115,8 @@ Three consequences, and they bind every ML item below:
    currently unfittable.** Finding 6's proposed fix - a hour-of-day by day-of-week
    profile learned across days - cannot be evaluated until the recording spans
    several days. Build it, hold the score.
-3. **Sample size.** About 63 000 crossings and 920 000 paired predictions in the
-   current scored window, but they are not 920 000 independent facts: a vehicle
+3. **Sample size.** 80 572 crossings and 1 318 685 paired predictions in the
+   current scored window, but they are not 1.3M independent facts: a vehicle
    running late is late at every stop ahead of it, and the effective count is
    nearer the number of trips. A model with more than a few hundred effective
    parameters will fit noise. Report bootstrap intervals, which `score.bootstrap`
@@ -109,30 +146,46 @@ These come out of `reports/findings.md` and cost nothing to test. Do them first;
 they may move the baseline that everything else is compared against.
 
 All three land as `sections-no-prior`, `prior-shape` and `offset-decay` in
-`config.py`. Screening scores below are one hour of replay (2026-09-06
-07:00-08:30, warmup 1800 s, 23667 paired predictions) and are not the final
-numbers - Phase 1 has to be rerun with the rest of the comparison.
+`config.py`. Two sets of numbers appear below. The **screening** scores were one
+hour of replay (2026-09-06 07:00-08:30, warmup 1800 s, 23667 paired predictions)
+under the old scoring; the **full** scores are the 2026-09-06 run over the whole
+recording with Phase 0's fixes in, and those are the ones that count.
+
+**All three fixes were wrong about the outcome, and none is a win.** The
+screening pass ranked `sections-no-prior` best of everything; on the corrected
+full run it is 127 s against `full`'s 119 s, the worst of the three. That
+reversal is not the fixes changing their behaviour - it is what an hour of one
+morning, scored on 12% of its predictions, is worth as evidence. Keep all three
+variants in the comparison as evidence; ship none of them.
 
 - [x] **`no-prior` + `sections`** - finding 2 says `sections` mostly wins by not
       paying the prior's bias, so the combination should beat either. Pure config
       change: `replace(FULL, unit="section", corridor=False, prior="off")`.
-      **MAE 100 s against `full`'s 106 s, and the bias goes +26 to -33.** The
-      best of the three, and it stays best at every horizon over 2 minutes.
+      Screening: MAE 100 s against `full`'s 106 s. **Full: 127 s against 119 s,
+      worse than either parent** (`sections` 121, `no-prior` 114). Dropping the
+      prior helps a cell model, which has a corridor to fall back on, and hurts
+      a section model, which has only the global mean. Both changes spend the
+      same thing.
 - [x] **`prior-shape`** - finding 1's remedy. Keep the timetable prior as a shape
       but not as a level: normalise it so its length-weighted mean equals the
       learned global pace rather than the timetable's own. `PaceModel._level`
       does the rescale once at construction; `Config.prior` is now
-      `"level" | "shape" | "off"`. **MAE 104 s, bias +26 to +18.** So the level
-      is part of what the prior costs but not all of it - `sections-no-prior`
-      drops the prior entirely and still wins by 4 s.
+      `"level" | "shape" | "off"`. Screening: MAE 104 s. **Full: 118 s against
+      `full`'s 119 s and `no-prior`'s 114 s.** So the level is part of what the
+      prior costs but not all of it: normalising it recovers a fifth of the gap
+      to dropping the prior outright. The shape is worth about nothing.
 - [x] **`offset-decay`** - finding 4's remedy. `_factor` in `replay.py` multiplies
       the whole remaining ETA flat, but a vehicle's own speed ratio has an
       e-folding time near 4.5 minutes. `replay._fade` now scales each leg by
       `exp(-h / 300)` at that leg's own lead time `h`, so the next stop gets the
-      ratio in full and the far end gets none. **MAE 130 s to 103 s** - it turns
-      the worst variant into the second best. At 20-45 min `vehicle-offset`
-      scores 383 s and `offset-decay` 269 s, which is the fade doing exactly
-      what it was built to do.
+      ratio in full and the far end gets none. Screening: MAE 130 s to 103 s.
+      **Full: `vehicle-offset` 163 s to `offset-decay` 121 s, against `full`'s
+      119 s.** The fade does exactly what it was built to do - 20-45 min goes
+      325 s to 219 s, level with `full`'s 212, while 0-1 min stays at 16 s
+      against `full`'s 17 - and the result is a tie. The vehicle's own recent
+      speed knows nothing about the next two minutes that the corridor-fast term
+      does not already know. This is the cleanest negative result in the plan:
+      correct diagnosis, correct fix, no gain.
 
 ## Phase 2 - hyperparameters of the estimator that ships
 
@@ -202,6 +255,18 @@ The point of these is to bound how much the online part is worth. If a static
 table fitted on yesterday matches the live model, the live model is doing
 nothing that a lookup could not.
 
+**Answered, on the corrected full run.** The online part is worth roughly 12%,
+and no more than that: `table` 134 s and `table-live` 134 s against `full`'s
+119 s. A frozen (section, hour) lookup gets within an eighth of the shipped
+model, and the single global today-is-slow multiplier that `table-live` adds on
+top buys nothing measurable. Meanwhile `knn` - the last 10 crossings of the
+section, median, no hierarchy and no decay at all - scores 118 s and beats
+`full`. So the cell/corridor/global back-off structure is not paying for its
+complexity against a plain recency window on this recording. That is the single
+most consequential result of the whole comparison so far, and it is the thing to
+re-test first when the recording covers several days: a recency window is
+exactly what should degrade when the sparse hours arrive.
+
 - [x] **`table`** - one travel time per (section, hour-of-day), fitted offline on
       the training window, applied frozen. No decay, no updates, no back-off.
       This is the classic "historical average" baseline every transit paper uses
@@ -255,7 +320,10 @@ uncorrected `full` and against the one above it, so the comparison says what the
 extra capacity bought:
 
 - [ ] **`resid-const`** - one number: the mean residual. A sanity floor. If this
-      beats `full` the model has a bias, which finding 1 says it does (+36 s).
+      beats `full` the model has a bias. Pooled, `full`'s bias is only -9 s, but
+      that is two biases cancelling: +6 s at 0-1 min and -69 s at 20-45 min. So
+      fit the constant per horizon bucket, not once - a single number would find
+      nothing here and would be the wrong test.
 - [ ] **`resid-linear`** - ridge regression on the features above. Closed form in
       numpy, no dependency. Tells whether the residual is a linear function of
       horizon and lateness, which is the shape finding 4 predicts.
