@@ -1,9 +1,10 @@
 """Estimators that exist to bound what the one in `model.py` is worth.
 
-Two of the shipped model's claims are expensive: that learning has to happen
-online as fixes arrive, and that the cell / corridor / global back-off is worth
-its complexity. Each gets an estimator here that denies it, so the claim can be
-priced instead of argued about.
+Three of the shipped model's claims are expensive: that learning has to happen
+online as fixes arrive, that the cell / corridor / global back-off is worth its
+complexity, and that a mean is the right summary of what a road has been doing.
+Each gets an estimator here that denies it, so the claim can be priced instead
+of argued about.
 
   table       one travel time per (section, hour), fitted once and frozen. If
               this matches the live model, online learning is doing nothing a
@@ -15,17 +16,21 @@ priced instead of argued about.
   knn         the median of the last k crossings of this unit by any vehicle.
               No hierarchy, no decay curve, one constant. If this matches the
               live model, the back-off structure is not earning its keep.
+  median      the full hierarchy and the full decay, with every mean replaced by
+              a weighted median. Differs from the shipped model in the loss it
+              optimises and in nothing else, which is the point: MAE is
+              minimised by the median, and the shipped model is means throughout.
 
 Table fitting happens during the replay's own warmup and stops the instant scoring
 starts, so the split is structural rather than remembered: `replay` sets
 `emitting` on the model at the first epoch it scores, and after that the table
 takes no more evidence. Run those variants with a warmup long enough to be a
-training window - an evening, say, scored the next morning. `knn` learns online
-like the shipped model and needs no such split.
+training window - an evening, say, scored the next morning. `knn` and `median`
+learn online like the shipped model and need no such split.
 """
 import numpy as np
 
-from .model import SLOTS, BaseModel, Ewma, group
+from .model import SLOTS, BaseModel, Ewma, PaceModel, group
 
 
 class TableModel(BaseModel):
@@ -156,3 +161,146 @@ class KnnModel(BaseModel):
         rows = np.arange(len(n))
         lo, hi = np.maximum(n - 1, 0) // 2, np.maximum(n, 1) // 2
         return np.where(n > 0, 0.5 * (a[rows, lo] + a[rows, hi]), empty)
+
+
+class Ring:
+    """The last m observations per key, with their weights and their times.
+
+    An EWMA can carry a mean in one number because a mean of a mean is a mean.
+    A median cannot: it needs the observations themselves. So each key keeps a
+    fixed window of the last m, overwriting oldest-first, and decay is applied
+    when the window is read rather than when it is written.
+
+    m is a memory the half-lives cannot see past. A cell crossed 11.5 times a
+    day with m = 16 holds most of a day, which is the slow term's reach; a busy
+    corridor holds minutes, which is the fast term's. That mismatch is real and
+    is the price of medians, not a bug to hide - it is one of the things the
+    comparison is measuring.
+    """
+
+    def __init__(self, n, m, init, fast_tau, slow_tau, fast=True):
+        self.val = np.full((n, m), float(init))
+        self.w = np.zeros((n, m))
+        self.t = np.full((n, m), -np.inf)
+        self.at = np.zeros(n, dtype=np.int64)
+        self.taus = (fast_tau, slow_tau) if fast else (slow_tau,)
+
+    def update(self, idx, vals, now, weights):
+        idx, vals, weights = group(idx, vals, weights)
+        if not len(idx):
+            return
+        slot = self.at[idx] % self.val.shape[1]
+        self.val[idx, slot] = vals
+        self.w[idx, slot] = weights
+        self.t[idx, slot] = now
+        self.at[idx] += 1
+
+    def weights(self, now):
+        """Each stored weight, faded by however long ago it was stored.
+
+        Two half-lives are one kernel here rather than two estimators blended
+        afterwards: an observation counts for the mean of what the short memory
+        and the long memory each still make of it. Blending two medians would
+        not be a median of anything.
+        """
+        age = now - self.t
+        left = sum(np.exp(-np.minimum(age / tau, 700.0)) for tau in self.taus)
+        return self.w * left / len(self.taus)
+
+
+def wmedian(val, w):
+    """The weighted median of each row, interpolated between the two middles.
+
+    Each sorted entry is placed at the middle of the weight it occupies, and the
+    answer is read off at half the total by straight interpolation between the
+    two entries either side. Simply returning the entry where the cumulative
+    weight first passes half is the other common definition and it is biased: it
+    always returns the lower of two middles, which on an even count is half a
+    spacing low every time. Measured on this recording that convention cost 79
+    seconds of bias, so the interpolation is not a nicety.
+
+    With equal weights this reproduces `np.median` exactly. A slot never written
+    carries no weight and is sorted to +inf so it can never be interpolated
+    towards; the crossing always lands at or before the last entry that has
+    weight, which is why that is safe. Rows must carry weight somewhere, which
+    the back-off entry in `MedianLayer` guarantees.
+    """
+    o = np.argsort(np.where(w > 0.0, val, np.inf), axis=1, kind="stable")
+    vs, ws = np.take_along_axis(val, o, 1), np.take_along_axis(w, o, 1)
+    cum = np.cumsum(ws, axis=1)
+    pos = (cum - 0.5 * ws) / np.maximum(cum[:, -1:], 1e-12)
+
+    rows = np.arange(len(val))
+    j = np.clip((pos < 0.5).sum(axis=1), 1, val.shape[1] - 1)
+    p0, p1 = pos[rows, j - 1], pos[rows, j]
+    v0, v1 = vs[rows, j - 1], vs[rows, j]
+    f = np.clip((0.5 - p0) / np.maximum(p1 - p0, 1e-12), 0.0, 1.0)
+    return v0 + f * (v1 - v0)
+
+
+class MedianLayer:
+    """`model.Layer`, with every mean replaced by a weighted median.
+
+    The back-off is the same three levels and the same two constants, expressed
+    the way a median can express it: the level above enters as one more
+    observation carrying weight k. With no local evidence the median of that row
+    is the parent's value, exactly as the mean version returns the parent; with
+    plenty, the parent is one point among many and is outvoted. The mean version
+    blends continuously and this one switches over, which is the second thing
+    the comparison measures.
+    """
+
+    def __init__(self, nunit, ncorr, unit_corr, init, fast_hl, slow_hl, m,
+                 k_unit=4.0, k_corr=4.0, fast=True, corridor=True):
+        self.unit_corr = unit_corr
+        self.corridor = corridor
+        self.k_unit, self.k_corr = k_unit, k_corr
+        args = (m, init, fast_hl / np.log(2.0), slow_hl / np.log(2.0))
+        self.cell = Ring(nunit, *args, fast=fast)
+        self.corr = Ring(ncorr, *args, fast=fast)
+        self.glob = Ring(1, *args, fast=fast)
+
+    def update(self, units, vals, now, weights, corr):
+        total = weights.sum()
+        if total <= 0.0:
+            return
+        self.cell.update(units, vals, now, weights)
+        if self.corridor:
+            cu, vu, wu = corr
+            self.corr.update(cu, vu, now, wu)
+        # One entry per batch, summarising the batch the way this layer
+        # summarises everything - so the global row is a median of medians.
+        self.glob.update(np.zeros(1, dtype=int),
+                         np.array([np.median(vals)]), now, np.array([total]))
+
+    @staticmethod
+    def _with_parent(ring, now, parent, k):
+        val = np.concatenate([ring.val, parent[:, None]], axis=1)
+        w = np.concatenate([ring.weights(now), np.full((len(parent), 1), k)],
+                           axis=1)
+        return wmedian(val, w)
+
+    def read(self, now):
+        glob = float(wmedian(self.glob.val, self.glob.weights(now))[0])
+        if self.corridor:
+            corr = self._with_parent(self.corr, now,
+                                     np.full(len(self.corr.val), glob),
+                                     self.k_corr)
+            base = corr[self.unit_corr]
+        else:
+            base = np.full(len(self.cell.val), glob)
+        return self._with_parent(self.cell, now, base, self.k_unit)
+
+
+class MedianModel(PaceModel):
+    """The shipped model with `MedianLayer` in place of `model.Layer`.
+
+    Everything else is inherited, which is the claim being tested: the two
+    differ in how a layer summarises what it has seen, and in nothing else.
+    """
+
+    def _layer(self, init):
+        return MedianLayer(self.nunit, self.ncorr, self.unit_corr, init,
+                           self.cfg.fast_hl, self.cfg.slow_hl, self.cfg.ring,
+                           k_unit=self.cfg.k_unit, k_corr=self.cfg.k_corr,
+                           fast=self.cfg.fast, corridor=self.cfg.corridor)

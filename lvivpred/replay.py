@@ -44,6 +44,8 @@ def build(net, cfg=None):
     cfg = cfg or config.FULL
     if cfg.learn == "knn":
         return baselines.KnnModel(net, cfg)
+    if cfg.learn == "median":
+        return baselines.MedianModel(net, cfg)
     if cfg.learn.startswith("table"):
         return baselines.TableModel(net, cfg)
     return PaceModel(net, cfg)

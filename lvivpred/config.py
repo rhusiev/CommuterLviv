@@ -3,7 +3,7 @@
 Every design decision in the model is a claim that something is worth doing.
 Each switch here turns one of them off, so the claim can be checked against the
 same recording rather than argued about. `full` is the model as shipped; most
-other variants differ from it in exactly one place. Three replace the learning
+other variants differ from it in exactly one place. Four replace the learning
 outright with an estimator from `baselines.py`, and the last replaces the
 prediction step instead.
 
@@ -24,8 +24,9 @@ class Config:
     unit: str = "cell"          # what a travel time is learned per: cell|section
     vehicle_offset: str = "off"    # scale the ETA by this vehicle: off|flat|decay
     eta: str = "model"          # how a prediction is formed: model|lateness
-    learn: str = "online"       # what does the learning: online|table|table-live|knn
+    learn: str = "online"       # the estimator: online|table|table-live|knn|median
     knn: int = 10               # crossings the knn estimator keeps per unit
+    ring: int = 16              # crossings the median estimator keeps per key
 
     # Shrinkage: observations a layer needs before it outweighs the one it backs
     # off to. Half-lives: how live "now" is, and how long the baseline remembers.
@@ -111,6 +112,13 @@ VARIANTS = [
                 "half-life. Tests the back-off hierarchy against a plain "
                 "recency window, and the mean against the median - MAE is "
                 "minimised by the median, which nothing else here uses."),
+    replace(FULL, name="median", learn="median",
+            doc="The same three layers, the same two half-lives, the same two "
+                "shrinkage constants - and a weighted median wherever the "
+                "shipped model takes a mean. MAE is minimised by the median, "
+                "so if the model is optimising the wrong loss this is what it "
+                "costs. The price is memory: a median needs the last 16 "
+                "crossings of a key kept, not one running number."),
     Config("schedule-offset",
            "Not a road model at all: the timetable plus this vehicle's current "
            "lateness, held constant to the end of the trip. This is what the "

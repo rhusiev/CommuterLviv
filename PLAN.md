@@ -158,10 +158,15 @@ nothing that a lookup could not.
       cell/corridor/global back-off structure earns its complexity against a
       plain recency window. Implemented as `baselines.KnnModel`; `k` still to be
       swept.
-- [ ] **`median`** - swap every EWMA mean for a decayed weighted median. MAE is
+- [x] **`median`** - swap every EWMA mean for a decayed weighted median. MAE is
       minimised by the median, not the mean, and the current model optimises the
       wrong loss throughout. Cheap to state, awkward to implement vectorised -
       approximate with a decayed P-square or a small per-unit ring buffer.
+      Implemented as `baselines.MedianModel` over a per-key ring buffer of the
+      last `cfg.ring` crossings; the decay is applied to each entry's weight, so
+      the two half-lives survive. Best of everything at 0-5 min and the worst at
+      10-45 min, with a bias no median convention removes: an ETA is a *sum* of
+      cell times, and a sum of medians of right-skewed times runs short.
 
 ## Phase 4 - offline learning on the residual
 
