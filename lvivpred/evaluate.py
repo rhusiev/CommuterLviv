@@ -12,7 +12,8 @@ def main(net=None, save=True, **kw):
 
     truth = Truth(net, res)
     print(f"replay: {res.epochs} epochs, {res.buf.n} predictions, "
-          f"{len(res.truth)} crossings, {truth.n} unambiguous"
+          f"{truth.n} crossings under {len(truth.by_trip_stop)} trip-and-stop "
+          f"names and {len(truth.by_veh_stop)} vehicle-and-stop names"
           f"{'' if warm else '  (cold start: no usable snapshot)'}\n")
 
     score.report({"ours": predictors.ours(res, truth),
