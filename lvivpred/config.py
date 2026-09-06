@@ -72,16 +72,26 @@ VARIANTS = [
                 "term supplies 8% of the blend, while a corridor has ten times "
                 "the evidence and is shrunk just as hard. This trusts the "
                 "corridor sooner and the cell later."),
+    replace(FULL, name="tuned", k_unit=1.0, k_corr=0.5, fast_hl=7200.0,
+            slow_hl=43200.0,
+            doc="The shipped model at the best value each of its four constants "
+                "found when swept alone. Every one of those sweeps moved the "
+                "same way - less shrinkage, longer memory - and the four gains "
+                "do add: this is the only variant that beats the shipped model "
+                "at every horizon out to 20 minutes. It pays for that in the "
+                "20-45 minute bucket, where trusting live evidence sooner and "
+                "forgetting it later carries the current state of the road much "
+                "further ahead than it holds."),
     replace(FULL, name="sections", unit="section", corridor=False,
             doc="Learn one travel time per stop-to-stop section rather than per "
                 "100 m cell. Corridor pooling is off because a section spans "
                 "many corridors and cannot be assigned to one."),
     replace(FULL, name="sections-no-prior", unit="section", corridor=False,
             prior="off",
-            doc="Sections and no timetable prior together. Each alone beats the "
-                "full model, and the measured reason is the same one - the "
-                "prior's bias reaches a cell only where live evidence is thin - "
-                "so the two gains may well be the same gain counted twice."),
+            doc="Sections and no timetable prior together. Dropping the prior "
+                "alone beats the full model and coarsening to sections alone "
+                "does not, so this asks whether the one gain survives the other "
+                "change. It does not: the pair scores worse than either."),
     replace(FULL, name="vehicle-offset", vehicle_offset="flat",
             doc="The full road model, then scaled by how fast this particular "
                 "vehicle has been running against it. Asks whether anything is "

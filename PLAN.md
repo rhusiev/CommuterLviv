@@ -45,31 +45,70 @@ in `reports/findings.md` is the full account.
       published conclusion: the board is several times better than `api`, not
       beside it.
 
-## Where the comparison stands, on the corrected run
+## Where the comparison stands
 
-2026-09-06, 80 572 crossings over 1056 minutes, 1 318 685 predictions every
+2026-09-06, 93 796 crossings over 1143 minutes, 1 756 722 predictions every
 approach answered. Overall MAE, best first, from `reports/approaches.md`:
 
 | | s | | s | | s |
 |---|---|---|---|---|---|
-| `no-prior` | 114 | `no-fast` | 122 | `table` | 134 |
-| `prior-shape` | 118 | `no-incremental` | 122 | `k-split` | 140 |
-| `knn` | 118 | `sections-no-prior` | 127 | `vehicle-offset` | 163 |
-| **`full`** | **119** | `no-hold` | 130 | `median` | 174 |
-| `offset-decay` | 121 | `no-corridor` | 132 | `schedule-offset` | 208 |
-| `sections` | 121 | `table-live` | 134 | `api` | 467 |
+| **`tuned`** | **114** | `offset-decay` | 122 | `no-corridor` | 132 |
+| `no-prior` | 115 | `no-fast` | 123 | `k-split` | 140 |
+| `prior-shape` | 119 | `no-incremental` | 123 | `table-live` | 144 |
+| `full` | 120 | `sections-no-prior` | 128 | `table` | 149 |
+| `knn` | 121 | `no-hold` | 131 | `vehicle-offset` | 165 |
+| `sections` | 122 | | | `median` | 177 |
 
-Nothing beats `full` by more than 4%, and the two that do - `no-prior` and
-`knn` - both win by *removing* structure. Read that as the standing summary: on
-8.5 hours of one day, every piece of machinery in the shipped model is either
-neutral or slightly harmful, and the ablations that cost real accuracy are only
-`hold` (+9%), `corridor` (+11%) and the shared shrinkage constant (`k-split`,
-+17%). The plan from here is not to find a better model but to find out which of
-these survive a recording that spans several days, which is Phase 6.
+`schedule-offset` 199, `api` 471, `schedule` 843.
+
+**`tuned` is the first thing to actually beat `full`, and it does it by tuning
+rather than by removing.** It is the shipped model at the best value each of its
+four constants found when swept alone - `k_unit=1`, `k_corr=0.5`,
+`fast_hl=7200`, `slow_hl=43200` - so the four gains do add, at least to a 5%
+total. It wins every horizon bucket out to 20 minutes and by a widening margin:
+15 s against 18 at 0-1 min, 39 against 48 at 2-5, 65 against 78 at 5-10, 111
+against 126 at 10-20. It loses only the last bucket, 223 against 214 at 20-45
+min, and the absolute intervals there overlap.
+
+That last bucket is the price, and the bias column says what is being bought:
+`tuned` runs at -66 s against `full`'s -10. Trusting live evidence sooner and
+forgetting it later means the model tracks whatever the road is currently doing
+and carries it far further ahead than it should, which is free at three minutes
+and wrong at thirty.
+
+**`tuned` and `no-prior` are the same finding twice.** They score 114 against
+115 with bias -66 against -63 and sit within a second of each other in five of
+six buckets, having got there by opposite routes: one keeps the timetable prior
+and stops shrinking towards it, the other deletes it. Turning the prior off *on
+top of* the tuned constants settles it (`check_prior.py`, four variants on one common
+support of 94 376 crossings):
+
+| bucket | `full` | `tuned` | `tuned-no-prior` | `no-prior` |
+|---|---|---|---|---|
+| 0-1 | 18 | 15 | 15 | 16 |
+| 1-2 | 30 | 25 | 24 | 25 |
+| 2-5 | 49 | 40 | 39 | 41 |
+| 5-10 | 80 | 67 | 65 | 69 |
+| 10-20 | 130 | 115 | 113 | 117 |
+| 20-45 | 224 | 234 | 239 | 230 |
+
+Deleting the prior costs `full` 2 s at 0-1 min and 13 s at 10-20; it costs
+`tuned` 0 s and 2 s. **The prior is nearly inert once the shrinkage is
+loosened** - which is what "the learned pace dominates it" means, and it is the
+mechanism behind both results. So there is one thing to carry into Phase 6, not
+two: on a single day the model shrinks too hard towards a prior it does not
+need. Whether it still does not need it across several days is the whole
+question.
+
+Everything else still holds: the ablations that cost real accuracy are only
+`hold` (+9%), `corridor` (+9%) and the shared shrinkage constant (`k-split`,
++17%), and no default should move before Phase 6 shows which of this survives a
+recording spanning several days. A constant tuned on one day is fitted to that
+day.
 
 The one outside predictor worth beating is the public arrivals board, not `api`:
-on the 161 466 events it also answers, `lad` scores 111 s and `api` 408 s, with
-`full` at 85 s.
+on the 212 763 events it also answers, `lad` scores 114 s and `api` 429 s, with
+`full` at 87 s.
 
 ## Speed of the comparison
 
@@ -82,10 +121,13 @@ compares every array element by element, including the three outside predictors.
 Bit-identical, 45.7 s to 18.2 s on those three. Run it after anything that
 touches `replay.py`.
 
-- [ ] **Retime a full seventeen-variant run** and record the real figure here.
-      The three-variant measurement extrapolates to about 9 minutes at the
-      default `cpu_count() - 2` workers, but that is arithmetic, not a
-      measurement, and memory bandwidth is the obvious way for it to be wrong.
+- [x] **Retimed on the real thing.** The eighteen-variant run of 2026-09-06:
+      six workers on eight cores, per-variant times 213-282 s with a mean of
+      232, three waves, about 12 minutes of replay. Sequential would be 70. The
+      per-variant time is roughly 30% above the 170-180 s the same variants take
+      when only four run at once, so contention is real and the speedup is
+      nearer 6x than the 8x the worker count suggests - which is the direction
+      the earlier three-variant extrapolation got wrong.
 - [-] **A single tracking pass shared by every variant.** Dropped. It would take
       the remaining 9 minutes to about 5, and costs a restructuring of
       `replay.py` - the file every published number rests on - plus per-variant
@@ -252,9 +294,18 @@ comes.
       `k_corr` is **still at the lower edge**: **0.5 → 166.5**, 1 → 166.7,
       2 → 167.1, 4 → 167.8, 8 → 169.0, 16 → 170.6 - monotone, and every step
       separated.
-- [ ] **Extend the `k_corr` grid downward** to 0.125 and 0.25. It is the one
-      grid that has not turned over, so its optimum is not yet measured, only
-      bounded above.
+- [x] **Extended the `k_corr` grid downward** to 0.125 and 0.25 (92 944
+      crossings, 1 138 epochs - the recording had grown again, so this is a
+      third support and a third set of MAEs not comparable to the two above).
+      Still monotone to the lower edge and every step still separated:
+      **0.125 → 168.8**, 0.25 → 169.0, 0.5 → 169.1, 1 → 169.3, 2 → 169.8,
+      4 → 170.6. But the whole grid now spans 1.8 s and the three best points
+      span 0.3 s, against a `full` MAE near 169. The direction is real and the
+      size of it is not worth a default change: `k_corr` is a nearly flat
+      direction, and the separations only reach significance because a paired
+      bootstrap over identical rows has almost no variance left to hide them.
+      Reading a separated interval as an important one is the mistake this
+      point exists to record. Stop sweeping it.
 - [ ] **Score a combined `tuned` variant** - `k_unit=1`, `k_corr=0.5`,
       `fast_hl=7200`, `slow_hl=43200` - against `full`, `no-prior` and `knn` on
       the experiment's support. The four grids were each swept with everything

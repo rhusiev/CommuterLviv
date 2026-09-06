@@ -31,11 +31,15 @@ from .experiments import REPORTS, _end
 # can be swept by name; these are the ones with a reason behind them.
 GRIDS = {
     "k_unit": [0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
-    "k_corr": [0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
+    # `k_corr` stayed monotone to its lower edge even after the grid was
+    # extended there, but the whole range spans under 2 s of MAE. It is a nearly
+    # flat direction; the grid is kept for completeness, not for a decision.
+    "k_corr": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0],
     # Both half-life grids ran to their upper edge on the first recording, so
     # both now extend past the length of a day, where decay stops meaning much.
-    "fast_hl": [120.0, 300.0, 480.0, 900.0, 1800.0, 3600.0, 7200.0],
-    "slow_hl": [1800.0, 5400.0, 14400.0, 43200.0, 86400.0, 172800.0],
+    # On the second pass both turned over inside these ranges.
+    "fast_hl": [480.0, 1800.0, 7200.0, 14400.0, 28800.0, 57600.0],
+    "slow_hl": [5400.0, 43200.0, 172800.0, 345600.0, 691200.0],
     "knn": [3, 5, 10, 20, 40],
 }
 
