@@ -1,13 +1,31 @@
 # Why the approaches scored what they did
 
 `approaches.md` says which variants won. It does not say why, and five of the
-results contradicted a claim the model makes about itself. Each one below was
-measured on the same recording - 18.6 hours of `data/feed.db`, 245 307 cell
-crossings over 19 228 distinct cells - not argued from the code.
+results contradicted a claim the model makes about itself. A sixth finding, on
+what the nightly shutdown does to the model, came out of asking whether such a
+sparse subset can be trusted. Each one below was measured on the same recording
+of `data/feed.db` - 245 307 cell crossings over 19 228 distinct cells - not
+argued from the code.
 
 The scripts behind these numbers were one-off instrumentation of `replay.run`,
 not checked in. What is checked in is the conclusion and the number that
 supports it.
+
+**What the recording covers.** The replay spans 18.6 hours, but that is not
+18.6 hours of service. The fixes fall in two windows - 2026-09-05 20:00-23:59
+and 2026-09-06 00:00-09:32 - and the second is mostly the overnight shutdown,
+when there is no public transport in Lviv because of the war. Hours 01:00-04:59
+returned zero vehicles on all 2880 polls. So the evidence is roughly 8.5 hours
+of moving traffic: an evening peak and a morning peak, with **no data at all
+for 10:00-19:00**. Statements about what the *prior* contains hold for all 24
+slots, since they read the prior array itself. Statements about what the *city*
+does are verified over hours 05-09 and 20-23 only.
+
+None of the numbers below carry a confidence interval - unlike
+`approaches.md`, which resamples over whole trips and reports 95% intervals,
+this is a single recording measured once. Treat every finding here as
+provisional: a plausible read of two short windows on one weekend, not a result
+confirmed across recordings.
 
 ## 1. The timetable prior costs 12% MAE, and it is not close
 
@@ -147,22 +165,62 @@ The feed is not stale in the ordinary sense - `pred` revises every 15-30 s,
 and only 0.3% of revisions leave the value unchanged. Whatever produces the
 tail survives being refreshed twice a minute.
 
-## The shape of all five
+## 6. The nightly shutdown resets the model onto the prior every morning
+
+There is no service in Lviv between roughly 00:00 and 05:30. Every weight is
+stamped with the time it was earned and decays from that stamp, so a 6.5-hour
+gap is 4.3 slow half-lives and about 5% of the weight survives it. Snapshotting
+the model each hour across the night:
+
+| local | `full` believes | `no-prior` believes | cell-slow w | corr-slow w |
+|---|---|---|---|---|
+| 22:00 | 19.0 km/h | 19.6 | 1.40 | 6.48 |
+| 23:00 | 18.6 | 19.4 | 1.13 | 5.22 |
+| 02:00 | 17.7 | 19.1 | 0.29 | 1.35 |
+| 05:00 | 17.2 | 19.1 | 0.07 | 0.34 |
+| 06:00 | 18.0 | 19.6 | 0.05 | 0.25 |
+| 07:00 | 19.4 | 20.0 | 0.51 | 2.38 |
+| 08:00 | 20.1 | 20.7 | 1.70 | 7.86 |
+
+Against K_CELL = K_CORR = 4.0, a cell-slow weight of 0.05 is 1.2% of the blend:
+at 06:00 the model is essentially all prior and global, and does not recover
+until 08:00. Measured speed in hours 05-09 is 20.3-23.1 km/h, so `full` opens
+the morning peak believing the city is 15% slower than it is.
+
+`no-prior` drifts only 19.4 to 19.1 over the same night, because what it falls
+back to is the learned global mean rather than the timetable. Finding 1's bias
+is therefore not a steady-state cost that a long run amortises - it is
+re-inflicted at the start of every service day.
+
+Saving a snapshot does not help. `state.py` argues that age needs no check
+because a stale snapshot fades back to the timetable prior on its own; that is
+exactly the failure here, not the safeguard. The fix is a fallback that
+survives the gap: an hour-of-day by day-of-week profile learned across days, or
+a third EWMA with a half-life measured in days beneath the existing two.
+
+The collector itself is untouched by the shutdown - 2880 consecutive polls
+returning zero vehicles, no errors, and the frequent short empty replies during
+the day (8.6% of polls at 08:00) never run longer than 3 polls, well under
+STALE = 120 s.
+
+## The shape of all six
 
 Three distinct mechanisms account for the lot.
 
-1. **A prior is only worth its bias.** Findings 1 and 2. The timetable is used
-   as a level and its level is wrong by 6%, so every cell without live evidence
-   inherits that error. Shrinkage does not rescue a biased target; it delivers
-   it.
+1. **A prior is only worth its bias.** Findings 1, 2 and 6. The timetable is
+   used as a level and its level is wrong by 6%, so every cell without live
+   evidence inherits that error. Shrinkage does not rescue a biased target; it
+   delivers it - and the nightly shutdown puts the whole network back into that
+   state once a day.
 2. **Resolution is worthless faster than it is refreshed.** Findings 2 and 3.
    Cells and short half-lives both describe the city more finely than 11.5
-   crossings per cell per day can support, and a fixed shrinkage constant then
-   throws most of that description away.
-3. **A correction is only valid over the time it persists.** Findings 4 and 5.
-   A vehicle's offset lasts 5 minutes and is applied over 45; the operator's
+   crossings per cell per recording can support, and a fixed shrinkage
+   constant then throws most of that description away.
+3. **A correction is only valid over the time it persists.** Findings 4, 5 and
+   6. A vehicle's offset lasts 5 minutes and is applied over 45; the operator's
    position error lasts as long as its position is wrong and is applied to
-   everything downstream of it.
+   everything downstream of it; and the road model's own memory lasts 90
+   minutes, which is shorter than the night it has to be carried across.
 
 The one thing to take away: every one of these is a mismatch between how long a
 piece of evidence is good for and how far it is being carried.
