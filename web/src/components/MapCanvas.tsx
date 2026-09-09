@@ -169,25 +169,35 @@ export function MapCanvas({ catalog, live, stops, selected, onPickStop, focus, t
         if (x < -R || y < -R || x > w + R || y > h + R) continue;
 
         // The direction wedge sits on the rim rather than inside it, so the
-        // number stays readable at any angle. A vehicle the tracker cannot
-        // call moving gets no wedge: an arrow on a standing bus is a claim
-        // about the next minute, not a report of this one
+        // number stays readable at any angle. It is drawn whether or not the
+        // vehicle is moving - which way it faces is known either way, and a
+        // marker with no wedge left no way to tell one end of the route from
+        // the other. Solid means under way; an outline means standing, so the
+        // wedge says where it will go without claiming it is going there now
+        g.globalAlpha = veh.flags & STALE_FLAG ? 0.45 : 1;
+        const a = ((heading - 90) * Math.PI) / 180;
+        const cos = Math.cos(a);
+        const sin = Math.sin(a);
+        g.beginPath();
+        g.moveTo(x + cos * (R + 5), y + sin * (R + 5));
+        g.lineTo(x + cos * R - sin * 5, y + sin * R + cos * 5);
+        g.lineTo(x + cos * R + sin * 5, y + sin * R - cos * 5);
+        g.closePath();
         if (veh.flags & MOVING_FLAG) {
-          const a = ((heading - 90) * Math.PI) / 180;
-          const cos = Math.cos(a);
-          const sin = Math.sin(a);
-          g.beginPath();
-          g.moveTo(x + cos * (R + 5), y + sin * (R + 5));
-          g.lineTo(x + cos * R - sin * 5, y + sin * R + cos * 5);
-          g.lineTo(x + cos * R + sin * 5, y + sin * R - cos * 5);
-          g.closePath();
           g.fillStyle = c.nub;
           g.fill();
+        } else {
+          g.lineWidth = 1.5;
+          g.lineJoin = "round";
+          g.strokeStyle = c.nub;
+          g.stroke();
         }
 
         const badge = badges[veh.route];
-        if (!badge) continue;
-        g.globalAlpha = veh.flags & STALE_FLAG ? 0.45 : 1;
+        if (!badge) {
+          g.globalAlpha = 1;
+          continue;
+        }
         g.drawImage(badge, x - R, y - R, R * 2, R * 2);
         g.globalAlpha = 1;
       }

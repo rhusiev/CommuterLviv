@@ -551,8 +551,10 @@ OpenStreetMap vector tiles - no key and no account, and `VITE_MAP_STYLE` points
 it somewhere else if that host ever goes away.
 
 Vehicles are coloured circles carrying their route number, with a wedge on the
-rim pointing where they are going; stops are small circles, drawn only for the
-routes you have picked. Clicking one lists every route through it with the next
+rim pointing where they are going - solid while the vehicle is under way, an
+outline while it stands, so a marker always says which way it faces without
+claiming it is moving. Stops are small circles, drawn only for the routes you
+have picked. Clicking one lists every route through it with the next
 arrival for each, and pinning it puts it in the Times tab. Named sets of routes -
 one for work, one for home - live on the server, so they follow the account
 rather than the browser. Serve `dist/` with a history fallback: every path has to

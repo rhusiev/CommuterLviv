@@ -1069,8 +1069,8 @@ build are run by hand.
       `HEAD_SPAN = 25 m` either side so one bent segment cannot swing it. This
       is right by construction: `s` grows in the direction of travel, and it is
       the same geometry the arrival times are computed along, so the arrow and
-      the times can no longer disagree. No arrow is drawn at all unless the
-      vehicle is moving - see below.
+      the times can no longer disagree. The arrow was hidden entirely on a
+      vehicle that is not moving; see the amendment at the end of this list.
 - [x] **Be conservative about motion.** The tracker already carries the
       variance of its own speed estimate, so the test is evidence rather than a
       new constant: `tr.v - SURE * sqrt(tr.P[1,1]) > track.HOLD_SPEED` with
@@ -1156,6 +1156,15 @@ build are run by hand.
       that gets skipped. A GitHub Actions workflow is the obvious next step and
       is not written: there is no remote to run it on, so it could not be
       exercised, and an untested workflow is worse than none.
+- [x] **A standing vehicle shows its direction too**, asked for by the user on
+      2026-09-09. Hiding the wedge unless `MOVING` left no way to tell one end
+      of a route from the other at exactly the moment somebody is looking - a
+      marker at a stop is the common case, not the rare one. The wedge is drawn
+      always now: solid when the vehicle is under way, an outline when it
+      stands. The heading is the route's tangent at `s` either way, so nothing
+      is claimed that was not already known; only the fill says whether it is
+      being acted on. Both clients, and the wedge follows the stale marker's
+      opacity now rather than staying at full.
 
 ## Deliverables
 
