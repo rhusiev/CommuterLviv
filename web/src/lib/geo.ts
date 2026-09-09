@@ -48,6 +48,15 @@ export function screen(view: View, w: number, h: number) {
 export const metresPerPixel = (lat: number, zoom: number) =>
   (40075016.686 * Math.cos((lat * Math.PI) / 180)) / (TILE * 2 ** zoom);
 
+/** Metres between two points, flat-earth. Over a city 20 km across the error
+ * against the great circle is centimetres, and "which stop is nearest" needs
+ * far less than that. */
+export function metres(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {
+  const dy = (a.lat - b.lat) * 111320;
+  const dx = (a.lon - b.lon) * 111320 * Math.cos((a.lat * Math.PI) / 180);
+  return Math.hypot(dx, dy);
+}
+
 const VIEW_KEY = "commuterlviv.view";
 
 export function loadView(): View {
