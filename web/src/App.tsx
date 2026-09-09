@@ -7,6 +7,7 @@ import { StopSearch } from "./components/StopSearch";
 import { Timetable } from "./components/Timetable";
 import { api, ApiError, catalog as fetchCatalog } from "./lib/api";
 import { loadTheme, saveTheme, type Theme } from "./lib/theme";
+import { readUrl, writeUrl } from "./lib/url";
 import { useLive } from "./lib/useLive";
 import type { Catalog, Me, RouteSet } from "./lib/types";
 
@@ -21,15 +22,19 @@ const oldPinKey = (user: string) => `commuterlviv.pins.${user}`;
 export function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [cat, setCat] = useState<Catalog | null>(null);
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+  // Read once, at mount: from here on this component is what the address bar
+  // follows rather than the other way round
+  const [opened] = useState(readUrl);
+  const [picked, setPicked] = useState<Set<string>>(new Set(opened.routes ?? []));
   const [sets, setSets] = useState<RouteSet[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [pinIds, setPinIds] = useState<string[]>([]);
   const [stop, setStop] = useState<number | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lon: number } | null>(null);
-  const [tab, setTab] = useState<"map" | "times">("map");
+  const [tab, setTab] = useState<"map" | "times">(opened.tab);
   const [panel, setPanel] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const code = JOIN.exec(location.pathname)?.[1] ?? null;
   // A new set of arrivals changes the store's snapshot, which re-renders this
@@ -37,36 +42,46 @@ export function App() {
   // timestamp itself
   const { live, connection, count } = useLive();
 
+  /** Nothing here throws into the void. A signed-out session puts the sign-in
+   * screen up, and everything else is said on screen: rethrowing left the
+   * splash reading "…" with the reason in a console nobody has open. */
+  const failed = useCallback((err: unknown) => {
+    if (err instanceof ApiError && err.status === 401) {
+      setMe(null);
+      return;
+    }
+    setNotice(err instanceof Error ? err.message : "the service is not answering");
+  }, []);
+
   const load = useCallback(async () => {
     try {
       const who = await api.me();
       setMe(who);
       setSets(who.sets.sets);
       setActive(who.sets.active);
+      // A link that names routes is what the person opening it asked for; the
+      // account's active set only decides when the link says nothing
       const set = who.sets.sets.find((s) => s.id === who.sets.active);
-      if (set) setPicked(new Set(set.routes));
+      if (set && opened.routes === null) setPicked(new Set(set.routes));
       setPinIds(who.sets.pins);
+      setNotice(null);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) setMe(null);
-      else throw err;
+      failed(err);
     }
-  }, []);
+  }, [failed, opened.routes]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  const loadCatalog = useCallback(() => {
+    setNotice(null);
+    void fetchCatalog().then(setCat, failed);
+  }, [failed]);
+
   useEffect(() => {
-    if (!me) return;
-    void fetchCatalog()
-      .then(setCat)
-      // A session that died between `/api/me` and here leaves the splash up
-      // forever otherwise
-      .catch((err) => {
-        if (err instanceof ApiError && err.status === 401) setMe(null);
-        else throw err;
-      });
-  }, [me]);
+    if (me) loadCatalog();
+  }, [me, loadCatalog]);
 
   const stopIndex = useMemo(() => {
     const m = new Map<string, number>();
@@ -108,6 +123,29 @@ export function App() {
     // Runs when the catalog arrives, and must not re-run when the pins change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cat, me]);
+
+  /** The stop a link named, once there is a catalog to look it up in. It flies
+   * there, because a link to a stop that leaves the camera over the centre of
+   * the city has not shown anybody the stop. */
+  useEffect(() => {
+    if (!cat || opened.stop === null) return;
+    const i = stopIndex.get(opened.stop);
+    if (i === undefined) return;
+    setStop(i);
+    setFocus({ lat: cat.stops[i]!.lat, lon: cat.stops[i]!.lon });
+    // Only when the catalog arrives: after that the address bar follows the
+    // screen and this would fight it
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cat]);
+
+  useEffect(() => {
+    if (!cat) return;
+    writeUrl({
+      routes: [...picked],
+      stop: stop === null ? null : cat.stops[stop]!.id,
+      tab,
+    });
+  }, [cat, picked, stop, tab]);
 
   const index = useMemo(() => {
     const m = new Map<string, number>();
@@ -162,9 +200,19 @@ export function App() {
   };
 
   if (code !== null && !me) return <SignIn code={code} onIn={() => void load()} />;
-  if (me === undefined) return <Splash text="…" />;
+  if (me === undefined)
+    return notice === null ? (
+      <Splash text="…" />
+    ) : (
+      <Splash text={notice} onRetry={() => void load()} />
+    );
   if (me === null) return <SignIn code={null} onIn={() => void load()} />;
-  if (!cat) return <Splash text="loading the city" />;
+  if (!cat)
+    return notice === null ? (
+      <Splash text="loading the city" />
+    ) : (
+      <Splash text={notice} onRetry={loadCatalog} />
+    );
 
   return (
     <div className="flex h-dvh flex-col bg-slate-950 text-slate-100">
@@ -205,7 +253,9 @@ export function App() {
           {count} vehicles
           <button
             onClick={async () => {
-              await api.logout();
+              // Signed out here whether or not the request landed: the session
+              // it is ending may already be the reason it failed
+              await api.logout().catch(() => undefined);
               setMe(null);
             }}
             className="text-slate-500 hover:text-slate-200"
@@ -214,6 +264,18 @@ export function App() {
           </button>
         </span>
       </header>
+
+      {notice !== null && (
+        <p className="flex items-center gap-2 bg-rose-950/80 px-3 py-1.5 text-sm text-rose-200">
+          {notice}
+          <button
+            onClick={() => setNotice(null)}
+            className="ml-auto text-rose-400 hover:text-rose-200"
+          >
+            ✕
+          </button>
+        </p>
+      )}
 
       <main className="relative flex-1 overflow-hidden">
         <div className={tab === "map" ? "absolute inset-0" : "hidden"}>
@@ -274,7 +336,7 @@ export function App() {
               onActivate={(s) => {
                 setPicked(new Set(s.routes));
                 setActive(s.id);
-                void api.activateSet(s.id);
+                void api.activateSet(s.id).catch(failed);
               }}
               onCreate={async (name) => {
                 await api.createSet(name, [...picked]);
@@ -296,10 +358,18 @@ export function App() {
   );
 }
 
-function Splash({ text }: { text: string }) {
+function Splash({ text, onRetry }: { text: string; onRetry?: () => void }) {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-slate-950 text-slate-500">
-      {text}
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-slate-950 text-slate-500">
+      <p className="max-w-sm px-4 text-center">{text}</p>
+      {onRetry && (
+        <button
+          onClick={onRetry}
+          className="rounded-md bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
+        >
+          try again
+        </button>
+      )}
     </div>
   );
 }
