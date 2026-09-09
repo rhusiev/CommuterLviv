@@ -19,6 +19,9 @@
 
 	handle {
 		root * /srv
+		# The worker decides what every later request is allowed to do, so a
+		# cached copy of it outlives the deploy that replaced it
+		header /sw.js Cache-Control "no-cache"
 		# Every other path serves index.html: `/join/<code>` is a route in the
 		# app and not a file, and a 404 there turns an invite link into a dead
 		# one

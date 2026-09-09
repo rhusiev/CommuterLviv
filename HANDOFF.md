@@ -209,6 +209,14 @@ The proxy exists so the browser sees a single origin and the `__Host-` cookies
 work in development exactly as they do in production. `COMMUTERLVIV_API` moves the
 target if the service is not on 8099.
 
+`public/sw.js` is the service worker, hand-written rather than generated: vite
+hashes every asset name, so a precache list would have to be built, and caching
+what has already been served reaches the same place after one visit. It is
+registered only from a production build - the dev server has no `sw.js`, and a
+worker holding the dev server's modules would serve them after they changed.
+`deploy/Caddyfile` sends `Cache-Control: no-cache` for it, because a cached
+worker outlives the deploy that replaced it.
+
 The thing to understand before editing it is that **vehicle positions never
 enter React**. `lib/live.ts` owns a `Map` of vehicles, the canvas loop in
 `components/MapCanvas.tsx` reads that map sixty times a second, and React
