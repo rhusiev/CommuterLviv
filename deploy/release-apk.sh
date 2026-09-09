@@ -20,7 +20,23 @@ version=$(sed -n 's/^version: \([^+]*\)+.*/\1/p' "$root/mobile/pubspec.yaml")
 cd "$root/mobile"
 flutter build apk --release
 
+apk=build/app/outputs/flutter-apk/app-release.apk
+
+# An unsigned APK installs nowhere: Android rejects it, and the phone says
+# "App not installed" without saying why. The release is signed only if
+# android/key.properties exists, so this is the check that catches a machine
+# without the key before the file is published rather than after
+signer=$(ls -d "${ANDROID_HOME:-$HOME/.local/share/android-sdk}"/build-tools/*/apksigner 2>/dev/null | tail -1)
+if [ -n "$signer" ]; then
+  "$signer" verify "$apk" >/dev/null 2>&1 || {
+    echo "the build is not signed - see android/key.properties in mobile/README.md" >&2
+    exit 1
+  }
+else
+  echo "no apksigner in the SDK - the signature was not checked" >&2
+fi
+
 mkdir -p "$out"
-cp build/app/outputs/flutter-apk/app-release.apk "$out/commuterlviv-$version.apk"
+cp "$apk" "$out/commuterlviv-$version.apk"
 cp "$out/commuterlviv-$version.apk" "$out/commuterlviv.apk"
 ls -l "$out"

@@ -58,7 +58,28 @@ flutter build apk --release
 ```
 
 It comes out unsigned unless `android/key.properties` exists, which is what
-F-Droid needs. See `fdroid/ua.lviv.commuterlviv.yml` for the rest.
+F-Droid needs - it builds from source and signs with its own key. **An unsigned
+APK installs nowhere**: Android refuses it and the phone says only "App not
+installed". A debug build carries the debug key and installs, which is why the
+difference is easy to miss until a release build is handed to a phone.
+
+So a machine that hands out release builds keeps a key of its own. Ours lives
+in `android/commuterlviv-release.jks` with its password in
+`android/key.properties`; both are gitignored, neither is recoverable, and an
+update signed by a different key will not install over one signed by this one -
+back them up or expect to uninstall before every update.
+
+```sh
+keytool -genkeypair -v -keystore mobile/android/commuterlviv-release.jks \
+  -storetype PKCS12 -keyalg RSA -keysize 4096 -validity 10000 \
+  -alias commuterlviv -dname "CN=CommuterLviv, O=CommuterLviv, C=UA"
+# then android/key.properties: storeFile, storePassword, keyAlias, keyPassword
+$ANDROID_HOME/build-tools/*/apksigner verify --print-certs -v <apk>
+```
+
+`release-apk.sh` runs that last line for you and refuses to publish a build
+that is not signed. Signing is v2-only, because `minSdk` is past 24 - there is
+no `META-INF/*.RSA` in the APK and its absence is not a problem.
 
 `../deploy/release-apk.sh` is the same build plus the one step that makes it
 reachable: it copies the result into `deploy/apk/`, which the web container
