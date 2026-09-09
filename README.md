@@ -396,19 +396,30 @@ Take the copy while the collector is running with SQLite's own backup, not with
 `scp`. The database is in WAL mode, so the newest rows are in `feed.db-wal` and
 a plain copy of `feed.db` is both missing them and possibly torn:
 
+Python does it, and there is no `sqlite3` command line tool on a machine that
+only ever runs the collector:
+
 ```sh
-ssh vps 'sqlite3 /opt/commuterlviv/data/feed.db ".backup /tmp/feed-snapshot.db"'
-ssh vps 'gzip -9 /tmp/feed-snapshot.db'          # it compresses about 4:1
+ssh vps python3 <<'EOF'
+import sqlite3
+sqlite3.connect("/opt/commuterlviv/data/feed.db").backup(
+    sqlite3.connect("/tmp/feed-snapshot.db"))
+EOF
+ssh vps gzip -9 /tmp/feed-snapshot.db            # it compresses about 4:1
 scp vps:/tmp/feed-snapshot.db.gz .
 ```
 
-Inside the stack the same thing, without a `sqlite3` binary in the image:
+Inside the stack, the same, through the image's own python:
 
 ```sh
 docker compose exec -T service python -c "import sqlite3; \
   sqlite3.connect('data/feed.db').backup(sqlite3.connect('data/snapshot.db'))"
 docker compose cp service:/app/data/snapshot.db ./feed-snapshot.db
+docker compose exec -T service rm /app/data/snapshot.db
 ```
+
+The snapshot is as large as the recording, so delete it once it is copied - the
+collector stops at 3 GB free.
 
 ## The approaches, and switching between them
 
