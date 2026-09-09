@@ -11,6 +11,7 @@ import 'package:flutter/services.dart' show TextInput;
 
 import 'api.dart';
 import 'server_dialog.dart';
+import 'strings.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key, required this.api, required this.onIn});
@@ -87,7 +88,7 @@ class _SignInScreenState extends State<SignInScreen> {
     } on ApiError catch (e) {
       setState(() => _error = e.message);
     } on Exception {
-      setState(() => _error = 'could not reach ${widget.api.base}');
+      setState(() => _error = txt.unreachable(widget.api.base));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -122,18 +123,15 @@ class _SignInScreenState extends State<SignInScreen> {
                   children: [
                     Text('CommuterLviv', style: text.headlineMedium),
                     const SizedBox(height: 4),
-                    Text(
-                      'where the buses actually are',
-                      style: text.bodyMedium,
-                    ),
+                    Text(txt.tagline, style: text.bodyMedium),
                     const SizedBox(height: 28),
                     if (_joining && _mode == 'code') ...[
                       TextField(
                         controller: _code,
                         autocorrect: false,
-                        decoration: const InputDecoration(
-                          labelText: 'Invite code',
-                          helperText: 'the last part of the link you were sent',
+                        decoration: InputDecoration(
+                          labelText: txt.inviteCode,
+                          helperText: txt.inviteHint,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -143,7 +141,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       autocorrect: false,
                       textInputAction: TextInputAction.next,
                       autofillHints: const [AutofillHints.username],
-                      decoration: const InputDecoration(labelText: 'Username'),
+                      decoration: InputDecoration(labelText: txt.username),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -155,13 +153,13 @@ class _SignInScreenState extends State<SignInScreen> {
                             ? AutofillHints.newPassword
                             : AutofillHints.password,
                       ],
-                      decoration: const InputDecoration(labelText: 'Password'),
+                      decoration: InputDecoration(labelText: txt.password),
                     ),
                     const SizedBox(height: 4),
                     SwitchListTile.adaptive(
                       value: _remember,
                       onChanged: (v) => setState(() => _remember = v),
-                      title: const Text('Stay signed in'),
+                      title: Text(txt.stayIn),
                       contentPadding: EdgeInsets.zero,
                     ),
                     if (_error != null) ...[
@@ -185,9 +183,9 @@ class _SignInScreenState extends State<SignInScreen> {
                           : Text(
                               _joining
                                   ? (_mode == 'open'
-                                        ? 'Create the account'
-                                        : 'Join')
-                                  : 'Sign in',
+                                        ? txt.createAccount
+                                        : txt.join)
+                                  : txt.signIn,
                             ),
                     ),
                     if (_mode != 'closed')
@@ -195,10 +193,10 @@ class _SignInScreenState extends State<SignInScreen> {
                         onPressed: () => setState(() => _joining = !_joining),
                         child: Text(
                           _joining
-                              ? 'I already have an account'
+                              ? txt.haveAccount
                               : (_mode == 'open'
-                                    ? 'Create an account'
-                                    : 'I have an invite code'),
+                                    ? txt.wantAccount
+                                    : txt.haveInvite),
                         ),
                       ),
                     TextButton(

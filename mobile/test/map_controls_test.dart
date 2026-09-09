@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'package:commuterlviv/src/map_controls.dart';
+import 'package:commuterlviv/src/strings.dart';
 
 /// A map with the buttons over it, and no tile layer: the controls only ever
 /// read the camera, and a test has no network.
@@ -35,11 +36,11 @@ void main() {
   testWidgets('the buttons zoom, and stop at the ends', (tester) async {
     final map = await pump(tester);
 
-    await tester.tap(find.byTooltip('Zoom in'));
+    await tester.tap(find.byTooltip(txt.zoomIn));
     await tester.pump();
     expect(map.camera.zoom, 14);
 
-    await tester.tap(find.byTooltip('Zoom out'));
+    await tester.tap(find.byTooltip(txt.zoomOut));
     await tester.pump();
     expect(map.camera.zoom, 13);
 
@@ -66,11 +67,11 @@ void main() {
     tester,
   ) async {
     final map = await pump(tester);
-    expect(find.byTooltip('Face north'), findsNothing);
+    expect(find.byTooltip(txt.faceNorth), findsNothing);
 
     map.rotate(30);
     await tester.pump();
-    expect(find.byTooltip('Face north'), findsOneWidget);
+    expect(find.byTooltip(txt.faceNorth), findsOneWidget);
     expect(
       tester
           .widget<Transform>(
@@ -88,9 +89,9 @@ void main() {
       closeTo(0.866, 0.001), // cos 30°: the needle turns with the map
     );
 
-    await tester.tap(find.byTooltip('Face north'));
+    await tester.tap(find.byTooltip(txt.faceNorth));
     await tester.pump();
     expect(map.camera.rotation, 0);
-    expect(find.byTooltip('Face north'), findsNothing);
+    expect(find.byTooltip(txt.faceNorth), findsNothing);
   });
 }

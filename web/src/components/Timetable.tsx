@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { countdown, nextPerRoute } from "../lib/eta";
 import { colour } from "../lib/sprites";
 import type { Arrival, Catalog } from "../lib/types";
+import { t } from "../lib/i18n";
 
 /** The pinned stops, and the next arrival of each route at each. The clock
  * ticks locally between epochs: the predictions change once a minute, but a
@@ -24,11 +25,7 @@ export function Timetable({
   }, []);
 
   if (!stops.length) {
-    return (
-      <p className="p-6 text-sm text-slate-500">
-        Nothing pinned yet. Tap a stop on the map and pin it to watch it here.
-      </p>
-    );
+    return <p className="p-6 text-sm text-slate-500">{t.nothingPinned}</p>;
   }
 
   return (
@@ -45,11 +42,11 @@ export function Timetable({
                 onClick={() => onUnpin(i)}
                 className="text-xs text-slate-600 hover:text-rose-300"
               >
-                unpin
+                {t.unpin}
               </button>
             </div>
             {due.length === 0 ? (
-              <p className="mt-1 text-sm text-slate-600">nothing due on the routes shown</p>
+              <p className="mt-1 text-sm text-slate-600">{t.nothingDue}</p>
             ) : (
               <ul className="mt-1 divide-y divide-slate-800/70">
                 {due.map((a) => {

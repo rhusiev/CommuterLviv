@@ -1115,6 +1115,32 @@ build are run by hand.
       2026-09-09. `vector_map_tiles` was caching under the temporary directory,
       which Android empties at will. `lib/src/map_tiles.dart` puts it under
       application support - 200 MB, 90 days, 32 MB and 50 tiles in memory.
+- [x] **The web app puts its state in the address bar**, 2026-09-09.
+      `web/src/lib/url.ts` reads and writes `routes`, `stop` and `tab` as feed
+      ids, once at mount and on every change through `history.replaceState`, so
+      a link carries what is on the screen. A link that names routes wins over
+      the account's active set; one that names a stop flies there.
+- [x] **The web app says what went wrong**, 2026-09-09. Every failed call went
+      into a console nobody had open, leaving the splash reading "…". A 401 puts
+      the sign-in screen up; anything else is a retryable splash before there is
+      a screen, and a dismissible banner after.
+- [x] **Stops near me**, 2026-09-09. `metres()` in `web/src/lib/geo.ts` and a ◎
+      button in the search box: `navigator.geolocation`, the stops within 2 km,
+      nearest first, with the distance where the route list goes.
+- [x] **`home.dart` split into the widgets it was hiding**, 2026-09-09. It was
+      896 lines and every widget in it took a `_HomeScreenState` back-pointer,
+      which works only because Dart privacy is per library. The tabs, the card,
+      the sheets and the search are their own files now, each taking what it
+      draws and calling back.
+- [x] **Ukrainian**, 2026-09-09. `web/src/lib/i18n.ts` and
+      `mobile/lib/src/strings.dart` hold the two dictionaries, key for key, so
+      the clients say the same things. The language is the stored choice, else
+      Ukrainian for a browser or phone asking for it, and it is read once per
+      load: changing it reloads the page or asks for a restart, which buys not
+      threading a provider through every widget. `intl` and ARB files were
+      considered and dropped - two locales and sixty strings do not pay for a
+      code generator. Server error messages are still English: they come from
+      `live/app.py` and are shown as sent.
 
 ## Deliverables
 

@@ -1,4 +1,5 @@
 import type { Arrival } from "./types";
+import { t } from "./i18n";
 
 /** The soonest arrival per route, in the order the routes come. The service
  * already sorts a stop's arrivals soonest first, so the first one seen for a
@@ -15,9 +16,9 @@ export function nextPerRoute(list: Arrival[]): Arrival[] {
 }
 
 /** How long until then, as a rider would say it. */
-export function countdown(t: number, now = Date.now() / 1000): string {
-  const s = t - now;
-  if (s < 30) return "now";
-  if (s < 90) return "1 min";
-  return `${Math.round(s / 60)} min`;
+export function countdown(at: number, now = Date.now() / 1000): string {
+  const s = at - now;
+  if (s < 30) return t.now;
+  if (s < 90) return t.oneMinute;
+  return t.minutes(Math.round(s / 60));
 }

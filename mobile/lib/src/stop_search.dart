@@ -5,9 +5,10 @@ library;
 import 'package:flutter/material.dart';
 
 import 'models.dart';
+import 'strings.dart';
 
 class StopSearch extends SearchDelegate<int?> {
-  StopSearch(this.catalog) : super(searchFieldLabel: 'Find a stop');
+  StopSearch(this.catalog) : super(searchFieldLabel: txt.findStop);
 
   final Catalog catalog;
 

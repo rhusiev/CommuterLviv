@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { colour } from "../lib/sprites";
 import { THEMES, type Theme } from "../lib/theme";
 import type { Catalog, RouteSet } from "../lib/types";
+import { lang, setLang, t } from "../lib/i18n";
 
 /** Which routes are on the map, and the named sets that stand for a selection:
  * one for the way to work, one for home. A set is the selection at the moment
@@ -40,14 +41,14 @@ export function RoutePanel(p: Props) {
     try {
       await fn();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "that did not work");
+      setError(err instanceof Error ? err.message : t.failed);
     }
   };
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-hidden">
       <section>
-        <h2 className="text-xs uppercase tracking-wide text-slate-500">Sets</h2>
+        <h2 className="text-xs uppercase tracking-wide text-slate-500">{t.sets}</h2>
         <ul className="mt-2 space-y-1">
           {p.sets.map((s) => (
             <li key={s.id} className="flex items-center gap-1">
@@ -63,14 +64,14 @@ export function RoutePanel(p: Props) {
                 <span className="ml-2 text-xs text-slate-500">{s.routes.length}</span>
               </button>
               <button
-                title="Save the current selection into this set"
+                title={t.saveSet}
                 onClick={guard(() => p.onUpdate(s))}
                 className="rounded-md px-2 py-1.5 text-xs text-slate-500 hover:bg-slate-800 hover:text-slate-200"
               >
-                save
+                {t.save}
               </button>
               <button
-                title="Delete this set"
+                title={t.deleteSet}
                 onClick={guard(() => p.onDelete(s))}
                 className="rounded-md px-2 py-1.5 text-xs text-slate-500 hover:bg-slate-800 hover:text-rose-300"
               >
@@ -93,11 +94,11 @@ export function RoutePanel(p: Props) {
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="New set from selection"
+            placeholder={t.newSet}
             className="min-w-0 flex-1 rounded-md border border-slate-800 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-sky-600"
           />
           <button className="rounded-md bg-slate-800 px-3 text-sm text-slate-200 hover:bg-slate-700">
-            add
+            {t.add}
           </button>
         </form>
         {error && <p className="mt-1 text-xs text-rose-400">{error}</p>}
@@ -106,17 +107,17 @@ export function RoutePanel(p: Props) {
       <section className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-baseline justify-between">
           <h2 className="text-xs uppercase tracking-wide text-slate-500">
-            Routes
-            <span className="ml-2 normal-case text-slate-600">{p.picked.size} on</span>
+            {t.routes}
+            <span className="ml-2 normal-case text-slate-600">{t.on(p.picked.size)}</span>
           </h2>
           <button onClick={p.onClear} className="text-xs text-slate-500 hover:text-slate-300">
-            clear
+            {t.clear}
           </button>
         </div>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter"
+          placeholder={t.filter}
           className="mt-2 rounded-md border border-slate-800 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-sky-600"
         />
         <div data-chips className="mt-2 flex flex-wrap content-start gap-1 overflow-y-auto">
@@ -127,7 +128,9 @@ export function RoutePanel(p: Props) {
                 key={r.id}
                 onClick={() => p.onToggle(r.id)}
                 title={r.long}
-                style={on ? { backgroundColor: colour(r.short, r.type), color: "#0b0f14" } : undefined}
+                style={
+                  on ? { backgroundColor: colour(r.short, r.type), color: "#0b0f14" } : undefined
+                }
                 className={`rounded-md px-2 py-1 text-sm font-medium ${
                   on ? "" : "bg-slate-800/70 text-slate-400 hover:bg-slate-700"
                 }`}
@@ -140,19 +143,38 @@ export function RoutePanel(p: Props) {
       </section>
 
       <section>
-        <h2 className="text-xs uppercase tracking-wide text-slate-500">Map</h2>
-        <div className="mt-2 flex flex-wrap gap-1">
-          {THEMES.map((t) => (
+        <h2 className="text-xs uppercase tracking-wide text-slate-500">{t.language}</h2>
+        <div className="mt-2 flex gap-1">
+          {(["uk", "en"] as const).map((l) => (
             <button
-              key={t.id}
-              onClick={() => p.onTheme(t)}
+              key={l}
+              onClick={() => setLang(l)}
               className={`rounded-md px-2 py-1 text-xs ${
-                t.id === p.theme.id
+                l === lang
                   ? "bg-sky-600/20 text-sky-200"
                   : "bg-slate-800/70 text-slate-400 hover:bg-slate-700"
               }`}
             >
-              {t.name}
+              {l === "uk" ? "Українська" : "English"}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-xs uppercase tracking-wide text-slate-500">{t.basemap}</h2>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {THEMES.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => p.onTheme(m)}
+              className={`rounded-md px-2 py-1 text-xs ${
+                m.id === p.theme.id
+                  ? "bg-sky-600/20 text-sky-200"
+                  : "bg-slate-800/70 text-slate-400 hover:bg-slate-700"
+              }`}
+            >
+              {m.name}
             </button>
           ))}
         </div>
