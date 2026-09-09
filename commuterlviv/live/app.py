@@ -31,7 +31,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
 
-from .. import network
+from .. import __version__, network
 from . import (auth, db, hub, journeys, prefs, security, service, settings,
                state)
 
@@ -444,6 +444,7 @@ async def health(request):
     app = request.app.state
     return JSONResponse({"ok": app.svc.live.epochs > 0 or app.svc.polls > 0,
                          "uptime": round(time.time() - app.started, 1),
+                         "version": __version__,
                          "registration": app.settings.registration})
 
 

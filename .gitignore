@@ -29,3 +29,6 @@ mobile/**/GeneratedPluginRegistrant.*
 # The deployment's passwords
 .env
 deploy/*.env
+
+# Release builds, served at /download by the stack; not history
+deploy/apk/*.apk

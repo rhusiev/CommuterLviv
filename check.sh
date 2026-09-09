@@ -28,6 +28,36 @@ run() {
   if ! (cd "$root/$dir" && "$@"); then failed="$failed $name"; fi
 }
 
+step "one version, in three trees"
+run version . python3 - <<'EOF'
+import json, pathlib, re, sys
+
+root = pathlib.Path(".")
+want = re.search(r'__version__ = "([^"]+)"',
+                 (root / "commuterlviv/__init__.py").read_text()).group(1)
+pub = re.search(r"^version: (\S+)\+(\d+)$",
+                (root / "mobile/pubspec.yaml").read_text(), re.M)
+recipe = (root / "mobile/fdroid/ua.lviv.commuterlviv.yml").read_text()
+found = {
+    "web/package.json": json.loads((root / "web/package.json").read_text())["version"],
+    "mobile/pubspec.yaml": pub.group(1),
+    "fdroid versionName": re.search(r"versionName: (\S+)", recipe).group(1),
+    "fdroid CurrentVersion": re.search(r"CurrentVersion: (\S+)", recipe).group(1),
+    "fdroid tag": re.search(r"commit: v(\S+)", recipe).group(1),
+}
+bad = {k: v for k, v in found.items() if v != want}
+codes = {re.search(r"versionCode: (\d+)", recipe).group(1),
+         re.search(r"CurrentVersionCode: (\d+)", recipe).group(1), pub.group(2)}
+if bad or len(codes) != 1:
+    print(f"commuterlviv/__init__.py says {want}")
+    for k, v in bad.items():
+        print(f"  {k} says {v}")
+    if len(codes) != 1:
+        print(f"  the Android version codes disagree: {sorted(codes)}")
+    sys.exit(1)
+print(f"{want}, build {pub.group(2)}")
+EOF
+
 step "python: syntax and undefined names"
 if command -v ruff >/dev/null; then
   # Only the rules that mean "this will not run": the codebase predates any
