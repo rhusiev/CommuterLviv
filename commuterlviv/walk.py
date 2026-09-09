@@ -86,7 +86,7 @@ def fetch(net=None, session=None):
     return res.json()
 
 
-def _metres(lat1, lon1, lat2, lon2):
+def metres(lat1, lon1, lat2, lon2):
     """Equirectangular, which over a city block is exact to a centimetre and
     costs no trigonometry per edge beyond one cosine per pair."""
     k = math.cos(math.radians((lat1 + lat2) / 2))
@@ -125,7 +125,7 @@ def compile_graph(raw):
             if i is None:
                 continue
             if prev is not None:
-                d = _metres(lat[prev], lon[prev], lat[i], lon[i])
+                d = metres(lat[prev], lon[prev], lat[i], lon[i])
                 heads.append(prev)
                 tails.append(i)
                 costs.append(d)
@@ -187,7 +187,7 @@ class Walk:
         for y in range(cy - r, cy + r + 1):
             for x in range(cx - r, cx + r + 1):
                 for i in self.grid.get((y, x), ()):
-                    d = _metres(lat, lon, self.lat[i], self.lon[i])
+                    d = metres(lat, lon, self.lat[i], self.lon[i])
                     if d <= within:
                         found.append((d, i))
         found.sort()
