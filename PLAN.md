@@ -23,7 +23,7 @@ in `reports/findings.md` is the full account.
 - [x] **Ground truth was being deleted by the arrivals board's naming.** A
       crossing was kept only if *both* (trip, stop) and (vehicle, stop) named it
       uniquely. Over a six-hour window a vehicle passes each of its stops several
-      times, so (vehicle, stop) is unique for only 11% of crossings against 94%
+      times, so (vehicle, stop) is unique for only 11% of predictions against 94%
       for (trip, stop): 89% of the ground truth was being thrown away to
       accommodate the one predictor that needs the weaker naming. Worse, our own
       predictions were addressed by (trip, stop) too, so a prediction about one
@@ -258,7 +258,7 @@ variants in the comparison as evidence; ship none of them.
       no longer `PaceModel.__init__` arguments but `Config` fields. Defaults are
       the shipped values, so nothing moved. `Layer` takes `k_unit` and `k_corr`
       per instance.
-- [x] **A command to sweep them.** `python3 -m lvivpred sweep <field> [values]`
+- [x] **A command to sweep them.** `python3 -m commuterlviv sweep <field> [values]`
       cold-replays one point per value and prints a paired 95% interval against
       the best point, appending the grid to `reports/sweeps.json`. Paired rather
       than absolute because on a grid this tight the shared variance is nearly
@@ -311,12 +311,16 @@ comes.
       bootstrap over identical rows has almost no variance left to hide them.
       Reading a separated interval as an important one is the mistake this
       point exists to record. Stop sweeping it.
-- [ ] **Score a combined `tuned` variant** - `k_unit=1`, `k_corr=0.5`,
+- [x] **Score a combined `tuned` variant** - `k_unit=1`, `k_corr=0.5`,
       `fast_hl=7200`, `slow_hl=43200` - against `full`, `no-prior` and `knn` on
       the experiment's support. The four grids were each swept with everything
       else shipped, so their gains are not known to add. This is also the
       decisive question of the whole comparison so far: whether tuning the
-      structure beats removing it. Cheap now that variants run in parallel.
+      structure beats removing it. **They do add, to about 5%**: `tuned` 114 s
+      against `full`'s 120 and `no-prior`'s 115, winning every horizon bucket
+      out to 20 minutes and losing only 20-45. It is the first thing to beat
+      `full` by tuning rather than by removing; the section above this one has
+      the buckets and what the bias says about them.
 - [x] **The `fast_hl` confound is settled.** At `fast_hl = 7200` the fast term
       nearly coincides with the 5400 s slow one, so the gain could have been
       half as much shrinkage rather than longer memory. Sweeping `fast` on a
@@ -345,14 +349,30 @@ Finding 3 is the specific hypothesis to test here: the cell-fast term supplies
 shared constant. That is the `k-split` variant (`k_unit=16`, `k_corr=1`), to be
 scored with the rest of the comparison before the grid is run.
 
-Geometry constants cost a network rebuild and go last, in their own pass:
+Geometry constants were expected to cost a network rebuild and to go last, in
+their own pass. They cost much less than that: the stop assignment that
+dominates a build does not depend on any of them, and neither does tracking or
+the ground truth, so `network.regrid` recomputes the three affected arrays per
+shape and the sweep runs like any other. The three now live in a `Geometry`
+dataclass (`network.py`) with `sweep.GEOMETRY` naming them, and `run_many`
+accepts one network per config.
 
-- [ ] `CELL` (`network.py:19`, 100 m) at 50, 100, 200, 400 m. Finding 2 measured
-      the between-cell variance at 59% of the total against 37% between-section,
-      so there is a resolution optimum somewhere between the two and neither end
-      is it.
-- [ ] `CORRIDOR_GRID` (`network.py:20`, 120 m) at 60, 120, 250 m, and the bearing
-      resolution at 4, 8, 16 octants.
+All three are run. Finding 13 has the tables; between them they are worth 2 s of
+166, and only `grid` is shipped wrong.
+
+- [x] `cell` (was `CELL`, 100 m) at 50, 100, 200, 400 m. Finding 2 measured the
+      between-cell variance at 59% of the total against 37% between-section, so
+      there is a resolution optimum somewhere between the two and neither end is
+      it. It is at 100 m, where the value already was: 166.5 s against 167.8 at
+      50, 167.1 at 200 and 168.6 at 400. A shallow U, 2.1 s wide.
+- [x] `grid` (was `CORRIDOR_GRID`, 120 m) at 60, 120, 250 m, and `octants`, the
+      bearing resolution, at 4, 8, 16. `grid` chose the low edge, so it was
+      re-swept at 30, 45, 60, 120: monotone down to 30 (164.4), with 45 (164.7)
+      not separated from it and the shipped 120 at 166.7. `octants` 16 (166.7)
+      and 8 (166.9) are not separated; 4 costs 1.0 s.
+- [ ] Confirm `grid=45` on `stack-robust` before changing `network.DEFAULT`. The
+      corridor layer is one input of four there, and a 2.3 s win on `full` need
+      not survive the blend.
 
 Sweeps are not free: each is a full replay. Run them as a batch overnight rather
 than interactively, and write the grid to `reports/sweeps.json`.
@@ -412,14 +432,15 @@ Setup, common to all of Phase 4:
 - **Target** `log((actual - now) / max(predicted - now, 1))`, clipped at ±1.5
 - **Split** one replay of the whole recording, not two, with rows split by the
   time they were emitted: fit on rows before 2026-09-06 00:00 and test from
-  05:30 to the end of the recording. Written when the recording ended at 09:32,
-  it now runs to 16:00 and the test window should take all of it. One replay
-  keeps this causal - the physical model is causal and the residual model only
-  ever sees earlier rows - and it means the model state at 05:30 carries the
-  evening's learning, as it would in deployment. Drop the first 30-40 minutes
-  of training rows, where the model is still cold.
-- **Rows** one per emitted prediction: about 1.9 million over the whole
-  recording, of which the test window is the larger part
+  05:30 to the end of the recording, which is 18:56. One replay keeps this
+  causal - the physical model is causal and the residual model only ever sees
+  earlier rows - and it means the model state at 05:30 carries the evening's
+  learning, as it would in deployment. Drop the first 40 minutes of training
+  rows, where the model is still cold. This split turned out to be too
+  lopsided to answer the phase's question on its own; the deviation below says
+  what was added and why.
+- **Rows** one per emitted prediction: 3 010 244 over the whole recording,
+  covering 130 426 crossings
 - **Features**, all available causally at emit time:
   `horizon` (seconds to the predicted arrival), `n_stops_ahead`,
   `dist_remaining`, `hour + minute/60`, `model_eta`, the vehicle's own speed
@@ -430,12 +451,12 @@ Setup, common to all of Phase 4:
 - **Weighting** by `1 / truth.gap` so a crossing interpolated across a 40 s hole
   counts less than one pinned to 10 s
 
-- [x] **The rows themselves.** `lvivpred/features.py` and a `feats=` hook in
+- [x] **The rows themselves.** `commuterlviv/features.py` and a `feats=` hook in
       `replay.run` write one row per emitted prediction, appended in the same
       loop and under the same mask as the prediction, so feature row *i* is
       prediction row *i* and the join to the truth is by position and never by a
       key; `predictors.event_of` supplies the crossing id. Run it with
-      `python3 -m lvivpred features --out reports/feats.npz`. Two deviations
+      `python3 -m commuterlviv features --out reports/feats.npz`. Two deviations
       from the feature list above: `horizon` and `model_eta` are the same
       quantity and only one is recorded, and `fix_age` - how stale the believed
       position is - was added because it is causally available and clearly
@@ -448,44 +469,135 @@ Models, in increasing order of what they can express. Each is scored against the
 uncorrected `full` and against the one above it, so the comparison says what the
 extra capacity bought:
 
-- [ ] **`resid-const`** - one number: the mean residual. A sanity floor. If this
-      beats `full` the model has a bias. Pooled, `full`'s bias is only -9 s, but
-      that is two biases cancelling: +6 s at 0-1 min and -69 s at 20-45 min. So
-      fit the constant per horizon bucket, not once - a single number would find
-      nothing here and would be the wrong test.
-- [ ] **`resid-linear`** - ridge regression on the features above. Closed form in
-      numpy, no dependency. Tells whether the residual is a linear function of
-      horizon and lateness, which is the shape finding 4 predicts.
-- [ ] **`resid-gbm`** - gradient-boosted regression trees, squared loss and then
-      absolute loss. Needs `scikit-learn` (`HistGradientBoostingRegressor`);
-      **add it as an optional extra, not to `requirements.txt`**, so the
-      collector's VPS footprint does not change. Tune `max_depth` in 3-8,
-      `learning_rate` in 0.03-0.3, `max_iter` by early stopping on a held-out
-      slice of the *training* window.
-- [ ] **`resid-quantile`** - the same GBM at quantile 0.5, and at 0.1/0.9 to get
-      a prediction interval. An interval is a genuinely new output: "the bus
-      arrives in 6-11 minutes" is more useful than a point estimate that is
-      wrong by 90 seconds, and nothing currently produces one.
-- [ ] **`resid-mlp`** - a small dense network, two hidden layers of 32-64 units.
-      Expected to lose on 16k rows; run it anyway so the report can say by how
-      much rather than assert it. Needs `torch`, or write the backward pass in
-      numpy - it is small enough that numpy is the lighter option.
+All five landed as `commuterlviv/residual.py` and
+`python3 -m commuterlviv residual`, and are scored twice - on the split above, and
+on a second split fitted before 12:00 and scored after it. The second split was
+not in the plan and is the reason there is a result at all: see the deviation
+below. `reports/residual.md` and `reports/residual-midday.md` hold the two
+tables, finding 9 holds what they mean. MAE in seconds, plan split first:
 
-Feature ablation on whichever of these wins, so the report can say *which*
-feature carried it rather than just naming the model.
+| model | plan split | vs full | midday split | vs full |
+|---|---|---|---|---|
+| `full` | 168.4 | - | 161.2 | - |
+| `resid-const` | 197.5 | +29.1 | 163.3 | +2.0 |
+| `resid-linear` | 185.0 | +16.6 | 159.7 | -1.5 |
+| `resid-gbm` | 207.2 | +38.8 | 154.6 | -6.6 |
+| **`resid-quantile`** | 199.3 | +30.9 | **145.5** | **-15.8** |
+| `resid-mlp` | 900.9 | +732.6 | 200.5 | +39.2 |
+
+- [x] **`resid-const`** - one number per horizon bucket, fitted per bucket
+      rather than pooled because pooled it would find nothing: `full` runs late
+      at one minute and early at forty and the two cancel. It is a floor and it
+      behaves like one - +2.0 s on the midday split, +29.1 on the plan's. The
+      model's bias is not stable enough across the day for a constant to remove
+      it.
+- [x] **`resid-linear`** - weighted ridge, closed form in numpy, penalty chosen
+      on a held-out tail of the training window. The design matrix is never
+      materialised: three million rows would be gigabytes and the normal
+      equations it feeds are 70 squared, so one chunked pass accumulates them
+      and every penalty is solved from the same accumulation. Worth -1.5 s
+      [-3.0, -0.3] on the midday split. The residual is not linear in these
+      features.
+- [x] **`resid-gbm`** - `HistGradientBoostingRegressor`, `max_depth=6`,
+      `learning_rate=0.1`, `max_iter=400` with early stopping on 15% held out
+      of the training window, `route` passed as categorical. sklearn is imported
+      inside the fit and stays out of `requirements.txt`, so the collector's VPS
+      footprint does not change. -6.6 s [-13.2, +0.4]: not separated from zero.
+- [x] **`resid-quantile`** - the same trees at quantile 0.5. **The winner, and
+      the only large step in the whole phase: -15.8 s [-20.1, -11.6], 9.8%.**
+      Capacity bought almost nothing and the loss function bought everything -
+      the residual is right-skewed, MAE is minimised by the median, and squared
+      loss fits one quantity while the scoring grades another.
+- [x] **The 0.1/0.9 prediction interval** - `band-const` and `band-quantile`,
+      described under the deviations below. Finding 12.
+- [x] **`resid-mlp`** - two hidden layers of 48 and 32, Adam in numpy on a
+      300k-row subsample, no torch. It loses as expected and by a lot: +39.2 s
+      on the midday split and +732.6 on the plan's. Not broken - in-sample it
+      cuts training MAE from 135 s to 80 s and correlates 0.67 with the target -
+      it overfits the training window and extrapolates.
+
+- [x] **Feature ablation on the winner.** Each group blanked and the model
+      refitted, on the midday split. The model's own evidence weights cost
+      +20.0 s, the vehicle's speed ratio and fix ages +8.1, the timetable's
+      answer and lateness +6.9, hour and route +5.5, and horizon, distance and
+      stops ahead +4.5. **How much the model knew is worth more than anything it
+      knew**: the correction is learning when the physical model was guessing,
+      not learning about the city.
+
+Two deviations from the spec above, both made after seeing the numbers:
+
+- **A second split, fitted before 12:00 and scored after it.** The plan's split
+  fits on 141 559 evening rows and scores on 2 757 685 rows covering an entire
+  weekday, and on it every model loses. That is a real result about transfer and
+  it is kept, but it cannot answer whether a residual model is worth anything at
+  all, because the training window is 5% of the test window and a different
+  traffic regime. The midday split is still one replay, still strictly causal -
+  training rows all precede test rows in emit time - and it is what the 9.8%
+  comes from. Neither split is the honest one on its own; the pair is.
+- **The 0.1/0.9 interval is a separate pair of rules, not `resid-quantile`
+  refitted.** `band-const` is a weighted empirical quantile per horizon bucket
+  and fits nothing; `band-quantile` is two quantile-loss tree fits. Graded by
+  coverage against the 80% target, mean width and the check loss at each edge.
+  `band-const` wins on both splits (76.1% and 82.2% coverage against 59.3% and
+  67.2%), because the `1/gap` fitting weight lets a single fit put its edges
+  where the short horizons want them. Finding 12.
 
 ## Phase 5 - hybrid and ensemble
 
-- [ ] **`stack`** - fit per-horizon-bucket blend weights over `full`,
+- [x] **`stack`** - fit per-horizon-bucket blend weights over `full`,
       `no-prior`, `sections` and `api`, on the training window. The buckets are
       already defined in `score.py:BUCKETS`. Finding 4 showed `vehicle-offset`
       wins at 0-1 min and loses at 20-45, and finding 5 showed `api` has a good
       median and a bad tail, so a horizon-aware blend of things that fail
       differently is the most likely single win in this whole plan.
-- [ ] **`stack-robust`** - the same, but blending medians rather than means, to
-      stop the `api` tail from poisoning the mix.
-- [ ] **`full` + `resid-gbm`** - the best physical model with the best residual
-      model on top. This is the headline hybrid.
+      **The squared-loss fit does not separate from zero on the plan's split:
+      117.4 s against `full`'s 116.7, +0.8 [-2.1, +3.7]**, though it is worth
+      -12.5 [-14.0, -11.0] on the midday one. It is fitted on 125 841 evening
+      rows and scored on 2 391 111 rows of the next day, and the weights it
+      learns there do not survive the overnight regime change.
+- [x] **`stack-robust`** - the same, but blending medians rather than means, to
+      stop the `api` tail from poisoning the mix. **The win of the phase, and the
+      largest single one in the plan so far: 107.6 s, -9.0 [-10.3, -7.6], 7.8%,
+      on the same split where the squared-loss fit is worthless.** The fit-free
+      `stack-median` also transfers, at 111.3 s, -5.4 [-6.3, -4.6]. Both beat
+      every member; the best member, `no-prior`, is 112.2 s. On the midday split
+      it is -14.4 [-15.7, -13.2], 13.2%, and the control says none of that is
+      de-biasing: fitting only the per-bucket intercept is worth +0.3 there and
+      +9.5 on the plan's split. Finding 10.
+- [x] **`full` + `resid-gbm`** - the best physical model with the best residual
+      model on top. This is the headline hybrid. **It is not a hybrid worth
+      shipping on this split: 138.2 s, +21.6 [+19.0, +23.9].** On the midday
+      split it is worth -9.1 [-11.1, -7.3], less than either fitted stack is
+      worth on the identical rows, and it needs a trained model on top of the
+      replay rather than six vectors of four weights. That is Phase 4's finding 9 again - the correction is
+      fitted on an evening window and applied to a whole weekday - and not a new
+      fact, but it is the number the plan asked for.
+
+Implemented in `commuterlviv/stack.py`, run with `python3 -m commuterlviv stack`, with
+three deviations from the spec above:
+
+- **The plan's one robustness idea became two rules**, because "blending
+  medians" can mean either of two different things and they defend against
+  different failures. `stack-robust` fits the same linear weights to minimise
+  *absolute* rather than squared error, so no single wild training row sets the
+  weights; `stack-median` takes the member-wise median at prediction time, which
+  is the only rule a wild `api` value cannot pass through at all. Both are
+  scored.
+- **The weights are constrained to sum to one, by construction rather than by
+  penalty.** One member is the base and the others enter as differences from it,
+  so a blend is always an average of predictions and never a rescaling of them,
+  and a per-bucket intercept carries whatever shared bias is left.
+- **The hybrid uses `resid-quantile`, not `resid-gbm`.** The plan named the
+  squared-loss trees before Phase 4 measured that the median-loss ones are the
+  only residual model that separates from zero.
+- **Both splits are run here too**, for the reason Phase 4 gives, and they
+  disagree in the same direction: on the midday split every blend wins, and the
+  squared-loss one is nearly as good as the robust one. See finding 10.
+- **A fourth rule, `debias`, was added as a control**, because every blend
+  carries a per-horizon intercept and the intercepts it fits are large - up to
+  +122 s in the 20-45 minute bucket. `debias` fits *only* those intercepts, on
+  `full` alone, so the report can say how much of a stack's win is mixing
+  predictors and how much is removing a bias the members share.
 
 ## Phase 6 - the multi-day items, blocked on data
 
@@ -497,20 +609,523 @@ that they are unscored rather than quietly omitting them.
       EWMAs as the thing they back off to instead of the timetable prior. This
       directly addresses the nightly reset, which finding 6 measured as `full`
       opening the morning peak believing the city is 15% slower than it is.
-- [ ] **`slow-day`** - the cheaper half of the same idea: a third EWMA with a
+- [x] **`slow-day`** - the cheaper half of the same idea: a third EWMA with a
       half-life of a day or two, so something survives the overnight gap without
-      needing a full profile.
+      needing a full profile. Built ahead of the rest of Phase 6 because the
+      recording *contains* one night, so the morning it breaks is scorable now.
+      `Config.day_hl` (0.0 = off) adds a third `Ewma` at the cell and corridor
+      scales; `Layer` now assembles its terms in `_cells`/`_corrs` instead of
+      branching on `fast` in two places. Swept as `day_hl`, whose grid includes
+      0 so the sweep carries its own baseline. Scored: warmed on the previous
+      evening and night and tested on the morning to 09:00, **109 s against
+      `full`'s 134, -18%**, better than `full` at every horizon and better than
+      `no-prior` at the two long ones. Over the whole recording, 113 against
+      118, tied with `no-prior` and `tuned` on MAE but with a bias of -51 s
+      against their -58 and -68 (`reports/slow-day.md`). Finding 11.
 - [ ] **Per-hour scoring.** No per-hour table is published today, which finding 6
       noted is why nothing shipped is misleading despite the sparse hours. Once
       there are enough hours, publish MAE by hour with counts, and suppress any
       hour with fewer than a few hundred paired predictions rather than printing
       a number nobody should read.
 
+## Phase 7 - a live service and a web UI
+
+Requested 2026-09-06, to start once Phase 5's follow-ups (the `tuned` member,
+`slow-day`, the prediction interval, the geometry sweeps) are finished. This is
+the first thing in the project that is a product rather than a measurement, so
+it gets its own rules: nothing here may change how a predictor scores, and the
+offline replay stays the source of truth about accuracy.
+
+**What it is.** A server that keeps collecting the three feeds, holds the best
+current position for every vehicle and the best arrival prediction for every
+stop ahead of it, and serves both to a browser in real time. Which predictor
+produces those numbers is a backend switch, not a client choice - the same
+`config.VARIANTS` the comparison uses.
+
+**Open questions to settle before writing code, in this order:**
+
+- [x] **How much load do visitors and scrapers put on this.** Measured on
+      2026-09-07 by `check_live_load.py`, on the 08:00-09:00 peak. The question
+      is what an arriving *client* costs, not what a login costs: a login is
+      one argon2 hash and then never again, while a client that sits on the
+      map costs something for as long as it is connected.
+
+      The city is small: 386 vehicles on 66 routes at once, 28.5 new GPS fixes
+      per second for all of it, a fix per vehicle every 10 s median. The model
+      is shared - every client watches the same city - so CPU is per server,
+      not per client: one core replays an hour of feed in 12.2 s, or 305x real
+      time, which is 197 ms per 60 s epoch, of which 16 ms is the prediction
+      itself. Only bytes are per client. A whole-city map frame is 2.6 KiB
+      packed (339 vehicles at 8 bytes: 16-bit id, two 16-bit grid offsets, a
+      byte of heading, a byte of flags) or 22.3 KiB as JSON, 4.5 KiB gzipped.
+      Streamed as deltas at the rate positions actually change, that is
+      **228 B/s per client for the entire city** and 28 B/s for a five-route
+      set. A hundred clients each watching everything is 23 KB/s, or
+      0.18 Mbit/s.
+
+      So a visitor costs bytes and a websocket, not CPU: the model runs once
+      whether one person is watching or a thousand. Ordinary visitors are
+      therefore free at any plausible number, and nothing here needs a second
+      core.
+
+      A scraper is the same arithmetic pointed the wrong way, and that is where
+      it stops being free. The expensive thing to build is a city-wide vehicle
+      history, and this service hands one over at 228 B/s - cheaper and cleaner
+      than polling the upstream feed, because the tracking and the smoothing are
+      already done. One scraper is invisible in the numbers; what it takes is a
+      copy of the output nobody paid for, continuously. The defence is not
+      capacity, it is a gate: an account, which the invite links ration.
+- [x] **Authentication or not.** Accounts, decided by the user on 2026-09-07.
+      Two reasons, both recorded because neither is a capacity reason: route
+      sets that follow a person between phone and laptop cannot live in local
+      storage, and an open websocket streaming every vehicle in the city is
+      worth more to a scraper than it costs the server to serve. Route sets
+      therefore live in Postgres, per account, and the full session-cookie and
+      remember-me treatment is in scope as asked. Registration is by admin-minted
+      link, following newsense, so the gate is closed by default rather than
+      open to anyone who finds the endpoint.
+- [x] **Rust or Python.** Python, one service. `newsense` splits by what the
+      code needs, and measured against that rule nothing here needs Rust: the
+      model is 4700 lines of numpy that would have to be rewritten, and the
+      part that might have wanted Rust - the fan-out - moves 228 B/s per
+      client and 16 ms of CPU per epoch. A second language buys an IPC hop, a
+      second toolchain and two copies of the live state, for a bottleneck that
+      does not exist. Revisit only if concurrent clients reach four figures.
+
+**The shape.** One process, because there is only ever one poller: the same
+collector that fills `feed.db` today also feeds an in-memory model, and the API
+reads that model. Postgres holds accounts and route sets only; the recording
+stays in SQLite and the offline replay stays the source of truth about accuracy.
+
+- [x] `commuterlviv/live/` - the service. Written and smoke-tested end to end on
+      2026-09-07 against Postgres 17 in podman: 36 assertions over registration,
+      login, CSRF, Origin, rate limits, route sets, arrivals and the websocket,
+      plus 9 more over remember-me theft and account disabling. All pass.
+  - [x] `state.py`: the vehicle feed into live tracks plus the pace model,
+        stepped on the same 60 s epoch grid `replay.py` uses. It does not
+        reimplement the epoch: `Live.epoch` makes the same four calls
+        `replay._flush` makes, in the same order, and `Live.poll_done` reads
+        positions through `replay.predictable` and `replay.believed`, so the
+        live numbers come from the measured code. Which variant is
+        `COMMUTERLVIV_VARIANT` over `config.BY_NAME`, never a client's choice.
+  - [x] `wire.py`: the packed frame, 10 bytes a vehicle rather than the 8
+        estimated - a `u16` route id was added, because the client colours and
+        filters by route and looking it up per vehicle over the websocket was
+        the only alternative. Snapshot and delta share one header; removals ride
+        along as a list of ids. The delta compares encoded values, not the
+        floats behind them: it used to compare raw lat/lon, so a fix that moved
+        by less than the half metre a step is worth resent a row the client
+        already had, byte for byte.
+  - [x] `hub.py`: one websocket per client with its own route filter. No send
+        queues: a client diffs the currently published snapshot against what it
+        last delivered, so a slow client falls behind in time, not in memory.
+        Positions publish per poll (~5 s), arrivals per epoch (60 s).
+  - [x] `security.py` + `auth.py`: argon2id passwords, opaque server-side
+        sessions in Postgres behind a `__Host-` cookie, remember-me as
+        series+token rotated on every use, `hmac.compare_digest` throughout, and
+        theft detection - a spent token coming back deletes the series and every
+        session that user has. The last two are what `newsense/services/auth`
+        does *not* do. One thing the reference also does not need and this does:
+        a 30 s grace on the previous token, because two tabs restoring at once
+        would otherwise look exactly like theft.
+  - [x] CSRF on every unsafe method (double submit: the raw token in a readable
+        cookie, its SHA-256 in the session row), an `Origin` check, and token
+        buckets that are tight where argon2 is reachable - 20/min per IP and
+        5/min per (IP, username) on login and register, against 600/min for the
+        rest of the API.
+  - [x] `app.py`: session and account endpoints, the catalog behind an ETag,
+        route sets CRUD, the timetable view and the websocket. `service.py`
+        runs the poll and epoch loops; `db.py` runs forward-only numbered
+        migrations at boot; `admin.py` and `commuterlviv admin` mint invite links,
+        list accounts and disable one; `commuterlviv serve` runs it.
+  - [x] Registration is by admin-minted link, as `newsense` does it: the code
+        rides in the path, `POST /api/register/{code}`, mirroring that project's
+        `register_with_code` and its `code-register.tsx`. `admin invite` prints
+        `<COMMUTERLVIV_WEB_BASE or the first origin>/join/<code>`. Unlike the
+        reference, which keeps codes in plaintext, only the SHA-256 is stored
+        and the use is spent in the same transaction as the account insert.
+  - Recorded deviation: **the live service does not write `feed.db`**. The
+        existing collector keeps recording, which costs one extra upstream
+        request every five seconds. Giving the recording a second author in the
+        middle of the dataset the whole comparison rests on is the one change
+        here that could lose data, and the saving is not worth it.
+- [x] `web/` - React 19 + Vite 7 + TypeScript + Tailwind 4, the `newsense-web`
+      stack minus React Router's framework mode, which buys nothing for a
+      single-page map. Vehicles and stops draw on one canvas rather than as DOM
+      markers, and positions are interpolated between epochs with
+      `requestAnimationFrame`, because "smooth" means the vehicles must move
+      between updates rather than jump on them. A route picker, named route
+      sets (work, home, ...) with create/edit/delete/select, a stop click
+      listing every route through it, and a timetable tab of the next arrival
+      per route. Built and driven in headless chromium on 2026-09-07: joining
+      through an invite link, signing out and back in, picking routes, vehicles
+      arriving over the socket, the canvas changing between frames, a stop click
+      opening its card, pinning it into the timetable, and the session surviving
+      a reload - all passing, no console errors.
+  - [x] Nothing about a vehicle's position passes through React. `live.ts` keeps
+        the vehicles in a `Map` the draw loop reads directly, and React
+        subscribes through `useSyncExternalStore` to a snapshot of only the
+        three things that change rarely: the connection, the arrivals and the
+        count. A position frame re-renders nothing.
+  - [x] `wire.ts` mirrors `wire.py` and was checked against it rather than by
+        eye: a frame encoded in Python decodes byte for byte in node, ids,
+        routes, headings, flags and removals exact and lat/lon exact to the
+        double. The first version stored coordinates in a `Float32Array` and
+        was off by up to 1.5e-6 degrees, a third of the wire's own quantum,
+        which is why they are `Float64Array` now.
+  - [x] Both end to end checks live in the repo rather than in `/tmp`:
+        `check_live.py <code> <code2>` for the service and `check_web.py <code>`
+        for the UI, each env-driven, each exiting non-zero on a failure. The
+        browser one takes a throwaway profile per run, because a reused one
+        carries the last run's session cookie and then the invite link renders
+        the map instead of the form.
+  - [x] A real map of Lviv under the vehicles: MapLibre GL JS 6.7 - BSD, no
+        key, no account - drawing VersaTiles' `shadow` style over OpenStreetMap
+        vector tiles, overridable with `VITE_MAP_STYLE`. MapLibre owns the
+        gestures and the vehicles keep their own canvas above it, drawn from
+        MapLibre's `render` event so the two agree within a frame, with
+        `geo.ts` repeating MapLibre's Web Mercator rather than calling
+        `map.project` per vehicle per frame. The library and its stylesheet are
+        a dynamic import: the sign-in screen still costs 216 kB, 69 kB gzipped,
+        and the 1 006 kB of MapLibre arrives only with the map. `check_web.py`
+        grew a basemap stage - the tiles are fetched, the city renders under
+        the vehicles, and the two projections agree to half a pixel - and all
+        sixteen checks pass against the dev server and against `npm run
+        preview` on 5174. MapLibre's tile worker is bundled by Vite and handed
+        over with `setWorkerUrl`: left to itself it looks for a file the dev
+        optimiser mutes and the build never emits, and then draws no city
+        while logging nothing. The tile requests are the worker's, which no
+        `performance` entry records, so the check attaches to that target over
+        CDP and counts them there.
+  - Recorded deviation, since **reversed on 2026-09-09**: pinned stops were per
+        device, in `localStorage` under `commuterlviv.pins.<username>`, on the
+        argument that a pin is not worth carrying between devices and would cost
+        a write per tap. Both halves were wrong - people pin the stop they use
+        every morning, and the write is one small row - so they went to the
+        server; only the map view stays local, under `commuterlviv.view`.
+
+What the references actually are, checked on 2026-09-07 so this does not have to
+be rediscovered:
+
+- `newsense` is five services behind one docker-compose: `auth`, `users`,
+  `aggregator`, `fetcher` in Rust, `embeddings` in Python. The split is by what
+  the code needs, and it is the precedent for putting the model in Python and
+  the push layer wherever it belongs.
+- `newsense/services/auth` is 1150 lines of axum 0.8: `argon2` for password
+  hashing, `tower-sessions` with `tower-sessions-sqlx-store` on Postgres for
+  server-side sessions, `axum_csrf` for the CSRF layer, `tower_governor` for
+  rate limiting, `axum-extra`'s cookie feature. That is the stack to copy for
+  the authenticated case rather than to reinvent.
+- `newsense-web` is React 19 with React Router 7 in framework mode, Tailwind 4,
+  Vite 7, TypeScript, ~4900 lines of `.tsx`. State is React context
+  (`app/lib/auth-context.tsx`, `settings-context.tsx`) over a thin fetch layer
+  (`app/lib/api.ts`); components are hand-rolled in `app/components/ui`.
+
+## Phase 8 - a phone app, one-command deployment, and three honesty fixes
+
+Requested 2026-09-07. Phase 7's rule still holds: nothing here may change how a
+predictor scores, and the offline replay stays the source of truth.
+
+**Server and web, asked for as "any improvements you have in mind":**
+
+- [x] `GZipMiddleware` on the Starlette app, `minimum_size=1024`. The catalog
+      is 219 kB of JSON and went out uncompressed on every first load; it is
+      now 30 kB on the wire, measured. The websocket is untouched - it carries
+      its own packed bytes and gzip only ever sees whole HTTP responses.
+- [x] A locate-me control on the map. `watchPosition`, a dot with an accuracy
+      ring drawn from the same canvas as the vehicles, and only the first fix
+      moves the camera - after that the dot moves and the view stays where the
+      user put it. `metresPerPixel` in `geo.ts` sizes the ring, because a 300 m
+      indoor fix drawn as a 6 px dot claims a precision the phone never had.
+- [x] A stop search in the header. Prefix matches first, then substring, eight
+      hits, each showing which routes call there because a thousand stops
+      repeat their names once per direction. Picking one flies the map, selects
+      the stop and opens its card.
+- [x] A check in `check_web.py` for the search: type, pick the first hit,
+      assert the card names that stop. Done, plus a theme check beside it. Two
+      hooks were added for it - `data-hit` on a search result and `data-chips`
+      on the route chip list - because the old selector was
+      `aside section:last-of-type button[title]` and the theme picker became
+      the last section. Selecting six routes was also changed to selecting all
+      of them: after dark most routes are empty and the vehicle checks failed
+      for no reason other than the hour.
+
+**The phone app.** Flutter, chosen by the user on 2026-09-07 over React Native
+and a PWA. The binding constraint is F-Droid, which builds from source with no
+proprietary SDK in the tree: that rules out Expo, Google Play Services and any
+map SDK with a key. Toolchain installed under XDG paths as asked - Flutter
+3.47.2 in `~/.local/share/flutter`, Temurin JDK 21 in `~/.local/share/jdk`
+(the system JDK is 25, too new for AGP), the Android SDK in
+`~/.local/share/android-sdk`, `PUB_CACHE` in `~/.cache/pub`, Gradle in
+`~/.local/share/gradle`; `/tmp/flutterenv.sh` exports the lot.
+
+- [x] `mobile/` - the app. `flutter_map` with `vector_map_tiles` because both
+      are pure Dart, so the vehicle overlay shares the Flutter frame with the
+      basemap exactly as the web overlay shares MapLibre's. Two tabs, Map and
+      Times; sheets for routes, sets and the map style; `showSearch` for stops.
+      Every vehicle and every stop is one `CustomPaint` driven by a `Ticker`,
+      with a `ui.Paragraph` per route cached so text is laid out once rather
+      than per vehicle per frame - the Dart analogue of the web's pre-rendered
+      badge sprites. `flutter analyze` is clean and the release APK builds.
+- [x] A Dart port of the 10-byte wire protocol, checked against `wire.py`.
+      `mobile/test/wire_test.dart` decodes a frame `commuterlviv.live.wire.encode`
+      actually produced, pasted in as bytes, so it tests agreement between the
+      two languages rather than the Dart against itself. 3 tests, all passing.
+- [x] Auth needs no server change: the app sends `Origin: app://commuterlviv`,
+      which has to be listed in `COMMUTERLVIV_ORIGINS`, and echoes the CSRF cookie
+      as `X-CSRF-Token`. `lib/src/api.dart` is a hand-rolled cookie jar over
+      `dart:io HttpClient`, matching `lp_csrf` by suffix because the service
+      prefixes cookies with `__Host-` when they are secure, and treating an
+      empty value or a past expiry as a deletion rather than a value.
+- [x] Material 3 on Android, Cupertino on iOS, from one widget tree.
+      `PageTransitionsTheme` picks the per-platform page animation, the
+      `.adaptive` constructors carry the rest, and `tick()` in `main.dart`
+      chooses the platform's haptic.
+- [x] F-Droid metadata: fastlane structure under `mobile/fastlane/`, and a
+      build recipe at `mobile/fdroid/ua.lviv.commuterlviv.yml`. The release build
+      is now unsigned unless `android/key.properties` exists - `flutter create`
+      leaves the release signed with the *debug* key, which F-Droid cannot
+      take - and `dependenciesInfo` is off, because that blob is Google-signed
+      and unreproducible. The licence is MIT, chosen by the user on 2026-09-08
+      and now in `LICENSE` at the root; the deployment is `commuterlviv.r1a.nl`,
+      which is the app's default server and the recipe's `WebSite`. **One field
+      is still a placeholder:** the repository URL, because the project has no
+      public repository yet.
+- [ ] Locate-me on the phone. **Dropped from v1 deliberately.** The obvious
+      package, `geolocator`, pulls `com.google.android.gms:play-services-
+      location`, and F-Droid takes no build with a proprietary SDK in it. The
+      honest follow-up is a small platform channel over
+      `android.location.LocationManager`, which is AOSP, plus `CoreLocation` on
+      iOS. Until then the app asks for no location permission at all - the
+      Android manifest requests `INTERNET` and nothing else.
+- [x] Documented. `mobile/README.md` is the app's own page; the root
+      `README.md` gained a "The phone" section beside "The map"; `HANDOFF.md`
+      gained the app in its layout tree, in its state of play, in its
+      `COMMUTERLVIV_ORIGINS` examples, and a note that `wire.dart` is now a third
+      hand-written copy of the frame layout.
+- Known caveat: `vector_map_tiles` resolved to `9.0.0-beta.13`, a pre-release.
+  Not a choice - it is the version compatible with `flutter_map 8.3.2`.
+- [x] Run on a device, asked for by the user on 2026-09-08. An Android 15
+      x86_64 emulator (`avd commuterlviv`, pixel_6) with the debug APK built
+      `--dart-define=COMMUTERLVIV_BASE=http://10.0.2.2:18099` against the dev
+      compose stack. Registered through an invite code, then the map, the route
+      sheet, the Times tab and the style sheet, all by `adb shell input`.
+      Confirmed: the sign-in screen shows the compiled-in base, the catalog's 72
+      routes fill the sheet, the socket carries vehicles that animate between
+      frames, the arrow appears only on the ones the server calls moving, and
+      the session survives a reinstall.
+- Two real bugs came out of that run, both of which only a client could find:
+  **a route's `type` is a word** (`bus`, `tram`, `trolleybus`), not the GTFS
+  `route_type` number both clients declared. Flutter threw on the cast and
+  stopped at a spinner; the web app cast silently and painted every tram and
+  trolleybus in the bus hue. Fixed in `models.dart`, `map_theme.dart`,
+  `web/src/lib/types.ts` and `web/src/lib/sprites.ts`. And **the map style never
+  changed**: `vector_map_tiles` caches the tile images it renders under the
+  theme's id, every VersaTiles style parses to the id `default`, so the second
+  style read back the first one's pictures from disk - across restarts. Fixed by
+  rebuilding the `Style` with `theme: read.theme.copyWith(id: theme.id)`.
+- Non-obvious about the emulator, not about this code: the bundled SwiftShader
+  renderer segfaults the emulator on Fedora 44, and with `-gpu swangle_indirect`
+  the host `gfxstream` GLES2 decoder SIGILLs on Flutter's first frame. The
+  combination that works is SwANGLE plus starting the app with
+  `--ez enable-software-rendering true --ez enable-impeller false`. In
+  `mobile/README.md` and `HANDOFF.md`.
+- [x] The server address moved into the menu, asked for by the user on
+      2026-09-08. It was only editable from the sign-in screen, which nobody
+      already signed in can reach. `lib/src/server_dialog.dart` now holds the
+      one dialog both places call; `Api.setBase` reports whether the address
+      changed, and a change drops the session, the jar and the cached catalogue
+      and returns to sign-in, because all three belonged to the old server.
+- [x] **Stops the feed leaves off a route**, reported by the user on 2026-09-08:
+      no А16 times at Енергетична (711), with times at the stops either side.
+      Investigated first - `stop_times.txt` has no А16 row for stop `44236`, the
+      city's own trip updates have 3 404 rows there and none from route 112, and
+      `api.lad.lviv.ua/stops/0711` lists only А27 and А53 - so the app agreed
+      with the city and the city was wrong. The user knows the stop is served
+      and does not want to go upstream, so `commuterlviv/overrides.toml` is read
+      at startup and `overrides.py` folds each rule into the pattern before any
+      distance is solved. `toward` picks the direction, because the 296°
+      platform is not the 116° one and both А16 patterns pass within 12 m.
+      `check_overrides.py` rebuilds from scratch and asserts each rule lands.
+      Two rules so far, both platforms of the same stop after the user
+      confirmed the second: 197 trips call at 711 on shape 37996, 198 at 712 on
+      37997 and 38109, and the live service serves А16 arrivals at both.
+- [x] **Renamed to CommuterLviv**, asked for by the user on 2026-09-08, who chose
+      the deep reading: identifiers as well as branding. `lvivpred/` is
+      `commuterlviv/`, `LVIVPRED_*` is `COMMUTERLVIV_*`, the compose project, the
+      images and the containers follow, the Dart package is `commuterlviv` and the
+      app is `ua.lviv.commuterlviv` - a different application id, so the phone
+      takes it as a new app rather than an upgrade. The domain in the defaults and
+      the docs is `commuterlviv.r1a.nl`; DNS does not answer for it yet, and the
+      deployment addresses this machine by IP, so nothing waits on it. Two things
+      kept the old spelling and say why in HANDOFF: the Postgres role and database
+      on the existing volume, and the checkout's root directory.
+- [x] Map buttons, asked for by the user on 2026-09-08. `lib/src/map_controls.dart`
+      is its own file rather than a private widget in `home.dart` so it can be
+      driven by a widget test: zoom in and out, disabled at 9 and 18, and a
+      compass that appears only once the camera is off north and turns with it.
+      The web got only zoom, `NavigationControl` with `showCompass: false`,
+      because rotation is deliberately disabled there - the vehicle overlay is a
+      second canvas drawn from centre and zoom alone.
+- [x] **A pinch turned the map**, reported by the user on 2026-09-08: no
+      deadzone, so the twist two fingers always carry rotated the city while
+      zooming. `flutter_map` has the thresholds but skips them entirely unless
+      `enableMultiFingerGestureRace` is on, which it is not by default, so the
+      fix is `mapInteraction` in `lib/src/map_controls.dart`, next to the zoom
+      limits and shared with the test: race on, 12° of twist, 0.35 zoom levels
+      of spread, and rotation's win set widened to `MultiFingerGesture.all` so
+      a deliberate twist does not lock zooming out for the rest of the touch.
+      `test/map_gestures_test.dart` drives two pointers through an 8° pinch and
+      a 20° twist; it fails with the race off, which is what makes it a test.
+      The first threshold tried, 25°, was reported too reluctant the same day
+      and halved. Part of why it read as reluctant was the test: at 50 px apart
+      the pointers never cleared Flutter's scale slop, so nothing below 25°
+      rotated there either. They are 240 px apart now.
+- [x] **The phone showed "29814221 min"**, reported by the user on 2026-09-08.
+      An arrival's `t` is an absolute unix time, which is what the web's
+      `countdown()` has always assumed, and the phone divided it by sixty and
+      called it minutes. `lib/src/eta.dart` is now the port of
+      `web/src/lib/eta.ts`, thresholds included, and `test/eta_test.dart` pins
+      the number that was on the screen. Verified on the emulator against the
+      live stack: "now, 2 min, 5 min, 12 min".
+- [x] The sign-in screen follows the server's registration mode, noticed by the
+      user on 2026-09-08: `COMMUTERLVIV_REGISTRATION=open` was reachable by neither
+      client, because both only ever posted `/api/register/{code}` and the web
+      form only appeared behind an invite link. `/api/health` now also reports
+      `registration`, which is the only endpoint a client can read before anyone
+      is signed in and is no secret anyway. Both clients ask on load and show
+      what it allows - an invite field under `code`, a sign-up button under
+      `open`, neither under `closed` - and post the codeless `/api/register`
+      when there is no code. Verified against the running stack: `code` refuses
+      it with "that invite code is not valid", `open` gets as far as checking
+      the password.
+- [x] Password managers, after Bitwarden would not fill the form on the user's
+      phone on 2026-09-08. A Flutter form is one native view, so the manager
+      sees nothing to fill unless the app says what the fields are: the two are
+      now in an `AutofillGroup` with `AutofillHints.username` and
+      `password` - `newPassword` while joining - and `_submit` calls
+      `TextInput.finishAutofillContext()`, which is what prompts the manager to
+      save, since the form never leaves the screen on its own. The web form was
+      already fine - a real `<form>` with `autocomplete` on both fields - and
+      gained `name="username"` and `name="password"` for the older heuristics.
+      `mobile/lib` and `mobile/test` are now `dart format` clean throughout,
+      which touched nine files.
+- [x] A debug APK for the user's own phone, built
+      `--dart-define=COMMUTERLVIV_BASE=http://10.8.0.2:8080` and handed over from a
+      `python3 -m http.server 8099` bound to the VPN address. Debug and not
+      release for two reasons: the release manifest forbids cleartext, and the
+      deployment has no certificate; and a release APK is unsigned without
+      `android/key.properties`.
+
+**Deployment, asked for on 2026-09-07 with `newsense` as the example.** Today
+`docker-compose.yml` starts Postgres and nothing else; the service and the web
+build are run by hand.
+
+- [x] `deploy/service.Dockerfile` and `deploy/web.Dockerfile`, and
+      `docker-compose.yml` bringing up four containers - db, service, collector,
+      and Caddy in front - on `docker compose up -d --build`. Caddy serves the
+      built UI, proxies `/api` and `/ws` to the service and falls back to
+      `index.html`, so the whole thing is one origin and the `__Host-` cookies
+      need no cross-origin rules. The collector is in the stack rather than
+      beside it because `service.warm` replays the last two hours of its
+      recording at boot, and without a local recording every restart is twenty
+      minutes of cold predictions. Verified end to end under a scratch project:
+      health through Caddy, the SPA fallback, a gzipped catalog at 29.7 kB,
+      `admin invite`, registration, and a websocket carrying `hello` and a
+      snapshot frame.
+- [x] `docker-compose.dev.yml`, an overlay: source mounted, Vite's dev server in
+      place of the built files (`build: !reset null`), `COMMUTERLVIV_DEV=true`, and
+      the db, service and pgadmin ports open. The service is restarted rather
+      than reloaded on a source change - it holds a warmed model that a reloader
+      would discard on every keystroke. Verified on shifted ports, since this
+      machine already has all four in use: Vite serving with its HMR client,
+      `/api/health` through Vite's proxy, and the service answering directly on
+      8099 as the phone app needs.
+- [x] `docker-compose.tls.yml`, a second overlay for when the machine is the one
+      the domain points at: Caddy takes 80/443 and gets its own certificate.
+      `COMMUTERLVIV_SITE_ADDRESS` is required there, with a compose `:?` message
+      rather than a silent fallback to `:8080`.
+- [x] `.env.example` with every setting and its default, `.dockerignore` so the
+      0.95 GB `data/` never enters a build context, and two guides in
+      `README.md` - production and development - each a `cp`, a `docker compose`
+      and an `admin invite`.
+- Non-obvious, and the one real bug found while testing: **`try_files` runs in
+  an earlier Caddy phase than `reverse_proxy`**, so a single block containing
+  both rewrote `/api/health` to `/index.html` before the proxy matcher ever saw
+  the path - the API answered with the app's HTML and a 200. The two halves have
+  to be exclusive `handle` blocks. Recorded in `deploy/Caddyfile` beside the
+  code.
+- Note: the compose project is now pinned to `commuterlviv`, so an older checkout
+  that ran the previous file from `main/` has its database left behind in the
+  `main_postgres_data` volume.
+
+**Three honesty fixes to the map, all reported by the user on 2026-09-07:**
+
+- [x] **The heading arrows point the wrong way.** Root cause: `_heading` in
+      `live/state.py` preferred the feed's reported bearing and only fell back
+      to the route. The reported bearing is now gone from the codebase - out of
+      `state.fix`, out of `service.py`, out of the pruning in `epoch` - and the
+      arrow is the tangent of the vehicle's own shape at `s`, averaged over
+      `HEAD_SPAN = 25 m` either side so one bent segment cannot swing it. This
+      is right by construction: `s` grows in the direction of travel, and it is
+      the same geometry the arrival times are computed along, so the arrow and
+      the times can no longer disagree. No arrow is drawn at all unless the
+      vehicle is moving - see below.
+- [x] **Be conservative about motion.** The tracker already carries the
+      variance of its own speed estimate, so the test is evidence rather than a
+      new constant: `tr.v - SURE * sqrt(tr.P[1,1]) > track.HOLD_SPEED` with
+      `SURE = 1.0`. That answer rides the wire as flag bit 1 (`MOVING`), the
+      marker of a vehicle that fails it sits at its last known place, and one
+      that passes is dead-reckoned only `DAMP = 0.7` of the distance. Drawn
+      short of where it is, a vehicle reads as caution; drawn past a stop it
+      has not reached, it reads as a lie. `replay.believed` is untouched, so
+      the timetable shows exactly the numbers the offline comparison measured.
+- [x] **A map theme switcher.** `web/src/lib/theme.ts` holds the five
+      VersaTiles styles, the `localStorage` choice and `ink(dark)`, the overlay
+      palette. The palette had to move there too: the near-white nub reads on
+      `shadow` and vanishes on `neutrino`. Switching is `map.setStyle`, so the
+      camera, the gestures and the overlay all survive it.
+- [x] **Pinned stops moved to the server, and to feed ids**, 2026-09-09. Each
+      client kept its own pins in its own storage, as catalog positions, so the
+      phone and the browser disagreed about what was pinned and a stop added to
+      the feed shifted every pin after it onto its neighbour. They live in
+      `user_prefs.data` now, behind `GET`/`POST /api/pins`, validated against
+      the catalog on the way in, unknown ids dropped rather than the write
+      refused, capped at 63 - one below the 64 stops a socket may watch, so the
+      pins plus whichever card is open always fit. Each client migrates its own
+      old key once and drops it only after the upload lands. Verified against
+      the running stack.
+- [x] **The websocket re-checks its session**, 2026-09-09. It was authenticated
+      at the handshake and never again, so signing out somewhere else left the
+      socket fed until the tab closed. `app.py`'s `expire` asks every 60 s with
+      `touch=False` - `load_session` refreshes the idle clock otherwise - and
+      closes 4401. Verified: logout, closed after 60 s, code 4401.
+- [x] **A client's own message stopped waking every other client**, 2026-09-09.
+      `publish` woke one shared event, so a hundred idle clients recomputed
+      their diffs whenever any one of them changed a filter. Each client has its
+      own `asyncio.Event` now; the sequence counter still does the race
+      protection.
+- [x] **A rate limit on the socket**, asked for by the user on 2026-09-09.
+      Five messages a second sustained, burst 60, close 1008 after 500 refusals,
+      and `ws_max_size` at 16 KB so a large frame is refused at the protocol
+      rather than read into memory. Generous by an order of magnitude against a
+      person changing routes as fast as a person can; it is there for the client
+      that loops. Verified: 2000 messages, closed with 1008.
+- [x] **The phone keeps its basemap between runs**, asked for by the user on
+      2026-09-09. `vector_map_tiles` was caching under the temporary directory,
+      which Android empties at will. `lib/src/map_tiles.dart` puts it under
+      application support - 200 MB, 90 days, 32 MB and 50 tiles in memory.
+
 ## Deliverables
 
 - `reports/approaches.md` regenerated with every scored variant, keeping the
   existing paired-on-common-support method and bootstrap intervals
 - `reports/sweeps.json` with the hyperparameter grids
+- `reports/residual.md` and `reports/residual-midday.md`, the two splits of
+  Phase 4, each with its `.json` alongside
+- `reports/stack.md` and `reports/stack-midday.md`, the same two splits of
+  Phase 5, each with its `.json` alongside, and each printing the members'
+  error correlation next to the result
 - a section in `reports/findings.md` for whatever the new results contradict
 - this file, kept current: mark each item as it lands, and keep the reason when
   something is dropped
