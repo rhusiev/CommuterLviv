@@ -246,7 +246,8 @@ class Api {
   /// wearing rather than reset to the default on every launch
   String? get mapTheme => _prefs.getString('commuterlviv.theme');
 
-  Future<void> setMapTheme(String id) => _prefs.setString('commuterlviv.theme', id);
+  Future<void> setMapTheme(String id) =>
+      _prefs.setString('commuterlviv.theme', id);
 
   /// Pinned stops, kept by the server so the phone and the browser agree, and
   /// held by feed id for the same reason route sets are.

@@ -1,8 +1,10 @@
 /// The app proper: a map of the city, and the times at the stops you pinned.
 ///
 /// One screen owns all the state the two tabs share - the catalog, the socket,
-/// which routes are shown, which stops are pinned - because both tabs are
-/// views of the same subscription. Everything else here is a sheet.
+/// which routes are shown, which stops are pinned - because both tabs are views
+/// of the same subscription. Nothing else in the app holds any of it: the tabs,
+/// the card and the sheets are handed what they draw and call back when
+/// somebody touches them, so this file is the only place the state changes.
 library;
 
 import 'dart:async';
@@ -15,16 +17,16 @@ import 'package:vector_map_tiles/vector_map_tiles.dart';
 
 import '../main.dart' show tick;
 import 'api.dart';
-import 'eta.dart';
 import 'live.dart';
-import 'map_controls.dart';
-import 'map_tiles.dart';
+import 'map_tab.dart';
 import 'map_theme.dart';
 import 'models.dart';
 import 'server_dialog.dart';
-import 'vehicle_layer.dart';
-
-const _lviv = LatLng(49.8397, 24.0297);
+import 'sheets.dart';
+import 'stop_card.dart';
+import 'stop_search.dart';
+import 'times_tab.dart';
+import 'vehicle_layer.dart' show stopsZoom;
 
 /// How far a tap may land from a stop and still count. A finger is wider than
 /// the dot it is aiming at.
@@ -110,19 +112,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /// The sheets are separate widgets but they edit this screen's state, so they
-  /// need a way to say so that is not `setState` from outside a `State`
-  void update(VoidCallback change) {
-    if (mounted) setState(change);
-  }
-
   Iterable<int> _indexes(Catalog catalog, List<String> ids) =>
       ids.map((id) => catalog.index[id]).whereType<int>();
 
   /// Pinned stops arrive as feed ids and are used as catalog positions. A stop
   /// the city has since dropped simply does not resolve.
-  List<int> _resolve(Catalog catalog, List<String> ids) =>
-      [for (final id in ids) ?catalog.stopIndex[id]];
+  List<int> _resolve(Catalog catalog, List<String> ids) => [
+    for (final id in ids) ?catalog.stopIndex[id],
+  ];
 
   /// The pins this device kept before the server did. They were stored as
   /// catalog positions, so they are read against the catalog loaded now, sent
@@ -234,9 +231,13 @@ class _HomeScreenState extends State<HomeScreen> {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (_) => _StopCard(
-        home: this,
+      builder: (_) => StopCard(
+        catalog: _catalog!,
+        live: _live!,
         stop: stop,
+        pinned: _pins.contains(stop),
+        watching: _routes,
+        onPin: () => _pin(stop),
         onRoute: (route) {
           Navigator.pop(context);
           _toggleRoute(route);
@@ -276,7 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (catalog == null) return;
     final stop = await showSearch<int?>(
       context: context,
-      delegate: _StopSearch(catalog),
+      delegate: StopSearch(catalog),
     );
     if (stop != null && mounted) {
       setState(() => _tab = 0);
@@ -290,7 +291,7 @@ class _HomeScreenState extends State<HomeScreen> {
         showModalBottomSheet<void>(
           context: context,
           showDragHandle: true,
-          builder: (_) => _ThemeSheet(home: this),
+          builder: (_) => ThemeSheet(current: _theme, onPick: _setTheme),
         );
       case 'server':
         // The session belonged to the old address and is gone with it, so a
@@ -355,7 +356,29 @@ class _HomeScreenState extends State<HomeScreen> {
               context: context,
               showDragHandle: true,
               isScrollControlled: true,
-              builder: (_) => _RouteSheet(home: this),
+              builder: (_) => RouteSheet(
+                api: widget.api,
+                catalog: catalog,
+                sets: _sets,
+                picked: _routes,
+                onToggle: _toggleRoute,
+                onClear: () {
+                  setState(_routes.clear);
+                  _push();
+                },
+                onActivated: (set, routes) => setState(() {
+                  _routes
+                    ..clear()
+                    ..addAll(routes);
+                  _sets = Sets(
+                    sets: _sets!.sets,
+                    active: set.id,
+                    pins: _sets!.pins,
+                  );
+                  _push();
+                }),
+                onSets: (sets) => setState(() => _sets = sets),
+              ),
             ),
             icon: const Icon(Icons.route_outlined),
             tooltip: 'Routes',
@@ -381,8 +404,27 @@ class _HomeScreenState extends State<HomeScreen> {
       body: IndexedStack(
         index: _tab,
         children: [
-          _MapTab(home: this),
-          _TimesTab(home: this),
+          MapTab(
+            map: _map,
+            style: _style,
+            catalog: catalog,
+            live: live,
+            stops: _drawn,
+            selected: _stop,
+            theme: _theme,
+            empty: _routes.isEmpty,
+            onTap: _tap,
+          ),
+          TimesTab(
+            catalog: catalog,
+            live: live,
+            pins: _pins,
+            onUnpin: _pin,
+            onOpen: (stop) {
+              setState(() => _tab = 0);
+              _openStop(stop, fly: true);
+            },
+          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -420,477 +462,4 @@ class _Status extends StatelessWidget implements PreferredSizeWidget {
             color: material.Theme.of(context).colorScheme.error,
           ),
   );
-}
-
-class _MapTab extends StatelessWidget {
-  const _MapTab({required this.home});
-
-  final _HomeScreenState home;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = home._style;
-    return Stack(
-      children: [
-        FlutterMap(
-          mapController: home._map,
-          options: MapOptions(
-            initialCenter: _lviv,
-            initialZoom: 13,
-            minZoom: minZoom,
-            maxZoom: maxZoom,
-            onTap: (_, point) => home._tap(point),
-            interactionOptions: mapInteraction,
-          ),
-          children: [
-            if (style != null)
-              VectorTileLayer(
-                tileProviders: style.providers,
-                theme: style.theme,
-                sprites: style.sprites,
-                // The renderer's own frame budget: below this it drops detail
-                // rather than the frame, which is the right trade on a phone
-                maximumZoom: 18,
-                // `analyze` resolves the package's conditional export to its
-                // web stub, where its `Directory` is a `String`; the compiler
-                // picks the `dart:io` one this actually gets
-                // ignore: argument_type_not_assignable
-                cacheFolder: tileCache,
-                fileCacheTtl: tileTtl,
-                fileCacheMaximumSizeInBytes: tileDiskBytes,
-                memoryTileCacheMaxSize: tileMemoryBytes,
-                memoryTileDataCacheMaxSize: tileMemoryCount,
-              ),
-            VehicleLayer(
-              catalog: home._catalog!,
-              live: home._live!,
-              stops: home._drawn,
-              selected: home._stop,
-              theme: home._theme,
-            ),
-            const SimpleAttributionWidget(
-              source: Text('OpenStreetMap · VersaTiles'),
-              alignment: Alignment.bottomLeft,
-            ),
-          ],
-        ),
-        Positioned(right: 12, bottom: 24, child: MapControls(map: home._map)),
-        if (style == null) const LinearProgressIndicator(minHeight: 2),
-        if (home._routes.isEmpty)
-          const Center(
-            child: Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('Pick a route to see it moving'),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _TimesTab extends StatelessWidget {
-  const _TimesTab({required this.home});
-
-  final _HomeScreenState home;
-
-  @override
-  Widget build(BuildContext context) {
-    if (home._pins.isEmpty) {
-      return const Center(child: Text('Pin a stop and its times show up here'));
-    }
-    return AnimatedBuilder(
-      animation: home._live!,
-      builder: (context, _) => ListView(
-        children: [
-          for (final stop in home._pins)
-            _StopTile(
-              home: home,
-              stop: stop,
-              arrivals: home._live!.arrivals[stop] ?? const [],
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StopTile extends StatelessWidget {
-  const _StopTile({
-    required this.home,
-    required this.stop,
-    required this.arrivals,
-  });
-
-  final _HomeScreenState home;
-  final int stop;
-  final List<Arrival> arrivals;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = home._catalog!.stops[stop];
-    return ListTile(
-      title: Text(s.name),
-      subtitle: arrivals.isEmpty
-          ? const Text('nothing due')
-          : Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              children: [
-                for (final a in arrivals.take(6)) _Due(home: home, arrival: a),
-              ],
-            ),
-      trailing: IconButton(
-        onPressed: () => home._pin(stop),
-        icon: const Icon(Icons.push_pin),
-        tooltip: 'Unpin',
-      ),
-      onTap: () {
-        home.update(() => home._tab = 0);
-        home._openStop(stop, fly: true);
-      },
-    );
-  }
-}
-
-/// A route badge and how long until it calls. Half a minute away reads "now",
-/// because "0 min" invites the reader to think it is late rather than here.
-class _Due extends StatelessWidget {
-  const _Due({required this.home, required this.arrival});
-
-  final _HomeScreenState home;
-  final Arrival arrival;
-
-  @override
-  Widget build(BuildContext context) {
-    final route = home._catalog!.routes[arrival.route];
-    return Chip(
-      visualDensity: VisualDensity.compact,
-      avatar: CircleAvatar(
-        backgroundColor: routeColour(route.short, route.type),
-        child: Text(
-          route.short,
-          style: const TextStyle(fontSize: 9, color: Color(0xff0b0f14)),
-        ),
-      ),
-      label: Text(countdown(arrival.t)),
-    );
-  }
-}
-
-class _StopCard extends StatelessWidget {
-  const _StopCard({
-    required this.home,
-    required this.stop,
-    required this.onRoute,
-  });
-
-  final _HomeScreenState home;
-  final int stop;
-  final void Function(int route) onRoute;
-
-  @override
-  Widget build(BuildContext context) {
-    final catalog = home._catalog!;
-    final s = catalog.stops[stop];
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    s.name,
-                    style: material.Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => home._pin(stop),
-                  icon: Icon(
-                    home._pins.contains(stop)
-                        ? Icons.push_pin
-                        : Icons.push_pin_outlined,
-                  ),
-                  tooltip: home._pins.contains(stop) ? 'Unpin' : 'Pin',
-                ),
-              ],
-            ),
-            if (s.code.isNotEmpty) Text(s.code),
-            const SizedBox(height: 8),
-            AnimatedBuilder(
-              animation: home._live!,
-              builder: (context, _) {
-                final due = home._live!.arrivals[stop] ?? const <Arrival>[];
-                if (due.isEmpty) {
-                  return const Text(
-                    'nothing due on the routes you are watching',
-                  );
-                }
-                return Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    for (final a in due.take(8)) _Due(home: home, arrival: a),
-                  ],
-                );
-              },
-            ),
-            const Divider(height: 24),
-            Text(
-              'Calls here',
-              style: material.Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              children: [
-                for (final r in s.routes)
-                  ActionChip(
-                    label: Text(catalog.routes[r].short),
-                    avatar: home._routes.contains(r)
-                        ? const Icon(Icons.check, size: 16)
-                        : null,
-                    onPressed: () => onRoute(r),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ThemeSheet extends StatelessWidget {
-  const _ThemeSheet({required this.home});
-
-  final _HomeScreenState home;
-
-  @override
-  Widget build(BuildContext context) => SafeArea(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final t in mapThemes)
-          ListTile(
-            onTap: () {
-              Navigator.pop(context);
-              home._setTheme(t);
-            },
-            title: Text(t.name),
-            subtitle: Text(t.dark ? 'dark' : 'light'),
-            trailing: t.id == home._theme.id ? const Icon(Icons.check) : null,
-          ),
-      ],
-    ),
-  );
-}
-
-/// Routes, and the saved sets of routes. Sets live on the server so the phone
-/// and the browser show the same thing; which routes are ticked right now is
-/// only ticked here until it is saved as one.
-class _RouteSheet extends StatefulWidget {
-  const _RouteSheet({required this.home});
-
-  final _HomeScreenState home;
-
-  @override
-  State<_RouteSheet> createState() => _RouteSheetState();
-}
-
-class _RouteSheetState extends State<_RouteSheet> {
-  String _filter = '';
-
-  _HomeScreenState get home => widget.home;
-
-  Future<void> _save() async {
-    final catalog = home._catalog!;
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        final field = TextEditingController();
-        return AlertDialog.adaptive(
-          title: const Text('Name this set'),
-          content: TextField(controller: field, autofocus: true),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, field.text.trim()),
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-    if (name == null || name.isEmpty) return;
-    final ids = [for (final i in home._routes) catalog.routes[i].id];
-    final made = await home.widget.api.createSet(name, ids);
-    await home.widget.api.activateSet(made.id);
-    final sets = await home.widget.api.sets();
-    if (mounted) {
-      home.update(() => home._sets = sets);
-      setState(() {});
-    }
-  }
-
-  Future<void> _activate(RouteSet set) async {
-    final catalog = home._catalog!;
-    await home.widget.api.activateSet(set.id);
-    home._routes
-      ..clear()
-      ..addAll(home._indexes(catalog, set.routes));
-    home._push();
-    if (mounted) {
-      home.update(
-        () => home._sets = Sets(
-          sets: home._sets!.sets,
-          active: set.id,
-          pins: home._sets!.pins,
-        ),
-      );
-      setState(() {});
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final catalog = home._catalog!;
-    final needle = _filter.toLowerCase();
-    final shown = [
-      for (var i = 0; i < catalog.routes.length; i++)
-        if (needle.isEmpty ||
-            catalog.routes[i].short.toLowerCase().contains(needle) ||
-            catalog.routes[i].long.toLowerCase().contains(needle))
-          i,
-    ];
-    final sets = home._sets?.sets ?? const <RouteSet>[];
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.7,
-      builder: (context, controller) => ListView(
-        controller: controller,
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        children: [
-          if (sets.isNotEmpty) ...[
-            Text(
-              'Sets',
-              style: material.Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              children: [
-                for (final s in sets)
-                  ChoiceChip(
-                    label: Text(s.name),
-                    selected: s.id == home._sets?.active,
-                    onSelected: (_) => _activate(s),
-                  ),
-              ],
-            ),
-            const Divider(height: 24),
-          ],
-          TextField(
-            onChanged: (v) => setState(() => _filter = v),
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search),
-              hintText: 'Filter routes',
-            ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: [
-              for (final i in shown)
-                FilterChip(
-                  label: Text(catalog.routes[i].short),
-                  tooltip: catalog.routes[i].long,
-                  selected: home._routes.contains(i),
-                  onSelected: (_) {
-                    home._toggleRoute(i);
-                    setState(() {});
-                  },
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              TextButton(
-                onPressed: home._routes.isEmpty
-                    ? null
-                    : () {
-                        home._routes.clear();
-                        home._push();
-                        setState(() {});
-                      },
-                child: const Text('Clear'),
-              ),
-              const Spacer(),
-              FilledButton.tonal(
-                onPressed: home._routes.isEmpty ? null : _save,
-                child: const Text('Save as a set'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Stops by name. The catalog is a thousand stops, which is small enough to
-/// scan on every keystroke and not worth an index.
-class _StopSearch extends SearchDelegate<int?> {
-  _StopSearch(this.catalog) : super(searchFieldLabel: 'Find a stop');
-
-  final Catalog catalog;
-
-  @override
-  List<Widget> buildActions(BuildContext context) => [
-    if (query.isNotEmpty)
-      IconButton(onPressed: () => query = '', icon: const Icon(Icons.clear)),
-  ];
-
-  @override
-  Widget buildLeading(BuildContext context) => IconButton(
-    onPressed: () => close(context, null),
-    icon: const BackButtonIcon(),
-  );
-
-  @override
-  Widget buildResults(BuildContext context) => buildSuggestions(context);
-
-  @override
-  Widget buildSuggestions(BuildContext context) {
-    final needle = query.trim().toLowerCase();
-    if (needle.isEmpty) return const SizedBox.shrink();
-    final hits = [
-      for (var i = 0; i < catalog.stops.length; i++)
-        if (catalog.stops[i].name.toLowerCase().contains(needle)) i,
-    ];
-    return ListView.builder(
-      itemCount: hits.length,
-      itemBuilder: (context, k) {
-        final s = catalog.stops[hits[k]];
-        return ListTile(
-          title: Text(s.name),
-          subtitle: Text(
-            [for (final r in s.routes) catalog.routes[r].short].join(' · '),
-          ),
-          onTap: () => close(context, hits[k]),
-        );
-      },
-    );
-  }
 }

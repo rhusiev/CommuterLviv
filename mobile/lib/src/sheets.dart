@@ -1,0 +1,203 @@
+/// The two things the app bar opens: which routes are on the map, and which
+/// basemap they are drawn on.
+library;
+
+import 'package:flutter/material.dart' hide Theme;
+import 'package:flutter/material.dart' as material show Theme;
+
+import 'api.dart';
+import 'map_theme.dart';
+import 'models.dart';
+
+class ThemeSheet extends StatelessWidget {
+  const ThemeSheet({super.key, required this.current, required this.onPick});
+
+  final MapTheme current;
+  final void Function(MapTheme theme) onPick;
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final t in mapThemes)
+          ListTile(
+            onTap: () {
+              Navigator.pop(context);
+              onPick(t);
+            },
+            title: Text(t.name),
+            subtitle: Text(t.dark ? 'dark' : 'light'),
+            trailing: t.id == current.id ? const Icon(Icons.check) : null,
+          ),
+      ],
+    ),
+  );
+}
+
+/// Routes, and the saved sets of routes. Sets live on the server so the phone
+/// and the browser show the same thing; which routes are ticked right now is
+/// only ticked here until it is saved as one.
+class RouteSheet extends StatefulWidget {
+  const RouteSheet({
+    super.key,
+    required this.api,
+    required this.catalog,
+    required this.sets,
+    required this.picked,
+    required this.onToggle,
+    required this.onClear,
+    required this.onActivated,
+    required this.onSets,
+  });
+
+  final Api api;
+  final Catalog catalog;
+  final Sets? sets;
+
+  /// Route positions, the screen's own live set - ticking a chip changes what
+  /// the map shows before anything is saved
+  final Set<int> picked;
+  final void Function(int route) onToggle;
+  final VoidCallback onClear;
+
+  /// A set was chosen: these are the routes it names, as positions
+  final void Function(RouteSet set, Iterable<int> routes) onActivated;
+
+  /// The server's list of sets changed, and this is it
+  final void Function(Sets sets) onSets;
+
+  @override
+  State<RouteSheet> createState() => _RouteSheetState();
+}
+
+class _RouteSheetState extends State<RouteSheet> {
+  String _filter = '';
+
+  Iterable<int> _positions(List<String> ids) =>
+      ids.map((id) => widget.catalog.index[id]).whereType<int>();
+
+  Future<void> _save() async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        final field = TextEditingController();
+        return AlertDialog.adaptive(
+          title: const Text('Name this set'),
+          content: TextField(controller: field, autofocus: true),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, field.text.trim()),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+    if (name == null || name.isEmpty) return;
+    final ids = [for (final i in widget.picked) widget.catalog.routes[i].id];
+    final made = await widget.api.createSet(name, ids);
+    await widget.api.activateSet(made.id);
+    final sets = await widget.api.sets();
+    if (!mounted) return;
+    widget.onSets(sets);
+    setState(() {});
+  }
+
+  Future<void> _activate(RouteSet set) async {
+    await widget.api.activateSet(set.id);
+    if (!mounted) return;
+    widget.onActivated(set, _positions(set.routes));
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final catalog = widget.catalog;
+    final needle = _filter.toLowerCase();
+    final shown = [
+      for (var i = 0; i < catalog.routes.length; i++)
+        if (needle.isEmpty ||
+            catalog.routes[i].short.toLowerCase().contains(needle) ||
+            catalog.routes[i].long.toLowerCase().contains(needle))
+          i,
+    ];
+    final sets = widget.sets?.sets ?? const <RouteSet>[];
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.7,
+      builder: (context, controller) => ListView(
+        controller: controller,
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        children: [
+          if (sets.isNotEmpty) ...[
+            Text(
+              'Sets',
+              style: material.Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              children: [
+                for (final s in sets)
+                  ChoiceChip(
+                    label: Text(s.name),
+                    selected: s.id == widget.sets?.active,
+                    onSelected: (_) => _activate(s),
+                  ),
+              ],
+            ),
+            const Divider(height: 24),
+          ],
+          TextField(
+            onChanged: (v) => setState(() => _filter = v),
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search),
+              hintText: 'Filter routes',
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              for (final i in shown)
+                FilterChip(
+                  label: Text(catalog.routes[i].short),
+                  tooltip: catalog.routes[i].long,
+                  selected: widget.picked.contains(i),
+                  onSelected: (_) {
+                    widget.onToggle(i);
+                    setState(() {});
+                  },
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              TextButton(
+                onPressed: widget.picked.isEmpty
+                    ? null
+                    : () {
+                        widget.onClear();
+                        setState(() {});
+                      },
+                child: const Text('Clear'),
+              ),
+              const Spacer(),
+              FilledButton.tonal(
+                onPressed: widget.picked.isEmpty ? null : _save,
+                child: const Text('Save as a set'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
