@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { MapCanvas } from "./components/MapCanvas";
 import { RoutePanel } from "./components/RoutePanel";
 import { SignIn } from "./components/SignIn";
+import { JourneyPanel, type Point } from "./components/JourneyPanel";
 import { StopCard } from "./components/StopCard";
 import { StopSearch } from "./components/StopSearch";
 import { VehicleCard } from "./components/VehicleCard";
@@ -34,7 +35,10 @@ export function App() {
   const [stop, setStop] = useState<number | null>(null);
   const [veh, setVeh] = useState<number | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lon: number } | null>(null);
-  const [tab, setTab] = useState<"map" | "times">(opened.tab);
+  const [tab, setTab] = useState<"map" | "times" | "plan">(opened.tab);
+  const [from, setFrom] = useState<Point | null>(null);
+  const [to, setTo] = useState<Point | null>(null);
+  const [picking, setPicking] = useState<"from" | "to" | null>(null);
   const [panel, setPanel] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const [notice, setNotice] = useState<string | null>(null);
@@ -187,6 +191,30 @@ export function App() {
     return out;
   }, [cat, indexes]);
 
+  /** The journey's two ends on the map. Lettered rather than coloured: two pins
+   * of the same shape are told apart by the letter on a map of any palette */
+  const marks = useMemo(() => {
+    const out: { lat: number; lon: number; label: string }[] = [];
+    if (from) out.push({ ...from, label: "A" });
+    if (to) out.push({ ...to, label: "B" });
+    return out;
+  }, [from, to]);
+
+  /** Where the browser says the phone is, for either end of the journey. The
+   * map has its own locate button and its own fix; this asks separately rather
+   * than reaching into it, because the two are wanted at different moments and
+   * a refusal here should not turn the map's dot off. */
+  const useHere = (which: "from" | "to") => {
+    navigator.geolocation?.getCurrentPosition(
+      (pos) => {
+        const at = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        (which === "from" ? setFrom : setTo)(at);
+      },
+      () => setNotice(t.noLocation),
+      { enableHighAccuracy: true, timeout: 10_000 },
+    );
+  };
+
   const setPinned = (next: number[]) => {
     if (!cat) return;
     const ids = next.map((i) => cat.stops[i]!.id);
@@ -227,13 +255,13 @@ export function App() {
           {t.routes}
         </button>
         <nav className="flex rounded-md bg-slate-900 p-0.5 text-sm">
-          {(["map", "times"] as const).map((v) => (
+          {(["map", "times", "plan"] as const).map((v) => (
             <button
               key={v}
               onClick={() => setTab(v)}
               className={`rounded px-3 py-1 ${tab === v ? "bg-slate-700" : "text-slate-400"}`}
             >
-              {v === "map" ? t.map : t.times}
+              {v === "map" ? t.map : v === "times" ? t.times : t.plan}
             </button>
           ))}
         </nav>
@@ -281,7 +309,7 @@ export function App() {
       )}
 
       <main className="relative flex-1 overflow-hidden">
-        <div className={tab === "map" ? "absolute inset-0" : "hidden"}>
+        <div className={tab === "map" || tab === "plan" ? "absolute inset-0" : "hidden"}>
           <MapCanvas
             catalog={cat}
             live={live}
@@ -294,9 +322,38 @@ export function App() {
             vehicle={veh}
             onPickVehicle={setVeh}
             focus={focus}
+            picking={picking !== null}
+            onPickPoint={(lat, lon) => {
+              if (picking === "from") setFrom({ lat, lon });
+              if (picking === "to") setTo({ lat, lon });
+              setPicking(null);
+            }}
+            marks={marks}
             theme={theme}
           />
-          {veh !== null && stop === null && (
+          {tab === "plan" && (
+            <aside className="absolute inset-y-0 right-0 z-20 w-96 max-w-[90vw] border-l border-slate-800 bg-slate-950/95 p-3 backdrop-blur">
+              <JourneyPanel
+                catalog={cat}
+                from={from}
+                to={to}
+                picking={picking}
+                onPick={setPicking}
+                onSwap={() => {
+                  setFrom(to);
+                  setTo(from);
+                }}
+                onHere={useHere}
+                onStop={(i) => {
+                  setTab("map");
+                  setStop(i);
+                  setFocus({ lat: cat.stops[i]!.lat, lon: cat.stops[i]!.lon });
+                }}
+              />
+            </aside>
+          )}
+
+          {tab === "map" && veh !== null && stop === null && (
             <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 mx-auto max-w-md">
               <VehicleCard
                 catalog={cat}
@@ -310,7 +367,7 @@ export function App() {
             </div>
           )}
 
-          {stop !== null && (
+          {tab === "map" && stop !== null && (
             <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 mx-auto max-w-md">
               <StopCard
                 catalog={cat}

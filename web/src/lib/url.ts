@@ -12,7 +12,7 @@ export type UrlState = {
    * account's active set should decide */
   routes: string[] | null;
   stop: string | null;
-  tab: "map" | "times";
+  tab: "map" | "times" | "plan";
 };
 
 export function readUrl(): UrlState {
@@ -21,7 +21,7 @@ export function readUrl(): UrlState {
   return {
     routes: routes === null ? null : routes.split(",").filter(Boolean),
     stop: q.get("stop"),
-    tab: q.get("tab") === "times" ? "times" : "map",
+    tab: q.get("tab") === "times" ? "times" : q.get("tab") === "plan" ? "plan" : "map",
   };
 }
 

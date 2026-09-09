@@ -127,6 +127,28 @@ r = s.get(BASE + "/api/vehicle?veh=65535")
 check("an untracked vehicle is empty, not an error",
       r.status_code == 200 and r.json()["stops"] == [], r.text[:120])
 
+# Two points a few km apart, near the centre and near Sykhiv: any planner
+# worth having finds a ride between them, and the walk is long enough that it
+# cannot be the only answer
+r = s.get(BASE + "/api/plan?from=49.8397,24.0297&to=49.8003,23.9950")
+if r.status_code == 503:
+    print("SKIP journey planner - this service has no walk.npz")
+else:
+    got = r.json() if r.status_code == 200 else {}
+    opts = got.get("options", [])
+    check("a journey is planned", r.status_code == 200 and opts, r.text[:200])
+    check("its legs run from the door to the door, in order",
+          all(o["legs"][0]["a"] == -1 and o["legs"][-1]["b"] == -1
+              and all(a["arr"] <= b["dep"] and a["b"] == b["a"]
+                      for a, b in zip(o["legs"], o["legs"][1:]))
+              for o in opts), str(opts)[:300])
+    check("ranked by arrival",
+          [o["arr"] for o in opts] == sorted(o["arr"] for o in opts),
+          str([o["arr"] for o in opts]))
+r = s.get(BASE + "/api/plan?from=nonsense&to=49.8,24.0")
+check("a journey from nowhere is refused",
+      r.status_code in (400, 503), r.text[:80])
+
 r = s.get(BASE + "/api/status")
 check("status", r.status_code == 200, r.text[:200])
 
