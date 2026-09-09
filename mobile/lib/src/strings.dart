@@ -59,6 +59,8 @@ class Strings {
     required this.faceNorth,
     required this.zoomIn,
     required this.zoomOut,
+    required this.whereAmI,
+    required this.noLocation,
     required this.now,
     required this.oneMinute,
     required this.minutes,
@@ -108,6 +110,8 @@ class Strings {
   final String faceNorth;
   final String zoomIn;
   final String zoomOut;
+  final String whereAmI;
+  final String noLocation;
   final String now;
   final String oneMinute;
   final String Function(int minutes) minutes;
@@ -158,6 +162,8 @@ const _en = Strings(
   faceNorth: 'Face north',
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
+  whereAmI: 'Where I am',
+  noLocation: 'Location is not available',
   now: 'now',
   oneMinute: '1 min',
   minutes: _enMinutes,
@@ -211,6 +217,8 @@ const _uk = Strings(
   faceNorth: 'На північ',
   zoomIn: 'Наблизити',
   zoomOut: 'Віддалити',
+  whereAmI: 'Де я',
+  noLocation: 'Місцеперебування недоступне',
   now: 'зараз',
   oneMinute: '1 хв',
   minutes: _ukMinutes,

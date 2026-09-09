@@ -276,8 +276,9 @@ flutter build apk --release        # unsigned unless android/key.properties exis
 The structure mirrors the web app's for the same reason: every vehicle and stop
 is one `CustomPaint` repainted from a `Ticker`, positions are eased between the
 five-second frames, and each route's badge is laid out once into a
-`ui.Paragraph`. `mobile/README.md` has the rest, including why there is no
-locate-me button. Two fields in `mobile/fdroid/ua.lviv.commuterlviv.yml` are the
+`ui.Paragraph`. `mobile/README.md` has the rest, including why the
+locate-me button is a hand-written channel over AOSP's `LocationManager` and
+why iOS has no half of it yet. Two fields in `mobile/fdroid/ua.lviv.commuterlviv.yml` are the
 owner's to fill: the licence, since the repository has no LICENCE file, and the
 repository URL, since there is no remote.
 

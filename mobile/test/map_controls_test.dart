@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'package:commuterlviv/src/here.dart';
 import 'package:commuterlviv/src/map_controls.dart';
 import 'package:commuterlviv/src/strings.dart';
 
@@ -24,7 +25,7 @@ Future<MapController> pump(WidgetTester tester, {double zoom = 13}) async {
             ),
             children: const [],
           ),
-          MapControls(map: map),
+          MapControls(map: map, here: Here(onFirstFix: (_) {})),
         ],
       ),
     ),

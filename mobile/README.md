@@ -150,14 +150,28 @@ and is wrong: it resolves the package's conditional export to the web stub,
 where `Directory` is a `String`, while the compiler picks the `dart:io` one.
 Hence the `ignore` comment at the call in `home.dart`.
 
-## Not in this version
+## Where the phone is
 
-**Locate me.** The obvious package for it, `geolocator`, pulls
-`com.google.android.gms:play-services-location`, and F-Droid does not take
-builds with a proprietary SDK in them. Doing it properly is a small platform
-channel over `android.location.LocationManager`, which is AOSP, plus
-`CoreLocation` on iOS. Until then the app asks for no location permission at
-all, which is also the honest thing to ship.
+The locate button is a hand-written platform channel, not a package. The obvious
+package, `geolocator`, pulls `com.google.android.gms:play-services-location`,
+and F-Droid does not take builds with a proprietary SDK in them; so
+`MainActivity.kt` talks to `android.location.LocationManager`, which is AOSP,
+over two channels - `ua.lviv.commuterlviv/here` for `start` and `stop`,
+`ua.lviv.commuterlviv/here/fixes` for a `{lat, lon, accuracy}` map per fix. It
+asks both providers, GPS and network, because which one answers first differs
+indoors and out, and it drops the updates in `onPause`: no fix is taken while
+the map is off screen.
+
+`ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION` are declared, and asked for
+on the first press of the button - never at launch. The fix stays on the phone:
+`lib/src/here.dart` holds it, the layer draws it, and nothing sends it to the
+service, which has no use for it.
+
+**iOS has no half yet.** It needs the same two channels over `CoreLocation`.
+Until then the channel is missing there, which `here.dart` reads as a refusal,
+so an iPhone gets a disabled button rather than a crash.
+
+## Not in this version
 
 **`vector_map_tiles` is on `9.0.0-beta.13`.** Not by choice: it is the version
 compatible with `flutter_map 8.3.2`. Worth revisiting when either goes stable.
