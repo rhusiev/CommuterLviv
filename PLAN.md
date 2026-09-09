@@ -1148,6 +1148,14 @@ build are run by hand.
       `/ws`. Offline it opens and says the service is not answering, which is
       the truth. Verified against the live stack: the manifest, the worker and
       the icons are served, and `/sw.js` carries `Cache-Control: no-cache`.
+- [x] **One command that checks the checkout**, 2026-09-09. `check.sh`: ruff's
+      will-it-run rules, the package imports, the web types and build, and
+      `flutter analyze`/`flutter test`. Deliberately nothing that needs a
+      database, a service or a recording - `check_live.py`, `check_web.py` and
+      `check_parallel.py` each do, and a check that cannot be run is a check
+      that gets skipped. A GitHub Actions workflow is the obvious next step and
+      is not written: there is no remote to run it on, so it could not be
+      exercised, and an untested workflow is worse than none.
 
 ## Deliverables
 
