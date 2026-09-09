@@ -154,22 +154,29 @@ Hence the `ignore` comment at the call in `home.dart`.
 
 The locate button is a hand-written platform channel, not a package. The obvious
 package, `geolocator`, pulls `com.google.android.gms:play-services-location`,
-and F-Droid does not take builds with a proprietary SDK in them; so
-`MainActivity.kt` talks to `android.location.LocationManager`, which is AOSP,
-over two channels - `ua.lviv.commuterlviv/here` for `start` and `stop`,
-`ua.lviv.commuterlviv/here/fixes` for a `{lat, lon, accuracy}` map per fix. It
-asks both providers, GPS and network, because which one answers first differs
-indoors and out, and it drops the updates in `onPause`: no fix is taken while
-the map is off screen.
+and F-Droid does not take builds with a proprietary SDK in them; so each
+platform has its own half, answering the same two channels -
+`ua.lviv.commuterlviv/here` for `start` and `stop`,
+`ua.lviv.commuterlviv/here/fixes` for a `{lat, lon, accuracy}` map per fix - so
+that `here.dart` has one code path.
+
+`MainActivity.kt` is the Android half, over `android.location.LocationManager`,
+which is AOSP. It asks both providers, GPS and network, because which one
+answers first differs indoors and out. `ios/Runner/Here.swift` is the iOS half,
+over `CoreLocation`, which is part of the system; `AppDelegate.swift` owns it
+and hands it the app's trips in and out of the background. Both stop the
+updates while the app is off screen: no fix is taken while the map is not on
+it.
 
 `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION` are declared, and asked for
 on the first press of the button - never at launch. The fix stays on the phone:
 `lib/src/here.dart` holds it, the layer draws it, and nothing sends it to the
 service, which has no use for it.
 
-**iOS has no half yet.** It needs the same two channels over `CoreLocation`.
-Until then the channel is missing there, which `here.dart` reads as a refusal,
-so an iPhone gets a disabled button rather than a crash.
+**The iOS half is unbuilt.** It is written but has never been through a
+compiler: there is no Mac here, and `flutter build ios` needs one. Read it as a
+first draft until somebody with Xcode runs it. Everything else here - the
+missing channel reading as a refusal - still holds on any third platform.
 
 ## Not in this version
 

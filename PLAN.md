@@ -901,9 +901,11 @@ map SDK with a key. Toolchain installed under XDG paths as asked - Flutter
       updates in `onPause`. `lib/src/here.dart` holds the fix and the browser's
       four states, `off | waiting | on | denied`; the layer draws a 6 px dot and
       an accuracy ring, the ring only when it would be wider than two stop
-      radii, the same rule `MapCanvas.tsx` uses. **iOS has no half yet**: the
-      channel is missing there, which reads as a refusal, so the button is
-      dead rather than the app.
+      radii, the same rule `MapCanvas.tsx` uses. `ios/Runner/Here.swift` is the
+      iOS half, over `CoreLocation`, answering the same two channels; **it has
+      never been compiled**, there being no Mac here, so read it as a first
+      draft. On any third platform the channel is missing, which reads as a
+      refusal, so the button is dead rather than the app.
 - [x] Documented. `mobile/README.md` is the app's own page; the root
       `README.md` gained a "The phone" section beside "The map"; `HANDOFF.md`
       gained the app in its layout tree, in its state of play, in its

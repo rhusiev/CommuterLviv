@@ -7,9 +7,11 @@
 /// service, which has no use for it.
 ///
 /// The platform half is hand-written - `MainActivity.kt` over AOSP's
-/// `LocationManager` - rather than `geolocator`, which pulls Google Play
-/// services and would keep the build out of F-Droid. Only Android has a half:
-/// on anything else the channel is missing, which reads here as a refusal.
+/// `LocationManager`, `ios/Runner/Here.swift` over `CoreLocation` - rather
+/// than `geolocator`, which pulls Google Play services and would keep the
+/// build out of F-Droid. Both answer the same two channels, so there is one
+/// code path here; anywhere else the channel is missing, which reads as a
+/// refusal.
 library;
 
 import 'dart:async';
