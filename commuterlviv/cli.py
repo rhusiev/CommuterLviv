@@ -12,7 +12,7 @@
     walk        fetch the city's footpaths once, for the journey planner
     plan        door to door: walk, ride, walk, ranked by arrival
     serve       run the live service: the model, over HTTP and websockets
-    admin       mint invite links, list accounts, disable one
+    admin       mint invite links, list accounts, disable or delete one
 """
 import argparse
 import sys
@@ -198,6 +198,10 @@ def _admin(rest):
     off = sub.add_parser("disable", help="lock an account and end its sessions")
     off.add_argument("username")
     off.add_argument("--undo", action="store_true")
+    gone = sub.add_parser("delete", help="erase an account and all its data")
+    gone.add_argument("username")
+    gone.add_argument("--yes", action="store_true",
+                      help="required: there is no undo")
     a = ap.parse_args(rest)
     if a.what == "invite":
         print(admin.run(admin.invite(a.uses, a.days, a.note)))
@@ -207,6 +211,11 @@ def _admin(rest):
                   f"last login {r['last_login'] or '-'}  "
                   f"sessions {r['sessions']}"
                   f"{'  DISABLED' if r['disabled'] else ''}")
+    elif a.what == "delete":
+        if not a.yes:
+            raise SystemExit("pass --yes: deleting an account cannot be undone")
+        ok = admin.run(admin.delete(a.username))
+        print("done" if ok else "no such user")
     else:
         ok = admin.run(admin.disable(a.username, not a.undo))
         print("done" if ok else "no such user")

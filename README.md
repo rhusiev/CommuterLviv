@@ -499,7 +499,10 @@ docker compose exec service python -m commuterlviv admin invite
 ```
 
 That last line prints one registration link. Open it, pick a username, and the
-map is yours. `docker compose logs -f service` is the rest of the interface.
+map is yours. `docker compose logs -f service` is the rest of the interface,
+with `admin users`, `admin disable <name>` and `admin delete <name> --yes`
+beside it - `disable` locks an account and ends its sessions and can be undone,
+`delete` erases it and everything hanging off it and cannot.
 
 Two lines of `.env` decide everything and neither has a safe guess:
 `POSTGRES_PASSWORD`, and `COMMUTERLVIV_ORIGINS` - the exact origins allowed to make
