@@ -65,6 +65,23 @@ class Strings {
     required this.vehicleGone,
     required this.now,
     required this.oneMinute,
+    required this.plan,
+    required this.from,
+    required this.to,
+    required this.tapMap,
+    required this.useHere,
+    required this.swap,
+    required this.findRoute,
+    required this.searching,
+    required this.noJourney,
+    required this.toDoor,
+    required this.noChange,
+    required this.livePart,
+    required this.schedulePart,
+    required this.wholeWalk,
+    required this.planHint,
+    required this.walkLeg,
+    required this.changeCount,
     required this.minutes,
     required this.unreachable,
   });
@@ -118,6 +135,23 @@ class Strings {
   final String vehicleGone;
   final String now;
   final String oneMinute;
+  final String plan;
+  final String from;
+  final String to;
+  final String tapMap;
+  final String useHere;
+  final String swap;
+  final String findRoute;
+  final String searching;
+  final String noJourney;
+  final String toDoor;
+  final String noChange;
+  final String livePart;
+  final String schedulePart;
+  final String wholeWalk;
+  final String planHint;
+  final String Function(int minutes) walkLeg;
+  final String Function(int changes) changeCount;
   final String Function(int minutes) minutes;
   final String Function(String server) unreachable;
 }
@@ -168,6 +202,23 @@ const _en = Strings(
   zoomOut: 'Zoom out',
   whereAmI: 'Where I am',
   noLocation: 'Location is not available',
+  plan: 'Journey',
+  from: 'From',
+  to: 'To',
+  tapMap: 'tap the map',
+  useHere: 'where I am',
+  swap: 'swap',
+  findRoute: 'Find a way',
+  searching: 'looking for a way',
+  noJourney: 'no way to get there was found',
+  toDoor: 'to the door',
+  noChange: 'no changes',
+  livePart: 'tracked',
+  schedulePart: 'timetable',
+  wholeWalk: 'walk the whole way',
+  planHint: 'Tap the map to set where you are and where you are going.',
+  walkLeg: _enWalkLeg,
+  changeCount: _enChangeCount,
   stopsAhead: 'Stops ahead',
   vehicleGone: 'This one is no longer being tracked',
   now: 'now',
@@ -176,6 +227,8 @@ const _en = Strings(
   unreachable: _enUnreachable,
 );
 
+String _enWalkLeg(int m) => 'walk $m min';
+String _enChangeCount(int n) => n == 1 ? '1 change' : '$n changes';
 String _enMinutes(int m) => '$m min';
 String _enUnreachable(String server) => 'could not reach $server';
 
@@ -225,6 +278,23 @@ const _uk = Strings(
   zoomOut: 'Віддалити',
   whereAmI: 'Де я',
   noLocation: 'Місцеперебування недоступне',
+  plan: 'Маршрут',
+  from: 'Звідки',
+  to: 'Куди',
+  tapMap: 'торкніться мапи',
+  useHere: 'де я',
+  swap: 'поміняти',
+  findRoute: 'Знайти шлях',
+  searching: 'шукаємо шлях',
+  noJourney: 'шляху не знайдено',
+  toDoor: 'до місця',
+  noChange: 'без пересадок',
+  livePart: 'за відстеженням',
+  schedulePart: 'за розкладом',
+  wholeWalk: 'пішки весь шлях',
+  planHint: 'Торкніться мапи, щоб вказати, де ви є і куди прямуєте.',
+  walkLeg: _ukWalkLeg,
+  changeCount: _ukChangeCount,
   stopsAhead: 'Наступні зупинки',
   vehicleGone: 'Цей транспорт більше не відстежується',
   now: 'зараз',
@@ -233,6 +303,8 @@ const _uk = Strings(
   unreachable: _ukUnreachable,
 );
 
+String _ukWalkLeg(int m) => 'пішки $m хв';
+String _ukChangeCount(int n) => n == 1 ? '1 пересадка' : 'пересадок: $n';
 String _ukMinutes(int m) => '$m хв';
 String _ukUnreachable(String server) => 'не вдалося зʼєднатися з $server';
 

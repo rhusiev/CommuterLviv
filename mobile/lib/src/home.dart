@@ -18,6 +18,7 @@ import 'package:vector_map_tiles/vector_map_tiles.dart';
 import '../main.dart' show tick;
 import 'api.dart';
 import 'here.dart';
+import 'journey_panel.dart';
 import 'live.dart';
 import 'map_tab.dart';
 import 'map_theme.dart';
@@ -64,6 +65,15 @@ class _HomeScreenState extends State<HomeScreen> {
   int? _stop;
   int _tab = 0;
 
+  bool _planning = false;
+  LatLng? _from;
+  LatLng? _to;
+  End? _picking;
+
+  /// Which end of a journey is waiting for the phone's own position, when a
+  /// fix has been asked for and has not arrived yet
+  End? _wantHere;
+
   late final Here _here = Here(onFirstFix: (at) => _map.move(at, 16));
 
   late MapTheme _theme = themeById(widget.api.mapTheme);
@@ -74,11 +84,13 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _load();
     _loadStyle();
+    _here.addListener(_fixArrived);
   }
 
   @override
   void dispose() {
     _live?.dispose();
+    _here.removeListener(_fixArrived);
     _here.dispose();
     _map.dispose();
     super.dispose();
@@ -259,6 +271,16 @@ class _HomeScreenState extends State<HomeScreen> {
   void _tap(LatLng point) {
     final catalog = _catalog;
     if (catalog == null) return;
+    // While an end of a journey is being set, every tap is that point: the
+    // nearest stop is not what was asked for, and a door is rarely one
+    if (_picking != null) {
+      tick();
+      setState(() {
+        _at(_picking!, point);
+        _picking = null;
+      });
+      return;
+    }
     final camera = _map.camera;
     final at = camera.latLngToScreenOffset(point);
 
@@ -317,6 +339,45 @@ class _HomeScreenState extends State<HomeScreen> {
         },
       ),
     );
+  }
+
+  /// The phone's own position, for one end of a journey. `Here` answers at
+  /// once if it already has a fix and otherwise when the first one lands, so
+  /// the end being waited for is remembered rather than the answer waited on.
+  Future<void> _hereFor(End which) async {
+    final at = await _here.start();
+    if (!mounted) return;
+    if (at == null && _here.state == Locating.denied) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(txt.noLocation)));
+      return;
+    }
+    setState(() {
+      if (at == null) {
+        _wantHere = which;
+      } else {
+        _at(which, at);
+      }
+    });
+  }
+
+  void _fixArrived() {
+    final which = _wantHere;
+    final at = _here.fix?.point;
+    if (which == null || at == null) return;
+    setState(() {
+      _at(which, at);
+      _wantHere = null;
+    });
+  }
+
+  void _at(End which, LatLng at) {
+    if (which == End.from) {
+      _from = at;
+    } else {
+      _to = at;
+    }
   }
 
   Future<void> _search() async {
@@ -405,6 +466,17 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: txt.findStop,
           ),
           IconButton(
+            onPressed: () => setState(() {
+              _planning = !_planning;
+              _tab = 0;
+              if (!_planning) _picking = null;
+            }),
+            icon: Icon(
+              _planning ? Icons.directions : Icons.directions_outlined,
+            ),
+            tooltip: txt.plan,
+          ),
+          IconButton(
             onPressed: () => showModalBottomSheet<void>(
               context: context,
               showDragHandle: true,
@@ -455,7 +527,9 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
         bottom: _Status(live: live),
       ),
-      body: IndexedStack(
+      body: Stack(
+        children: [
+          IndexedStack(
         index: _tab,
         children: [
           MapTab(
@@ -468,6 +542,10 @@ class _HomeScreenState extends State<HomeScreen> {
             theme: _theme,
             here: _here,
             empty: _routes.isEmpty,
+            marks: [
+              if (_from != null) (at: _from!, label: 'A'),
+              if (_to != null) (at: _to!, label: 'B'),
+            ],
             onTap: _tap,
           ),
           TimesTab(
@@ -480,6 +558,38 @@ class _HomeScreenState extends State<HomeScreen> {
               _openStop(stop, fly: true);
             },
           ),
+            ],
+          ),
+          if (_planning && _tab == 0)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.6,
+                ),
+                child: JourneyPanel(
+                  api: widget.api,
+                  catalog: catalog,
+                  from: _from,
+                  to: _to,
+                  picking: _picking,
+                  onPick: (which) => setState(() => _picking = which),
+                  onSwap: () => setState(() {
+                    final was = _from;
+                    _from = _to;
+                    _to = was;
+                  }),
+                  onHere: _hereFor,
+                  onStop: (stop) => _openStop(stop, fly: true),
+                  onClose: () => setState(() {
+                    _planning = false;
+                    _picking = null;
+                  }),
+                ),
+              ),
+            ),
         ],
       ),
       bottomNavigationBar: NavigationBar(

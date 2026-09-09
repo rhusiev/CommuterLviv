@@ -169,3 +169,70 @@ class Arrival {
   /// Unix seconds at which it calls here - an instant, not a countdown
   final int t;
 }
+
+/// One unbroken movement of a planned journey. `a` and `b` are catalog stop
+/// indexes, or -1 for the door at either end; a walk has no route. `live` says
+/// the ride is a vehicle the model can see rather than a timetable entry.
+class Leg {
+  const Leg({
+    required this.kind,
+    required this.dep,
+    required this.arr,
+    required this.a,
+    required this.b,
+    this.route,
+    this.veh,
+    this.live = false,
+  });
+
+  factory Leg.fromJson(Map<String, dynamic> j) => Leg(
+    kind: j['kind'] as String,
+    dep: j['dep'] as int,
+    arr: j['arr'] as int,
+    a: j['a'] as int,
+    b: j['b'] as int,
+    route: j['route'] as int?,
+    veh: j['veh'] as int?,
+    live: j['live'] as bool? ?? false,
+  );
+
+  final String kind;
+  final int dep;
+  final int arr;
+  final int a;
+  final int b;
+  final int? route;
+  final int? veh;
+  final bool live;
+
+  bool get walking => kind == 'walk';
+}
+
+class Journey {
+  const Journey({
+    required this.dep,
+    required this.arr,
+    required this.rides,
+    required this.live,
+    required this.legs,
+  });
+
+  factory Journey.fromJson(Map<String, dynamic> j) => Journey(
+    dep: j['dep'] as int,
+    arr: j['arr'] as int,
+    rides: j['rides'] as int,
+    live: j['live'] as bool,
+    legs: [
+      for (final l in j['legs'] as List)
+        Leg.fromJson(l as Map<String, dynamic>),
+    ],
+  );
+
+  final int dep;
+  final int arr;
+  final int rides;
+
+  /// True when every ride in it is a vehicle the model can see
+  final bool live;
+  final List<Leg> legs;
+}
