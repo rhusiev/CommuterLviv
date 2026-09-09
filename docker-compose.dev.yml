@@ -1,0 +1,67 @@
+# Development, as an overlay on the production file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# The source is mounted rather than copied, the UI is Vite's dev server instead
+# of built files, and the service and the database are reachable from the host.
+services:
+  db:
+    ports:
+      - "5432:5432"
+
+  service:
+    environment:
+      COMMUTERLVIV_DEV: "true"
+      COMMUTERLVIV_SECURE_COOKIES: "false"
+      COMMUTERLVIV_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,app://commuterlviv
+      COMMUTERLVIV_WEB_BASE: http://localhost:5173
+      COMMUTERLVIV_REGISTRATION: code
+      # Nothing proxies here - Vite forwards without adding the header, and the
+      # phone app talks to 8099 directly. Trusting a header nobody sets would
+      # only let anyone on the network forge their way past the rate limiter.
+      COMMUTERLVIV_TRUST_PROXY: "false"
+    volumes:
+      - ./commuterlviv:/app/commuterlviv:ro
+    # For the phone app, which talks to the service directly and not through
+    # Vite: `flutter run --dart-define=COMMUTERLVIV_BASE=http://10.0.2.2:8099`
+    ports:
+      - "8099:8099"
+
+  collector:
+    volumes:
+      - ./commuterlviv:/app/commuterlviv:ro
+
+  web:
+    build: !reset null
+    image: node:22-alpine
+    working_dir: /app
+    # `npm ci` on every start, because the mounted tree has no node_modules and
+    # the named volume below is what keeps it from being a reinstall each time
+    command: sh -c "npm ci --no-audit --no-fund && npm run dev -- --host 0.0.0.0"
+    # A failed install should say so once, not every ten seconds
+    restart: "no"
+    environment:
+      COMMUTERLVIV_API: http://service:8099
+    volumes:
+      - ./web:/app
+      - web_modules:/app/node_modules
+    ports: !override
+      - "5173:5173"
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: commuterlviv_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    networks:
+      - internal_backend
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  web_modules:

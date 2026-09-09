@@ -1,0 +1,101 @@
+# Production. Four containers: Postgres, the service, the collector that feeds
+# it, and Caddy in front serving the built UI. `docker compose up -d` is the
+# whole deployment; see the guide in README.md.
+
+# Named, because the checkout is worktree-style and the directory this runs from
+# is called `main`. Volumes are named after the project.
+name: commuterlviv
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: commuterlviv_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal_backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  service:
+    build:
+      context: .
+      dockerfile: deploy/service.Dockerfile
+    image: commuterlviv-service:${VERSION:-latest}
+    container_name: commuterlviv_service
+    restart: unless-stopped
+    environment:
+      COMMUTERLVIV_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      COMMUTERLVIV_ORIGINS: ${COMMUTERLVIV_ORIGINS}
+      COMMUTERLVIV_WEB_BASE: ${COMMUTERLVIV_WEB_BASE:-}
+      COMMUTERLVIV_VARIANT: ${COMMUTERLVIV_VARIANT:-slow-day}
+      COMMUTERLVIV_REGISTRATION: ${COMMUTERLVIV_REGISTRATION:-code}
+      COMMUTERLVIV_SECURE_COOKIES: ${COMMUTERLVIV_SECURE_COOKIES:-true}
+      # Caddy is the only thing that can reach it, and Caddy sets the header
+      COMMUTERLVIV_TRUST_PROXY: "true"
+    volumes:
+      - service_data:/app/data
+    networks:
+      - internal_backend
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # Building the city's geometry from the static feed takes a minute on a
+      # cold volume, and warming the model on the recording takes another
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8099/api/health').read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 180s
+
+  collector:
+    build:
+      context: .
+      dockerfile: deploy/service.Dockerfile
+    image: commuterlviv-service:${VERSION:-latest}
+    container_name: commuterlviv_collector
+    restart: unless-stopped
+    command: ["python", "-m", "commuterlviv", "collect", "--keep-days", "30", "--min-free-gb", "3"]
+    volumes:
+      - service_data:/app/data
+    networks:
+      - internal_backend
+    depends_on:
+      - service
+    # It drains its write queue on SIGTERM; killing it mid-write is how a
+    # multi-day recording loses its last minutes
+    stop_grace_period: 60s
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
+    image: commuterlviv-web:${VERSION:-latest}
+    container_name: commuterlviv_web
+    restart: unless-stopped
+    environment:
+      COMMUTERLVIV_SITE_ADDRESS: ${COMMUTERLVIV_SITE_ADDRESS:-:8080}
+    # Loopback by default: whatever terminates TLS on this machine is what the
+    # world talks to. docker-compose.tls.yml is the other way round.
+    ports:
+      - "${COMMUTERLVIV_BIND:-127.0.0.1:8080}:8080"
+    networks:
+      - internal_backend
+    depends_on:
+      - service
+
+networks:
+  internal_backend:
+
+volumes:
+  postgres_data:
+  service_data:

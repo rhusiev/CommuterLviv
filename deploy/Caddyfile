@@ -1,0 +1,28 @@
+{
+	admin off
+}
+
+# `:8080` by default: plain HTTP, for a machine that has something else doing
+# TLS in front. Set COMMUTERLVIV_SITE_ADDRESS to a domain name and Caddy gets a
+# certificate for it on its own - see docker-compose.tls.yml.
+{$COMMUTERLVIV_SITE_ADDRESS::8080} {
+	encode zstd gzip
+
+	# `handle` and not a bare `reverse_proxy`, because the two halves have to be
+	# exclusive: `try_files` below runs in an earlier phase than proxying, so a
+	# shared block rewrites `/api/health` to `/index.html` before the proxy ever
+	# sees which path was asked for
+	@service path /api/* /ws
+	handle @service {
+		reverse_proxy service:8099
+	}
+
+	handle {
+		root * /srv
+		# Every other path serves index.html: `/join/<code>` is a route in the
+		# app and not a file, and a 404 there turns an invite link into a dead
+		# one
+		try_files {path} /index.html
+		file_server
+	}
+}

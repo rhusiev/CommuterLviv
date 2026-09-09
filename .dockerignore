@@ -1,0 +1,13 @@
+# `data/` alone is about a gigabyte of recording, and none of it belongs in an
+# image: the service caches its own copy in a volume at runtime
+data/
+.venv/
+.git/
+mobile/
+reports/
+docs/
+web/node_modules/
+web/dist/
+**/__pycache__/
+*.pyc
+.env
