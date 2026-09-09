@@ -41,6 +41,24 @@ export type Call = { stop: number; route: number; t: number };
 
 export type VehicleStops = { t: number; veh: number; stops: Call[] };
 
+/** One unbroken movement of a planned journey. `a` and `b` are catalog stop
+ * indexes, or -1 for the door at either end; a walk has no route. `live` says
+ * the ride is a vehicle the model can see rather than a timetable entry. */
+export type Leg = {
+  kind: "walk" | "ride";
+  dep: number;
+  arr: number;
+  a: number;
+  b: number;
+  route?: number;
+  veh?: number | null;
+  live?: boolean;
+};
+
+export type Journey = { dep: number; arr: number; rides: number; live: boolean; legs: Leg[] };
+
+export type Plan = { t: number; options: Journey[] };
+
 export type Status = {
   variant: string;
   epochs: number;

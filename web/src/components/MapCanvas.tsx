@@ -46,6 +46,12 @@ type Props = {
   /** Where the search wants the camera. A new object flies, so asking twice for
    * the same stop flies twice */
   focus: { lat: number; lon: number } | null;
+  /** While the planner is waiting for an end of the journey, a click is that
+   * point rather than a choice of stop */
+  picking: boolean;
+  onPickPoint: (lat: number, lon: number) => void;
+  /** The journey's two ends, drawn as lettered pins */
+  marks: { lat: number; lon: number; label: string }[];
   theme: Theme;
 };
 
@@ -63,6 +69,9 @@ export function MapCanvas({
   vehicle,
   onPickVehicle,
   focus,
+  picking,
+  onPickPoint,
+  marks,
   theme,
 }: Props) {
   const box = useRef<HTMLDivElement>(null);
@@ -78,6 +87,9 @@ export function MapCanvas({
   const style = useRef(styleUrl(theme));
   const held = useRef<MapLibre | null>(null);
   const here = useRef<Fix | null>(null);
+  const pickPoint = useRef(onPickPoint);
+  const picks = useRef(picking);
+  const pins = useRef(marks);
   const [locating, setLocating] = useState<Locating>("off");
 
   shown.current = stops;
@@ -86,6 +98,9 @@ export function MapCanvas({
   onPickVeh.current = onPickVehicle;
   chosen.current = vehicle;
   paint.current = ink(theme.dark);
+  pickPoint.current = onPickPoint;
+  picks.current = picking;
+  pins.current = marks;
 
   useEffect(() => {
     const el = canvas.current!;
@@ -178,6 +193,23 @@ export function MapCanvas({
         g.stroke();
       }
 
+      for (const mark of pins.current) {
+        const x = p.x(mark.lon);
+        const y = p.y(mark.lat);
+        g.beginPath();
+        g.arc(x, y, 9, 0, TAU);
+        g.fillStyle = c.nub;
+        g.fill();
+        g.lineWidth = 2;
+        g.strokeStyle = c.edge;
+        g.stroke();
+        g.fillStyle = c.edge;
+        g.font = "bold 11px system-ui, sans-serif";
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        g.fillText(mark.label, x, y);
+      }
+
       const badges = sprites.current!.badges;
       for (const [id, veh] of live.vehicles) {
         const [lat, lon, heading] = sample(veh, now);
@@ -266,6 +298,12 @@ export function MapCanvas({
       map.on("error", (e) => console.warn("basemap:", e.error?.message ?? e));
       map.on("moveend", () => saveView(viewOf(map!)));
       map.on("click", (e) => {
+        // While an end of a journey is being set, every click is that point:
+        // the nearest stop is not what was asked for, and a door is rarely one
+        if (picks.current) {
+          pickPoint.current(e.lngLat.lat, e.lngLat.lng);
+          return;
+        }
         const p = screen(viewOf(map!), w, h);
         // Vehicles first: they are drawn over the stops and are the larger
         // target, so a tap that lands on a badge meant the badge
