@@ -1147,6 +1147,35 @@ build are run by hand.
       stops, the badge being the larger target and drawn on top, and the card
       refetches once a minute because that is the epoch.
 
+- [x] **A journey planner**, 2026-09-09. Door to door: `GET
+      /api/plan?from=lat,lon&to=lat,lon` answers with ranked journeys, each a
+      chain of legs - walk to a stop, ride, maybe change, walk to the door.
+      RAPTOR over the timetable in `commuterlviv/plan.py`, three rounds, which
+      is two changes; walking on an OpenStreetMap footpath graph in
+      `commuterlviv/walk.py` (239922 nodes, 269098 edges, 5.5 MB), because
+      straight-line distance calls a stop across a railway line a two-minute
+      walk. Both caches are built by hand - `python -m commuterlviv walk` then
+      `python -m commuterlviv plan --build` - and the service answers 503 on
+      this endpoint alone without them.
+
+      Two decisions the user asked for by name. No radius is hardcoded for
+      "which stops are near enough": the bound is the journey's own
+      alternative, walking the whole way, which is a minute across a square
+      and an hour across the city, and that pure walk is offered as an option
+      so the comparison is visible. And a tracked vehicle is not a correction
+      applied to a scheduled leg afterwards but an extra trip in the
+      timetable, its stop times exactly what the arrivals board shows - so the
+      fallback past the 45-minute horizon needs no rule at all, there simply
+      are no live trips out there, and every leg is labelled with which of the
+      two it came from. Where a route has a live vehicle predicted at a stop,
+      that route's scheduled departures at that stop are suppressed, so the
+      timetable cannot offer an optimistic bus the model knows is late.
+
+      Not yet done: the accuracy of a prediction against how far ahead it was
+      made is still unmeasured, so the horizon is the model's own 45 minutes
+      rather than a number the recording justified. That is Phase 6 and needs
+      the VPS recording.
+
 - [x] **`home.dart` split into the widgets it was hiding**, 2026-09-09. It was
       896 lines and every widget in it took a `_HomeScreenState` back-pointer,
       which works only because Dart privacy is per library. The tabs, the card,
