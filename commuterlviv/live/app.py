@@ -32,7 +32,8 @@ from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
 
 from .. import network
-from . import auth, db, hub, prefs, security, service, settings, state
+from . import (auth, db, hub, journeys, prefs, security, service, settings,
+               state)
 
 SESSION_COOKIE = "lp_sess"
 CSRF_COOKIE = "lp_csrf"
@@ -333,6 +334,39 @@ async def vehicle(request, session):
         for r in rows]})
 
 
+def _point(raw):
+    """A "lat,lon" query parameter, or None if it is not one. Anything outside
+    the city's own box is refused rather than searched for: the footpath graph
+    stops at the city limit, and a point beyond it has no pavement, not a long
+    walk."""
+    parts = (raw or "").split(",")
+    if len(parts) != 2:
+        return None
+    try:
+        lat, lon = float(parts[0]), float(parts[1])
+    except ValueError:
+        return None
+    if not (49.7 <= lat <= 50.05 and 23.8 <= lon <= 24.25):
+        return None
+    return lat, lon
+
+
+async def journey(request, session):
+    """Door to door: walk to a stop, ride, walk to the door, ranked by
+    arrival. Legs say whether they came from a tracked vehicle or from the
+    timetable, because past the model's horizon only the timetable is left."""
+    app = request.app.state
+    if app.planner is None:
+        return error("this service has no journey planner", status=503)
+    origin = _point(request.query_params.get("from"))
+    dest = _point(request.query_params.get("to"))
+    if origin is None or dest is None:
+        return error("from and to must each be lat,lon inside Lviv")
+    found = await asyncio.to_thread(app.planner.search, origin, dest,
+                                    app.svc.live.arrivals)
+    return JSONResponse(found)
+
+
 async def pins(request, session):
     """The stops someone watches, by feed id. The whole list is written on
     every change: it is at most 63 short strings, and a pin that half applied
@@ -478,6 +512,7 @@ def routes():
         Route("/api/catalog", protected(catalog), methods=["GET"]),
         Route("/api/arrivals", protected(arrivals), methods=["GET"]),
         Route("/api/vehicle", protected(vehicle), methods=["GET"]),
+        Route("/api/plan", protected(journey), methods=["GET"]),
         Route("/api/pins", protected(pins), methods=["GET", "POST"]),
         Route("/api/sets", protected(sets), methods=["GET", "POST"]),
         Route("/api/sets/active", protected(active), methods=["POST"]),
@@ -506,6 +541,7 @@ def build(st=None, net=None):
         s.catalog_json = json.dumps(cat.describe()).encode()
         s.catalog_tag = f'W/"{len(s.catalog_json):x}-{len(cat.stops):x}"'
         s.svc = service.Service(st, loaded, cat, log)
+        s.planner = journeys.Planner.maybe(loaded, cat, log)
         s.hub = hub.Hub(s.svc.live)
         s.tasks = [*await s.svc.start(s.hub), asyncio.create_task(sweeper(s.pool))]
         log(f"serving {st.variant} on {len(cat.routes)} routes, "

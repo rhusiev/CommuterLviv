@@ -10,6 +10,7 @@
     check       take the model apart: is it the model, the tracking or the truth
     diag        ask what methodology the official API is actually using
     walk        fetch the city's footpaths once, for the journey planner
+    plan        door to door: walk, ride, walk, ranked by arrival
     serve       run the live service: the model, over HTTP and websockets
     admin       mint invite links, list accounts, disable one
 """
@@ -162,6 +163,11 @@ def _walk(rest):
     walk.main(rest)
 
 
+def _plan(rest):
+    from . import plan
+    plan.main(rest)
+
+
 def _serve(rest):
     import uvicorn
     from .live import app as live_app
@@ -214,7 +220,7 @@ def _no_args(name, rest):
 COMMANDS = {"collect": _collect, "features": _features, "residual": _residual,
             "stack": _stack, "evaluate": _evaluate, "experiment": _experiment,
             "sweep": _sweep, "check": _check, "diag": _diag,
-            "walk": _walk, "serve": _serve, "admin": _admin}
+            "walk": _walk, "plan": _plan, "serve": _serve, "admin": _admin}
 
 
 def main(argv=None):
