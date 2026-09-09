@@ -10,8 +10,8 @@ It does. Deleting the prior costs `full` 2 s of MAE at 0-1 min and 13 s at
 10-20; it costs `tuned` 0 s and 2 s. The two results are one result.
 """
 from dataclasses import replace
-from lvivpred import config, network, replay, score
-from lvivpred.experiments import _end
+from commuterlviv import config, network, replay, score
+from commuterlviv.experiments import _end
 
 net = network.load()
 tuned = next(c for c in config.VARIANTS if c.name == "tuned")

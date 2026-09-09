@@ -7,7 +7,7 @@ other variants differ from it in exactly one place. Four replace the learning
 outright with an estimator from `baselines.py`, and the last replaces the
 prediction step instead.
 
-Run them with `python3 -m lvivpred experiment`.
+Run them with `python3 -m commuterlviv experiment`.
 """
 from dataclasses import dataclass, replace
 
@@ -30,10 +30,13 @@ class Config:
 
     # Shrinkage: observations a layer needs before it outweighs the one it backs
     # off to. Half-lives: how live "now" is, and how long the baseline remembers.
+    # `day_hl` is a third term at day scale, off at 0.0, that carries a cell
+    # across the overnight gap in service.
     k_unit: float = 4.0
     k_corr: float = 4.0
     fast_hl: float = 480.0
     slow_hl: float = 5400.0
+    day_hl: float = 0.0
 
 
 FULL = Config("full", "The model as it ships: everything below turned on.")
@@ -82,6 +85,15 @@ VARIANTS = [
                 "20-45 minute bucket, where trusting live evidence sooner and "
                 "forgetting it later carries the current state of the road much "
                 "further ahead than it holds."),
+    replace(FULL, name="slow-day", day_hl=86400.0,
+            doc="A third half-life of one day beneath the other two, at both "
+                "the cell and the corridor scale. The city runs no service "
+                "between 00:00 and 05:30, so by 06:00 the 5400 s term has "
+                "decayed to 1.2% of the blend and the model opens the morning "
+                "peak back on the timetable - finding 6 measures it believing "
+                "the city 15% slower than it is. This asks whether what a cell "
+                "was doing yesterday is a better opening guess than the "
+                "schedule."),
     replace(FULL, name="sections", unit="section", corridor=False,
             doc="Learn one travel time per stop-to-stop section rather than per "
                 "100 m cell. Corridor pooling is off because a section spans "

@@ -4,3 +4,28 @@ __pycache__/
 # Downloaded feeds, the recorded database and the learned model: all rebuildable
 # or re-collectable, and far too large to version.
 data/
+
+# One feature row per emitted prediction, 93 MB, rebuilt by `commuterlviv features`
+reports/feats.npz
+
+# The web app's installed packages and its build output
+web/node_modules/
+web/dist/
+*.tsbuildinfo
+
+# The phone app's build output and resolved packages. `pubspec.lock` is kept:
+# a reproducible F-Droid build needs the exact versions.
+mobile/build/
+mobile/.dart_tool/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/key.properties
+mobile/ios/Pods/
+mobile/ios/Flutter/Generated.xcconfig
+mobile/ios/Flutter/ephemeral/
+mobile/ios/Flutter/flutter_export_environment.sh
+mobile/**/GeneratedPluginRegistrant.*
+
+# The deployment's passwords
+.env
+deploy/*.env

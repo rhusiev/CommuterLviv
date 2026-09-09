@@ -103,10 +103,14 @@ class Layer:
     A unit is whatever travel time is learned per - a 100 m cell by default.
     Either of the two upper layers can be switched off, in which case the one
     below simply backs off further; there is always the global number.
+
+    A third half-life, `day_hl`, is optional and measured in days. Its term sits
+    beside the other two at both scales, so what a cell learned yesterday still
+    carries weight this morning instead of the model waking onto the prior.
     """
 
     def __init__(self, nunit, ncorr, unit_corr, init, fast_hl, slow_hl,
-                 k_unit=4.0, k_corr=4.0, fast=True, corridor=True):
+                 k_unit=4.0, k_corr=4.0, fast=True, corridor=True, day_hl=0.0):
         self.unit_corr = unit_corr
         self.fast, self.corridor = fast, corridor
         self.k_unit, self.k_corr = k_unit, k_corr
@@ -114,20 +118,28 @@ class Layer:
         self.cs = Ewma(nunit, slow_hl, init)
         self.rf = Ewma(ncorr, fast_hl, init)
         self.rs = Ewma(ncorr, slow_hl, init)
+        self.cd = Ewma(nunit, day_hl, init) if day_hl else None
+        self.rd = Ewma(ncorr, day_hl, init) if day_hl else None
         self.g = Ewma(1, slow_hl, init)
+
+    def _cells(self):
+        return ((self.cf,) if self.fast else ()) + (self.cs,) + \
+            ((self.cd,) if self.cd is not None else ())
+
+    def _corrs(self):
+        return ((self.rf,) if self.fast else ()) + (self.rs,) + \
+            ((self.rd,) if self.rd is not None else ())
 
     def update(self, units, vals, now, weights, corr):
         total = weights.sum()
         if total <= 0.0:
             return
-        self.cs.update(units, vals, now, weights)
-        if self.fast:
-            self.cf.update(units, vals, now, weights)
+        for ewma in self._cells():
+            ewma.update(units, vals, now, weights)
         if self.corridor:
             cu, vu, wu = corr
-            self.rs.update(cu, vu, now, wu)
-            if self.fast:
-                self.rf.update(cu, vu, now, wu)
+            for ewma in self._corrs():
+                ewma.update(cu, vu, now, wu)
         self.g.update(np.zeros(1, dtype=int),
                       np.array([np.average(vals, weights=weights)]),
                       now, np.array([total]))
@@ -142,13 +154,11 @@ class Layer:
     def read(self, now):
         gm, _ = self.g.read(now)
         if self.corridor:
-            corr = self._blend(now, (self.rf, self.rs) if self.fast
-                               else (self.rs,), gm[0], self.k_corr)
+            corr = self._blend(now, self._corrs(), gm[0], self.k_corr)
             base = corr[self.unit_corr]
         else:
             base = gm[0]
-        return self._blend(now, (self.cf, self.cs) if self.fast
-                           else (self.cs,), base, self.k_unit)
+        return self._blend(now, self._cells(), base, self.k_unit)
 
 
 class BaseModel:
@@ -405,7 +415,8 @@ class PaceModel(BaseModel):
         return Layer(self.nunit, self.ncorr, self.unit_corr, init,
                      self.cfg.fast_hl, self.cfg.slow_hl,
                      k_unit=self.cfg.k_unit, k_corr=self.cfg.k_corr,
-                     fast=self.cfg.fast, corridor=self.cfg.corridor)
+                     fast=self.cfg.fast, corridor=self.cfg.corridor,
+                     day_hl=self.cfg.day_hl)
 
     def _absorb(self, units, corr, ratio, held, w_pace, w_hold, now):
         self.pace.update(units, ratio, now, w_pace, group(corr, ratio, w_pace))
