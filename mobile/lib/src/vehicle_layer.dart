@@ -173,6 +173,12 @@ class _Painter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
     final nub = Paint()..color = ink.nub;
+    final standing = Paint()
+      ..color = ink.nub
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..strokeJoin = StrokeJoin.round;
+    final faded = ink.nub.withValues(alpha: 0.55);
     for (final v in live.vehicles.values) {
       final at = sample(v, now);
       final p = camera.latLngToScreenOffset(LatLng(at.lat, at.lon));
@@ -185,35 +191,36 @@ class _Painter extends CustomPainter {
       if (v.stale) {
         fill.color = fill.color.withValues(alpha: 0.55);
       }
+      nub.color = standing.color = v.stale ? faded : ink.nub;
       canvas.drawCircle(p, badgeRadius - 1.5, fill);
       canvas.drawCircle(p, badgeRadius - 1.5, edge);
 
       // The direction wedge sits on the rim rather than inside it, so the
-      // number stays readable at any angle. A vehicle the tracker cannot call
-      // moving gets no wedge: an arrow on a standing bus is a claim about the
-      // next minute, not a report of this one
-      if (v.moving) {
-        final a = (at.heading - 90 + camera.rotation) * math.pi / 180;
-        final cos = math.cos(a);
-        final sin = math.sin(a);
-        canvas.drawPath(
-          ui.Path()
-            ..moveTo(
-              p.dx + cos * (badgeRadius + 5),
-              p.dy + sin * (badgeRadius + 5),
-            )
-            ..lineTo(
-              p.dx + cos * badgeRadius - sin * 5,
-              p.dy + sin * badgeRadius + cos * 5,
-            )
-            ..lineTo(
-              p.dx + cos * badgeRadius + sin * 5,
-              p.dy + sin * badgeRadius - cos * 5,
-            )
-            ..close(),
-          nub,
-        );
-      }
+      // number stays readable at any angle. It is drawn whether or not the
+      // vehicle is moving - which way it faces is known either way, and a
+      // marker with no wedge left no way to tell one end of the route from the
+      // other. Solid means under way; an outline means standing, so the wedge
+      // says where it will go without claiming it is going there now
+      final a = (at.heading - 90 + camera.rotation) * math.pi / 180;
+      final cos = math.cos(a);
+      final sin = math.sin(a);
+      canvas.drawPath(
+        ui.Path()
+          ..moveTo(
+            p.dx + cos * (badgeRadius + 5),
+            p.dy + sin * (badgeRadius + 5),
+          )
+          ..lineTo(
+            p.dx + cos * badgeRadius - sin * 5,
+            p.dy + sin * badgeRadius + cos * 5,
+          )
+          ..lineTo(
+            p.dx + cos * badgeRadius + sin * 5,
+            p.dy + sin * badgeRadius - cos * 5,
+          )
+          ..close(),
+        v.moving ? nub : standing,
+      );
 
       final text = badge(v.route);
       canvas.drawParagraph(text, p - Offset(badgeRadius, text.height / 2));
