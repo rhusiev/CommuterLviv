@@ -364,6 +364,15 @@ Deviations from the plan's Phase 4 and 5 specs, all recorded in `PLAN.md`:
 
 ## Things that will cost you an hour if nobody tells you
 
+- **An unsigned release APK says "App not installed" and nothing else.** The
+  release is signed only if `mobile/android/key.properties` exists, so a fresh
+  checkout builds an APK that installs nowhere; debug builds carry the debug
+  key and install fine, which hides it. This machine's key is
+  `mobile/android/commuterlviv-release.jks`, gitignored and not recoverable -
+  lose it and every phone has to uninstall before it can update.
+  `deploy/release-apk.sh` verifies the signature before publishing. Signing is
+  v2-only past `minSdk` 24, so there is no `META-INF/*.RSA` to look for;
+  `apksigner verify` is the only honest check.
 - **Overpass answers 406 to a request with no `User-Agent`.** It is the Apache
   in front of it, not the API, and the body is an HTML error page that mentions
   nothing about the header - so it reads like a broken query. `walk.py` sends
