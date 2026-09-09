@@ -1135,6 +1135,18 @@ build are run by hand.
 - [x] **Stops near me**, 2026-09-09. `metres()` in `web/src/lib/geo.ts` and a ◎
       button in the search box: `navigator.geolocation`, the stops within 2 km,
       nearest first, with the distance where the route list goes.
+- [x] **A vehicle's road ahead**, 2026-09-09. Tapping a vehicle in either
+      client lists the stops it is predicted to reach and when.
+      `Arrivals.of()` in `live/state.py` is the complement of `at()`: `eta`
+      already carries `veh`, so this is a filter over the same rows the stop
+      cards read and not a second computation - the two answers cannot
+      disagree, which `check_live.py` now asserts against a live vehicle.
+      `GET /api/vehicle?veh=<wire id>`; an untracked id is an empty list and
+      not a 404, because a vehicle that finished its run between the tap and
+      the request is the ordinary case. Both clients hit-test vehicles before
+      stops, the badge being the larger target and drawn on top, and the card
+      refetches once a minute because that is the epoch.
+
 - [x] **`home.dart` split into the widgets it was hiding**, 2026-09-09. It was
       896 lines and every widget in it took a `_HomeScreenState` back-pointer,
       which works only because Dart privacy is per library. The tabs, the card,

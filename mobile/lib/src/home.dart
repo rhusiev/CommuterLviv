@@ -27,7 +27,8 @@ import 'sheets.dart';
 import 'stop_card.dart';
 import 'stop_search.dart';
 import 'times_tab.dart';
-import 'vehicle_layer.dart' show stopsZoom;
+import 'vehicle_card.dart';
+import 'vehicle_layer.dart' show badgeRadius, stopsZoom;
 import 'strings.dart';
 
 /// How far a tap may land from a stop and still count. A finger is wider than
@@ -259,8 +260,33 @@ class _HomeScreenState extends State<HomeScreen> {
     final catalog = _catalog;
     if (catalog == null) return;
     final camera = _map.camera;
-    if (camera.zoom < stopsZoom) return;
     final at = camera.latLngToScreenOffset(point);
+
+    // Vehicles first: they are drawn over the stops and are the larger target,
+    // so a tap that lands on a badge meant the badge. They are also worth
+    // tapping at any zoom, which is why this is above the stops' cutoff
+    final live = _live;
+    if (live != null) {
+      var veh = -1;
+      var near = badgeRadius * badgeRadius;
+      final now = live.nowMs;
+      for (final entry in live.vehicles.entries) {
+        final p = sample(entry.value, now);
+        final d = (camera.latLngToScreenOffset(LatLng(p.lat, p.lon)) - at)
+            .distanceSquared;
+        if (d < near) {
+          near = d;
+          veh = entry.key;
+        }
+      }
+      if (veh >= 0) {
+        tick();
+        _openVehicle(veh);
+        return;
+      }
+    }
+
+    if (camera.zoom < stopsZoom) return;
     var best = -1;
     var closest = _hitRadius * _hitRadius;
     for (final i in _drawn) {
@@ -275,6 +301,22 @@ class _HomeScreenState extends State<HomeScreen> {
     if (best < 0) return;
     tick();
     _openStop(best);
+  }
+
+  void _openVehicle(int veh) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => VehicleCard(
+        api: widget.api,
+        catalog: _catalog!,
+        veh: veh,
+        onStop: (stop) {
+          Navigator.pop(context);
+          _openStop(stop, fly: true);
+        },
+      ),
+    );
   }
 
   Future<void> _search() async {

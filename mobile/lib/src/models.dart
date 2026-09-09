@@ -143,6 +143,20 @@ class Me {
   final Sets sets;
 }
 
+/// The reverse of an [Arrival]: one vehicle, and a stop ahead of it
+class Call {
+  const Call({required this.stop, required this.route, required this.t});
+
+  factory Call.fromJson(Map<String, dynamic> j) =>
+      Call(stop: j['stop'] as int, route: j['route'] as int, t: j['t'] as int);
+
+  final int stop;
+  final int route;
+
+  /// Unix seconds at which it gets there
+  final int t;
+}
+
 class Arrival {
   const Arrival({required this.route, required this.veh, required this.t});
 

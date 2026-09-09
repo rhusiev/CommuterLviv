@@ -40,6 +40,9 @@ type Props = {
   stops: number[];
   selected: number | null;
   onPickStop: (i: number | null) => void;
+  /** The wire id of the vehicle whose stops ahead are being shown, if any */
+  vehicle: number | null;
+  onPickVehicle: (id: number | null) => void;
   /** Where the search wants the camera. A new object flies, so asking twice for
    * the same stop flies twice */
   focus: { lat: number; lon: number } | null;
@@ -51,7 +54,17 @@ const viewOf = (m: MapLibre): View => {
   return { lat: c.lat, lon: c.lng, zoom: m.getZoom() };
 };
 
-export function MapCanvas({ catalog, live, stops, selected, onPickStop, focus, theme }: Props) {
+export function MapCanvas({
+  catalog,
+  live,
+  stops,
+  selected,
+  onPickStop,
+  vehicle,
+  onPickVehicle,
+  focus,
+  theme,
+}: Props) {
   const box = useRef<HTMLDivElement>(null);
   const under = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -59,6 +72,8 @@ export function MapCanvas({ catalog, live, stops, selected, onPickStop, focus, t
   const shown = useRef(stops);
   const pick = useRef(selected);
   const onPick = useRef(onPickStop);
+  const onPickVeh = useRef(onPickVehicle);
+  const chosen = useRef(vehicle);
   const paint = useRef(ink(theme.dark));
   const style = useRef(styleUrl(theme));
   const held = useRef<MapLibre | null>(null);
@@ -68,6 +83,8 @@ export function MapCanvas({ catalog, live, stops, selected, onPickStop, focus, t
   shown.current = stops;
   pick.current = selected;
   onPick.current = onPickStop;
+  onPickVeh.current = onPickVehicle;
+  chosen.current = vehicle;
   paint.current = ink(theme.dark);
 
   useEffect(() => {
@@ -162,7 +179,7 @@ export function MapCanvas({ catalog, live, stops, selected, onPickStop, focus, t
       }
 
       const badges = sprites.current!.badges;
-      for (const veh of live.vehicles.values()) {
+      for (const [id, veh] of live.vehicles) {
         const [lat, lon, heading] = sample(veh, now);
         const x = p.x(lon);
         const y = p.y(lat);
@@ -199,6 +216,13 @@ export function MapCanvas({ catalog, live, stops, selected, onPickStop, focus, t
           continue;
         }
         g.drawImage(badge, x - R, y - R, R * 2, R * 2);
+        if (id === chosen.current) {
+          g.beginPath();
+          g.arc(x, y, R + 3, 0, TAU);
+          g.lineWidth = 2;
+          g.strokeStyle = c.nub;
+          g.stroke();
+        }
         g.globalAlpha = 1;
       }
 
@@ -243,6 +267,27 @@ export function MapCanvas({ catalog, live, stops, selected, onPickStop, focus, t
       map.on("moveend", () => saveView(viewOf(map!)));
       map.on("click", (e) => {
         const p = screen(viewOf(map!), w, h);
+        // Vehicles first: they are drawn over the stops and are the larger
+        // target, so a tap that lands on a badge meant the badge
+        let veh: number | null = null;
+        let vehD = R * R;
+        const now = Date.now() / 1000;
+        for (const [id, v] of live.vehicles) {
+          const [lat, lon] = sample(v, now);
+          const dx = p.x(lon) - e.point.x;
+          const dy = p.y(lat) - e.point.y;
+          const d = dx * dx + dy * dy;
+          if (d < vehD) {
+            vehD = d;
+            veh = id;
+          }
+        }
+        if (veh !== null) {
+          onPickVeh.current(veh);
+          onPick.current(null);
+          return;
+        }
+
         let best: number | null = null;
         let bestD = HIT * HIT;
         for (const i of shown.current) {
@@ -255,6 +300,7 @@ export function MapCanvas({ catalog, live, stops, selected, onPickStop, focus, t
             best = i;
           }
         }
+        onPickVeh.current(null);
         onPick.current(best);
       });
       map.on("render", draw);

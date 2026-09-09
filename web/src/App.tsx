@@ -4,6 +4,7 @@ import { RoutePanel } from "./components/RoutePanel";
 import { SignIn } from "./components/SignIn";
 import { StopCard } from "./components/StopCard";
 import { StopSearch } from "./components/StopSearch";
+import { VehicleCard } from "./components/VehicleCard";
 import { Timetable } from "./components/Timetable";
 import { api, ApiError, catalog as fetchCatalog } from "./lib/api";
 import { loadTheme, saveTheme, type Theme } from "./lib/theme";
@@ -31,6 +32,7 @@ export function App() {
   const [active, setActive] = useState<string | null>(null);
   const [pinIds, setPinIds] = useState<string[]>([]);
   const [stop, setStop] = useState<number | null>(null);
+  const [veh, setVeh] = useState<number | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lon: number } | null>(null);
   const [tab, setTab] = useState<"map" | "times">(opened.tab);
   const [panel, setPanel] = useState(false);
@@ -285,10 +287,29 @@ export function App() {
             live={live}
             stops={stops}
             selected={stop}
-            onPickStop={setStop}
+            onPickStop={(i) => {
+              setStop(i);
+              if (i !== null) setVeh(null);
+            }}
+            vehicle={veh}
+            onPickVehicle={setVeh}
             focus={focus}
             theme={theme}
           />
+          {veh !== null && stop === null && (
+            <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 mx-auto max-w-md">
+              <VehicleCard
+                catalog={cat}
+                veh={veh}
+                onStop={(i) => {
+                  setStop(i);
+                  setVeh(null);
+                }}
+                onClose={() => setVeh(null)}
+              />
+            </div>
+          )}
+
           {stop !== null && (
             <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 mx-auto max-w-md">
               <StopCard
