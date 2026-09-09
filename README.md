@@ -433,6 +433,35 @@ python3 -m commuterlviv admin invite                 # a registration link, prin
 python3 -m commuterlviv serve
 ```
 
+`GET /api/plan?from=lat,lon&to=lat,lon` answers the door-to-door question:
+walk, ride, maybe change, walk, ranked by arrival, with the whole walk offered
+as one of the options. It is RAPTOR (Delling, Pajor, Werneck 2012) over the
+GTFS timetable, three rounds so at most two changes, with footpaths from an
+OpenStreetMap walking graph rather than straight lines. There is no hardcoded
+radius for which stops count as nearby: the bound is the time to walk the whole
+way, because a walk longer than that can never be part of a better journey.
+
+A tracked vehicle enters the search as an ordinary one-trip pattern built from
+its own predictions, so where the model has something to say it outranks the
+schedule automatically, and past the model's 45-minute horizon there simply are
+no live trips left and the timetable takes over with no rule needed. Every ride
+leg carries `live: true` or `false`, and both clients label it, because
+somebody deciding whether to run for a bus deserves to know which of the two
+they are reading. How much accuracy is lost at the far end of that horizon is
+still unmeasured - it needs the VPS recording.
+
+The planner needs two caches that are built once and are not in the image:
+
+```sh
+python3 -m commuterlviv walk         # data/walk.npz, the OSM footpath graph
+python3 -m commuterlviv plan --build # data/transfers.npz, stop-to-stop on foot
+```
+
+`walk.npz` is pure OpenStreetMap and can be copied between hosts; `transfers.npz`
+indexes stops by the catalog it was built against and must be rebuilt wherever
+`network.pkl` differs. Without them the service still starts, logs why, and
+`/api/plan` answers 503 - the map and the arrivals do not depend on it.
+
 Accounts are required for everything except `/api/health`, for two reasons,
 neither of them capacity. They carry a person's named route sets and pinned
 stops between their devices, both stored as feed ids so that a rebuilt catalog
@@ -501,6 +530,11 @@ Worth knowing:
 - **First boot takes a couple of minutes.** The static GTFS feed has to be
   fetched and the city's geometry built from it. Both are cached in the same
   volume, so every boot after that is seconds.
+- **The journey planner is off until its caches exist.** Run
+  `docker compose exec service python -m commuterlviv walk` once, then
+  `... plan --build`; both land in the service volume. Until then `/api/plan`
+  is a 503 and the plan tab says so. The Overpass fetch is a few minutes and
+  sometimes times out under load - it is safe to retry.
 - **`COMMUTERLVIV_SECURE_COOKIES` defaults to true** and browsers only accept
   `__Host-` cookies over HTTPS. Serving over plain HTTP with it left on gives a
   login that silently never sticks.
@@ -559,7 +593,9 @@ arrival for each, and pinning it puts it in the Times tab. Clicking a vehicle
 asks the opposite question: `GET /api/vehicle?veh=<id>` answers with every stop
 that vehicle is predicted to reach and when, out to the model's 45-minute
 horizon, read off the same predictions the stop card shows - so the two cannot
-disagree. Named sets of routes -
+disagree. A third tab plans a journey: tap where you are and where you are
+going, and it answers with ways to get there, ranked by arrival - walk to a
+stop, ride, maybe change, walk to the door. Named sets of routes -
 one for work, one for home - live on the server, so they follow the account
 rather than the browser. Serve `dist/` with a history fallback: every path has to
 return `index.html`, or `/join/<code>` is a 404 and the invite link is dead.
@@ -591,7 +627,8 @@ uses, so panning moves the city and the vehicles in the same frame.
 
 `mobile/` is the same client again, in Flutter, for Android and iOS. It adds no
 endpoint and no model - the browser and the phone see the same city, the same
-route sets and the same predictions.
+route sets and the same predictions, and the same journey planner behind the
+directions button in the app bar.
 
 ```sh
 cd mobile && flutter pub get

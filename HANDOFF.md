@@ -298,6 +298,21 @@ with 1008 after 500 refusals, and a frame over 16 KB is refused by uvicorn
 before it is read. And the phone keeps its basemap: `mobile/lib/src/map_tiles.dart`
 puts the tile cache under application support, 200 MB for 90 days.
 
+**And a journey planner, 2026-09-09.** `GET /api/plan?from=lat,lon&to=lat,lon`
+answers door to door - walk, ride, maybe change, walk - ranked by arrival, in
+both clients (a third tab in the browser, the directions button on the phone).
+It is a hand-rolled RAPTOR in `commuterlviv/plan.py` over an OpenStreetMap
+walking graph in `commuterlviv/walk.py`, deliberately not OpenTripPlanner: one
+process, no JVM, and the live model drops straight into it. There is no
+hardcoded radius for nearby stops - the bound is the time to walk the whole way.
+A tracked vehicle is fed in as a one-trip pattern of its own predictions, so
+beyond the model's 45-minute horizon there are simply no live trips left and the
+timetable takes over; every ride leg is labelled `live` or not, in both clients.
+It needs two caches built once, `python -m commuterlviv walk` then `plan
+--build`; without them the service still runs and `/api/plan` is a 503. How much
+accuracy the far end of that horizon costs is unmeasured and waits on the VPS
+recording.
+
 ## Do this next
 
 1. **Phase 6's first question, asked of Phase 5's answer.** Pull the VPS
@@ -337,6 +352,14 @@ Deviations from the plan's Phase 4 and 5 specs, all recorded in `PLAN.md`:
 
 ## Things that will cost you an hour if nobody tells you
 
+- **Overpass answers 406 to a request with no `User-Agent`.** It is the Apache
+  in front of it, not the API, and the body is an HTML error page that mentions
+  nothing about the header - so it reads like a broken query. `walk.py` sends
+  one. A 504 from the same endpoint is load; retry it.
+- **`transfers.npz` is indexed against one catalog.** It numbers stops by
+  `sorted(net.stops)`, so a copy taken from a host whose `network.pkl` differs
+  is silently wrong. `walk.npz` is pure OSM and copies freely; that is why the
+  container got the graph by `docker compose cp` and built the transfers itself.
 - **MAE numbers are only comparable within one run.** Each run scores on the
   crossings every variant answered, and that support changes with the window and
   with the variant list. Seven different supports exist in the reports already,
@@ -545,6 +568,8 @@ commuterlviv/
   features.py   one feature row per emitted prediction
   residual.py   offline models of the model's own error, and their ablation
   stack.py      per-horizon blends of the predictors that fail differently
+  walk.py       the city on foot: an OSM footpath graph, Dijkstra in seconds
+  plan.py       RAPTOR over the timetable and the live vehicles, door to door
   truth.py      when each vehicle actually passed each stop
   predictors.py the four predictors reduced to one common form
   score.py      paired scoring on common support, with bootstrap intervals
@@ -558,7 +583,8 @@ commuterlviv/
     db.py / migrations/   the pool and forward-only numbered SQL
     security.py   tokens, argon2, usernames, token buckets
     auth.py       sessions and remember-me, in Postgres
-    prefs.py      named route sets, per account
+    prefs.py      named route sets and pinned stops, per account
+    journeys.py   plan.py behind /api/plan, optional and 503 without its caches
     app.py        the HTTP and websocket surface
     admin.py      invite links, accounts, disabling one
 web/            the UI: Vite, React 19, MapLibre with a canvas over it
@@ -566,13 +592,14 @@ web/            the UI: Vite, React 19, MapLibre with a canvas over it
                 vehicles), api.ts, geo.ts (Web Mercator, the same one
                 MapLibre uses), sprites.ts (pre-rendered badges), eta.ts
   src/components/  MapCanvas (the basemap and the overlay), RoutePanel,
-                StopCard, Timetable, SignIn
+                StopCard, Timetable, JourneyPanel, SignIn
   src/App.tsx   the screen, the /join/<code> match, the pins
 mobile/         the phone app: Flutter, Android and iOS, F-Droid-shaped
   lib/src/      wire.dart (mirrors wire.py), live.dart, api.dart,
                 vehicle_layer.dart (one CustomPaint for the city),
                 home.dart (the state both tabs share) and the widgets it
-                hands to: map_tab, times_tab, stop_card, sheets, stop_search,
+                hands to: map_tab, times_tab, stop_card, journey_panel,
+                sheets, stop_search,
                 map_theme.dart, strings.dart (uk and en)
   test/         wire_test.dart, against bytes Python encoded
   fdroid/       the fdroiddata build recipe, two fields still TODO

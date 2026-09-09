@@ -92,6 +92,7 @@ refused and the map stays empty while everything else works.
 | `lib/src/map_theme.dart` | the five basemap styles and the colours drawn over them |
 | `lib/src/map_controls.dart` | zoom, and the compass that shows up off north |
 | `lib/src/eta.dart` | an arrival's absolute time, said as a countdown |
+| `lib/src/journey_panel.dart` | two points, and the ways between them |
 | `lib/src/map_tiles.dart` | where the basemap is kept between runs |
 
 Seven things are worth knowing before changing any of it.
@@ -149,6 +150,17 @@ and 50 parsed tiles in memory. `flutter analyze` calls that assignment an error
 and is wrong: it resolves the package's conditional export to the web stub,
 where `Directory` is a `String`, while the compiler picks the `dart:io` one.
 Hence the `ignore` comment at the call in `home.dart`.
+
+## Planning a journey
+
+The directions button in the app bar opens `journey_panel.dart` over the map.
+Both ends are set by tapping the map, or by the locate button beside either
+field; while an end is being picked, a tap is that point and not the nearest
+stop, because a door rarely is one. `GET /api/plan` answers with options ranked
+by arrival, and each ride leg says whether it came from a tracked vehicle or
+from the timetable - past the model's 45-minute horizon it is the schedule's
+guess, and it says so rather than looking equally certain. A server without the
+planner caches answers 503; the panel shows the message.
 
 ## Where the phone is
 
