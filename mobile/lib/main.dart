@@ -17,10 +17,15 @@ import 'package:flutter/services.dart';
 import 'src/api.dart';
 import 'src/home.dart';
 import 'src/sign_in.dart';
+import 'src/strings.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(CommuterLvivApp(api: await Api.open()));
+  final api = await Api.open();
+  useLang(
+    Lang.values.firstWhere((l) => l.name == api.language, orElse: phoneLang),
+  );
+  runApp(CommuterLvivApp(api: api));
 }
 
 /// iOS users expect a back swipe and a sliding page; Android users expect

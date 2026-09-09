@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "../lib/api";
+import { t } from "../lib/i18n";
 
 /** Sign in, register, or take up an invite. Which of the three the server
  * allows is its `COMMUTERLVIV_REGISTRATION`, read from `/api/health`; an invite
@@ -31,7 +32,7 @@ export function SignIn({ code, onIn }: { code: string | null; onIn: () => void }
       history.replaceState(null, "", "/");
       onIn();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "something went wrong");
+      setError(err instanceof ApiError ? err.message : t.wrong);
       setBusy(false);
     }
   };
@@ -40,18 +41,14 @@ export function SignIn({ code, onIn }: { code: string | null; onIn: () => void }
     <div className="flex min-h-dvh items-center justify-center bg-slate-950 p-6">
       <form onSubmit={submit} className="w-full max-w-sm space-y-4">
         <div>
-          <h1 className="text-xl font-semibold text-slate-100">CommuterLviv</h1>
+          <h1 className="text-xl font-semibold text-slate-100">{t.appName}</h1>
           <p className="mt-1 text-sm text-slate-400">
-            {!joining
-              ? "Sign in to see the map"
-              : code !== null
-                ? "Pick a name and a password to take up this invite"
-                : "Pick a name and a password"}
+            {!joining ? t.signInHint : code !== null ? t.inviteHint : t.registerHint}
           </p>
         </div>
 
         <label className="block">
-          <span className="text-xs uppercase tracking-wide text-slate-500">Username</span>
+          <span className="text-xs uppercase tracking-wide text-slate-500">{t.username}</span>
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -66,7 +63,7 @@ export function SignIn({ code, onIn }: { code: string | null; onIn: () => void }
         </label>
 
         <label className="block">
-          <span className="text-xs uppercase tracking-wide text-slate-500">Password</span>
+          <span className="text-xs uppercase tracking-wide text-slate-500">{t.password}</span>
           <input
             type="password"
             value={password}
@@ -76,9 +73,7 @@ export function SignIn({ code, onIn }: { code: string | null; onIn: () => void }
             required
             className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-sky-600"
           />
-          {joining && (
-            <span className="mt-1 block text-xs text-slate-500">At least 10 characters</span>
-          )}
+          {joining && <span className="mt-1 block text-xs text-slate-500">{t.passwordHint}</span>}
         </label>
 
         <label className="flex items-center gap-2 text-sm text-slate-300">
@@ -88,7 +83,7 @@ export function SignIn({ code, onIn }: { code: string | null; onIn: () => void }
             onChange={(e) => setRemember(e.target.checked)}
             className="size-4 accent-sky-600"
           />
-          Stay signed in on this device
+          {t.stayIn}
         </label>
 
         {error && <p className="text-sm text-rose-400">{error}</p>}
@@ -98,7 +93,7 @@ export function SignIn({ code, onIn }: { code: string | null; onIn: () => void }
           disabled={busy}
           className="w-full rounded-lg bg-sky-600 py-2 font-medium text-white hover:bg-sky-500 disabled:opacity-50"
         >
-          {joining ? "Create the account" : "Sign in"}
+          {joining ? t.createAccount : t.signIn}
         </button>
 
         {(joining || mode === "open") && (
@@ -118,7 +113,7 @@ export function SignIn({ code, onIn }: { code: string | null; onIn: () => void }
             }}
             className="w-full text-sm text-slate-500 hover:text-slate-300"
           >
-            {joining ? "I already have an account" : "Create an account"}
+            {joining ? t.haveAccount : t.wantAccount}
           </button>
         )}
       </form>

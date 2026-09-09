@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'due.dart';
 import 'live.dart';
 import 'models.dart';
+import 'strings.dart';
 
 class TimesTab extends StatelessWidget {
   const TimesTab({
@@ -28,7 +29,7 @@ class TimesTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (pins.isEmpty) {
-      return const Center(child: Text('Pin a stop and its times show up here'));
+      return Center(child: Text(txt.pinAStop));
     }
     return AnimatedBuilder(
       animation: live,
@@ -67,7 +68,7 @@ class _StopTile extends StatelessWidget {
   Widget build(BuildContext context) => ListTile(
     title: Text(catalog.stops[stop].name),
     subtitle: arrivals.isEmpty
-        ? const Text('nothing due')
+        ? Text(txt.nothingDue)
         : Wrap(
             spacing: 6,
             runSpacing: 4,
@@ -79,7 +80,7 @@ class _StopTile extends StatelessWidget {
     trailing: IconButton(
       onPressed: onUnpin,
       icon: const Icon(Icons.push_pin),
-      tooltip: 'Unpin',
+      tooltip: txt.unpin,
     ),
     onTap: onOpen,
   );

@@ -10,6 +10,7 @@ import { loadTheme, saveTheme, type Theme } from "./lib/theme";
 import { readUrl, writeUrl } from "./lib/url";
 import { useLive } from "./lib/useLive";
 import type { Catalog, Me, RouteSet } from "./lib/types";
+import { t } from "./lib/i18n";
 
 const JOIN = /^\/join\/([\w-]+)\/?$/;
 
@@ -50,7 +51,7 @@ export function App() {
       setMe(null);
       return;
     }
-    setNotice(err instanceof Error ? err.message : "the service is not answering");
+    setNotice(err instanceof Error ? err.message : t.noService);
   }, []);
 
   const load = useCallback(async () => {
@@ -202,14 +203,14 @@ export function App() {
   if (code !== null && !me) return <SignIn code={code} onIn={() => void load()} />;
   if (me === undefined)
     return notice === null ? (
-      <Splash text="…" />
+      <Splash text={t.waiting} />
     ) : (
       <Splash text={notice} onRetry={() => void load()} />
     );
   if (me === null) return <SignIn code={null} onIn={() => void load()} />;
   if (!cat)
     return notice === null ? (
-      <Splash text="loading the city" />
+      <Splash text={t.loading} />
     ) : (
       <Splash text={notice} onRetry={loadCatalog} />
     );
@@ -221,16 +222,16 @@ export function App() {
           onClick={() => setPanel((v) => !v)}
           className="rounded-md bg-slate-800 px-3 py-1.5 text-sm hover:bg-slate-700"
         >
-          Routes
+          {t.routes}
         </button>
         <nav className="flex rounded-md bg-slate-900 p-0.5 text-sm">
-          {(["map", "times"] as const).map((t) => (
+          {(["map", "times"] as const).map((v) => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`rounded px-3 py-1 ${tab === t ? "bg-slate-700" : "text-slate-400"}`}
+              key={v}
+              onClick={() => setTab(v)}
+              className={`rounded px-3 py-1 ${tab === v ? "bg-slate-700" : "text-slate-400"}`}
             >
-              {t === "map" ? "Map" : "Times"}
+              {v === "map" ? t.map : t.times}
             </button>
           ))}
         </nav>
@@ -250,7 +251,7 @@ export function App() {
             }`}
             title={connection}
           />
-          {count} vehicles
+          {t.vehicles(count)}
           <button
             onClick={async () => {
               // Signed out here whether or not the request landed: the session
@@ -260,7 +261,7 @@ export function App() {
             }}
             className="text-slate-500 hover:text-slate-200"
           >
-            {me.username} · out
+            {me.username} · {t.out}
           </button>
         </span>
       </header>
@@ -318,9 +319,9 @@ export function App() {
             <RoutePanel
               catalog={cat}
               theme={theme}
-              onTheme={(t) => {
-                setTheme(t);
-                saveTheme(t);
+              onTheme={(next) => {
+                setTheme(next);
+                saveTheme(next);
               }}
               picked={picked}
               onToggle={(id) =>
@@ -367,7 +368,7 @@ function Splash({ text, onRetry }: { text: string; onRetry?: () => void }) {
           onClick={onRetry}
           className="rounded-md bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
         >
-          try again
+          {t.tryAgain}
         </button>
       )}
     </div>

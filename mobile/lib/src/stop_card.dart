@@ -7,6 +7,7 @@ import 'package:flutter/material.dart' as material show Theme;
 import 'due.dart';
 import 'live.dart';
 import 'models.dart';
+import 'strings.dart';
 
 class StopCard extends StatefulWidget {
   const StopCard({
@@ -69,7 +70,7 @@ class _StopCardState extends State<StopCard> {
                   icon: Icon(
                     _pinned ? Icons.push_pin : Icons.push_pin_outlined,
                   ),
-                  tooltip: _pinned ? 'Unpin' : 'Pin',
+                  tooltip: _pinned ? txt.unpin : txt.pin,
                 ),
               ],
             ),
@@ -80,9 +81,7 @@ class _StopCardState extends State<StopCard> {
               builder: (context, _) {
                 final due = widget.live.arrivals[stop] ?? const <Arrival>[];
                 if (due.isEmpty) {
-                  return const Text(
-                    'nothing due on the routes you are watching',
-                  );
+                  return Text(txt.nothingDueWatched);
                 }
                 return Wrap(
                   spacing: 6,
@@ -96,7 +95,7 @@ class _StopCardState extends State<StopCard> {
             ),
             const Divider(height: 24),
             Text(
-              'Calls here',
+              txt.callsHere,
               style: material.Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: 6),

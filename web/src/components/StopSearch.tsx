@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { metres } from "../lib/geo";
 import type { Catalog } from "../lib/types";
+import { t } from "../lib/i18n";
 
 /** Find a stop by name, or by standing next to it. The catalog is a thousand
  * stops with repeated names - every direction of a street is its own stop - so
@@ -55,7 +56,7 @@ export function StopSearch({ catalog, onGo }: Props) {
     setQuery("");
     setWhy("");
     if (!navigator.geolocation) {
-      setWhy("this browser will not say where it is");
+      setWhy(t.noGeolocation);
       return;
     }
     setLocating(true);
@@ -69,7 +70,7 @@ export function StopSearch({ catalog, onGo }: Props) {
           .sort((a, b) => a.away - b.away)
           .slice(0, LIMIT);
         setNear(found);
-        if (found.length === 0) setWhy("no stop within 2 km of where you are");
+        if (found.length === 0) setWhy(t.nothingNear);
       },
       (err) => {
         setLocating(false);
@@ -119,13 +120,13 @@ export function StopSearch({ catalog, onGo }: Props) {
           } else return;
           e.preventDefault();
         }}
-        placeholder="Find a stop"
+        placeholder={t.findStop}
         className="w-32 rounded-md border border-slate-800 bg-slate-900 px-2 py-1 pr-7 text-sm text-slate-100 outline-none focus:w-56 focus:border-sky-600"
       />
       <button
         onClick={locate}
         disabled={locating}
-        title="Stops near me"
+        title={t.nearMe}
         className="absolute right-1 top-1/2 -translate-y-1/2 rounded px-1 text-sm text-slate-500 hover:text-sky-300 disabled:text-slate-700"
       >
         ◎
@@ -157,7 +158,7 @@ export function StopSearch({ catalog, onGo }: Props) {
                           .filter(Boolean)
                           .slice(0, 6)
                           .join(" ")
-                      : `${Math.round(near[n]!.away)} m`}
+                      : t.away(Math.round(near[n]!.away))}
                   </span>
                 </button>
               </li>

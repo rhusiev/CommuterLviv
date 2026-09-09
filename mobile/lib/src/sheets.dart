@@ -1,5 +1,5 @@
-/// The two things the app bar opens: which routes are on the map, and which
-/// basemap they are drawn on.
+/// What the app bar opens: which routes are on the map, which basemap they are
+/// drawn on, and which language everything is said in.
 library;
 
 import 'package:flutter/material.dart' hide Theme;
@@ -8,6 +8,7 @@ import 'package:flutter/material.dart' as material show Theme;
 import 'api.dart';
 import 'map_theme.dart';
 import 'models.dart';
+import 'strings.dart';
 
 class ThemeSheet extends StatelessWidget {
   const ThemeSheet({super.key, required this.current, required this.onPick});
@@ -27,8 +28,36 @@ class ThemeSheet extends StatelessWidget {
               onPick(t);
             },
             title: Text(t.name),
-            subtitle: Text(t.dark ? 'dark' : 'light'),
+            subtitle: Text(t.dark ? txt.dark : txt.light),
             trailing: t.id == current.id ? const Icon(Icons.check) : null,
+          ),
+      ],
+    ),
+  );
+}
+
+/// Ukrainian or English. The strings are read once at launch, so this only
+/// records the choice - the sheet says as much rather than pretending the
+/// screen behind it changed.
+class LanguageSheet extends StatelessWidget {
+  const LanguageSheet({super.key, required this.api});
+
+  final Api api;
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final l in Lang.values)
+          ListTile(
+            onTap: () async {
+              await api.setLanguage(l.name);
+              if (context.mounted) Navigator.pop(context);
+            },
+            title: Text(l == Lang.uk ? 'Українська' : 'English'),
+            subtitle: l == lang ? null : Text(txt.restartToApply),
+            trailing: l == lang ? const Icon(Icons.check) : null,
           ),
       ],
     ),
@@ -83,16 +112,16 @@ class _RouteSheetState extends State<RouteSheet> {
       builder: (context) {
         final field = TextEditingController();
         return AlertDialog.adaptive(
-          title: const Text('Name this set'),
+          title: Text(txt.nameSet),
           content: TextField(controller: field, autofocus: true),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: Text(txt.cancel),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, field.text.trim()),
-              child: const Text('Save'),
+              child: Text(txt.save),
             ),
           ],
         );
@@ -136,7 +165,7 @@ class _RouteSheetState extends State<RouteSheet> {
         children: [
           if (sets.isNotEmpty) ...[
             Text(
-              'Sets',
+              txt.sets,
               style: material.Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: 6),
@@ -155,9 +184,9 @@ class _RouteSheetState extends State<RouteSheet> {
           ],
           TextField(
             onChanged: (v) => setState(() => _filter = v),
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search),
-              hintText: 'Filter routes',
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search),
+              hintText: txt.filterRoutes,
             ),
           ),
           const SizedBox(height: 12),
@@ -187,12 +216,12 @@ class _RouteSheetState extends State<RouteSheet> {
                         widget.onClear();
                         setState(() {});
                       },
-                child: const Text('Clear'),
+                child: Text(txt.clear),
               ),
               const Spacer(),
               FilledButton.tonal(
                 onPressed: widget.picked.isEmpty ? null : _save,
-                child: const Text('Save as a set'),
+                child: Text(txt.saveAsSet),
               ),
             ],
           ),

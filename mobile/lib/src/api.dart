@@ -249,6 +249,13 @@ class Api {
   Future<void> setMapTheme(String id) =>
       _prefs.setString('commuterlviv.theme', id);
 
+  /// The language, if one was ever chosen here. Null means the phone's own,
+  /// which is what `main` falls back to
+  String? get language => _prefs.getString('commuterlviv.lang');
+
+  Future<void> setLanguage(String code) =>
+      _prefs.setString('commuterlviv.lang', code);
+
   /// Pinned stops, kept by the server so the phone and the browser agree, and
   /// held by feed id for the same reason route sets are.
   Future<List<String>> pins() async {

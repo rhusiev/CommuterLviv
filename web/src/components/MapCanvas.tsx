@@ -14,6 +14,7 @@ import {
 } from "../lib/geo";
 import { sample, type Live } from "../lib/live";
 import { build, R, type Sprites } from "../lib/sprites";
+import { t } from "../lib/i18n";
 import { ink, styleUrl, type Theme } from "../lib/theme";
 import type { Catalog } from "../lib/types";
 import { MOVING_FLAG, STALE_FLAG } from "../lib/wire";
@@ -328,7 +329,7 @@ export function MapCanvas({ catalog, live, stops, selected, onPickStop, focus, t
             setLocating("waiting");
           }
         }}
-        title={locating === "denied" ? "Location is not available" : "Where I am"}
+        title={locating === "denied" ? t.noLocation : t.whereAmI}
         className={`absolute right-2 top-2 z-10 grid size-9 place-items-center rounded-full border border-slate-700 bg-slate-900/80 backdrop-blur ${
           locating === "denied"
             ? "text-slate-700"

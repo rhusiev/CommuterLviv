@@ -5,6 +5,8 @@
 /// allowed to do is here too, next to the zoom limits they respect.
 library;
 
+import 'strings.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -70,7 +72,7 @@ class _MapControlsState extends State<MapControls> {
       children: [
         if (camera.rotation != 0)
           _MapButton(
-            tooltip: 'Face north',
+            tooltip: txt.faceNorth,
             onPressed: () => widget.map.rotate(0),
             // The map's contents turn by the camera's rotation, so the needle
             // has to turn with them to keep pointing at north
@@ -80,12 +82,12 @@ class _MapControlsState extends State<MapControls> {
             ),
           ),
         _MapButton(
-          tooltip: 'Zoom in',
+          tooltip: txt.zoomIn,
           onPressed: camera.zoom < maxZoom ? () => _zoom(1) : null,
           child: const Icon(Icons.add),
         ),
         _MapButton(
-          tooltip: 'Zoom out',
+          tooltip: txt.zoomOut,
           onPressed: camera.zoom > minZoom ? () => _zoom(-1) : null,
           child: const Icon(Icons.remove),
         ),

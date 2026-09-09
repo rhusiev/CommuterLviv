@@ -8,6 +8,7 @@ library;
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'strings.dart';
 
 /// Returns true when the address actually changed - which also means the stored
 /// session and catalogue were dropped, because they belonged to the old server
@@ -16,7 +17,7 @@ Future<bool> editServer(BuildContext context, Api api) async {
   final value = await showDialog<String>(
     context: context,
     builder: (context) => AlertDialog.adaptive(
-      title: const Text('Server'),
+      title: Text(txt.server),
       content: TextField(
         controller: field,
         autocorrect: false,
@@ -26,11 +27,11 @@ Future<bool> editServer(BuildContext context, Api api) async {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(txt.cancel),
         ),
         TextButton(
           onPressed: () => Navigator.pop(context, field.text),
-          child: const Text('Use'),
+          child: Text(txt.use),
         ),
       ],
     ),

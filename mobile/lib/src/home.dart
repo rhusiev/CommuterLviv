@@ -27,6 +27,7 @@ import 'stop_card.dart';
 import 'stop_search.dart';
 import 'times_tab.dart';
 import 'vehicle_layer.dart' show stopsZoom;
+import 'strings.dart';
 
 /// How far a tap may land from a stop and still count. A finger is wider than
 /// the dot it is aiming at.
@@ -107,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } on Exception {
       if (mounted) {
-        setState(() => _error = 'could not reach ${widget.api.base}');
+        setState(() => _error = txt.unreachable(widget.api.base));
       }
     }
   }
@@ -181,7 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       if (mounted && _theme.id == theme.id) setState(() => _style = style);
     } on Exception {
-      if (mounted) setState(() => _error = 'the basemap would not load');
+      if (mounted) setState(() => _error = txt.noBasemap);
     }
   }
 
@@ -293,6 +294,12 @@ class _HomeScreenState extends State<HomeScreen> {
           showDragHandle: true,
           builder: (_) => ThemeSheet(current: _theme, onPick: _setTheme),
         );
+      case 'lang':
+        showModalBottomSheet<void>(
+          context: context,
+          showDragHandle: true,
+          builder: (_) => LanguageSheet(api: widget.api),
+        );
       case 'server':
         // The session belonged to the old address and is gone with it, so a
         // change lands back on the sign-in screen rather than on a dead map
@@ -330,7 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   _load();
                   _loadStyle();
                 }),
-                child: const Text('Try again'),
+                child: Text(txt.tryAgain),
               ),
             ],
           ),
@@ -349,7 +356,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             onPressed: _search,
             icon: const Icon(Icons.search),
-            tooltip: 'Find a stop',
+            tooltip: txt.findStop,
           ),
           IconButton(
             onPressed: () => showModalBottomSheet<void>(
@@ -381,21 +388,22 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             icon: const Icon(Icons.route_outlined),
-            tooltip: 'Routes',
+            tooltip: txt.routes,
           ),
           PopupMenuButton<String>(
             onSelected: _menu,
             itemBuilder: (_) => [
-              const PopupMenuItem(value: 'map', child: Text('Map style')),
+              PopupMenuItem(value: 'map', child: Text(txt.mapStyle)),
+              PopupMenuItem(value: 'lang', child: Text(txt.language)),
               PopupMenuItem(
                 value: 'server',
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Server'),
+                  title: Text(txt.server),
                   subtitle: Text(widget.api.base),
                 ),
               ),
-              const PopupMenuItem(value: 'out', child: Text('Sign out')),
+              PopupMenuItem(value: 'out', child: Text(txt.signOut)),
             ],
           ),
         ],
@@ -430,11 +438,14 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.map_outlined), label: 'Map'),
+        destinations: [
           NavigationDestination(
-            icon: Icon(Icons.schedule_outlined),
-            label: 'Times',
+            icon: const Icon(Icons.map_outlined),
+            label: txt.map,
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.schedule_outlined),
+            label: txt.times,
           ),
         ],
       ),

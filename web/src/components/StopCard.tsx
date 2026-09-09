@@ -1,6 +1,7 @@
 import { countdown, nextPerRoute } from "../lib/eta";
 import { colour } from "../lib/sprites";
 import type { Arrival, Catalog } from "../lib/types";
+import { t } from "../lib/i18n";
 
 /** What is at this stop: every route that passes through it, and when the next
  * one of each is due. The route list comes from the catalog and is complete;
@@ -31,16 +32,18 @@ export function StopCard({
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-medium text-slate-100">{s.name}</h3>
           <p className="text-xs text-slate-500">
-            {s.code} · {s.routes.length} routes
+            {s.code} · {t.routeCount(s.routes.length)}
           </p>
         </div>
         <button
           onClick={onPin}
           className={`rounded-md px-2 py-1 text-xs ${
-            pinned ? "bg-sky-600/20 text-sky-200" : "bg-slate-800 text-slate-400 hover:text-slate-200"
+            pinned
+              ? "bg-sky-600/20 text-sky-200"
+              : "bg-slate-800 text-slate-400 hover:text-slate-200"
           }`}
         >
-          {pinned ? "pinned" : "pin"}
+          {pinned ? t.pinned : t.pin}
         </button>
         <button onClick={onClose} className="px-1 text-slate-500 hover:text-slate-200">
           ✕

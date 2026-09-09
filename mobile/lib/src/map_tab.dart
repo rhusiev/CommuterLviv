@@ -12,6 +12,7 @@ import 'map_theme.dart';
 import 'map_tiles.dart';
 import 'models.dart';
 import 'vehicle_layer.dart';
+import 'strings.dart';
 
 const lviv = LatLng(49.8397, 24.0297);
 
@@ -94,11 +95,11 @@ class MapTab extends StatelessWidget {
         Positioned(right: 12, bottom: 24, child: MapControls(map: map)),
         if (style == null) const LinearProgressIndicator(minHeight: 2),
         if (empty)
-          const Center(
+          Center(
             child: Card(
               child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('Pick a route to see it moving'),
+                padding: const EdgeInsets.all(16),
+                child: Text(txt.pickARoute),
               ),
             ),
           ),
