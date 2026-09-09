@@ -392,6 +392,24 @@ EOF
 `pred` and `lad` have no primary key, so merging the same file twice duplicates
 them; merge each source once.
 
+Take the copy while the collector is running with SQLite's own backup, not with
+`scp`. The database is in WAL mode, so the newest rows are in `feed.db-wal` and
+a plain copy of `feed.db` is both missing them and possibly torn:
+
+```sh
+ssh vps 'sqlite3 /opt/commuterlviv/data/feed.db ".backup /tmp/feed-snapshot.db"'
+ssh vps 'gzip -9 /tmp/feed-snapshot.db'          # it compresses about 4:1
+scp vps:/tmp/feed-snapshot.db.gz .
+```
+
+Inside the stack the same thing, without a `sqlite3` binary in the image:
+
+```sh
+docker compose exec -T service python -c "import sqlite3; \
+  sqlite3.connect('data/feed.db').backup(sqlite3.connect('data/snapshot.db'))"
+docker compose cp service:/app/data/snapshot.db ./feed-snapshot.db
+```
+
 ## The approaches, and switching between them
 
 Every design decision in the model is a claim that something is worth doing.
@@ -535,6 +553,66 @@ points here, hand Caddy the domain and it gets a certificate itself:
 echo 'COMMUTERLVIV_SITE_ADDRESS=commuterlviv.r1a.nl' >> .env
 docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
 ```
+
+**Behind a proxy that is already running**, publish nothing at all. The third
+overlay drops the host port and puts the web container on the proxy's own
+docker network instead, so the proxy reaches it by name and the stack has no
+door to the outside:
+
+```sh
+echo 'CADDY_NETWORK=caddy' >> .env      # the existing network's name
+docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+```
+
+```caddy
+commuterlviv.example.com {
+	reverse_proxy commuterlviv_web:8080
+}
+```
+
+That is the whole of it: `/ws` is an ordinary upgrade through the same
+`reverse_proxy` and needs no separate rule, and the outer proxy holds the
+certificate so `docker-compose.tls.yml` is not used with this. The outer proxy
+has to be on that network too. Rate limits stay per real client because Caddy
+sets `X-Forwarded-For` and the service reads the first entry - which is also
+why `COMMUTERLVIV_TRUST_PROXY` must stay off for a deployment where the port is
+reachable directly.
+
+### Moving it to a machine that is already collecting
+
+The repository has no remote, so the checkout is what travels. Everything the
+stack needs is in it except three gitignored things worth carrying by hand: the
+recording, the walking graph and the phone build.
+
+```sh
+rsync -a --delete --exclude data --exclude node_modules --exclude build \
+      --exclude .git ./ vps:/opt/commuterlviv/app/
+scp .env vps:/opt/commuterlviv/app/.env          # then fix ORIGINS on the far side
+scp deploy/apk/*.apk vps:/opt/commuterlviv/app/deploy/apk/
+scp data/walk.npz vps:/opt/commuterlviv/walk.npz
+```
+
+`walk.npz` is pure OpenStreetMap and host-independent, so copying it saves an
+Overpass fetch; `transfers.npz` is not - it is numbered against the catalog it
+was built with, so it is always built on the far side.
+
+**Stop the old collector before starting the new one.** Two collectors poll the
+same feeds twice for no extra information. The recording moves into the volume
+the stack uses, and then the systemd unit is retired:
+
+```sh
+sudo systemctl disable --now commuterlviv
+docker compose up -d --build db service          # creates the volume
+docker compose cp /opt/commuterlviv/data/feed.db service:/app/data/feed.db
+docker compose cp /opt/commuterlviv/walk.npz service:/app/data/walk.npz
+docker compose up -d                             # the collector joins in
+docker compose exec service python -m commuterlviv plan --build
+docker compose exec service python -m commuterlviv admin invite
+```
+
+Copying the recording in is not housekeeping: a restart replays its last two
+hours to warm the model, and a service that starts without one spends twenty
+minutes making the worst predictions it ever makes.
 
 Worth knowing:
 
