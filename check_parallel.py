@@ -5,8 +5,8 @@ import time
 
 import numpy as np
 
-from lvivpred import config, network, predictors, replay
-from lvivpred.truth import Truth
+from commuterlviv import config, network, predictors, replay
+from commuterlviv.truth import Truth
 
 net = network.load()
 kw = dict(warmup=1800.0,

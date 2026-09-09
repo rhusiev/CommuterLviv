@@ -16,8 +16,9 @@ never by a key. `dataset` does that join.
 Collecting them costs about a quarter of the replay's time - measured at 10.0 s
 against 12.5 s over one hour of recording - so it is off unless asked for:
 
-    python3 -m lvivpred features --out reports/feats.npz
+    python3 -m commuterlviv features --out reports/feats.npz
 """
+import dataclasses
 import datetime
 
 import numpy as np
@@ -139,16 +140,69 @@ def _headways(net, window=3600.0):
     return out
 
 
-def dataset(res, feats, truth):
-    """The rows a residual model is fitted on, joined to what actually happened.
+@dataclasses.dataclass
+class Rows:
+    """The feature table and everything needed to score a correction to it.
 
-    Returned as (X, y, w, at, event). `y` is the log of how much longer the
-    crossing really took than the model said, so a correction is a multiplier
-    and not a number of seconds - 30 s of optimism at a 40-minute horizon and
-    at a 1-minute one are not the same mistake. `w` discounts a crossing that
-    had to be interpolated across a wide gap between fixes, since where the
-    truth itself is soft the residual is partly the truth's.
+    `y` is the log of how much longer the crossing really took than the model
+    said, so a correction is a multiplier and not a number of seconds - 30 s of
+    optimism at a 40-minute horizon and at a 1-minute one are not the same
+    mistake. It is clipped, so it cannot be inverted back to the arrival time
+    and `t` carries that separately: a correction has to be scored in seconds
+    against the crossing that really happened, tails included. `w` discounts a
+    crossing interpolated across a wide gap between fixes, since where the truth
+    itself is soft the residual is partly the truth's. `trip` is carried for the
+    same reason `score.bootstrap` wants it: one late vehicle is one fact
+    repeated at every stop ahead of it, not thirty independent ones.
     """
+
+    x: np.ndarray
+    y: np.ndarray
+    w: np.ndarray
+    at: np.ndarray
+    event: np.ndarray
+    t: np.ndarray
+    trip: np.ndarray
+    cols: tuple[str, ...] = COLS
+
+    def __len__(self):
+        return len(self.y)
+
+    def col(self, name):
+        return self.x[:, self.cols.index(name)]
+
+    def select(self, mask):
+        return dataclasses.replace(
+            self, **{f.name: getattr(self, f.name)[mask]
+                     for f in dataclasses.fields(self) if f.name != "cols"})
+
+    @property
+    def eta(self):
+        """The model's own answer, in seconds ahead, as it was scored."""
+        return np.maximum(self.col("eta"), 1.0)
+
+    def error(self, correction=None):
+        """Seconds early (negative) or late, with an optional log correction."""
+        eta = self.eta if correction is None else self.eta * np.exp(correction)
+        return self.at + eta - self.t
+
+    def save(self, path):
+        np.savez_compressed(
+            path, cols=np.array(self.cols), x=self.x.astype(np.float32),
+            y=self.y.astype(np.float32), w=self.w.astype(np.float32),
+            at=self.at, event=self.event, t=self.t, trip=self.trip)
+
+
+def load(path):
+    d = np.load(path)
+    return Rows(x=d["x"].astype(float), y=d["y"].astype(float),
+                w=d["w"].astype(float), at=d["at"], event=d["event"],
+                t=d["t"], trip=d["trip"],
+                cols=tuple(str(c) for c in d["cols"]))
+
+
+def dataset(res, feats, truth):
+    """The rows a residual model is fitted on, joined to what actually happened."""
     from .predictors import event_of
 
     a = res.buf.done()
@@ -166,19 +220,8 @@ def dataset(res, feats, truth):
     eta = np.maximum(x[:, COLS.index("eta")].astype(float), 1.0)
     y = np.clip(np.log((t - at) / eta), -TARGET_CLIP, TARGET_CLIP)
     w = 1.0 / np.maximum(truth.gap[ev], 1.0)
-    return x.astype(float), y, w / w.mean(), at, ev
-
-
-def save(path, x, y, w, at, event):
-    np.savez_compressed(path, cols=np.array(COLS), x=x.astype(np.float32),
-                        y=y.astype(np.float32), w=w.astype(np.float32),
-                        at=at, event=event)
-
-
-def load(path):
-    d = np.load(path)
-    return (d["x"].astype(float), d["y"].astype(float), d["w"].astype(float),
-            d["at"], d["event"], list(d["cols"]))
+    return Rows(x=x.astype(float), y=y, w=w / w.mean(), at=at, event=ev, t=t,
+                trip=truth.trip[ev])
 
 
 def dump(out, net=None, db=None, t_from=None, t_to=None, warmup=0.0):
@@ -193,8 +236,8 @@ def dump(out, net=None, db=None, t_from=None, t_to=None, warmup=0.0):
                         warmup=warmup, feats=feats, progress=60, **kw)
     res.net = net
     truth = Truth(net, res)
-    x, y, w, at, ev = dataset(res, feats, truth)
-    save(out, x, y, w, at, ev)
-    print(f"\n{len(x)} rows x {len(COLS)} features from {truth.n} crossings "
+    rows = dataset(res, feats, truth)
+    rows.save(out)
+    print(f"\n{len(rows)} rows x {len(COLS)} features from {truth.n} crossings "
           f"-> {out}")
-    return x, y, w, at, ev
+    return rows

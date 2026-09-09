@@ -15,8 +15,14 @@ The base is `full` unless `--base` says otherwise, and a constant's best value
 is not the same on every base: what a shrinkage constant wants depends on what
 it is shrinking towards.
 
-    python3 -m lvivpred sweep k_unit 1 2 4 8 16
-    python3 -m lvivpred sweep k_unit --base sections-no-prior
+    python3 -m commuterlviv sweep k_unit 1 2 4 8 16
+    python3 -m commuterlviv sweep k_unit --base sections-no-prior
+    python3 -m commuterlviv sweep cell 50 100 200 400
+
+The last of those varies the network's geometry rather than the config's
+constants, and is sound for the same reason the rest are: the geometry decides
+only how finely the model divides the road, never how a vehicle is tracked or
+when it really passed a stop, so every point still answers the same crossings.
 """
 import json
 import os
@@ -40,27 +46,48 @@ GRIDS = {
     # On the second pass both turned over inside these ranges.
     "fast_hl": [480.0, 1800.0, 7200.0, 14400.0, 28800.0, 57600.0],
     "slow_hl": [5400.0, 43200.0, 172800.0, 345600.0, 691200.0],
+    # 0 is the third term switched off, i.e. the shipped model, so the sweep
+    # carries its own baseline.
+    "day_hl": [0.0, 21600.0, 43200.0, 86400.0, 259200.0],
     "knn": [3, 5, 10, 20, 40],
+    # The three geometry numbers live on the network, not on the config, so
+    # each point of these three replays a differently celled network. Cheap
+    # because `network.regrid` reuses the stop assignment.
+    "cell": [50.0, 100.0, 200.0, 400.0],
+    "grid": [60.0, 120.0, 250.0],
+    "octants": [4, 8, 16],
 }
+GEOMETRY = ("cell", "grid", "octants")
 
 
 def run(field, values=None, net=None, out=REPORTS, db=replay.DB, base=None, **kw):
-    net = net or network.load()
     base = base or config.FULL
     values = values or GRIDS[field]
-    if not hasattr(base, field):
+    if field not in GEOMETRY and not hasattr(base, field):
         raise SystemExit(f"Config has no field {field!r}; "
                          f"try one of {', '.join(GRIDS)}")
     if field == "knn" and base.learn != "knn":
         raise SystemExit(f"`{base.name}` does not use knn, so every point of "
                          f"this sweep would replay the same model; --base knn")
+    if field in GEOMETRY and not base.corridor and field != "cell":
+        raise SystemExit(f"`{base.name}` has no corridor layer, so every point "
+                         f"of a {field} sweep would replay the same model")
     # The CLI cannot know whether a grid is over counts or over seconds, so the
     # field itself says: a ring buffer indexed by a float is not an index.
-    cast = type(getattr(base, field))
+    holder = network.DEFAULT if field in GEOMETRY else base
+    cast = type(getattr(holder, field))
+    values = [cast(v) for v in values]
     kw.setdefault("t_to", _end(db))
 
-    cfgs = [replace(base, name=f"{field}={v:g}", **{field: v})
-            for v in map(cast, values)]
+    names = [f"{field}={v:g}" for v in values]
+    if field in GEOMETRY:
+        cfgs = [replace(base, name=n) for n in names]
+        net = [network.load(geom=replace(network.DEFAULT, **{field: v}))
+               for v in values]
+    else:
+        cfgs = [replace(base, name=n, **{field: v})
+                for n, v in zip(names, values)]
+        net = net or network.load()
     named, truth, rec = replay.run_many(net, cfgs, db=db, **kw)
 
     paired = score.common(named)

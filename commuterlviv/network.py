@@ -4,20 +4,39 @@ Everything downstream works in "distance along the trip's shape", in metres,
 rather than in lat/lon. That turns a 2-D tracking problem into a 1-D one and
 makes a stop just a scalar position on the line.
 """
+import copy
 import os
 import pickle
+from dataclasses import dataclass
 
 import numpy as np
 
-from . import gtfs
+from . import gtfs, overrides
 
 LAT0, LON0 = 49.84, 24.03
 KX = gtfs.LAT_M * np.cos(np.radians(LAT0))
 KY = gtfs.LAT_M
 
 CACHE = os.path.join(gtfs.DATA, "network.pkl")
-CELL = 100.0            # speed-field cell length along a shape, metres
-CORRIDOR_GRID = 120.0   # size of the shared spatial cell used to pool routes
+
+
+@dataclass(frozen=True)
+class Geometry:
+    """How fine the model's picture of the road is. Nothing else reads this.
+
+    Tracking, the stop positions and therefore the ground truth are all in
+    metres along a shape and do not depend on any of these three numbers, so
+    two geometries can be scored against each other on identical crossings -
+    and `regrid` can change them on an already-built network for the price of
+    recomputing three arrays per shape.
+    """
+
+    cell: float = 100.0     # speed-field cell length along a shape, metres
+    grid: float = 120.0     # size of the shared spatial cell used to pool routes
+    octants: int = 8        # heading classes a corridor cell is split into
+
+
+DEFAULT = Geometry()
 
 
 def to_xy(lat, lon):
@@ -49,21 +68,22 @@ def project(xy, cum, p, lo=None, hi=None):
 class Shape:
     __slots__ = ("xy", "cum", "length", "cells", "corridor")
 
-    def __init__(self, xy):
+    def __init__(self, xy, geom=DEFAULT):
         self.xy = xy
         step = np.sqrt(((xy[1:] - xy[:-1]) ** 2).sum(1))
         self.cum = np.concatenate([[0.0], np.cumsum(step)])
         self.length = float(self.cum[-1])
-        n = max(1, int(np.ceil(self.length / CELL)))
+        n = max(1, int(np.ceil(self.length / geom.cell)))
         self.cells = n
         mid = (np.arange(n) + 0.5) * (self.length / n)
         pts = self.at(mid)
         head = self.at(np.minimum(mid + 25.0, self.length)) - \
             self.at(np.maximum(mid - 25.0, 0.0))
-        oct_ = np.round(np.arctan2(head[:, 0], head[:, 1]) / (np.pi / 4)).astype(int) % 8
-        gx = np.floor(pts[:, 0] / CORRIDOR_GRID).astype(np.int64)
-        gy = np.floor(pts[:, 1] / CORRIDOR_GRID).astype(np.int64)
-        self.corridor = (gx * 100003 + gy) * 8 + oct_
+        k = 2 * np.pi / geom.octants
+        oct_ = np.round(np.arctan2(head[:, 0], head[:, 1]) / k).astype(int) % geom.octants
+        gx = np.floor(pts[:, 0] / geom.grid).astype(np.int64)
+        gy = np.floor(pts[:, 1] / geom.grid).astype(np.int64)
+        self.corridor = (gx * 100003 + gy) * geom.octants + oct_
 
     def at(self, d):
         """Position at distance d along the line (vectorised)."""
@@ -176,12 +196,14 @@ def build():
 
     # Trips sharing a shape and a stop list have identical geometry: solve once.
     solved = {}
+    extra = overrides.Overrides.load()
     for trip, rows in seq.items():
         rows.sort()
         sid = net.trip_shape.get(trip)
         if not sid or sid not in net.shapes:
             continue
-        ids = tuple(r[1] for r in rows)
+        ids, when = extra.patch(net, net.trip_route.get(trip), sid,
+                                tuple(r[1] for r in rows), [r[2] for r in rows])
         key = (sid, ids)
         if key not in solved:
             shape = net.shapes[sid]
@@ -189,18 +211,38 @@ def build():
                        np.array([net.stops[i]["lon"] for i in ids]))
             solved[key] = _stop_dists(shape, xy)[0]
         net.pattern_of[trip] = key
-        net.trip_stops[trip] = (ids, solved[key],
-                                np.array([r[2] for r in rows], dtype=float))
+        net.trip_stops[trip] = (ids, solved[key], np.array(when, dtype=float))
+    extra.report()
     return net
 
 
 def fresh():
-    """Whether the cached geometry was built from the static feed we now have."""
-    return (os.path.exists(CACHE) and os.path.exists(gtfs.ZIP)
-            and os.path.getmtime(CACHE) >= os.path.getmtime(gtfs.ZIP))
+    """Whether the cached geometry was built from the static feed we now have,
+    and from the overrides as they read now: editing them has to rebuild, or
+    the edit would take effect at some unrelated later feed change."""
+    if not os.path.exists(CACHE) or not os.path.exists(gtfs.ZIP):
+        return False
+    newest = max(os.path.getmtime(gtfs.ZIP),
+                 os.path.getmtime(overrides.PATH)
+                 if os.path.exists(overrides.PATH) else 0.0)
+    return os.path.getmtime(CACHE) >= newest
 
 
-def load(rebuild=False):
+def regrid(net, geom):
+    """The same network, re-celled. Only `Shape` depends on the geometry, and
+    the stop assignment that dominates a build does not, so a sweep over the
+    three numbers pays for the build once."""
+    out = copy.copy(net)
+    out.shapes = {sid: Shape(s.xy, geom) for sid, s in net.shapes.items()}
+    return out
+
+
+def load(rebuild=False, geom=DEFAULT):
+    net = _load(rebuild)
+    return net if geom == DEFAULT else regrid(net, geom)
+
+
+def _load(rebuild):
     gtfs.static_zip()   # so a feed that changed overnight invalidates the cache
     if not rebuild and fresh():
         with open(CACHE, "rb") as f:

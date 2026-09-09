@@ -362,7 +362,7 @@ def heartbeat(min_free_gb, keep_days):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="lvivpred collect")
+    ap = argparse.ArgumentParser(prog="commuterlviv collect")
     ap.add_argument("--veh-period", type=float, default=5.0)
     ap.add_argument("--trip-period", type=float, default=15.0)
     ap.add_argument("--lad-period", type=float, default=60.0)

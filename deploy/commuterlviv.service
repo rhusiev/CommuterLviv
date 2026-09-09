@@ -1,5 +1,5 @@
 [Unit]
-Description=lvivpred feed collector
+Description=commuterlviv feed collector
 After=network-online.target
 Wants=network-online.target
 # Systemd gives up restarting a service that fails too often. A collector that
@@ -9,10 +9,10 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-User=lvivpred
-WorkingDirectory=/opt/lvivpred
+User=commuterlviv
+WorkingDirectory=/opt/commuterlviv
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/opt/lvivpred/.venv/bin/python -m lvivpred collect --keep-days 30 --min-free-gb 3
+ExecStart=/opt/commuterlviv/.venv/bin/python -m commuterlviv collect --keep-days 30 --min-free-gb 3
 
 # The collector handles SIGTERM itself: it stops the pollers, drains the write
 # queue and closes the database. Give it room to do that before being killed.
@@ -26,7 +26,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/lvivpred/data
+ReadWritePaths=/opt/commuterlviv/data
 
 [Install]
 WantedBy=multi-user.target

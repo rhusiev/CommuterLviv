@@ -209,7 +209,8 @@ _JOB = None   # (net, db, kw), set before forking so `net` is never pickled
 
 def _replay_one(job):
     i, cfg = job
-    net, db, kw = _JOB
+    nets, db, kw = _JOB
+    net = nets[i]
     t = time.time()
     _, res = run(net, cfg=cfg, db=db, **kw)
     res.net = net
@@ -234,13 +235,19 @@ def run_many(net, cfgs, db=DB, workers=None, **kw):
 
     Two cores are left free, for the collector and for whatever else is running.
 
+    `net` may also be one network per config, which is how the geometry sweep
+    varies something the network holds rather than something the config does.
+    That is only sound because the ground truth does not depend on the geometry;
+    the fingerprint check below is what enforces it.
+
     Returns (named, truth, recording).
     """
     global _JOB
 
     jobs = list(enumerate(cfgs))
+    nets = net if isinstance(net, list) else [net] * len(jobs)
     workers = workers or min(len(jobs), max(1, (os.cpu_count() or 3) - 2))
-    _JOB = (net, db, kw)
+    _JOB = (nets, db, kw)
     try:
         with multiprocessing.get_context("fork").Pool(workers) as pool:
             out = list(pool.imap(_replay_one, jobs, chunksize=1))
@@ -249,13 +256,13 @@ def run_many(net, cfgs, db=DB, workers=None, **kw):
 
     named = {}
     _, _, first, rec, _ = out[0]
-    rec.net = net
+    rec.net = nets[0]
     for name, series, fp, _, took in out:
         if fp != first:
             raise RuntimeError(f"{name} tracked a different set of crossings")
         named[name] = series
         print(f"  {name:<16} {len(series):>8} predictions  {took:5.1f}s", flush=True)
-    return named, Truth(net, rec), rec
+    return named, Truth(nets[0], rec), rec
 
 
 def _idx(m, names, key):
@@ -266,7 +273,7 @@ def _idx(m, names, key):
     return i
 
 
-def _drain(model, tracks, closed, now, offset):
+def drain(model, tracks, closed, now, offset):
     """Hand the epoch's cell crossings to the model.
 
     Finished crossings report whatever weight they have left. Crossings still
@@ -357,13 +364,13 @@ def _lateness_eta(tr, s_now):
     return np.maximum(tr.sched[tr.next_stop:] - sched_now, 0.0)
 
 
-def _prune(tracks, runs, now):
+def prune(tracks, runs, now):
     """Forget vehicles that have gone quiet.
 
     A fix arriving more than GAP_RESET after the last one restarts the track
     anyway, so dropping it here changes no prediction. What it changes is that
     `tracks` stops growing for the life of the process, which over days would
-    otherwise leave `_drain` walking thousands of vehicles that stopped
+    otherwise leave `drain` walking thousands of vehicles that stopped
     reporting yesterday. The run counter outlives the track, because truth is
     keyed by it and a vehicle returning to the same trip must not reuse a
     number it has already spent.
@@ -374,15 +381,60 @@ def _prune(tracks, runs, now):
         runs[veh] = tracks.pop(veh).run
 
 
+def predictable(tr, now):
+    """Whether this track can be predicted from at all: the model is not asked.
+
+    Separate from `etas` because the offline pass numbers its vehicles here,
+    before the model has said anything, so that two variants of the model agree
+    on what event 7 is.
+    """
+    return (tr.ts is not None and tr.s is not None and now - tr.ts <= STALE
+            and tr.next_stop < len(tr.sdist))
+
+
+def believed(tr, now):
+    """Where the vehicle is thought to be now: the last fix, dead reckoned.
+
+    Bounded by EXTRAP because a track's speed is only evidence for about a
+    minute; past that, guessing further is worse than standing still.
+    """
+    return min(tr.s + tr.v * min(now - tr.ts, EXTRAP), tr.shape.length)
+
+
+def etas(model, tr, veh, now, offset):
+    """This vehicle's remaining stops within the horizon, as of `now`.
+
+    Returns `(next_stop, believed distance, seconds to each stop from
+    next_stop on, which of those are inside the horizon)`, or None if there is
+    nothing to say. The live service in `live/` steps the same model as the
+    offline replay and asks it the same question, so the question is asked in
+    one place.
+    """
+    if not predictable(tr, now):
+        return None
+    i = tr.next_stop
+    s_now = believed(tr, now)
+    if model.cfg.eta == "lateness":
+        dt = _lateness_eta(tr, s_now)
+    else:
+        dt = model.time_between(tr.shape_id, s_now, tr.sdist[i:])
+        if model.cfg.vehicle_offset != "off":
+            f = _factor(offset, veh)
+            dt = (_fade(dt, f) if model.cfg.vehicle_offset == "decay"
+                  else dt * f)
+    k = np.nonzero(dt <= HORIZON)[0]
+    return (i, s_now, dt, k) if len(k) else None
+
+
 def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True,
            offset=None, feats=None):
     # An estimator that fits once and freezes needs to know where the warmup
     # ends, and this is the only place that knows it. Set before the drain, so
     # the epoch that first scores is already past the estimator's training.
     model.emitting = emit
-    _drain(model, tracks, closed, now, offset)
+    drain(model, tracks, closed, now, offset)
     res.epochs += 1
-    _prune(tracks, runs, now)
+    prune(tracks, runs, now)
     if not emit:
         return
     model.refresh(now)
@@ -390,27 +442,17 @@ def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True,
         feats.refresh(model, now)
     ep = int(now - res.t0)
     for veh, tr in tracks.items():
-        if tr.ts is None or tr.s is None or now - tr.ts > STALE:
-            continue
-        i = tr.next_stop
-        if i >= len(tr.sdist):
+        if not predictable(tr, now):
             continue
         # Numbered before anything the model says is consulted, so two variants
-        # replaying the same recording agree on what event 7 is.
+        # replaying the same recording agree on what event 7 is - including the
+        # vehicles whose every remaining stop turns out to be past the horizon.
         vi = _idx(veh_idx, res.veh_ids, veh)
         ti = _idx(trip_idx, res.trip_ids, tr.trip)
-        s_now = min(tr.s + tr.v * min(now - tr.ts, EXTRAP), tr.shape.length)
-        if model.cfg.eta == "lateness":
-            dt = _lateness_eta(tr, s_now)
-        else:
-            dt = model.time_between(tr.shape_id, s_now, tr.sdist[i:])
-            if model.cfg.vehicle_offset != "off":
-                f = _factor(offset, veh)
-                dt = (_fade(dt, f) if model.cfg.vehicle_offset == "decay"
-                      else dt * f)
-        k = np.nonzero(dt <= HORIZON)[0]
-        if not len(k):
+        got = etas(model, tr, veh, now, offset)
+        if got is None:
             continue
+        i, s_now, dt, k = got
         res.pos.append((ep, vi, ti, tr.run, s_now))
         res.buf.extend(ep, vi, ti, tr.run, i + k,
                        np.rint(now - res.t0 + dt[k]).astype("i4"))

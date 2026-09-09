@@ -29,9 +29,15 @@ EPOCH = 60.0
 NARROW = ("lad",)   # predictors too narrow to set the support; see paired()
 
 
-def _keys(s):
+def keys(s):
     """One integer naming (crossing, instant), so predictors can be intersected."""
     return s.event * 100000000 + (s.epoch / EPOCH).astype(np.int64)
+
+
+def bucket_of(horizon):
+    """Which BUCKETS index each horizon falls in, as an array."""
+    edges = np.array([hi for _, hi in BUCKETS[:-1]], dtype=float)
+    return np.searchsorted(edges, horizon, "right")
 
 
 def common(named):
@@ -41,11 +47,11 @@ def common(named):
     predictor that answers about few stops belongs in a call of its own rather
     than in the one the main comparison uses.
     """
-    keys = {n: _keys(s) for n, s in named.items()}
+    by_name = {n: keys(s) for n, s in named.items()}
     shared = None
-    for k in keys.values():
+    for k in by_name.values():
         shared = k if shared is None else np.intersect1d(shared, k)
-    return {n: s.select(np.isin(keys[n], shared)) for n, s in named.items()}
+    return {n: s.select(np.isin(by_name[n], shared)) for n, s in named.items()}
 
 
 def paired(named):
