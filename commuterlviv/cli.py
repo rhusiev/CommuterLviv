@@ -1,4 +1,4 @@
-"""One entry point for the eleven things this project does.
+"""One entry point for the twelve things this project does.
 
     collect     record the live feeds into data/feed.db, indefinitely
     features    replay once and dump one feature row per prediction
@@ -9,6 +9,7 @@
     sweep       vary one estimator constant and score every value of it
     check       take the model apart: is it the model, the tracking or the truth
     diag        ask what methodology the official API is actually using
+    walk        fetch the city's footpaths once, for the journey planner
     serve       run the live service: the model, over HTTP and websockets
     admin       mint invite links, list accounts, disable one
 """
@@ -156,6 +157,11 @@ def _diag(rest):
     diag.main()
 
 
+def _walk(rest):
+    from . import walk
+    walk.main(rest)
+
+
 def _serve(rest):
     import uvicorn
     from .live import app as live_app
@@ -208,7 +214,7 @@ def _no_args(name, rest):
 COMMANDS = {"collect": _collect, "features": _features, "residual": _residual,
             "stack": _stack, "evaluate": _evaluate, "experiment": _experiment,
             "sweep": _sweep, "check": _check, "diag": _diag,
-            "serve": _serve, "admin": _admin}
+            "walk": _walk, "serve": _serve, "admin": _admin}
 
 
 def main(argv=None):
