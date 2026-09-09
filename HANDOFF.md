@@ -385,7 +385,11 @@ Deviations from the plan's Phase 4 and 5 specs, all recorded in `PLAN.md`:
   `__Host-` prefixed. `python3 check_web.py <code>` needs `npm run dev` up as
   well, registers a `browser_<timestamp>` account, and leaves screenshots in
   `/tmp/shot-*.png`. Both exit non-zero on a failure. Mint codes with
-  `python3 -m commuterlviv admin invite`, one per registration.
+  `python3 -m commuterlviv admin invite`, one per registration. `check_live.py`
+  registers the same username every time, so a second run against the same
+  database fails with `that username is taken` and everything after it: clear
+  it first with `admin delete smoke_user --yes`. It reads the base URL from
+  `COMMUTERLVIV_CHECK_BASE`, not from an argument - both arguments are codes.
 - **MapLibre's worker has to be handed to it, or neither dev nor the build
   draws a city.** Left alone it asks for `maplibre-gl-worker.mjs` beside its own
   module: pre-bundled by the dev optimiser that file is there but mute, and in

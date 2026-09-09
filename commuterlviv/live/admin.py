@@ -47,6 +47,25 @@ async def users(st=None):
         await pool.close()
 
 
+async def delete(username, st=None):
+    """Erase an account and everything hanging off it.
+
+    Every table that points at a user cascades, so this takes the sessions,
+    the remember-me tokens, the preferences and the audit trail with it - there
+    is nothing left to say the account existed, which is the point. `disable`
+    is the reversible one.
+    """
+    st = st or settings.load()
+    pool = await _pool(st)
+    try:
+        name = security.clean_username(username)
+        return await pool.fetchval(
+            "DELETE FROM users WHERE lower(username) = $1 RETURNING id",
+            name) is not None
+    finally:
+        await pool.close()
+
+
 async def disable(username, on=True, st=None):
     st = st or settings.load()
     pool = await _pool(st)
