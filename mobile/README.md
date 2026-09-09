@@ -81,7 +81,13 @@ refused and the map stays empty while everything else works.
 | `lib/src/api.dart` | cookies, the CSRF token and the `Origin` header - the browser part |
 | `lib/src/live.dart` | the socket, the vehicles, and where each one is right now |
 | `lib/src/vehicle_layer.dart` | one `CustomPaint` for the whole city |
-| `lib/src/home.dart` | the two tabs and every sheet |
+| `lib/src/home.dart` | the state both tabs share, and nothing that draws |
+| `lib/src/map_tab.dart` | the basemap, the vehicles and the attribution |
+| `lib/src/times_tab.dart` | the pinned stops and what is due at each |
+| `lib/src/stop_card.dart` | one stop, from the bottom of the map |
+| `lib/src/stop_search.dart` | stops by name, scanned on every keystroke |
+| `lib/src/sheets.dart` | the route sheet and the basemap sheet |
+| `lib/src/due.dart` | one route's countdown chip, drawn in three places |
 | `lib/src/server_dialog.dart` | which server to talk to, asked from two places |
 | `lib/src/map_theme.dart` | the five basemap styles and the colours drawn over them |
 | `lib/src/map_controls.dart` | zoom, and the compass that shows up off north |
