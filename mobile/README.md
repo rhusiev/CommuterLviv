@@ -60,6 +60,18 @@ flutter build apk --release
 It comes out unsigned unless `android/key.properties` exists, which is what
 F-Droid needs. See `fdroid/ua.lviv.commuterlviv.yml` for the rest.
 
+`../deploy/release-apk.sh` is the same build plus the one step that makes it
+reachable: it copies the result into `deploy/apk/`, which the web container
+mounts, so the newest build is always at `<site>/download/commuterlviv.apk` -
+`http://10.8.0.2:8080/download/` over the VPN. The versioned name is kept
+beside the stable one. Nothing there is in git.
+
+The version lives in `pubspec.yaml` and is the whole project's: the service and
+the web app carry the same number, `check.sh` fails if they disagree, and
+`/api/health` reports what is deployed. It is alpha, so it stays under 1.0, and
+`versionCode` goes up by one with it because F-Droid orders releases by that
+and nothing else.
+
 ## What the server needs
 
 One line of deployment configuration, because the app is not a web page and has

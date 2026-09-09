@@ -504,6 +504,19 @@ with `admin users`, `admin disable <name>` and `admin delete <name> --yes`
 beside it - `disable` locks an account and ends its sessions and can be undone,
 `delete` erases it and everything hanging off it and cannot.
 
+**One version, three trees.** `commuterlviv/__init__.py` holds it, `web/package.json`
+and `mobile/pubspec.yaml` repeat it, and `check.sh` fails if they drift; the
+service reports it at `/api/health`, so what is deployed is a question with an
+answer. It goes up with every substantial change and stays under 1.0 while this
+is alpha - and the Android `versionCode` goes up with it, because F-Droid
+orders releases by that alone.
+
+**The phone app is downloadable from the stack.** `deploy/release-apk.sh`
+builds a release APK into `deploy/apk/`, which the web container mounts, so
+`<site>/download/commuterlviv.apk` is always the newest build - the way onto a
+phone that cannot reach F-Droid. The directory is listed, so the versioned file
+is there too, and neither is in git.
+
 Two lines of `.env` decide everything and neither has a safe guess:
 `POSTGRES_PASSWORD`, and `COMMUTERLVIV_ORIGINS` - the exact origins allowed to make
 unsafe requests, scheme and host and port, no trailing slash. Everything else in

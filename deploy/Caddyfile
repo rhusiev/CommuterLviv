@@ -17,6 +17,16 @@
 		reverse_proxy service:8099
 	}
 
+	# The phone app itself, for a phone that cannot reach F-Droid: whatever
+	# `deploy/release-apk.sh` last put in `deploy/apk/`, listed so the versioned
+	# file and `commuterlviv.apk` are both visible. Android refuses a download
+	# served as text, hence the type
+	handle /download/* {
+		root * /srv
+		header /download/*.apk Content-Type application/vnd.android.package-archive
+		file_server browse
+	}
+
 	handle {
 		root * /srv
 		# The worker decides what every later request is allowed to do, so a

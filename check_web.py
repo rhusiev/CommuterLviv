@@ -309,6 +309,66 @@ async def main():
                       f"{name!r} not in the card")
                 await p.shot("/tmp/shot-search.png")
 
+            p.step("planning a journey")
+            await p.js("[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Journey').click()")
+            await asyncio.sleep(0.5)
+            # Two stop pixels far enough apart to be a ride rather than a walk,
+            # found the same way the stop click was: the overlay knows where the
+            # stops are and MapLibre takes the click
+            ends = await p.js("""(() => {
+              const c = [...document.querySelectorAll('canvas')].at(-1);
+              const r = c.getBoundingClientRect();
+              const dpr = devicePixelRatio;
+              const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+              const found = [];
+              for (let py = 0; py < c.height; py += 2) {
+                for (let px = 0; px < c.width; px += 2) {
+                  const o = (py * c.width + px) * 4;
+                  if (d[o] === 0xcf && d[o+1] === 0xd8 && d[o+2] === 0xe3) {
+                    found.push([r.left + px / dpr, r.top + py / dpr]);
+                  }
+                }
+              }
+              if (found.length < 2) return null;
+              // The two furthest apart, so the answer is a ride and not the
+              // walk that wins between neighbouring stops
+              let best = null, far = -1;
+              for (const a of found) for (const b of found) {
+                const d = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
+                if (d > far) { far = d; best = [a, b]; }
+              }
+              return best;
+            })()""")
+            if ends is None:
+                check("two stops are in view to plan between", False, "none found")
+            else:
+                for label, at in zip(("From", "To"), ends):
+                    await p.js(f"""(() => {{
+                      const row = [...document.querySelectorAll('span')].find(s => s.textContent.trim() === '{label}');
+                      row.parentElement.querySelector('button').click();
+                    }})()""")
+                    await asyncio.sleep(0.2)
+                    for kind in ("mousePressed", "mouseReleased"):
+                        await p.call("Input.dispatchMouseEvent", type=kind, x=at[0], y=at[1],
+                                     button="left", buttons=1, clickCount=1)
+                    await asyncio.sleep(0.4)
+                both = await p.js("(document.body.innerText.match(/\\d+\\.\\d{4}, \\d+\\.\\d{4}/g) ?? []).length")
+                check("both ends are set by tapping the map", both == 2, f"{both} of 2")
+                await p.js("[...document.querySelectorAll('button')].find(b => /Find a way/.test(b.textContent)).click()")
+                answered = await p.until(
+                    "/\\d+ min/.test(document.body.innerText) || /no way to get there/.test(document.body.innerText)",
+                    "the planner answers", timeout=30)
+                text = await p.js("document.body.innerText")
+                check("the planner answers", answered)
+                check("it offers at least one journey", "no way to get there" not in text,
+                      text[-200:])
+                # Every ride says which it is. A whole walk has no ride to
+                # label, and between two close stops that is the right answer
+                check("each ride is labelled tracked or timetable",
+                      "tracked" in text or "timetable" in text
+                      or "walk the whole way" in text, text[-200:])
+                await p.shot("/tmp/shot-plan.png")
+
             p.step("changing the map theme")
             await p.js("[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Routes').click()")
             await asyncio.sleep(0.3)

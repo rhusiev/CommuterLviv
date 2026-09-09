@@ -313,6 +313,18 @@ It needs two caches built once, `python -m commuterlviv walk` then `plan
 accuracy the far end of that horizon costs is unmeasured and waits on the VPS
 recording.
 
+**Versions, and where the APK lives, 2026-09-09.** The project has one version
+number for all three trees, `0.2.0` as of this change: `commuterlviv/__init__.py`
+is the source, `web/package.json`, `mobile/pubspec.yaml` and the F-Droid recipe
+repeat it, `check.sh` fails if they drift, and `/api/health` reports it. Bump it
+with every substantial change; it stays under 1.0 while this is alpha, and the
+Android `versionCode` goes up with it because F-Droid orders by that alone.
+`deploy/release-apk.sh` builds the phone app into `deploy/apk/`, which the web
+container mounts read-only at `/srv/download`, so the newest build is always at
+`<site>/download/commuterlviv.apk` - `http://10.8.0.2:8080/download/` over the
+VPN. It replaces the `python3 -m http.server` that used to serve `/tmp/apk`,
+which did not survive a reboot and served whatever was last copied there.
+
 ## Do this next
 
 1. **Phase 6's first question, asked of Phase 5's answer.** Pull the VPS
