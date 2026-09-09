@@ -1,0 +1,26 @@
+# Behind a reverse proxy that is already running on this machine:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+#
+# Nothing is published to the host. The web container joins the proxy's own
+# docker network instead, and the proxy reaches it by container name:
+#
+#   commuterlviv.example.com {
+#           reverse_proxy commuterlviv_web:8080
+#   }
+#
+# Websockets need no extra configuration in Caddy - `/ws` is an ordinary
+# upgrade through the same reverse_proxy. TLS is the outer proxy's job, so the
+# Caddy inside the stack stays on plain :8080 and docker-compose.tls.yml is not
+# used with this file.
+services:
+  web:
+    ports: !override []
+    networks:
+      - internal_backend
+      - caddy_net
+
+networks:
+  caddy_net:
+    external: true
+    name: ${CADDY_NETWORK:-caddy}
