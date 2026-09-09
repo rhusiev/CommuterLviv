@@ -569,10 +569,15 @@ web/            the UI: Vite, React 19, MapLibre with a canvas over it
 mobile/         the phone app: Flutter, Android and iOS, F-Droid-shaped
   lib/src/      wire.dart (mirrors wire.py), live.dart, api.dart,
                 vehicle_layer.dart (one CustomPaint for the city),
-                home.dart (the tabs and every sheet), map_theme.dart
+                home.dart (the state both tabs share) and the widgets it
+                hands to: map_tab, times_tab, stop_card, sheets, stop_search,
+                map_theme.dart, strings.dart (uk and en)
   test/         wire_test.dart, against bytes Python encoded
   fdroid/       the fdroiddata build recipe, two fields still TODO
   fastlane/     the store listing F-Droid reads from the repository
+check.sh           everything checkable with nothing running: ruff's
+                   will-it-run rules, the package imports, the web types and
+                   build, flutter analyze and test. Run it before a commit
 check_parallel.py  the replay-identity guard described above
 check_prior.py     a one-off: is `tuned` just `no-prior` by another route
 check_overrides.py every rule in overrides.toml, against a fresh build
