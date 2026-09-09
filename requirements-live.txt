@@ -1,0 +1,8 @@
+# The live service only. The collector runs on a small VPS and installs
+# requirements.txt alone; nothing here belongs on that machine.
+-r requirements.txt
+starlette>=1.6
+uvicorn>=0.52
+websockets>=17.1
+asyncpg>=0.31
+argon2-cffi>=25.1
