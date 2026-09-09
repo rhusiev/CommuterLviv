@@ -610,8 +610,11 @@ It is built to be publishable on F-Droid, which is why it is Flutter and not
 Expo: F-Droid builds from source and takes no proprietary SDK, so there is no
 Play Services, no Firebase and no keyed map SDK anywhere in the tree. The
 basemap is the same VersaTiles OpenStreetMap tiles, rendered on the device.
-The one cost of that rule is that there is no locate-me button yet - see
-`mobile/README.md`. The app asks for the internet permission and nothing else.
+The one cost of that rule is paid by the locate-me button, which is a
+hand-written channel over AOSP's `LocationManager` rather than the usual
+package - see `mobile/README.md`. The app asks for the internet permission, and
+for location on the first press of that button; the fix never leaves the
+phone.
 
 The service needs one line for it: `app://commuterlviv` in `COMMUTERLVIV_ORIGINS`. The
 app is not a web page and has no web origin, and that scheme is one no browser

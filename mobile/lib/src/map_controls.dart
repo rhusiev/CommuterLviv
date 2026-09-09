@@ -5,12 +5,13 @@
 /// allowed to do is here too, next to the zoom limits they respect.
 library;
 
-import 'strings.dart';
-
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+
+import 'here.dart';
+import 'strings.dart';
 
 /// The city fits in one screen at 9; 18 is where the basemap stops having
 /// anything more to say
@@ -31,9 +32,12 @@ const mapInteraction = InteractionOptions(
 );
 
 class MapControls extends StatefulWidget {
-  const MapControls({super.key, required this.map});
+  const MapControls({super.key, required this.map, required this.here});
 
   final MapController map;
+
+  /// The locate button's state, and what it turns on
+  final Here here;
 
   @override
   State<MapControls> createState() => _MapControlsState();
@@ -50,12 +54,23 @@ class _MapControlsState extends State<MapControls> {
     _events = widget.map.mapEventStream.listen((_) {
       if (mounted) setState(() {});
     });
+    widget.here.addListener(_redraw);
   }
 
   @override
   void dispose() {
     _events?.cancel();
+    widget.here.removeListener(_redraw);
     super.dispose();
+  }
+
+  void _redraw() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _locate() async {
+    final at = await widget.here.start();
+    if (at != null && mounted) widget.map.move(at, 16);
   }
 
   void _zoom(double by) {
@@ -67,9 +82,22 @@ class _MapControlsState extends State<MapControls> {
   @override
   Widget build(BuildContext context) {
     final camera = widget.map.camera;
+    final locating = widget.here.state;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        _MapButton(
+          tooltip: locating == Locating.denied ? txt.noLocation : txt.whereAmI,
+          onPressed: locating == Locating.denied ? null : _locate,
+          child: Icon(
+            locating == Locating.on
+                ? Icons.my_location
+                : Icons.location_searching,
+            color: locating == Locating.on
+                ? Theme.of(context).colorScheme.primary
+                : null,
+          ),
+        ),
         if (camera.rotation != 0)
           _MapButton(
             tooltip: txt.faceNorth,

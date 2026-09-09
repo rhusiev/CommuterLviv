@@ -17,6 +17,7 @@ import 'package:vector_map_tiles/vector_map_tiles.dart';
 
 import '../main.dart' show tick;
 import 'api.dart';
+import 'here.dart';
 import 'live.dart';
 import 'map_tab.dart';
 import 'map_theme.dart';
@@ -62,6 +63,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int? _stop;
   int _tab = 0;
 
+  late final Here _here = Here(onFirstFix: (at) => _map.move(at, 16));
+
   late MapTheme _theme = themeById(widget.api.mapTheme);
   Style? _style;
 
@@ -75,6 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _live?.dispose();
+    _here.dispose();
     _map.dispose();
     super.dispose();
   }
@@ -420,6 +424,7 @@ class _HomeScreenState extends State<HomeScreen> {
             stops: _drawn,
             selected: _stop,
             theme: _theme,
+            here: _here,
             empty: _routes.isEmpty,
             onTap: _tap,
           ),

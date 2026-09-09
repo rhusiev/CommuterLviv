@@ -6,6 +6,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:vector_map_tiles/vector_map_tiles.dart';
 
+import 'here.dart';
 import 'live.dart';
 import 'map_controls.dart';
 import 'map_theme.dart';
@@ -26,6 +27,7 @@ class MapTab extends StatelessWidget {
     required this.stops,
     required this.selected,
     required this.theme,
+    required this.here,
     required this.empty,
     required this.onTap,
   });
@@ -40,6 +42,9 @@ class MapTab extends StatelessWidget {
   final List<int> stops;
   final int? selected;
   final MapTheme theme;
+
+  /// Where the phone is: a dot on the map, and the button that asks for it
+  final Here here;
 
   /// Whether no route is chosen, which is the one state worth explaining
   final bool empty;
@@ -85,6 +90,7 @@ class MapTab extends StatelessWidget {
               stops: stops,
               selected: selected,
               theme: theme,
+              here: here,
             ),
             const SimpleAttributionWidget(
               source: Text('OpenStreetMap · VersaTiles'),
@@ -92,7 +98,11 @@ class MapTab extends StatelessWidget {
             ),
           ],
         ),
-        Positioned(right: 12, bottom: 24, child: MapControls(map: map)),
+        Positioned(
+          right: 12,
+          bottom: 24,
+          child: MapControls(map: map, here: here),
+        ),
         if (style == null) const LinearProgressIndicator(minHeight: 2),
         if (empty)
           Center(

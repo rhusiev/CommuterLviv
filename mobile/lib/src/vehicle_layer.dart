@@ -20,6 +20,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'here.dart';
 import 'live.dart';
 import 'map_theme.dart';
 import 'models.dart';
@@ -41,6 +42,7 @@ class VehicleLayer extends StatefulWidget {
     required this.stops,
     required this.selected,
     required this.theme,
+    required this.here,
   });
 
   final Catalog catalog;
@@ -50,6 +52,9 @@ class VehicleLayer extends StatefulWidget {
   final List<int> stops;
   final int? selected;
   final MapTheme theme;
+
+  /// Where the phone is, when it has been asked and told
+  final Here here;
 
   @override
   State<VehicleLayer> createState() => _VehicleLayerState();
@@ -105,6 +110,7 @@ class _VehicleLayerState extends State<VehicleLayer>
           live: widget.live,
           stops: widget.stops,
           selected: widget.selected,
+          here: widget.here,
           ink: Palette.of(widget.theme.dark),
           badge: _badge,
         ),
@@ -121,6 +127,7 @@ class _Painter extends CustomPainter {
     required this.live,
     required this.stops,
     required this.selected,
+    required this.here,
     required this.ink,
     required this.badge,
   }) : super(repaint: repaint);
@@ -130,6 +137,10 @@ class _Painter extends CustomPainter {
   final Live live;
   final List<int> stops;
   final int? selected;
+
+  /// Read at paint time, not at build time: the ticker repaints every frame,
+  /// and a fix that arrived between builds has to be on the next one
+  final Here here;
   final Palette ink;
   final ui.Paragraph Function(int route) badge;
 
@@ -137,7 +148,38 @@ class _Painter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final bounds = Offset.zero & size;
     if (camera.zoom >= stopsZoom) _paintStops(canvas, bounds);
+    _paintHere(canvas);
     _paintVehicles(canvas, bounds);
+  }
+
+  void _paintHere(Canvas canvas) {
+    final fix = here.fix;
+    if (fix == null) return;
+    final at = camera.latLngToScreenOffset(fix.point);
+    // The ring is the honest part of this: a 300 m fix indoors drawn as a 6 px
+    // dot claims a precision the phone never had. It is measured by projecting
+    // a point that far north, so it follows the zoom without arithmetic of its
+    // own
+    final north = camera.latLngToScreenOffset(
+      LatLng(fix.point.latitude + fix.accuracy / 111320, fix.point.longitude),
+    );
+    final ring = (at - north).distance;
+    if (ring > _stopRadius * 2) {
+      canvas.drawCircle(
+        at,
+        ring,
+        Paint()..color = ink.here.withValues(alpha: 0.12),
+      );
+    }
+    canvas.drawCircle(at, 6, Paint()..color = ink.here);
+    canvas.drawCircle(
+      at,
+      6,
+      Paint()
+        ..color = ink.edge
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
   }
 
   void _paintStops(Canvas canvas, Rect bounds) {

@@ -1,7 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- The app is nothing but a client for a service: no network, no map,
-         no times. Nothing else is asked for. -->
+         no times. Location is the one other thing asked for, and only when the
+         locate button is pressed: it draws the dot on the map and is never
+         sent anywhere. Nothing else is asked for. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
 
     <application
         android:label="CommuterLviv"

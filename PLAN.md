@@ -891,13 +891,19 @@ map SDK with a key. Toolchain installed under XDG paths as asked - Flutter
       which is the app's default server and the recipe's `WebSite`. **One field
       is still a placeholder:** the repository URL, because the project has no
       public repository yet.
-- [ ] Locate-me on the phone. **Dropped from v1 deliberately.** The obvious
-      package, `geolocator`, pulls `com.google.android.gms:play-services-
-      location`, and F-Droid takes no build with a proprietary SDK in it. The
-      honest follow-up is a small platform channel over
-      `android.location.LocationManager`, which is AOSP, plus `CoreLocation` on
-      iOS. Until then the app asks for no location permission at all - the
-      Android manifest requests `INTERNET` and nothing else.
+- [x] Locate-me on the phone, 2026-09-09. Dropped from v1, and done the way
+      that entry said it would have to be: `geolocator` was tried first, then
+      taken back out because it pulls `com.google.android.gms:play-services-
+      location` and F-Droid takes no build with a proprietary SDK in it.
+      `MainActivity.kt` talks to AOSP's `android.location.LocationManager` over
+      two channels - `ua.lviv.commuterlviv/here` for `start`/`stop`, and
+      `.../here/fixes` for one `{lat, lon, accuracy}` per fix - and drops the
+      updates in `onPause`. `lib/src/here.dart` holds the fix and the browser's
+      four states, `off | waiting | on | denied`; the layer draws a 6 px dot and
+      an accuracy ring, the ring only when it would be wider than two stop
+      radii, the same rule `MapCanvas.tsx` uses. **iOS has no half yet**: the
+      channel is missing there, which reads as a refusal, so the button is
+      dead rather than the app.
 - [x] Documented. `mobile/README.md` is the app's own page; the root
       `README.md` gained a "The phone" section beside "The map"; `HANDOFF.md`
       gained the app in its layout tree, in its state of play, in its
