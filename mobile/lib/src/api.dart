@@ -12,6 +12,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
@@ -220,6 +221,22 @@ class Api {
     return [
       for (final c in answer['stops'] as List)
         Call.fromJson(c as Map<String, dynamic>),
+    ];
+  }
+
+  /// Door to door: walk to a stop, ride, walk to the door, ranked by arrival.
+  /// Most of a second at the far end, so it is asked once per search
+  Future<List<Journey>> plan(LatLng from, LatLng to) async {
+    final answer =
+        await _call(
+              'GET',
+              '/api/plan?from=${from.latitude},${from.longitude}'
+              '&to=${to.latitude},${to.longitude}',
+            )
+            as Map<String, dynamic>;
+    return [
+      for (final j in answer['options'] as List)
+        Journey.fromJson(j as Map<String, dynamic>),
     ];
   }
 

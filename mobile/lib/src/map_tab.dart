@@ -29,6 +29,7 @@ class MapTab extends StatelessWidget {
     required this.theme,
     required this.here,
     required this.empty,
+    required this.marks,
     required this.onTap,
   });
 
@@ -48,11 +49,17 @@ class MapTab extends StatelessWidget {
 
   /// Whether no route is chosen, which is the one state worth explaining
   final bool empty;
+
+  /// The ends of a journey being planned, lettered rather than coloured: two
+  /// pins of the same shape are told apart by the letter on a map of any
+  /// palette
+  final List<({LatLng at, String label})> marks;
   final void Function(LatLng point) onTap;
 
   @override
   Widget build(BuildContext context) {
     final style = this.style;
+    final ink = Palette.of(theme.dark);
     return Stack(
       children: [
         FlutterMap(
@@ -92,6 +99,34 @@ class MapTab extends StatelessWidget {
               theme: theme,
               here: here,
             ),
+            if (marks.isNotEmpty)
+              MarkerLayer(
+                markers: [
+                  for (final mark in marks)
+                    Marker(
+                      point: mark.at,
+                      width: 26,
+                      height: 26,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: ink.nub,
+                          border: Border.all(color: ink.edge, width: 2),
+                        ),
+                        child: Center(
+                          child: Text(
+                            mark.label,
+                            style: TextStyle(
+                              color: ink.edge,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             const SimpleAttributionWidget(
               source: Text('OpenStreetMap · VersaTiles'),
               alignment: Alignment.bottomLeft,
