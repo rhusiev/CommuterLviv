@@ -1141,6 +1141,13 @@ build are run by hand.
       considered and dropped - two locales and sixty strings do not pay for a
       code generator. Server error messages are still English: they come from
       `live/app.py` and are shown as sent.
+- [x] **The web app installs**, 2026-09-09. `web/public/manifest.webmanifest`
+      and `web/public/sw.js`: an icon, a standalone window, and a shell that
+      opens offline. The worker caches what it has served rather than a
+      generated precache list - vite hashes asset names - and never `/api` or
+      `/ws`. Offline it opens and says the service is not answering, which is
+      the truth. Verified against the live stack: the manifest, the worker and
+      the icons are served, and `/sw.js` carries `Cache-Control: no-cache`.
 
 ## Deliverables
 

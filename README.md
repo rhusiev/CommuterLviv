@@ -558,6 +558,18 @@ one for work, one for home - live on the server, so they follow the account
 rather than the browser. Serve `dist/` with a history fallback: every path has to
 return `index.html`, or `/join/<code>` is a 404 and the invite link is dead.
 
+It installs. `web/public/manifest.webmanifest` and `web/public/sw.js` make it a
+progressive web app: an icon on the home screen, no browser chrome, and a shell
+that opens without the network. The worker caches only what it has already
+served - hashed assets under `/assets/` for good, the document network-first -
+and never `/api` or `/ws`, because a minute-old arrival time is worse than none
+and a cached session would lie about who is signed in. Offline it opens and says
+the service is not answering, which is the truth: the times come from the socket.
+
+The language is Ukrainian, with English for a browser that asks for it;
+`web/src/lib/i18n.ts` holds both dictionaries and the picker is in the route
+panel. Changing it reloads the page.
+
 Smoothness is the reason for the shape of the code. Positions arrive every five
 seconds, and between them each vehicle is interpolated towards where the server
 last put it, eased over 1.2 s, with the heading taking the short way round.
