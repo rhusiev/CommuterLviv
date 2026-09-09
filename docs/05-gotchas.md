@@ -117,6 +117,18 @@ Also: the hex has no leading `#`. Add one.
   schedule claims full weekday service on 1 January. Only the realtime feed reflects what
   is actually running.
 
+**A few vehicles report a clock that is days or years wrong.** Each vehicle carries its
+own `timestamp` and a handful of them are badly off. On one poll at 2026-09-07 08:20:
+626 vehicles, median fix age 14 s, p90 43 s - and **7 vehicles reporting a fix older
+than a day**, grouped at 1, 2, 3 and 4 days back plus one at **1109 days**, a clock three
+years behind. A poll on 2026-09-06 had the same shape, 11 of 542.
+
+It is the clock that is wrong, not the position. Such a vehicle keeps reporting, its
+consecutive timestamps are a normal ten seconds apart, and it sits somewhere plausible
+on its route. So filter on `now - vehicle.timestamp` before drawing anything, or your map
+will show a bus where it was in 2023. Differences between one vehicle's own timestamps
+stay usable.
+
 ## Stops
 
 **Stop pairs are not linked.** No `parent_station`, no `location_type`. Strip the
@@ -156,3 +168,9 @@ slow on a phone. Load `static.zip` into SQLite once, index `(stop_id)` and
 Not every route is live at once. A daytime snapshot had **68 of 72** routes represented
 by at least one vehicle. Overnight it will be far fewer. Absence of a vehicle means "not
 running now", not "route deleted" - keep the route in your UI, sourced from static GTFS.
+
+**Between roughly 00:00 and 05:30 there are no vehicles at all**, because of the war.
+The feed does not announce this; it just returns an empty entity list. Measured
+2026-09-06, when all 2880 polls between 01:00 and 04:59 came back empty, while the static
+schedule for those hours is unchanged. An app that treats an empty feed as an error will
+spend every night retrying.
