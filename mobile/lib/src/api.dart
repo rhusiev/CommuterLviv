@@ -212,6 +212,17 @@ class Api {
   Future<void> activateSet(String? id) =>
       _call('POST', '/api/sets/active', body: {'id': id});
 
+  /// Where one vehicle is going, and when it gets there: the predictions the
+  /// socket already sends per stop, asked the other way round
+  Future<List<Call>> vehicle(int veh) async {
+    final answer =
+        await _call('GET', '/api/vehicle?veh=$veh') as Map<String, dynamic>;
+    return [
+      for (final c in answer['stops'] as List)
+        Call.fromJson(c as Map<String, dynamic>),
+    ];
+  }
+
   /// The catalog is a megabyte of names that never change while the service is
   /// up, so it is kept on disk against the tag the service sends and the usual
   /// request is a 304 with no body.

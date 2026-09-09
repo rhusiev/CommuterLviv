@@ -311,6 +311,28 @@ async def arrivals(request, session):
                   "t": int(r["t"])} for r in arr.at(i)] for i in ids}})
 
 
+async def vehicle(request, session):
+    """One vehicle: where it is predicted to be, and when.
+
+    The reverse of `arrivals` - that asks a stop which vehicles are coming,
+    this asks a vehicle which stops are. Both read the same predictions, so
+    the two answers cannot disagree.
+
+    An id that is not being tracked gets an empty list rather than a 404: a
+    vehicle that finished its run between the tap and the request is the
+    ordinary case, not an error.
+    """
+    app = request.app.state
+    want = request.query_params.get("veh", "")
+    if not want.isdigit():
+        return error("veh must be a number")
+    arr = app.svc.live.arrivals
+    rows = arr.of(int(want))
+    return JSONResponse({"t": arr.t, "veh": int(want), "stops": [
+        {"stop": int(r["stop"]), "route": int(r["route"]), "t": int(r["t"])}
+        for r in rows]})
+
+
 async def pins(request, session):
     """The stops someone watches, by feed id. The whole list is written on
     every change: it is at most 63 short strings, and a pin that half applied
@@ -455,6 +477,7 @@ def routes():
         Route("/api/me", protected(me), methods=["GET"]),
         Route("/api/catalog", protected(catalog), methods=["GET"]),
         Route("/api/arrivals", protected(arrivals), methods=["GET"]),
+        Route("/api/vehicle", protected(vehicle), methods=["GET"]),
         Route("/api/pins", protected(pins), methods=["GET", "POST"]),
         Route("/api/sets", protected(sets), methods=["GET", "POST"]),
         Route("/api/sets/active", protected(active), methods=["POST"]),

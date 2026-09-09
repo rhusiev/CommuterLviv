@@ -1,4 +1,4 @@
-import type { Arrivals, Catalog, Me, RouteSet, Sets, Status } from "./types";
+import type { Arrivals, Call, Catalog, Me, RouteSet, Sets, Status } from "./types";
 
 /** Same origin by default: in development Vite proxies `/api` and `/ws` to the
  * service, so the session cookie is a first-party cookie in both settings. */
@@ -84,6 +84,10 @@ export const api = {
 
   arrivals: (stops: number[]): Promise<Arrivals> =>
     call(`/api/arrivals?stops=${stops.join(",")}`),
+  /** Where one vehicle is going, and when it gets there: the predictions
+   * `arrivals` reads, asked the other way round */
+  vehicle: (veh: number): Promise<{ t: number; veh: number; stops: Call[] }> =>
+    call(`/api/vehicle?veh=${veh}`),
   status: (): Promise<Status> => call("/api/status"),
 };
 

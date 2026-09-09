@@ -112,6 +112,21 @@ check("activating a foreign set 404s", r.status_code == 404, r.text[:80])
 stops = ",".join(str(i) for i in range(5))
 r = s.get(BASE + f"/api/arrivals?stops={stops}")
 check("arrivals", r.status_code == 200 and "stops" in r.json(), r.text[:120])
+# Whichever vehicle the first stop expects is one that is certainly tracked,
+# so its own list should not be empty either
+due = next((v for v in r.json().get("stops", {}).values() if v), None)
+if due:
+    r = s.get(BASE + f"/api/vehicle?veh={due[0]['veh']}")
+    check("one vehicle's stops ahead",
+          r.status_code == 200 and r.json()["stops"], r.text[:120])
+else:
+    print("SKIP one vehicle's stops ahead - nothing is due at those stops")
+r = s.get(BASE + "/api/vehicle?veh=nonsense")
+check("a vehicle that is not a number is refused", r.status_code == 400, r.text[:80])
+r = s.get(BASE + "/api/vehicle?veh=65535")
+check("an untracked vehicle is empty, not an error",
+      r.status_code == 200 and r.json()["stops"] == [], r.text[:120])
+
 r = s.get(BASE + "/api/status")
 check("status", r.status_code == 200, r.text[:200])
 

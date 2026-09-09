@@ -115,6 +115,14 @@ class Arrivals:
             return self.eta[:0]
         return self.eta[self.start[stop_i]:self.start[stop_i + 1]]
 
+    def of(self, veh_i):
+        """One vehicle's road ahead: every stop it is predicted to call at,
+        soonest first. There is no index by vehicle - `eta` is sorted by stop -
+        so this is a scan, which over a few thousand rows of numpy is a
+        microsecond and not worth a second sort to avoid."""
+        rows = self.eta[self.eta["veh"] == veh_i]
+        return rows[np.argsort(rows["t"], kind="stable")]
+
 
 class Live:
     """Vehicle tracks, the pace model, and the two published snapshots.

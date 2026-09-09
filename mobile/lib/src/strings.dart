@@ -61,6 +61,8 @@ class Strings {
     required this.zoomOut,
     required this.whereAmI,
     required this.noLocation,
+    required this.stopsAhead,
+    required this.vehicleGone,
     required this.now,
     required this.oneMinute,
     required this.minutes,
@@ -112,6 +114,8 @@ class Strings {
   final String zoomOut;
   final String whereAmI;
   final String noLocation;
+  final String stopsAhead;
+  final String vehicleGone;
   final String now;
   final String oneMinute;
   final String Function(int minutes) minutes;
@@ -164,6 +168,8 @@ const _en = Strings(
   zoomOut: 'Zoom out',
   whereAmI: 'Where I am',
   noLocation: 'Location is not available',
+  stopsAhead: 'Stops ahead',
+  vehicleGone: 'This one is no longer being tracked',
   now: 'now',
   oneMinute: '1 min',
   minutes: _enMinutes,
@@ -219,6 +225,8 @@ const _uk = Strings(
   zoomOut: 'Віддалити',
   whereAmI: 'Де я',
   noLocation: 'Місцеперебування недоступне',
+  stopsAhead: 'Наступні зупинки',
+  vehicleGone: 'Цей транспорт більше не відстежується',
   now: 'зараз',
   oneMinute: '1 хв',
   minutes: _ukMinutes,

@@ -36,6 +36,11 @@ export type Arrival = { route: number; veh: number; t: number };
 
 export type Arrivals = { t: number; stops: Record<string, Arrival[]> };
 
+/** The reverse of an `Arrival`: one vehicle, and the stops ahead of it */
+export type Call = { stop: number; route: number; t: number };
+
+export type VehicleStops = { t: number; veh: number; stops: Call[] };
+
 export type Status = {
   variant: string;
   epochs: number;
