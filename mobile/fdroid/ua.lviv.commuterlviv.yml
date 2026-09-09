@@ -1,0 +1,58 @@
+# The build recipe for F-Droid.
+#
+# This file does not live here in the end: it is copied to
+# `metadata/ua.lviv.commuterlviv.yml` in a fork of the `fdroiddata` repository and
+# sent as a merge request. It is kept here so the recipe and the app it builds
+# change together.
+#
+# One field is still a placeholder, and only the owner of the project can fill
+# it: every `https://example.invalid/...` below, and the `Repo:` beneath them.
+# The project has no public repository yet. Everything else is ready - the
+# licence is MIT, the file is `LICENSE` at the root, and F-Droid takes it.
+#
+# There is no proprietary dependency to strip either: the app pulls no Google
+# Play services, no Firebase and no map vendor SDK, which is why it is a Flutter
+# app talking to `dart:io` sockets rather than an Expo one.
+
+Categories:
+  - Navigation
+  - Internet
+License: MIT
+AuthorName: rad1an
+WebSite: https://commuterlviv.r1a.nl
+SourceCode: https://example.invalid/commuterlviv
+IssueTracker: https://example.invalid/commuterlviv/issues
+
+AutoName: CommuterLviv
+
+RepoType: git
+Repo: https://example.invalid/commuterlviv.git
+
+Builds:
+  - versionName: 1.0.0
+    versionCode: 1
+    commit: v1.0.0
+    subdir: mobile/android/app
+    sudo:
+      - apt-get update
+      - apt-get install -y curl unzip xz-utils
+      - curl -o flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.2-stable.tar.xz
+      - echo "TODO sha256 of the archive  flutter.tar.xz" | sha256sum -c -
+      - tar xf flutter.tar.xz -C /opt
+      - chown -R vagrant:vagrant /opt/flutter
+    output: build/app/outputs/flutter-apk/app-release.apk
+    srclibs:
+      - flutter@3.47.2
+    prebuild:
+      - git config --global --add safe.directory /opt/flutter
+    build:
+      - PATH=/opt/flutter/bin:$PATH flutter config --no-analytics
+      - PATH=/opt/flutter/bin:$PATH flutter build apk --release
+    ndk: r27c
+
+# The version the app reports and the version F-Droid publishes are the same
+# number, taken from `mobile/pubspec.yaml`
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 1.0.0
+CurrentVersionCode: 1

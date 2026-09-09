@@ -1,0 +1,23 @@
+A live map of Lviv's trams, trolleybuses and buses, and an honest answer to
+"how long until mine gets here".
+
+The app is a client. It talks to commuterlviv.r1a.nl by default, and to any other
+server you or someone you trust runs if you give the sign-in screen a different
+address. It does nothing on its own. There is no account here that is not an
+account there, and there is no analytics, advertising or tracking of any kind.
+
+What it shows:
+
+* Every vehicle on the routes you pick, moving on the map in real time
+* An arrow only when the vehicle is actually moving. A bus standing at a light
+  gets no arrow rather than a guessed one
+* The next arrivals at any stop, predicted from how traffic is running today
+  rather than from the printed timetable
+* Stops you pin, with their times on one screen
+* Five map styles, dark and light
+
+The map is OpenStreetMap data rendered on the device from VersaTiles' free
+vector tiles. No key, no account, no map vendor.
+
+Permissions: internet, and nothing else. The app never asks for your location -
+the map does not follow you, and does not need to.
