@@ -19,6 +19,7 @@ import 'eta.dart';
 import 'map_theme.dart';
 import 'models.dart';
 import 'strings.dart';
+import 'theme.dart';
 
 class VehicleCard extends StatefulWidget {
   const VehicleCard({
@@ -93,10 +94,7 @@ class _VehicleCardState extends State<VehicleCard> {
                     backgroundColor: routeColour(route.short, route.type),
                     child: Text(
                       route.short,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xff0b0f14),
-                      ),
+                      style: const TextStyle(fontSize: 11, color: plate),
                     ),
                   ),
                   const SizedBox(width: 10),

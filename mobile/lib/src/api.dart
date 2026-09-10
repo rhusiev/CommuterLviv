@@ -12,9 +12,11 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'map_theme.dart';
 import 'models.dart';
 
 /// The value the server checks against `COMMUTERLVIV_ORIGINS`. A scheme no browser
@@ -51,9 +53,22 @@ class Api {
   static const _catalogKey = 'commuterlviv.catalog';
   static const _catalogTagKey = 'commuterlviv.catalog.tag';
 
+  /// The jar and nothing else. Everything else this class stores is a
+  /// preference; the jar is a credential, so it lives in the Keystore.
+  static const _safe = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+
   static Future<Api> open() async {
     final prefs = await SharedPreferences.getInstance();
-    final jar = prefs.getString(_jarKey);
+    // A build before 0.3.2 kept the jar in plain preferences. Moving it rather
+    // than dropping it means an upgrade does not sign everyone out
+    final stale = prefs.getString(_jarKey);
+    if (stale != null) {
+      await _safe.write(key: _jarKey, value: stale);
+      await prefs.remove(_jarKey);
+    }
+    final jar = await _safe.read(key: _jarKey);
     return Api._(
       prefs,
       prefs.getString(_baseKey) ?? defaultBase,
@@ -78,7 +93,7 @@ class Api {
     _base = trimmed;
     _cookies.clear();
     await _prefs.setString(_baseKey, trimmed);
-    await _prefs.remove(_jarKey);
+    await _safe.delete(key: _jarKey);
     await _prefs.remove(_catalogKey);
     await _prefs.remove(_catalogTagKey);
     return true;
@@ -121,7 +136,7 @@ class Api {
         touched = true;
       }
     }
-    if (touched) await _prefs.setString(_jarKey, jsonEncode(_cookies));
+    if (touched) await _safe.write(key: _jarKey, value: jsonEncode(_cookies));
   }
 
   Future<HttpClientResponse> _send(
@@ -182,10 +197,16 @@ class Api {
   );
 
   /// `open`, `code` or `closed` - which of the three ways in the sign-in screen
-  /// should offer. Public, because nobody is signed in when it is asked
-  Future<String> registration() async {
-    final health = await _call('GET', '/api/health') as Map<String, dynamic>;
-    return health['registration'] as String? ?? 'code';
+  /// should offer. Public, because nobody is signed in when it is asked.
+  ///
+  /// Asking also settles where the basemap comes from: a server that serves its
+  /// own says so, and it serves it at `/tiles` under the address this app was
+  /// pointed at. That is why the app carries no tile host of its own - point it
+  /// at another deployment and it follows that one's map too.
+  Future<String> health() async {
+    final h = await _call('GET', '/api/health') as Map<String, dynamic>;
+    setTileOrigin(h['tiles'] == true ? '$_base/tiles' : null);
+    return h['registration'] as String? ?? 'code';
   }
 
   Future<void> logout() => _call('POST', '/api/logout');

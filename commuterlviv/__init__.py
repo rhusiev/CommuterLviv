@@ -5,4 +5,4 @@ thing to whoever is using them: a leg label that changed in all three is not
 three releases. Alpha, so it stays under 1.0 - `check.sh` fails if
 `web/package.json` or `mobile/pubspec.yaml` disagrees with this line.
 """
-__version__ = "0.2.0"
+__version__ = "0.3.5"

@@ -1,9 +1,12 @@
 /// The city, the vehicles on it, and nothing that knows where they came from.
 library;
 
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart' hide Theme;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:vector_map_tiles/vector_map_tiles.dart';
 
 import 'here.dart';
@@ -127,10 +130,7 @@ class MapTab extends StatelessWidget {
                     ),
                 ],
               ),
-            const SimpleAttributionWidget(
-              source: Text('OpenStreetMap · VersaTiles'),
-              alignment: Alignment.bottomLeft,
-            ),
+            const _Attribution(),
           ],
         ),
         Positioned(
@@ -151,4 +151,39 @@ class MapTab extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Who the map belongs to, behind a badge rather than across the corner.
+///
+/// OpenStreetMap's licence is ODbL and its attribution guidelines ask for a
+/// credit that is reasonably visible; on a small screen they allow that credit
+/// to sit one tap inside an icon, as long as the icon itself is always on the
+/// map. That is what this is - the ⓘ never goes away. Where the medium has
+/// links the credit is asked to be one, hence `url_launcher`.
+///
+/// The third name in the old box, `flutter_map`, is gone: it is BSD-3, which
+/// wants its notice in the distribution, not on the screen. Its licence text
+/// still ships in the app's own licence page.
+class _Attribution extends StatelessWidget {
+  const _Attribution();
+
+  @override
+  Widget build(BuildContext context) => RichAttributionWidget(
+    alignment: AttributionAlignment.bottomLeft,
+    showFlutterMapAttribution: false,
+    attributions: [
+      TextSourceAttribution(
+        'OpenStreetMap',
+        onTap: () => _open('https://www.openstreetmap.org/copyright'),
+      ),
+      TextSourceAttribution(
+        'VersaTiles',
+        onTap: () => _open('https://versatiles.org/'),
+      ),
+    ],
+  );
+
+  void _open(String url) => unawaited(
+    launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+  );
 }

@@ -1215,6 +1215,57 @@ build are run by hand.
       being acted on. Both clients, and the wedge follows the stale marker's
       opacity now rather than staying at full.
 
+## Phase 9 - the deployed app, asked for by the user on 2026-09-09
+
+Six items, in the order the user gave them. The first is a live fault on the
+deployed service; the rest are the phone and web apps as products rather than
+as clients.
+
+- [x] **The journey planner answers 503 on the VPS.** `/api/plan` on
+      `https://commuterlviv.r1a.nl` returns 503 and the web app says "this
+      service has no journey planner", while the phone still works because it
+      is pointed at the stack on the VPN, which has the files. The cause is not
+      a bug: `data/walk.npz` and `data/transfers.npz` are built by hand, are not
+      in the checkout, and the VPS volume is new, so `Planner.maybe` finds
+      nothing and disables the endpoint exactly as designed. What is wrong is
+      the deployment story - "copy the tree and bring it up" cannot produce a
+      working planner. Fix it so a fresh volume ends up with a planner without
+      anybody running a command by hand, without a request ever waiting on
+      Overpass, and without the fetch happening on every restart.
+- [x] **The app icon is still Flutter's.** The launcher icon, the splash and
+      whatever else Android and iOS ask for should be the mark the web app
+      already uses, so the three clients are one product on a home screen.
+- [x] **Language without a restart.** Changing it currently needs the app
+      restarted; it should take effect where it is chosen.
+- [x] **Map tiles cached on the phone.** Asked as a question, and the answer is
+      that they already are - `lib/src/map_tiles.dart`, 200 MB for 90 days
+      under application support rather than the cache directory Android empties.
+      Kept here as an item so the answer is written down where the question was
+      asked; nothing to do unless the check finds otherwise. Checked: the four
+      settings are read by `lib/src/map_tab.dart` where the map is built, so the
+      cache is live. No change made.
+- [x] **The attribution box.** The user asks whether the permanent
+      "flutter_map | © OpenStreetMap · VersaTiles" strip can go behind a button.
+      Decide what each of the three actually requires, keep exactly that, and
+      put the rest behind an ⓘ. Answered: OpenStreetMap's data is ODbL and its
+      attribution guidelines want a credit that is reasonably visible, but they
+      allow a small screen to put that credit one tap inside an always-present
+      icon, and ask for a link to openstreetmap.org/copyright where the medium
+      has links. VersaTiles redistributes the same data and rides on that.
+      `flutter_map` is BSD-3, which wants its notice in the distribution and not
+      on the screen, so it is dropped from the map. `RichAttributionWidget` with
+      `showFlutterMapAttribution: false`, plus `url_launcher` for the two links.
+- [x] **Modernise both designs.** The phone app and the web app, as a single
+      pass over each so they still look like the same product afterwards. Done
+      by giving the two clients one palette rather than two sets of literals:
+      five colours and two radii, declared in `web/src/app.css`'s `@theme` block
+      and repeated in the new `mobile/lib/src/theme.dart`, two of them the two
+      colours of the icon. Above that, on the web, five utilities - `panel`,
+      `inset-panel`, `btn`, `btn-quiet`, `field` - and on the phone a `ThemeData`
+      that turns Material 3's elevation tint off everywhere. Depth is now a
+      hairline ring and a soft shadow instead of a border and a raised surface,
+      which is what stops a panel over the map reading as a second map.
+
 ## Deliverables
 
 - `reports/approaches.md` regenerated with every scored variant, keeping the

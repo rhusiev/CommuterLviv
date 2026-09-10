@@ -533,6 +533,12 @@ with `admin users`, `admin disable <name>` and `admin delete <name> --yes`
 beside it - `disable` locks an account and ends its sessions and can be undone,
 `delete` erases it and everything hanging off it and cannot.
 
+`admin operator <name>` is the fourth, and it grants one thing: the right to
+read `GET /api/status`, which reports engine health, how many clients are
+connected and how much the service is pushing. Being signed in does not carry
+that - to anyone without the flag the endpoint is a 404, so it does not even
+admit to being there. `--undo` takes it back.
+
 **One version, three trees.** `commuterlviv/__init__.py` holds it, `web/package.json`
 and `mobile/pubspec.yaml` repeat it, and `check.sh` fails if they drift; the
 service reports it at `/api/health`, so what is deployed is a question with an
@@ -625,6 +631,43 @@ Copying the recording in is not housekeeping: a restart replays its last two
 hours to warm the model, and a service that starts without one spends twenty
 minutes making the worst predictions it ever makes.
 
+**What it reaches out to, and what that costs you.** Four hosts, and only one of
+them is unavoidable:
+
+| Host | Who asks | How often | Doing without it |
+| --- | --- | --- | --- |
+| `track.ua-gis.com` | the service and the collector | every 5 s | nothing to do - this *is* the data |
+| `tiles.versatiles.org` | every phone and browser, per tile | while the map moves | `docker-compose.tiles.yml` serves the basemap from the stack instead - see below |
+| `overpass-api.de` | the service | once per volume, ever | `COMMUTERLVIV_BUILD_PLANNER=false` and copy `data/walk.npz` in |
+| `api.lad.lviv.ua` | the collector only | every 5 s | `--profile collect` is off by default; the served app never touches it |
+
+The one worth thinking about is the tile server, not Overpass. Overpass is asked
+once, in the background, for a 5 MB file that is then a file - no request a user
+makes ever waits on it, and the whole dependency ends the moment `walk.npz`
+exists. The basemap is the opposite: it is a request per tile, from every
+device, for as long as anyone pans the map, and it is the only third party your
+users talk to directly.
+
+**Serving the basemap yourself.** One script and one overlay:
+
+```sh
+deploy/tiles-setup.sh https://commuterlviv.example.org /opt/commuterlviv/tiles
+COMMUTERLVIV_TILES=/opt/commuterlviv/tiles \
+  docker compose -f docker-compose.yml -f docker-compose.tiles.yml up -d
+```
+
+The script cuts a Lviv extract out of the 66 GB planet over HTTP range requests
+- about 20 MB at maxzoom 14 - fetches the sprites and glyphs, and generates the
+five styles. It wants the address because a style names its sprite, glyph and
+tile URLs absolutely, and the phone's style reader does not resolve relative
+ones. That address is the only place this deployment writes its own name down.
+
+Neither app is built knowing any of it. The overlay sets
+`COMMUTERLVIV_SELF_TILES`, the service reports it on `/api/health`, and the web
+app and the phone app both ask before they draw a map - so one web image and one
+APK work under any domain, and pointing the phone at a different deployment
+follows that deployment's map too.
+
 Worth knowing:
 
 - **The collector runs in the stack.** It writes `data/feed.db` in a volume,
@@ -635,11 +678,14 @@ Worth knowing:
 - **First boot takes a couple of minutes.** The static GTFS feed has to be
   fetched and the city's geometry built from it. Both are cached in the same
   volume, so every boot after that is seconds.
-- **The journey planner is off until its caches exist.** Run
-  `docker compose exec service python -m commuterlviv walk` once, then
-  `... plan --build`; both land in the service volume. Until then `/api/plan`
-  is a 503 and the plan tab says so. The Overpass fetch is a few minutes and
-  sometimes times out under load - it is safe to retry.
+- **The journey planner builds itself on first boot**, in a background task, so
+  `/api/plan` is a 503 for the two or three minutes it takes and everything else
+  serves normally. It happens once, because the result is two files in the
+  volume. To do it by hand instead - or to keep the deployment off Overpass
+  entirely - set `COMMUTERLVIV_BUILD_PLANNER=false` and either copy
+  `data/walk.npz` and `data/transfers.npz` in, or run
+  `docker compose exec service python -m commuterlviv walk` and then
+  `... plan --build`.
 - **`COMMUTERLVIV_SECURE_COOKIES` defaults to true** and browsers only accept
   `__Host-` cookies over HTTPS. Serving over plain HTTP with it left on gives a
   login that silently never sticks.
@@ -705,6 +751,20 @@ one for work, one for home - live on the server, so they follow the account
 rather than the browser. Serve `dist/` with a history fallback: every path has to
 return `index.html`, or `/join/<code>` is a 404 and the invite link is dead.
 
+One palette, two clients. `web/src/app.css` declares five colours and two
+radii in a Tailwind `@theme` block, and `mobile/lib/src/theme.dart` repeats the
+same seven values; two of the colours, the near-black plate and the sky accent,
+are the two colours in `web/public/icon.svg`, so both apps are the colour of
+their own icon. Above that sit five utilities - `panel`, `inset-panel`, `btn`,
+`btn-quiet`, `field` - and anything floating over the map uses `panel`:
+translucent, blurred, a hairline ring and a soft shadow rather than a border,
+because the map underneath is the context. Nothing outside `app.css` names a
+`slate-*` shade for a surface.
+
+`tool/icons.sh` draws every icon of all three clients from that one SVG,
+including the `maskable` PNG the manifest points at, which is framed like the
+Android adaptive icon because a browser crops it.
+
 It installs. `web/public/manifest.webmanifest` and `web/public/sw.js` make it a
 progressive web app: an icon on the home screen, no browser chrome, and a shell
 that opens without the network. The worker caches only what it has already
@@ -715,7 +775,8 @@ the service is not answering, which is the truth: the times come from the socket
 
 The language is Ukrainian, with English for a browser that asks for it;
 `web/src/lib/i18n.ts` holds both dictionaries and the picker is in the route
-panel. Changing it reloads the page.
+panel. Changing it reloads the page; the phone app, which shares the same keys,
+switches without a restart.
 
 Smoothness is the reason for the shape of the code. Positions arrive every five
 seconds, and between them each vehicle is interpolated towards where the server

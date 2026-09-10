@@ -1,6 +1,7 @@
-"""One entry point for the twelve things this project does.
+"""One entry point for the fourteen things this project does.
 
     collect     record the live feeds into data/feed.db, indefinitely
+    merge       fold recordings from several machines into one file
     features    replay once and dump one feature row per prediction
     residual    fit offline models of what the shipped model gets wrong
     stack       blend the approaches that fail differently, per horizon
@@ -21,6 +22,11 @@ import sys
 def _collect(rest):
     from . import collect
     collect.main(rest)
+
+
+def _merge(rest):
+    from . import merge
+    merge.main(rest)
 
 
 def _features(rest):
@@ -198,6 +204,9 @@ def _admin(rest):
     off = sub.add_parser("disable", help="lock an account and end its sessions")
     off.add_argument("username")
     off.add_argument("--undo", action="store_true")
+    op = sub.add_parser("operator", help="let an account read /api/status")
+    op.add_argument("username")
+    op.add_argument("--undo", action="store_true")
     gone = sub.add_parser("delete", help="erase an account and all its data")
     gone.add_argument("username")
     gone.add_argument("--yes", action="store_true",
@@ -210,7 +219,11 @@ def _admin(rest):
             print(f"{r['username']:<20} joined {r['created_at']:%Y-%m-%d}  "
                   f"last login {r['last_login'] or '-'}  "
                   f"sessions {r['sessions']}"
-                  f"{'  DISABLED' if r['disabled'] else ''}")
+                  f"{'  DISABLED' if r['disabled'] else ''}"
+                  f"{'  OPERATOR' if r['operator'] else ''}")
+    elif a.what == "operator":
+        ok = admin.run(admin.operator(a.username, not a.undo))
+        print("done" if ok else "no such user")
     elif a.what == "delete":
         if not a.yes:
             raise SystemExit("pass --yes: deleting an account cannot be undone")
@@ -226,7 +239,8 @@ def _no_args(name, rest):
         raise SystemExit(f"commuterlviv {name} takes no arguments, got {' '.join(rest)}")
 
 
-COMMANDS = {"collect": _collect, "features": _features, "residual": _residual,
+COMMANDS = {"collect": _collect, "merge": _merge,
+            "features": _features, "residual": _residual,
             "stack": _stack, "evaluate": _evaluate, "experiment": _experiment,
             "sweep": _sweep, "check": _check, "diag": _diag,
             "walk": _walk, "plan": _plan, "serve": _serve, "admin": _admin}

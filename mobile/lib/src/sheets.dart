@@ -2,6 +2,8 @@
 /// drawn on, and which language everything is said in.
 library;
 
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart' hide Theme;
 import 'package:flutter/material.dart' as material show Theme;
 
@@ -36,9 +38,9 @@ class ThemeSheet extends StatelessWidget {
   );
 }
 
-/// Ukrainian or English. The strings are read once at launch, so this only
-/// records the choice - the sheet says as much rather than pretending the
-/// screen behind it changed.
+/// Ukrainian or English. Applied at once - `useLang` rebuilds the tree from the
+/// root - and stored afterwards, because writing to the phone's preferences is
+/// slower than a frame and nothing waits on it.
 class LanguageSheet extends StatelessWidget {
   const LanguageSheet({super.key, required this.api});
 
@@ -51,12 +53,12 @@ class LanguageSheet extends StatelessWidget {
       children: [
         for (final l in Lang.values)
           ListTile(
-            onTap: () async {
-              await api.setLanguage(l.name);
-              if (context.mounted) Navigator.pop(context);
+            onTap: () {
+              useLang(l);
+              Navigator.pop(context);
+              unawaited(api.setLanguage(l.name));
             },
             title: Text(l == Lang.uk ? 'Українська' : 'English'),
-            subtitle: l == lang ? null : Text(txt.restartToApply),
             trailing: l == lang ? const Icon(Icons.check) : null,
           ),
       ],

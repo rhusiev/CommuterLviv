@@ -19,6 +19,7 @@ import 'api.dart';
 import 'map_theme.dart';
 import 'models.dart';
 import 'strings.dart';
+import 'theme.dart';
 
 /// Which end of a journey a tap or a fix is for
 enum End { from, to }
@@ -95,7 +96,11 @@ class _JourneyPanelState extends State<JourneyPanel> {
     final ready = widget.from != null && widget.to != null;
     return Material(
       elevation: 8,
-      color: material.Theme.of(context).colorScheme.surface,
+      color: panel,
+      surfaceTintColor: Colors.transparent,
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(panelRadius),
+      ),
       child: SafeArea(
         top: false,
         child: Padding(
@@ -126,18 +131,16 @@ class _JourneyPanelState extends State<JourneyPanel> {
                 label: txt.from,
                 at: widget.from,
                 picking: widget.picking == End.from,
-                onPick: () => widget.onPick(
-                  widget.picking == End.from ? null : End.from,
-                ),
+                onPick: () =>
+                    widget.onPick(widget.picking == End.from ? null : End.from),
                 onHere: () => widget.onHere(End.from),
               ),
               _End(
                 label: txt.to,
                 at: widget.to,
                 picking: widget.picking == End.to,
-                onPick: () => widget.onPick(
-                  widget.picking == End.to ? null : End.to,
-                ),
+                onPick: () =>
+                    widget.onPick(widget.picking == End.to ? null : End.to),
                 onHere: () => widget.onHere(End.to),
               ),
               const SizedBox(height: 8),
@@ -277,8 +280,8 @@ class _Option extends StatelessWidget {
                 ),
               ],
             ),
-            for (final leg in journey.legs) _LegRow(leg: leg, catalog: catalog,
-                onStop: onStop),
+            for (final leg in journey.legs)
+              _LegRow(leg: leg, catalog: catalog, onStop: onStop),
           ],
         ),
       ),
@@ -333,10 +336,7 @@ class _LegRow extends StatelessWidget {
               ),
               child: Text(
                 route.short,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Color(0xff0b0f14),
-                ),
+                style: const TextStyle(fontSize: 11, color: plate),
               ),
             ),
             const SizedBox(width: 8),

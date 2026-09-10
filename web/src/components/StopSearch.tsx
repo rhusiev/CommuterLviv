@@ -121,23 +121,23 @@ export function StopSearch({ catalog, onGo }: Props) {
           e.preventDefault();
         }}
         placeholder={t.findStop}
-        className="w-32 rounded-md border border-slate-800 bg-slate-900 px-2 py-1 pr-7 text-sm text-slate-100 outline-none focus:w-56 focus:border-sky-600"
+        className="field w-32 py-1 pr-7 transition-[width] focus:w-56"
       />
       <button
         onClick={locate}
         disabled={locating}
         title={t.nearMe}
-        className="absolute right-1 top-1/2 -translate-y-1/2 rounded px-1 text-sm text-slate-500 hover:text-sky-300 disabled:text-slate-700"
+        className="absolute right-1 top-1/2 -translate-y-1/2 rounded px-1 text-sm text-slate-500 hover:text-accent disabled:text-slate-600"
       >
         ◎
       </button>
       {why !== "" && (
-        <p className="absolute left-0 top-full z-30 mt-1 w-72 rounded-md border border-slate-800 bg-slate-950/95 px-2 py-1.5 text-xs text-slate-400 backdrop-blur">
+        <p className="panel absolute left-0 top-full z-30 mt-1 w-72 px-2 py-1.5 text-xs text-slate-400">
           {why}
         </p>
       )}
       {shown.length > 0 && (
-        <ul className="absolute left-0 top-full z-30 mt-1 w-72 overflow-hidden rounded-md border border-slate-800 bg-slate-950/95 backdrop-blur">
+        <ul className="panel absolute left-0 top-full z-30 mt-1 w-72 overflow-hidden">
           {shown.map((i, n) => {
             const s = catalog.stops[i]!;
             return (
@@ -147,7 +147,7 @@ export function StopSearch({ catalog, onGo }: Props) {
                   onMouseEnter={() => setCursor(n)}
                   data-hit={s.name}
                   className={`block w-full px-2 py-1.5 text-left text-sm ${
-                    n === cursor ? "bg-slate-800 text-slate-100" : "text-slate-300"
+                    n === cursor ? "bg-accent/15 text-accent" : "text-slate-300"
                   }`}
                 >
                   <span className="truncate">{s.name}</span>

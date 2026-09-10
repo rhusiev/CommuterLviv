@@ -1,5 +1,22 @@
 @import "tailwindcss";
 
+/* The palette both clients draw from. `plate` and `accent` are the two colours
+   in public/icon.svg, so the app is the same colour as its own icon;
+   mobile/lib/src/theme.dart repeats these five values and nothing else does.
+
+   Depth comes from a hairline ring and a soft shadow rather than a heavy
+   border, which is what keeps a panel readable over a moving map. */
+@theme {
+  --color-plate: #0b0f14;
+  --color-panel: #121822;
+  --color-raised: #1b2432;
+  --color-accent: #38bdf8;
+  --color-hair: rgb(255 255 255 / 8%);
+
+  --radius-panel: 1rem;
+  --radius-control: 0.625rem;
+}
+
 html,
 body,
 #root {
@@ -7,6 +24,38 @@ body,
 }
 
 body {
-  @apply bg-slate-950 text-slate-100 antialiased;
+  @apply bg-plate text-slate-100 antialiased;
   overscroll-behavior: none;
+}
+
+/* Anything that floats above the map: the stop card, the side panels, the
+   search results. Translucent, because the map underneath is the context. */
+@utility panel {
+  @apply rounded-panel bg-panel/90 shadow-xl ring-1 ring-hair backdrop-blur-md;
+}
+
+/* The same surface with no blur and no shadow, for a block inside a panel */
+@utility inset-panel {
+  @apply rounded-control bg-raised/70 ring-1 ring-hair;
+}
+
+/* What the two buttons below share. Not used directly */
+@utility control {
+  @apply rounded-control px-3 py-1.5 text-sm transition-colors;
+  @apply outline-none focus-visible:ring-2 focus-visible:ring-accent/70;
+}
+
+/* The action a screen exists for */
+@utility btn {
+  @apply control bg-accent/15 font-medium text-accent hover:bg-accent/25;
+}
+
+/* Every other action */
+@utility btn-quiet {
+  @apply control bg-raised/70 text-slate-300 hover:bg-raised hover:text-slate-100;
+}
+
+@utility field {
+  @apply w-full rounded-control bg-raised/70 px-3 py-2 text-sm ring-1 ring-hair;
+  @apply outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-accent/70;
 }

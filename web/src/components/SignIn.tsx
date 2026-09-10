@@ -17,7 +17,7 @@ export function SignIn({ code, onIn }: { code: string | null; onIn: () => void }
   const [mode, setMode] = useState("code");
 
   useEffect(() => {
-    api.registration().then(setMode, () => {});
+    api.health().then((h) => setMode(h.registration ?? "code"), () => {});
   }, []);
 
   const joining = code !== null || signingUp;
@@ -38,7 +38,7 @@ export function SignIn({ code, onIn }: { code: string | null; onIn: () => void }
   };
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-slate-950 p-6">
+    <div className="flex min-h-dvh items-center justify-center bg-plate p-6">
       <form onSubmit={submit} className="w-full max-w-sm space-y-4">
         <div>
           <h1 className="text-xl font-semibold text-slate-100">{t.appName}</h1>
@@ -58,7 +58,7 @@ export function SignIn({ code, onIn }: { code: string | null; onIn: () => void }
             autoComplete="username"
             autoFocus
             required
-            className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-sky-600"
+            className="field mt-1"
           />
         </label>
 
@@ -71,7 +71,7 @@ export function SignIn({ code, onIn }: { code: string | null; onIn: () => void }
             name="password"
             autoComplete={joining ? "new-password" : "current-password"}
             required
-            className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-sky-600"
+            className="field mt-1"
           />
           {joining && <span className="mt-1 block text-xs text-slate-500">{t.passwordHint}</span>}
         </label>
@@ -81,7 +81,7 @@ export function SignIn({ code, onIn }: { code: string | null; onIn: () => void }
             type="checkbox"
             checked={remember}
             onChange={(e) => setRemember(e.target.checked)}
-            className="size-4 accent-sky-600"
+            className="size-4 accent-accent"
           />
           {t.stayIn}
         </label>
@@ -91,7 +91,7 @@ export function SignIn({ code, onIn }: { code: string | null; onIn: () => void }
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-lg bg-sky-600 py-2 font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+          className="btn w-full py-2 disabled:opacity-50"
         >
           {joining ? t.createAccount : t.signIn}
         </button>

@@ -104,21 +104,22 @@ async def set_pins(pool, user_id, stops):
 
 
 async def create(pool, user_id, name, routes):
+    """The name clash is left to the unique index rather than checked first,
+    because a check followed by an insert is two statements a concurrent
+    request can get between."""
     async with pool.acquire() as con:
         async with con.transaction():
             n = await con.fetchval(
                 "SELECT count(*) FROM route_sets WHERE user_id = $1", user_id)
             if n >= MAX_SETS:
                 return None, f"at most {MAX_SETS} sets"
-            clash = await con.fetchval(
-                "SELECT 1 FROM route_sets WHERE user_id = $1 AND lower(name) = lower($2)",
-                user_id, name)
-            if clash:
+            try:
+                row = await con.fetchrow(
+                    "INSERT INTO route_sets(user_id, name, routes, ord) "
+                    "VALUES($1,$2,$3,$4) RETURNING id, name, routes, ord",
+                    user_id, name, routes, n)
+            except UniqueViolationError:
                 return None, "a set with that name already exists"
-            row = await con.fetchrow(
-                "INSERT INTO route_sets(user_id, name, routes, ord) "
-                "VALUES($1,$2,$3,$4) RETURNING id, name, routes, ord",
-                user_id, name, routes, n)
     return as_json(row), None
 
 
@@ -150,12 +151,3 @@ async def activate(pool, user_id, set_id):
         "ON CONFLICT (user_id) DO UPDATE SET active_set = $2, updated_at = now()",
         user_id, set_id)
     return True
-
-
-async def reorder(pool, user_id, ids):
-    async with pool.acquire() as con:
-        async with con.transaction():
-            for i, sid in enumerate(ids):
-                await con.execute(
-                    "UPDATE route_sets SET ord = $3 WHERE id = $1 AND user_id = $2",
-                    sid, user_id, i)

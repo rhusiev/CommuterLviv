@@ -9,7 +9,6 @@ library;
 
 import 'dart:io' show Platform;
 
-import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -18,10 +17,15 @@ import 'src/api.dart';
 import 'src/home.dart';
 import 'src/sign_in.dart';
 import 'src/strings.dart';
+import 'src/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final api = await Api.open();
+  // Also settles where the basemap comes from, which the map reads before the
+  // sign-in screen would have asked - a resumed session never sees that screen.
+  // A server that cannot be reached leaves the public tile server standing
+  await api.health().catchError((_) => 'code');
   useLang(
     Lang.values.firstWhere((l) => l.name == api.language, orElse: phoneLang),
   );
@@ -71,36 +75,28 @@ class _CommuterLvivAppState extends State<CommuterLvivApp> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xff38bdf8),
-      brightness: Brightness.dark,
-    );
-    return MaterialApp(
-      title: 'CommuterLviv',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: scheme,
-        useMaterial3: true,
-        pageTransitionsTheme: const PageTransitionsTheme(
-          builders: {
-            TargetPlatform.android: ZoomPageTransitionsBuilder(),
-            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-          },
-        ),
+    // Everything says what `txt` said when it was last built, so switching
+    // language is one rebuild of the whole tree and nothing below has to know
+    return ListenableBuilder(
+      listenable: langChanged,
+      builder: (context, _) => MaterialApp(
+        title: 'CommuterLviv',
+        debugShowCheckedModeBanner: false,
+        theme: appTheme(),
+        home: !_checked
+            ? const _Splash()
+            : _user == null
+            ? SignInScreen(
+                api: widget.api,
+                onIn: (name) => setState(() => _user = name),
+              )
+            : HomeScreen(
+                api: widget.api,
+                username: _user!,
+                onOut: () => setState(() => _user = null),
+                key: ValueKey(_user),
+              ),
       ),
-      home: !_checked
-          ? const _Splash()
-          : _user == null
-          ? SignInScreen(
-              api: widget.api,
-              onIn: (name) => setState(() => _user = name),
-            )
-          : HomeScreen(
-              api: widget.api,
-              username: _user!,
-              onOut: () => setState(() => _user = null),
-              key: ValueKey(_user),
-            ),
     );
   }
 }

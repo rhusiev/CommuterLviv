@@ -58,17 +58,3 @@ export type Leg = {
 export type Journey = { dep: number; arr: number; rides: number; live: boolean; legs: Leg[] };
 
 export type Plan = { t: number; options: Journey[] };
-
-export type Status = {
-  variant: string;
-  epochs: number;
-  tracks: number;
-  vehicles: number;
-  arrivals: number;
-  positions_age: number;
-  arrivals_age: number;
-  uptime: number;
-  polls: number;
-  errors: number;
-  clients: number;
-};

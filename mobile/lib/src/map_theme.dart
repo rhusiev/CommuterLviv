@@ -16,9 +16,18 @@ class MapTheme {
   final String name;
   final bool dark;
 
-  String get styleUrl =>
-      'https://tiles.versatiles.org/assets/styles/$id/style.json';
+  String get styleUrl => '$_tiles/assets/styles/$id/style.json';
 }
+
+/// Where the basemap comes from. The public server unless the deployment this
+/// app is pointed at serves its own, which `/api/health` says and `Api.health`
+/// records. Nothing here is compiled in: the app carries no tile host, so one
+/// build works against any deployment and following a different server means
+/// following its map too.
+String _tiles = _public;
+const _public = 'https://tiles.versatiles.org';
+
+void setTileOrigin(String? origin) => _tiles = origin ?? _public;
 
 const mapThemes = [
   MapTheme('shadow', 'Shadow', dark: true),

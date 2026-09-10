@@ -246,20 +246,21 @@ export function App() {
     );
 
   return (
-    <div className="flex h-dvh flex-col bg-slate-950 text-slate-100">
-      <header className="flex items-center gap-2 border-b border-slate-800 px-3 py-2">
-        <button
-          onClick={() => setPanel((v) => !v)}
-          className="rounded-md bg-slate-800 px-3 py-1.5 text-sm hover:bg-slate-700"
-        >
+    <div className="flex h-dvh flex-col bg-plate text-slate-100">
+      <header className="flex items-center gap-2 px-3 py-2 ring-1 ring-hair">
+        <button onClick={() => setPanel((v) => !v)} className="btn-quiet">
           {t.routes}
         </button>
-        <nav className="flex rounded-md bg-slate-900 p-0.5 text-sm">
+        <nav className="flex rounded-control bg-panel p-0.5 text-sm ring-1 ring-hair">
           {(["map", "times", "plan"] as const).map((v) => (
             <button
               key={v}
               onClick={() => setTab(v)}
-              className={`rounded px-3 py-1 ${tab === v ? "bg-slate-700" : "text-slate-400"}`}
+              className={`rounded-md px-3 py-1 transition-colors ${
+                tab === v
+                  ? "bg-accent/15 font-medium text-accent"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
             >
               {v === "map" ? t.map : v === "times" ? t.times : t.plan}
             </button>
@@ -297,7 +298,7 @@ export function App() {
       </header>
 
       {notice !== null && (
-        <p className="flex items-center gap-2 bg-rose-950/80 px-3 py-1.5 text-sm text-rose-200">
+        <p className="flex items-center gap-2 bg-rose-500/10 px-3 py-1.5 text-sm text-rose-200">
           {notice}
           <button
             onClick={() => setNotice(null)}
@@ -332,7 +333,7 @@ export function App() {
             theme={theme}
           />
           {tab === "plan" && (
-            <aside className="absolute inset-y-0 right-0 z-20 w-96 max-w-[90vw] border-l border-slate-800 bg-slate-950/95 p-3 backdrop-blur">
+            <aside className="absolute inset-y-0 right-0 z-20 w-96 max-w-[90vw] bg-panel/90 p-3 ring-1 ring-hair backdrop-blur-md">
               <JourneyPanel
                 catalog={cat}
                 from={from}
@@ -393,7 +394,7 @@ export function App() {
         )}
 
         {panel && (
-          <aside className="absolute inset-y-0 left-0 z-20 w-80 max-w-[85vw] border-r border-slate-800 bg-slate-950/95 p-3 backdrop-blur">
+          <aside className="absolute inset-y-0 left-0 z-20 w-80 max-w-[85vw] bg-panel/90 p-3 ring-1 ring-hair backdrop-blur-md">
             <RoutePanel
               catalog={cat}
               theme={theme}
@@ -439,13 +440,10 @@ export function App() {
 
 function Splash({ text, onRetry }: { text: string; onRetry?: () => void }) {
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-slate-950 text-slate-500">
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-plate text-slate-500">
       <p className="max-w-sm px-4 text-center">{text}</p>
       {onRetry && (
-        <button
-          onClick={onRetry}
-          className="rounded-md bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
-        >
+        <button onClick={onRetry} className="btn-quiet">
           {t.tryAgain}
         </button>
       )}

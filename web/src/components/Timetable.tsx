@@ -48,7 +48,7 @@ export function Timetable({
             {due.length === 0 ? (
               <p className="mt-1 text-sm text-slate-600">{t.nothingDue}</p>
             ) : (
-              <ul className="mt-1 divide-y divide-slate-800/70">
+              <ul className="mt-1 divide-y divide-hair">
                 {due.map((a) => {
                   const r = catalog.routes[a.route];
                   return (

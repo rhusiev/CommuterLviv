@@ -174,3 +174,48 @@ The feed does not announce this; it just returns an empty entity list. Measured
 2026-09-06, when all 2880 polls between 01:00 and 04:59 came back empty, while the static
 schedule for those hours is unchanged. An app that treats an empty feed as an error will
 spend every night retrying.
+
+## SQLite's `auto_vacuum` cannot be turned on after the fact
+
+`collect.py` opens its recording with `PRAGMA auto_vacuum=INCREMENTAL`, and `prune()`
+relies on it: it deletes rows older than `--keep-days` and then runs
+`PRAGMA incremental_vacuum` to hand the freed pages back to the filesystem.
+
+That pragma is only honoured on a database that has no tables yet. On an existing file
+it is silently a no-op - no error, no warning - and `PRAGMA auto_vacuum` keeps reporting
+`0`. `incremental_vacuum` then does nothing, deleted rows leave free pages inside the
+file, and the file never shrinks. The only way to change the setting afterwards is a full
+`VACUUM`, which needs room for a second copy of the database.
+
+The production recording is one of these: it came from `merge.py` rather than from a
+fresh `collect` run, and reports `auto_vacuum: 0`. Pruning it will still bound how much
+*data* it holds, but not how many *bytes* it occupies, so `--min-free-gb` is the guard
+that actually stops it, not `--keep-days`.
+
+## A file copied into a Docker volume keeps the host's uid, and SQLite calls that "readonly"
+
+The images run as `commuterlviv`, uid **10001**. A recording copied into the volume over
+`scp` or `docker cp` arrives owned by whoever copied it - uid 1000 on the VPS - and the
+directory around it stays `drwxr-xr-x`. The service only reads the recording, so it
+starts and serves happily and nothing looks wrong.
+
+The collector is the first thing that writes, and it fails with
+
+```
+write failed OperationalError('attempt to write a readonly database')
+```
+
+which names neither the file nor the permission. It is not the database that is
+read-only and not the mount: `docker inspect` reports the volume `"RW":true`. It is the
+file's owner, and SQLite reports every permission failure this way.
+
+There is no sudo on the VPS, so the fix goes through a container that is root:
+
+```sh
+docker run --rm -u 0 -v commuterlviv_service_data:/d alpine \
+  chown 10001:10001 /d/feed.db /d/feed.db-shm /d/feed.db-wal
+```
+
+All three, not just `feed.db` - WAL mode writes the `-wal` and `-shm` files beside it and
+fails the same way on either. Then restart the collector. Anything else copied into a
+volume by hand needs the same treatment.

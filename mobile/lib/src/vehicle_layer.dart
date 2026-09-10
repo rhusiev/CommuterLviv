@@ -24,6 +24,7 @@ import 'here.dart';
 import 'live.dart';
 import 'map_theme.dart';
 import 'models.dart';
+import 'theme.dart';
 
 /// Badge radius, in logical pixels
 const badgeRadius = 13.0;
@@ -91,7 +92,7 @@ class _VehicleLayerState extends State<VehicleLayer>
               fontWeight: FontWeight.w600,
             ),
           )
-          ..pushStyle(ui.TextStyle(color: const Color(0xff0b0f14)))
+          ..pushStyle(ui.TextStyle(color: plate))
           ..addText(short);
     return builder.build()
       ..layout(const ui.ParagraphConstraints(width: badgeRadius * 2));

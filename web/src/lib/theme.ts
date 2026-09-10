@@ -22,11 +22,21 @@ export const THEMES: Theme[] = [
 
 const KEY = "commuterlviv.theme";
 
-/** A full style URL still overrides everything, for a self-hosted tile server */
-const OVERRIDE = import.meta.env.VITE_MAP_STYLE as string | undefined;
+/** Where the basemap comes from. The public server unless this deployment
+ * serves its own, which `/api/health` says and `setSelfTiles` records - a built
+ * bundle knows no hostname, so the same image runs under any domain.
+ *
+ * `/tiles` and not a full URL: the app and the tile server are the same origin
+ * by construction, because Caddy puts them there. A self-hosted
+ * `versatiles serve` lays its styles out at the same paths as the public one,
+ * so only the origin differs and every theme stays its own map. */
+let tiles = "https://tiles.versatiles.org";
 
-export const styleUrl = (t: Theme) =>
-  OVERRIDE ?? `https://tiles.versatiles.org/assets/styles/${t.id}/style.json`;
+export const setSelfTiles = (self: boolean) => {
+  tiles = self ? "/tiles" : "https://tiles.versatiles.org";
+};
+
+export const styleUrl = (t: Theme) => `${tiles}/assets/styles/${t.id}/style.json`;
 
 export const loadTheme = (): Theme => {
   try {

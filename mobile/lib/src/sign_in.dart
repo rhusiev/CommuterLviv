@@ -44,7 +44,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
   Future<void> _askMode() async {
     try {
-      final mode = await widget.api.registration();
+      final mode = await widget.api.health();
       if (mounted) {
         setState(() {
           _mode = mode;

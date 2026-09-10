@@ -31,12 +31,15 @@ class Config:
     # Shrinkage: observations a layer needs before it outweighs the one it backs
     # off to. Half-lives: how live "now" is, and how long the baseline remembers.
     # `day_hl` is a third term at day scale, off at 0.0, that carries a cell
-    # across the overnight gap in service.
+    # across the overnight gap in service. `prof_hl` is not a term but a
+    # back-off: one number per unit per hour of the day, kept over weeks, that
+    # the live terms shrink towards instead of the corridor.
     k_unit: float = 4.0
     k_corr: float = 4.0
     fast_hl: float = 480.0
     slow_hl: float = 5400.0
     day_hl: float = 0.0
+    prof_hl: float = 0.0
 
 
 FULL = Config("full", "The model as it ships: everything below turned on.")
@@ -94,6 +97,24 @@ VARIANTS = [
                 "the city 15% slower than it is. This asks whether what a cell "
                 "was doing yesterday is a better opening guess than the "
                 "schedule."),
+    replace(FULL, name="profile", prof_hl=604800.0,
+            doc="What this cell does at this hour, learned across days and kept "
+                "for weeks, put where the corridor used to be: the thing the "
+                "live terms fall back on when they have nothing. Finding 6 "
+                "measures the model opening the morning peak believing the city "
+                "15% slower than it is, because the overnight gap decays every "
+                "live term away and leaves only the timetable. `slow-day` "
+                "carries yesterday across that gap as one number per cell; this "
+                "carries yesterday's *morning* into this morning, which is the "
+                "difference that matters if the city's slowness is a shape over "
+                "the day rather than a level."),
+    replace(FULL, name="profile-no-prior", prof_hl=604800.0, prior="off",
+            doc="The same profile with the timetable removed, so the hour-of-day "
+                "pattern has to be learned rather than inherited. This is the "
+                "literal form of finding 6's remedy - a learned profile instead "
+                "of the schedule's - and the pair with `profile` says whether "
+                "the schedule still adds anything once the model has its own "
+                "history of the same hours."),
     replace(FULL, name="sections", unit="section", corridor=False,
             doc="Learn one travel time per stop-to-stop section rather than per "
                 "100 m cell. Corridor pooling is off because a section spans "

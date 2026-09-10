@@ -20,6 +20,7 @@ asks who is listening, and only invited accounts can answer.
 """
 import asyncio
 import contextlib
+import ipaddress
 import json
 import time
 import uuid as uuidlib
@@ -41,6 +42,18 @@ REMEMBER_COOKIE = "lp_remember"
 
 MAX_BODY = 8 * 1024
 SESSION_RECHECK = 60.0          # s between asking whether an open socket still has a session
+PLAN_WORKERS = 4                # journey searches running at once, city-wide
+
+
+def _address(raw):
+    """The header as an address, or nothing. `auth_events.ip` is an `inet`
+    column, so a value that is not an address makes the insert raise - and that
+    insert is on the login path, which turned a bad header into a 500 for every
+    sign-in rather than a missing audit field."""
+    try:
+        return str(ipaddress.ip_address(raw))
+    except ValueError:
+        return None
 
 
 def log(*a):
@@ -68,7 +81,7 @@ class Guard:
         if self.set.trust_proxy:
             fwd = request.headers.get("x-forwarded-for", "")
             if fwd:
-                return fwd.split(",")[0].strip()
+                return _address(fwd.split(",")[0].strip())
         return request.client.host if request.client else None
 
     def origin_ok(self, request):
@@ -117,9 +130,16 @@ def error(message, status=400, **extra):
 
 
 async def body(request):
-    raw = await request.body()
-    if len(raw) > MAX_BODY:
+    # Checked before reading, not after: `request.body()` buffers whatever was
+    # sent, so a refusal that comes after it has already cost the memory
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and (len(declared) > 9 or int(declared) > MAX_BODY):
         return None, error("request too large", 413)
+    raw = b""
+    async for chunk in request.stream():
+        raw += chunk
+        if len(raw) > MAX_BODY:
+            return None, error("request too large", 413)
     try:
         data = json.loads(raw or b"{}")
     except json.JSONDecodeError:
@@ -302,14 +322,11 @@ async def arrivals(request, session):
     app = request.app.state
     want = request.query_params.get("stops", "")
     cat = app.svc.live.cat
-    ids = []
-    for part in want.split(",")[:hub.MAX_STOPS]:
-        if part.isdigit() and int(part) < len(cat.stops):
-            ids.append(int(part))
-    arr = app.svc.live.arrivals
-    return JSONResponse({"t": arr.t, "stops": {
-        str(i): [{"route": int(r["route"]), "veh": int(r["veh"]),
-                  "t": int(r["t"])} for r in arr.at(i)] for i in ids}})
+    # The length bound is not fussiness: `int` on a digit string long enough
+    # raises rather than returning, and the query string is not size-checked
+    ids = [int(p) for p in want.split(",")[:hub.MAX_STOPS]
+           if p.isdigit() and len(p) <= 9 and int(p) < len(cat.stops)]
+    return JSONResponse(hub.due(app.svc.live.arrivals, ids))
 
 
 async def vehicle(request, session):
@@ -325,7 +342,7 @@ async def vehicle(request, session):
     """
     app = request.app.state
     want = request.query_params.get("veh", "")
-    if not want.isdigit():
+    if not want.isdigit() or len(want) > 9:
         return error("veh must be a number")
     arr = app.svc.live.arrivals
     rows = arr.of(int(want))
@@ -362,8 +379,15 @@ async def journey(request, session):
     dest = _point(request.query_params.get("to"))
     if origin is None or dest is None:
         return error("from and to must each be lat,lon inside Lviv")
-    found = await asyncio.to_thread(app.planner.search, origin, dest,
-                                    app.svc.live.arrivals)
+    # A search is most of a second of one core, and the model and the map want
+    # those cores. Refused rather than queued once they are all busy: the rate
+    # limit alone would let one account put two hundred in flight, and a queue
+    # of them is the same denial of service with a longer fuse
+    if app.planning.locked():
+        return error("the planner is busy; try that again", 503)
+    async with app.planning:
+        found = await asyncio.to_thread(app.planner.search, origin, dest,
+                                        app.svc.live.arrivals)
     return JSONResponse(found)
 
 
@@ -440,15 +464,28 @@ async def health(request):
     The registration mode is here because a client has to know it before anyone
     is signed in, and it is not a secret: whether this service takes new
     accounts is answered by trying.
+
+    `tiles` is here for the same reason and answers the same way. It says the
+    basemap is served from this deployment's own origin, at `/tiles`, so a
+    client asks for it there rather than at tiles.versatiles.org. Asking rather
+    than being built knowing means one app binary works against any deployment,
+    self-hosting or not.
     """
     app = request.app.state
     return JSONResponse({"ok": app.svc.live.epochs > 0 or app.svc.polls > 0,
                          "uptime": round(time.time() - app.started, 1),
                          "version": __version__,
-                         "registration": app.settings.registration})
+                         "registration": app.settings.registration,
+                         "tiles": app.settings.self_tiles})
 
 
 async def status(request, session):
+    """Engine health and socket counts. Operators only: it says how many people
+    are connected and how much the service is pushing, which is the operator's
+    business and nobody else's. `python -m commuterlviv admin operator <name>`
+    grants it."""
+    if not session["operator"]:
+        return error("not found", 404)
     app = request.app.state
     return JSONResponse({**app.svc.health(), **app.hub.stats()})
 
@@ -544,7 +581,11 @@ def build(st=None, net=None):
         s.svc = service.Service(st, loaded, cat, log)
         s.planner = journeys.Planner.maybe(loaded, cat, log)
         s.hub = hub.Hub(s.svc.live)
+        s.planning = asyncio.Semaphore(PLAN_WORKERS)
         s.tasks = [*await s.svc.start(s.hub), asyncio.create_task(sweeper(s.pool))]
+        if s.planner is None and st.build_planner:
+            s.tasks.append(asyncio.create_task(
+                journeys.arrange(s, loaded, cat, log)))
         log(f"serving {st.variant} on {len(cat.routes)} routes, "
             f"{len(cat.stops)} stops")
         try:

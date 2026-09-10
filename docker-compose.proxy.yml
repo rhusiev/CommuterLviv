@@ -9,6 +9,15 @@
 #           reverse_proxy commuterlviv_web:8080
 #   }
 #
+# The outer proxy must overwrite the client address rather than add to it, or
+# the rate limits can be dodged by sending the header:
+#
+#   commuterlviv.example.com {
+#           reverse_proxy commuterlviv_web:8080 {
+#                   header_up X-Forwarded-For {remote_host}
+#           }
+#   }
+#
 # Websockets need no extra configuration in Caddy - `/ws` is an ordinary
 # upgrade through the same reverse_proxy. TLS is the outer proxy's job, so the
 # Caddy inside the stack stays on plain :8080 and docker-compose.tls.yml is not
@@ -16,6 +25,10 @@
 services:
   web:
     ports: !override []
+    environment:
+      # Behind another proxy the peer is that proxy, so the address to pass on
+      # is the one it forwarded. See the comment in deploy/Caddyfile
+      COMMUTERLVIV_CLIENT_IP: "{http.request.header.X-Forwarded-For}"
     networks:
       - internal_backend
       - caddy_net

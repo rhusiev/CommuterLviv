@@ -127,8 +127,10 @@ refused and the map stays empty while everything else works.
 | `lib/src/eta.dart` | an arrival's absolute time, said as a countdown |
 | `lib/src/journey_panel.dart` | two points, and the ways between them |
 | `lib/src/map_tiles.dart` | where the basemap is kept between runs |
+| `lib/src/theme.dart` | every colour and radius the app uses, once |
+| `lib/src/strings.dart` | Ukrainian and English, and the switch between them |
 
-Seven things are worth knowing before changing any of it.
+Ten things are worth knowing before changing any of it.
 
 **A password manager cannot see a Flutter form.** The whole app is one native
 view, so Bitwarden and the rest are offered nothing to fill unless the fields
@@ -183,6 +185,36 @@ and 50 parsed tiles in memory. `flutter analyze` calls that assignment an error
 and is wrong: it resolves the package's conditional export to the web stub,
 where `Directory` is a `String`, while the compiler picks the `dart:io` one.
 Hence the `ignore` comment at the call in `home.dart`.
+
+**The language switches without a restart.** `txt` is a top-level value, not an
+inherited widget, so a widget says whatever `txt` said when it was last built.
+`useLang` points it at the other `Strings` and bumps `langChanged`, a
+`ValueNotifier` that `main.dart` wraps the whole `MaterialApp` in, so one
+rebuild from the root is the entire mechanism and no widget below has to know
+the language can change. Nothing may cache a string in a field or in
+`initState`, or that copy will be the old language.
+
+**The attribution is a badge, not a strip.** OpenStreetMap's data is ODbL and
+its attribution guidelines want a credit that is reasonably visible - but they
+allow a small screen to put that credit one tap inside an icon, as long as the
+icon is always on the map, and they ask for a link to
+openstreetmap.org/copyright wherever the medium has links. So `map_tab.dart`
+uses `RichAttributionWidget`: a permanent ⓘ, opening OpenStreetMap and
+VersaTiles as links, which is why `url_launcher` is a dependency. `flutter_map`
+itself is dropped from the map - `showFlutterMapAttribution: false` - because
+BSD-3 wants its notice in the distribution, not on the screen, and it is still
+in the app's licence page.
+
+**Every icon comes out of one SVG.** `tool/icons.sh` rasterises
+`web/public/icon.svg` into the Android mipmaps, the adaptive-icon foreground,
+the splash bitmap and all sixteen files `ios/.../AppIcon.appiconset` asks for -
+and the web app's own PNGs, so the three clients cannot drift. Three framings,
+because three things crop differently: the legacy icon is the whole mark with
+its rounded plate; the adaptive foreground is the mark alone, scaled so its 368
+units of height land on the 66 of the 108-unit canvas every launcher mask
+keeps; the iOS files are square, and flattened to RGB because App Store
+validation rejects an alpha channel even when it is fully opaque. The results
+are committed: a build from source must not need a rasteriser.
 
 ## Planning a journey
 

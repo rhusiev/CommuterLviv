@@ -14,6 +14,8 @@ user has is dropped with it.
 """
 import datetime
 
+from asyncpg.exceptions import UniqueViolationError
+
 from . import security
 
 GRACE = 30.0     # s an already-rotated remember-me token stays acceptable
@@ -41,7 +43,9 @@ async def register(pool, ph, username, password, code=None, mode="code"):
     """Create an account. Returns (user_id, None) or (None, why not).
 
     The invite code is spent in the same transaction as the insert, so two
-    registrations racing on a one-use code cannot both win.
+    registrations racing on a one-use code cannot both win, and the name clash
+    is caught from the unique index rather than checked first, so two racing on
+    a username cannot either.
     """
     name = security.clean_username(username)
     if name is None:
@@ -63,13 +67,12 @@ async def register(pool, ph, username, password, code=None, mode="code"):
                     "RETURNING code_hash", security.digest(code or ""))
                 if spent is None:
                     return None, "that invite code is not valid"
-            taken = await con.fetchval(
-                "SELECT 1 FROM users WHERE lower(username) = $1", name)
-            if taken:
+            try:
+                uid = await con.fetchval(
+                    "INSERT INTO users(username, password_hash) VALUES($1,$2) "
+                    "RETURNING id", name, hashed)
+            except UniqueViolationError:
                 return None, "that username is taken"
-            uid = await con.fetchval(
-                "INSERT INTO users(username, password_hash) VALUES($1,$2) "
-                "RETURNING id", name, hashed)
     return uid, None
 
 
@@ -98,14 +101,14 @@ async def change_password(pool, ph, user_id, old, new, keep_session=None):
     """Returns None on success, otherwise why not. Every other session and every
     remember-me cookie dies here: changing a password is what someone does when
     they think they have been compromised, and it has to mean it."""
-    stored = await pool.fetchval("SELECT password_hash FROM users WHERE id = $1",
-                                 user_id)
-    if stored is None:
+    row = await pool.fetchrow(
+        "SELECT username, password_hash FROM users WHERE id = $1", user_id)
+    if row is None:
         return "no such user"
-    ok, _ = security.verify(ph, stored, old)
+    ok, _ = security.verify(ph, row["password_hash"], old)
     if not ok:
         return "the current password is wrong"
-    why = security.check_password(new)
+    why = security.check_password(new, row["username"])
     if why:
         return why
     async with pool.acquire() as con:
@@ -146,7 +149,7 @@ async def load_session(pool, raw, idle, max_life, touch=True):
         return None
     row = await pool.fetchrow(
         "SELECT s.id, s.user_id, s.csrf, s.created_at, s.last_seen, u.username, "
-        "u.disabled FROM sessions s JOIN users u ON u.id = s.user_id "
+        "u.disabled, u.operator FROM sessions s JOIN users u ON u.id = s.user_id "
         "WHERE s.id = $1 AND s.expires_at > now()", security.digest(raw))
     if row is None or row["disabled"]:
         return None
