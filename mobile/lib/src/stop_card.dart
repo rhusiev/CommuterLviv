@@ -7,6 +7,7 @@ import 'package:flutter/material.dart' as material show Theme;
 import 'due.dart';
 import 'live.dart';
 import 'models.dart';
+import 'route_badge.dart';
 import 'strings.dart';
 
 class StopCard extends StatefulWidget {
@@ -105,7 +106,7 @@ class _StopCardState extends State<StopCard> {
               children: [
                 for (final r in s.routes)
                   ActionChip(
-                    label: Text(catalog.routes[r].short),
+                    label: RouteBadge(route: catalog.routes[r], muted: true),
                     avatar: widget.watching.contains(r)
                         ? const Icon(Icons.check, size: 16)
                         : null,

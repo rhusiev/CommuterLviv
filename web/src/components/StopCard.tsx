@@ -1,5 +1,5 @@
 import { countdown, nextPerRoute } from "../lib/eta";
-import { colour } from "../lib/sprites";
+import { RouteBadge } from "./RouteBadge";
 import type { Arrival, Catalog } from "../lib/types";
 import { t } from "../lib/i18n";
 
@@ -60,12 +60,7 @@ export function StopCard({
               key={i}
               className="flex items-center gap-1 rounded-control bg-raised/70 py-0.5 pl-0.5 pr-1.5"
             >
-              <span
-                className="rounded px-1.5 py-0.5 text-xs font-semibold"
-                style={{ backgroundColor: colour(r.short, r.type), color: "#0b0f14" }}
-              >
-                {r.short}
-              </span>
+              <RouteBadge route={r} className="px-1.5 py-0.5 text-xs" />
               <span className="text-xs text-slate-400">{a ? countdown(a.t) : "-"}</span>
             </li>
           );

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { countdown, nextPerRoute } from "../lib/eta";
-import { colour } from "../lib/sprites";
 import type { Arrival, Catalog } from "../lib/types";
 import { t } from "../lib/i18n";
+import { RouteBadge } from "./RouteBadge";
 
 /** The pinned stops, and the next arrival of each route at each. The clock
  * ticks locally between epochs: the predictions change once a minute, but a
@@ -53,16 +53,11 @@ export function Timetable({
                   const r = catalog.routes[a.route];
                   return (
                     <li key={a.route} className="flex items-center gap-2 py-1.5">
-                      <span
-                        className="w-12 rounded px-1.5 py-0.5 text-center text-sm font-semibold"
-                        style={
-                          r
-                            ? { backgroundColor: colour(r.short, r.type), color: "#0b0f14" }
-                            : undefined
-                        }
-                      >
-                        {r?.short ?? "?"}
-                      </span>
+                      {r ? (
+                        <RouteBadge route={r} className="w-14 px-1.5 py-0.5 text-sm" />
+                      ) : (
+                        <span className="w-14 text-center text-sm text-slate-500">?</span>
+                      )}
                       <span className="flex-1 truncate text-sm text-slate-400">{r?.long}</span>
                       <span className="tabular-nums text-sm text-slate-100">
                         {countdown(a.t, now)}

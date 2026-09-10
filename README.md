@@ -770,6 +770,16 @@ column, and why the phone's `Scaffold` has neither an `appBar` nor a
 `bottomNavigationBar`: `floatingTop` and `floatingBottom` in `theme.dart` are
 what anything scrollable uses to clear the two floating bars.
 
+A route is named the same way everywhere: the kind of vehicle as a glyph, then
+the number. The city writes the kind as the letter in front of the number - `А25`
+is a bus, `Т07` a tram, `Тр33` a trolleybus - which only helps a reader who knows
+that and reads Cyrillic, so `routeNumber` in `web/src/lib/sprites.ts` and
+`mobile/lib/src/map_theme.dart` strips it and `RouteBadge` draws it instead. The
+glyphs are three line drawings in `RouteBadge.tsx` and `route_badge.dart`, the
+same 24-unit box in both, because no icon set carries a trolleybus. On the map
+there is no room for a glyph in a 26 px circle, so the badge is the number alone
+and the hue carries the kind - which it already did.
+
 `tool/icons.sh` draws every icon of all three clients from that one SVG,
 including the `maskable` PNG the manifest points at, which is framed like the
 Android adaptive icon because a browser crops it.

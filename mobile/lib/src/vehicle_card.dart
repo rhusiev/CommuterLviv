@@ -16,10 +16,9 @@ import 'package:flutter/material.dart' as material show Theme;
 
 import 'api.dart';
 import 'eta.dart';
-import 'map_theme.dart';
 import 'models.dart';
+import 'route_badge.dart';
 import 'strings.dart';
-import 'theme.dart';
 
 class VehicleCard extends StatefulWidget {
   const VehicleCard({
@@ -90,13 +89,7 @@ class _VehicleCardState extends State<VehicleCard> {
             Row(
               children: [
                 if (route != null) ...[
-                  CircleAvatar(
-                    backgroundColor: routeColour(route.short, route.type),
-                    child: Text(
-                      route.short,
-                      style: const TextStyle(fontSize: 11, color: plate),
-                    ),
-                  ),
+                  RouteBadge(route: route),
                   const SizedBox(width: 10),
                 ],
                 Expanded(

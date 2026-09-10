@@ -231,6 +231,18 @@ which of its parts are carrying it.
 
   `check.sh` green, both screenshotted headless at 1100x700 and 390x780.
 
+- **A route says what kind of vehicle it is with a glyph**, at 0.4.2. The city
+  writes the kind as the letter in front of the number - `А25` a bus, `Т07` a
+  tram, `Тр33` a trolleybus - which is only readable to someone who knows that
+  and reads Cyrillic. `routeNumber` strips it in both clients and `RouteBadge`
+  draws the kind instead, from three line drawings in the same 24-unit box,
+  because no icon set has a trolleybus. The map badge is the number alone: a
+  26 px circle has no room for a glyph, and the hue was already saying it. That
+  also buys the map badge a font size - three characters where four used to go.
+
+  Also 0.4.1: with the drawer open, the stop card and the timetable centred on
+  the window rather than on the map left over and sat flush against it.
+
 ## What just landed, and what it enables
 
 **Phase 5, the blends.** `commuterlviv/stack.py` replays `full`, `no-prior` and

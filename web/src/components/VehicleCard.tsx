@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { countdown } from "../lib/eta";
-import { colour } from "../lib/sprites";
 import { t } from "../lib/i18n";
+import { RouteBadge } from "./RouteBadge";
 import type { Call, Catalog } from "../lib/types";
 
 /** Where one vehicle goes next, and when it gets there.
@@ -59,17 +59,7 @@ export function VehicleCard({
   return (
     <div className="panel pointer-events-auto p-3">
       <div className="flex items-start gap-2">
-        {route && (
-          <span
-            className="rounded px-1.5 py-0.5 text-xs font-semibold"
-            style={{
-              backgroundColor: colour(route.short, route.type),
-              color: "#0b0f14",
-            }}
-          >
-            {route.short}
-          </span>
-        )}
+        {route && <RouteBadge route={route} className="px-1.5 py-0.5 text-xs" />}
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-medium text-slate-100">
             {t.stopsAhead}
