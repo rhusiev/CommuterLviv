@@ -1,4 +1,4 @@
-import type { Arrivals, Call, Catalog, Me, Plan, RouteSet, Sets } from "./types";
+import type { Arrivals, Call, Catalog, Me, Plan, RouteSet, Sets, Shapes } from "./types";
 
 /** Same origin by default: in development Vite proxies `/api` and `/ws` to the
  * service, so the session cookie is a first-party cookie in both settings. */
@@ -103,28 +103,32 @@ export const api = {
     call(`/api/plan?from=${from[0]},${from[1]}&to=${to[0]},${to[1]}`),
 };
 
-const CATALOG_KEY = "commuterlviv.catalog";
-
-/** The catalog is a megabyte of names that never change while the service is
- * up, so it is kept in local storage against the tag the service sends and the
- * usual request is a 304 with no body. */
-export async function catalog(): Promise<Catalog> {
-  const cached = localStorage.getItem(CATALOG_KEY);
-  const held = cached ? (JSON.parse(cached) as { tag: string; data: Catalog }) : null;
-  const res = await fetch(BASE + "/api/catalog", {
+/** A body that never changes while the service is up, kept in local storage
+ * against the tag the service sends: the usual request is a 304 with no body. */
+async function held<T>(path: string, key: string): Promise<T> {
+  const stored = localStorage.getItem(key);
+  const had = stored ? (JSON.parse(stored) as { tag: string; data: T }) : null;
+  const res = await fetch(BASE + path, {
     credentials: "include",
-    headers: held ? { "If-None-Match": held.tag } : {},
+    headers: had ? { "If-None-Match": had.tag } : {},
   });
-  if (res.status === 304 && held) return held.data;
-  if (!res.ok) throw new ApiError(`catalog ${res.status}`, res.status);
-  const data = (await res.json()) as Catalog;
+  if (res.status === 304 && had) return had.data;
+  if (!res.ok) throw new ApiError(`${path} ${res.status}`, res.status);
+  const data = (await res.json()) as T;
   const tag = res.headers.get("ETag");
   if (tag) {
     try {
-      localStorage.setItem(CATALOG_KEY, JSON.stringify({ tag, data }));
+      localStorage.setItem(key, JSON.stringify({ tag, data }));
     } catch {
       // A full quota is not a reason to fail the load - it only costs a refetch
     }
   }
   return data;
 }
+
+/** A megabyte of names */
+export const catalog = () => held<Catalog>("/api/catalog", "commuterlviv.catalog");
+
+/** Half a megabyte of geometry, asked for only once something wants to draw a
+ * route line: the rider who never opens the route view never pays for it. */
+export const shapes = () => held<Shapes>("/api/shapes", "commuterlviv.shapes");

@@ -29,9 +29,9 @@ RepoType: git
 Repo: https://example.invalid/commuterlviv.git
 
 Builds:
-  - versionName: 0.4.3
-    versionCode: 12
-    commit: v0.4.3
+  - versionName: 0.4.4
+    versionCode: 13
+    commit: v0.4.4
     subdir: mobile/android/app
     sudo:
       - apt-get update
@@ -54,5 +54,5 @@ Builds:
 # number, taken from `mobile/pubspec.yaml`
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 0.4.3
-CurrentVersionCode: 12
+CurrentVersion: 0.4.4
+CurrentVersionCode: 13

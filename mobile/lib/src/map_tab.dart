@@ -34,6 +34,9 @@ class MapTab extends StatelessWidget {
     required this.here,
     required this.empty,
     required this.marks,
+    required this.shapes,
+    required this.lines,
+    required this.arrowed,
     required this.onTap,
   });
 
@@ -58,6 +61,12 @@ class MapTab extends StatelessWidget {
   /// pins of the same shape are told apart by the letter on a map of any
   /// palette
   final List<({LatLng at, String label})> marks;
+
+  /// Every route's geometry, and which routes to draw from it. `arrowed` is
+  /// the one route whose direction arrows are drawn - the one being looked at
+  final Shapes? shapes;
+  final List<int> lines;
+  final int? arrowed;
   final void Function(LatLng point) onTap;
 
   @override
@@ -102,6 +111,9 @@ class MapTab extends StatelessWidget {
               selected: selected,
               theme: theme,
               here: here,
+              shapes: shapes,
+              lines: lines,
+              arrowed: arrowed,
             ),
             if (marks.isNotEmpty)
               MarkerLayer(

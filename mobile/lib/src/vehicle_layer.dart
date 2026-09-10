@@ -35,6 +35,14 @@ const stopsZoom = 14.0;
 
 const _stopRadius = 3.5;
 
+/// What `live/geometry.py` used, in metres: the arrows arrive that far apart
+const _arrowSpacing = 220.0;
+
+/// Below this the whole route is on screen and an arrowhead is a speck of
+/// speckle on the line. The line alone says where the route runs; the zoom that
+/// shows a street is the one where which way it runs is a question
+const _arrowZoom = 13.0;
+
 class VehicleLayer extends StatefulWidget {
   const VehicleLayer({
     super.key,
@@ -44,10 +52,22 @@ class VehicleLayer extends StatefulWidget {
     required this.selected,
     required this.theme,
     required this.here,
+    required this.shapes,
+    required this.lines,
+    required this.arrowed,
   });
 
   final Catalog catalog;
   final Live live;
+
+  /// Every route's geometry, once something has asked for it
+  final Shapes? shapes;
+
+  /// Which routes to draw a line for, and which one - if any - carries the
+  /// direction arrows. Arrows are for the single route being looked at; a
+  /// city's worth of them would be a texture, not information
+  final List<int> lines;
+  final int? arrowed;
 
   /// Indexes of the stops worth drawing: the ones the chosen routes call at
   final List<int> stops;
@@ -112,6 +132,9 @@ class _VehicleLayerState extends State<VehicleLayer>
           stops: widget.stops,
           selected: widget.selected,
           here: widget.here,
+          shapes: widget.shapes,
+          lines: widget.lines,
+          arrowed: widget.arrowed,
           ink: Palette.of(widget.theme.dark),
           badge: _badge,
         ),
@@ -129,6 +152,9 @@ class _Painter extends CustomPainter {
     required this.stops,
     required this.selected,
     required this.here,
+    required this.shapes,
+    required this.lines,
+    required this.arrowed,
     required this.ink,
     required this.badge,
   }) : super(repaint: repaint);
@@ -138,6 +164,9 @@ class _Painter extends CustomPainter {
   final Live live;
   final List<int> stops;
   final int? selected;
+  final Shapes? shapes;
+  final List<int> lines;
+  final int? arrowed;
 
   /// Read at paint time, not at build time: the ticker repaints every frame,
   /// and a fix that arrived between builds has to be on the next one
@@ -148,9 +177,96 @@ class _Painter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final bounds = Offset.zero & size;
+    // Under everything else: a route is the background a rider reads the
+    // vehicles against, and a line over a badge hides the number
+    _paintLines(canvas, bounds);
     if (camera.zoom >= stopsZoom) _paintStops(canvas, bounds);
     _paintHere(canvas);
     _paintVehicles(canvas, bounds);
+  }
+
+  void _paintLines(Canvas canvas, Rect bounds) {
+    final geometry = shapes;
+    if (geometry == null) return;
+    final casing = Paint()
+      ..color = ink.edge.withValues(alpha: 0.5)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+    for (final i in lines) {
+      if (i >= geometry.routes.length) continue;
+      final route = catalog.routes[i];
+      final path = ui.Path();
+      for (final line in geometry.routes[i].lines) {
+        var first = true;
+        for (final p in line) {
+          final at = camera.latLngToScreenOffset(p);
+          first ? path.moveTo(at.dx, at.dy) : path.lineTo(at.dx, at.dy);
+          first = false;
+        }
+      }
+      canvas.drawPath(path, casing);
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = routeColour(
+            route.short,
+            route.type,
+          ).withValues(alpha: lines.length > 1 ? 0.75 : 1)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3.5
+          ..strokeJoin = StrokeJoin.round
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    final one = arrowed;
+    if (one == null || one >= geometry.routes.length) return;
+    if (camera.zoom < _arrowZoom) return;
+    final arrows = geometry.routes[one].arrows;
+    // The server spaces arrows every 220 m along the line, which at the zoom
+    // that holds a whole route is five pixels: drawn as they come the line
+    // reads as a dashed one. They arrive in order along each shape, so every
+    // nth is still evenly spaced - just further apart
+    // Web mercator, at the camera's own latitude: 80 px of screen is this
+    // many metres of street
+    final metres =
+        80 *
+        156543.03392 *
+        math.cos(camera.center.latitude * math.pi / 180) /
+        math.pow(2, camera.zoom);
+    final step = math.max(1, (metres / _arrowSpacing).ceil());
+    final head = Paint()..color = ink.edge;
+    for (var k = 0; k < arrows.length; k += step) {
+      final arrow = arrows[k];
+      final at = camera.latLngToScreenOffset(arrow.at);
+      if (!bounds.inflate(12).contains(at)) continue;
+      final a = (arrow.heading - 90 + camera.rotation) * math.pi / 180;
+      final cos = math.cos(a);
+      final sin = math.sin(a);
+      // Two heads back to back would sit on top of each other and read as a
+      // diamond, so each backs off along the line by its own length
+      final off = arrow.twoWay ? 9.0 : 0.0;
+      _head(canvas, at + Offset(cos * off, sin * off), cos, sin, head);
+      if (arrow.twoWay) {
+        _head(canvas, at - Offset(cos * off, sin * off), -cos, -sin, head);
+      }
+    }
+  }
+
+  /// One arrowhead sitting on the line, pointing along `(cos, sin)`. Drawn in
+  /// the page's ink rather than the route's colour: it is a notch cut out of
+  /// the line, and a coloured head on a line of that colour is nothing at all.
+  void _head(Canvas canvas, Offset at, double cos, double sin, Paint paint) {
+    canvas.drawPath(
+      ui.Path()
+        ..moveTo(at.dx + cos * 7, at.dy + sin * 7)
+        ..lineTo(at.dx - cos * 3 - sin * 4.5, at.dy - sin * 3 + cos * 4.5)
+        ..lineTo(at.dx - cos * 3 + sin * 4.5, at.dy - sin * 3 - cos * 4.5)
+        ..close(),
+      paint,
+    );
   }
 
   void _paintHere(Canvas canvas) {

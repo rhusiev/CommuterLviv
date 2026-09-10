@@ -19,11 +19,13 @@ export function VehicleCard({
   catalog,
   veh,
   onStop,
+  onRoute,
   onClose,
 }: {
   catalog: Catalog;
   veh: number;
   onStop: (i: number) => void;
+  onRoute: (i: number) => void;
   onClose: () => void;
 }) {
   const [calls, setCalls] = useState<Call[] | null>(null);
@@ -53,13 +55,19 @@ export function VehicleCard({
     };
   }, [veh]);
 
-  const route =
-    calls?.[0] === undefined ? null : catalog.routes[calls[0].route];
+  const at = calls?.[0]?.route;
+  const route = at === undefined ? null : catalog.routes[at];
 
   return (
     <div className="panel pointer-events-auto p-3">
       <div className="flex items-start gap-2">
-        {route && <RouteBadge route={route} className="px-1.5 py-0.5 text-xs" />}
+        {/* The badge is the way to the route's line: it is already the one
+            thing on this card that names the route */}
+        {route && at !== undefined && (
+          <button onClick={() => onRoute(at)} title={t.routeLine} className="shrink-0">
+            <RouteBadge route={route} className="px-1.5 py-0.5 text-xs" />
+          </button>
+        )}
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-medium text-slate-100">
             {t.stopsAhead}

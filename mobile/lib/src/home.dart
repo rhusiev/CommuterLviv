@@ -23,6 +23,7 @@ import 'live.dart';
 import 'map_tab.dart';
 import 'map_theme.dart';
 import 'models.dart';
+import 'route_badge.dart';
 import 'server_dialog.dart';
 import 'sheets.dart';
 import 'stop_card.dart';
@@ -61,6 +62,14 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _error;
 
   final Set<int> _routes = {};
+
+  /// The route being looked at on its own, and whether the tab showing it is
+  /// the one selected. The route outlives the tab, so leaving it and coming
+  /// back does not have to be found again
+  int? _route;
+  bool _onRoute = false;
+  bool _allLines = false;
+  Shapes? _shapes;
   List<int> _drawn = const [];
   List<int> _pins = const [];
   int? _stop;
@@ -167,13 +176,71 @@ class _HomeScreenState extends State<HomeScreen> {
     final catalog = _catalog;
     final live = _live;
     if (catalog == null || live == null) return;
-    live.setRoutes(_routes.toList()..sort());
+    final shown = _shown;
+    live.setRoutes(shown.toList()..sort());
     final drawn = <int>[
       for (var i = 0; i < catalog.stops.length; i++)
-        if (catalog.stops[i].routes.any(_routes.contains)) i,
+        if (catalog.stops[i].routes.any(shown.contains)) i,
     ];
     setState(() => _drawn = drawn);
     _watch();
+  }
+
+  /// While one route is being looked at, it is the only one on the map: that
+  /// is what "its vehicles" means, and the filter is the socket's own, so the
+  /// others are not drawn because they are not sent
+  Set<int> get _shown => _onRoute && _route != null ? {_route!} : _routes;
+
+  /// Which routes have a line under them, and which one carries the arrows
+  List<int> get _lines {
+    if (_onRoute && _route != null) return [_route!];
+    if (!_allLines) return const [];
+    return [for (var i = 0; i < _catalog!.routes.length; i++) i];
+  }
+
+  /// Half a megabyte, and only the route view and the show-everything toggle
+  /// want it, so it is asked for the first time one of them is opened
+  Future<void> _geometry() async {
+    if (_shapes != null) return;
+    try {
+      final shapes = await widget.api.shapes();
+      if (mounted) setState(() => _shapes = shapes);
+    } on Exception {
+      if (mounted) setState(() => _error = txt.unreachable(widget.api.base));
+    }
+  }
+
+  /// Opening a route puts the whole of it on screen: it is tens of kilometres
+  /// long and wherever the camera happened to be is not on it
+  void _openRoute(int route) {
+    setState(() {
+      _route = route;
+      _onRoute = true;
+      _tab = 0;
+      _planning = false;
+    });
+    _push();
+    _geometry().then((_) {
+      final shape = _shapes?.routes.elementAtOrNull(route);
+      final points = [
+        for (final line in shape?.lines ?? const <List<LatLng>>[]) ...line,
+      ];
+      if (!mounted || points.isEmpty) return;
+      _map.fitCamera(
+        CameraFit.bounds(
+          bounds: LatLngBounds.fromPoints(points),
+          padding: const EdgeInsets.all(40),
+        ),
+      );
+    });
+  }
+
+  void _closeRoute() {
+    setState(() {
+      _route = null;
+      _onRoute = false;
+    });
+    _push();
   }
 
   /// The stops the server should send arrivals for: what is pinned, plus
@@ -336,6 +403,10 @@ class _HomeScreenState extends State<HomeScreen> {
           Navigator.pop(context);
           _openStop(stop, fly: true);
         },
+        onRoute: (route) {
+          Navigator.pop(context);
+          _openRoute(route);
+        },
       ),
     );
   }
@@ -472,6 +543,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (_from != null) (at: _from!, label: 'A'),
                   if (_to != null) (at: _to!, label: 'B'),
                 ],
+                shapes: _shapes,
+                lines: _lines,
+                arrowed: _onRoute ? _route : null,
                 onTap: _tap,
               ),
               TimesTab(
@@ -520,19 +594,35 @@ class _HomeScreenState extends State<HomeScreen> {
             left: floatingGap,
             right: floatingGap,
             top: MediaQuery.paddingOf(context).top + floatingGap,
-            child: _TopBar(
-              onSearch: _search,
-              onRoutes: () => _openRoutes(catalog),
-              onMenu: _menu,
-              server: widget.api.base,
-            ),
+            // The route strip takes this place while a route is open: the
+            // search and the menu belong to the map of the whole city
+            child: _onRoute && _route != null
+                ? _RouteStrip(
+                    route: catalog.routes[_route!],
+                    onClose: _closeRoute,
+                  )
+                : _TopBar(
+                    onSearch: _search,
+                    onRoutes: () => _openRoutes(catalog),
+                    onMenu: _menu,
+                    server: widget.api.base,
+                    lines: _allLines,
+                    onLines: () {
+                      setState(() => _allLines = !_allLines);
+                      if (_allLines) unawaited(_geometry());
+                    },
+                  ),
           ),
           Positioned(
             left: 0,
             right: 0,
             bottom: MediaQuery.paddingOf(context).bottom + floatingGap,
             child: Center(
-              child: _Tabs(selected: _planning ? 2 : _tab, onPick: _pickTab),
+              child: _Tabs(
+                selected: _onRoute ? 3 : (_planning ? 2 : _tab),
+                route: _route == null ? null : catalog.routes[_route!],
+                onPick: _pickTab,
+              ),
             ),
           ),
           _Status(live: live),
@@ -541,11 +631,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _pickTab(int i) => setState(() {
-    _tab = i == 1 ? 1 : 0;
-    _planning = i == 2;
-    if (!_planning) _picking = null;
-  });
+  void _pickTab(int i) {
+    setState(() {
+      _tab = i == 1 ? 1 : 0;
+      _planning = i == 2;
+      _onRoute = i == 3;
+      if (!_planning) _picking = null;
+    });
+    _push();
+  }
 
   void _openRoutes(Catalog catalog) => showFloatingSheet<void>(
     context,
@@ -572,6 +666,44 @@ class _HomeScreenState extends State<HomeScreen> {
   );
 }
 
+/// Which route the map has been narrowed to, and the way back out of it. It
+/// sits where the top bar does, because while a route is open it replaces it.
+class _RouteStrip extends StatelessWidget {
+  const _RouteStrip({required this.route, required this.onClose});
+
+  final TransitRoute route;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: panel.withValues(alpha: 0.9),
+    surfaceTintColor: Colors.transparent,
+    shape: const StadiumBorder(side: BorderSide(color: hair)),
+    elevation: 2,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+      child: Row(
+        children: [
+          RouteBadge(route: route),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              route.long,
+              overflow: TextOverflow.ellipsis,
+              style: material.Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+          IconButton(
+            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+            onPressed: onClose,
+            icon: const Icon(Icons.close, size: 20),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 /// What used to be the app bar: a search pill wide enough to read, and the two
 /// buttons that open everything else. It floats clear of the top edge, so the
 /// map runs behind it and under the status bar.
@@ -581,12 +713,18 @@ class _TopBar extends StatelessWidget {
     required this.onRoutes,
     required this.onMenu,
     required this.server,
+    required this.lines,
+    required this.onLines,
   });
 
   final VoidCallback onSearch;
   final VoidCallback onRoutes;
   final void Function(String choice) onMenu;
   final String server;
+
+  /// Whether every route's line is drawn under the map
+  final bool lines;
+  final VoidCallback onLines;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -628,6 +766,12 @@ class _TopBar extends StatelessWidget {
         child: const Icon(Icons.route_outlined),
       ),
       const SizedBox(width: 8),
+      RoundButton(
+        tooltip: lines ? txt.hideEveryRoute : txt.everyRoute,
+        onPressed: onLines,
+        child: Icon(Icons.polyline_outlined, color: lines ? accent : null),
+      ),
+      const SizedBox(width: 8),
       Material(
         color: panel.withValues(alpha: 0.9),
         surfaceTintColor: Colors.transparent,
@@ -658,9 +802,16 @@ class _TopBar extends StatelessWidget {
 /// third choice rather than a toggle in the bar because that is what it is: a
 /// third thing to be looking at, over the same city.
 class _Tabs extends StatelessWidget {
-  const _Tabs({required this.selected, required this.onPick});
+  const _Tabs({
+    required this.selected,
+    required this.route,
+    required this.onPick,
+  });
 
   final int selected;
+
+  /// The route being looked at, which adds a fourth tab while it is open
+  final TransitRoute? route;
   final void Function(int index) onPick;
 
   @override
@@ -669,6 +820,7 @@ class _Tabs extends StatelessWidget {
       (Icons.map_outlined, txt.map),
       (Icons.schedule_outlined, txt.times),
       (Icons.directions_outlined, txt.plan),
+      if (route != null) (Icons.timeline_outlined, txt.routeLine),
     ];
     return Material(
       color: panel.withValues(alpha: 0.9),

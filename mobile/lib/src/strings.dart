@@ -37,6 +37,10 @@ class Strings {
     required this.server,
     required this.signOut,
     required this.routes,
+    required this.routeLine,
+    required this.showRoute,
+    required this.everyRoute,
+    required this.hideEveryRoute,
     required this.findStop,
     required this.tryAgain,
     required this.filterRoutes,
@@ -106,6 +110,13 @@ class Strings {
   final String server;
   final String signOut;
   final String routes;
+
+  /// The tab that shows one route's line, which the planner's `plan` already
+  /// calls a route in Ukrainian - hence a second word for it
+  final String routeLine;
+  final String showRoute;
+  final String everyRoute;
+  final String hideEveryRoute;
   final String findStop;
   final String tryAgain;
   final String filterRoutes;
@@ -176,6 +187,10 @@ const _en = Strings(
   server: 'Server',
   signOut: 'Sign out',
   routes: 'Routes',
+  routeLine: 'Line',
+  showRoute: 'Show this route on the map',
+  everyRoute: 'Every route',
+  hideEveryRoute: 'Hide the route lines',
   findStop: 'Find a stop',
   tryAgain: 'Try again',
   filterRoutes: 'Filter routes',
@@ -251,6 +266,10 @@ const _uk = Strings(
   server: 'Сервер',
   signOut: 'Вийти',
   routes: 'Маршрути',
+  routeLine: 'Лінія',
+  showRoute: 'Показати цей маршрут на мапі',
+  everyRoute: 'Усі маршрути',
+  hideEveryRoute: 'Сховати лінії маршрутів',
   findStop: 'Знайти зупинку',
   tryAgain: 'Спробувати ще',
   filterRoutes: 'Пошук маршруту',

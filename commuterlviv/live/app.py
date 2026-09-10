@@ -33,8 +33,8 @@ from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
 
 from .. import __version__, network
-from . import (auth, db, hub, journeys, prefs, security, service, settings,
-               state)
+from . import (auth, db, geometry, hub, journeys, prefs, security, service,
+               settings, state)
 
 SESSION_COOKIE = "lp_sess"
 CSRF_COOKIE = "lp_csrf"
@@ -317,6 +317,19 @@ async def catalog(request, session):
                              "Cache-Control": "private, max-age=86400"})
 
 
+async def shapes(request, session):
+    """Where every route physically goes, and which way. Half a megabyte, never
+    changes while the process runs, and only the route view and the show-all
+    toggle need it - so it is a second request rather than part of the catalog,
+    and the client that never opens either never pays for it."""
+    app = request.app.state
+    if request.headers.get("if-none-match") == app.shapes_tag:
+        return Response(status_code=304, headers={"ETag": app.shapes_tag})
+    return Response(app.shapes_json, media_type="application/json",
+                    headers={"ETag": app.shapes_tag,
+                             "Cache-Control": "private, max-age=86400"})
+
+
 async def arrivals(request, session):
     """The timetable tab: what is coming to these stops, soonest first."""
     app = request.app.state
@@ -548,6 +561,7 @@ def routes():
         Route("/api/password", protected(password), methods=["POST"]),
         Route("/api/me", protected(me), methods=["GET"]),
         Route("/api/catalog", protected(catalog), methods=["GET"]),
+        Route("/api/shapes", protected(shapes), methods=["GET"]),
         Route("/api/arrivals", protected(arrivals), methods=["GET"]),
         Route("/api/vehicle", protected(vehicle), methods=["GET"]),
         Route("/api/plan", protected(journey), methods=["GET"]),
@@ -578,6 +592,10 @@ def build(st=None, net=None):
         cat = state.Catalog(loaded)
         s.catalog_json = json.dumps(cat.describe()).encode()
         s.catalog_tag = f'W/"{len(s.catalog_json):x}-{len(cat.stops):x}"'
+        # Four seconds of projection and thinning, once, rather than per client
+        s.shapes_json = json.dumps(
+            geometry.describe(loaded, cat.routes)).encode()
+        s.shapes_tag = f'W/"{len(s.shapes_json):x}-{len(cat.routes):x}"'
         s.svc = service.Service(st, loaded, cat, log)
         s.planner = journeys.Planner.maybe(loaded, cat, log)
         s.hub = hub.Hub(s.svc.live)
