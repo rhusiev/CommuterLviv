@@ -172,11 +172,21 @@ which of its parts are carrying it.
   validates the header so a bad one can only cost an audit field. `check_live.py`
   posts a login with `X-Forwarded-For: not-an-address}` and asserts 401.
 
-  Separately: the outer Caddy sets `X-Forwarded-For {remote_host}` correctly,
-  but sees every client as `172.19.0.1`, the Docker gateway, because it is
-  port-published rather than on host networking. **Every rate limit is therefore
-  one global bucket**, which is not what `docker-compose.proxy.yml` assumes. Not
-  changed - it is the user's own Caddy, outside this repo.
+  Separately, and **corrected on 2026-09-10**: the outer Caddy sets
+  `X-Forwarded-For {remote_host}` correctly and does see real client addresses.
+  An earlier note here said every client arrived as the Docker gateway
+  `172.19.0.1`; that is only true of requests that hairpin - from the host
+  itself, from another container, or from a VPN client whose packet leaves for
+  the public address and is DNATed back into the bridge, where Docker's
+  hairpin MASQUERADE rewrites the source to the gateway. Caddy's own log has
+  ordinary internet clients under their real address (`194.44.253.166`) beside
+  those. So rate limiting is per client for everyone off the VPN, and one
+  shared bucket for everyone on it.
+
+  Fixing the VPN half needs root on the VPS - there is no sudo - or a change to
+  how wg-easy routes, so it is left alone. The one clean fix, if it ever
+  matters, is to stop VPN clients hairpinning at all: give them the app's VPN
+  address directly rather than the public name.
 
 - **Production is recording**, from 2026-09-10 06:52. The collector runs behind
   the `collect` profile (`--profile collect up -d collector`, `--keep-days 30
