@@ -245,6 +245,11 @@ export function App() {
       <Splash text={notice} onRetry={loadCatalog} />
     );
 
+  // Where anything centred on the map has to start, so it is centred on the map
+  // that is left over rather than on the window: 12 px + the drawer's 320 + 12
+  // again. Only from `md`, because below that the drawer covers the map anyway
+  const clear = panel ? "left-3 md:left-86" : "left-3";
+
   return (
     // The map is the window and nothing is docked to an edge: the bar, the tab
     // switcher, the drawers and the cards are all rounded surfaces floating over
@@ -346,7 +351,9 @@ export function App() {
       )}
 
       {tab === "times" && (
-        <section className="panel absolute inset-x-3 top-19 bottom-20 z-20 mx-auto max-w-lg overflow-hidden">
+        <section
+          className={`panel absolute ${clear} right-3 top-19 bottom-20 z-20 mx-auto max-w-lg overflow-hidden`}
+        >
           <Timetable
             catalog={cat}
             stops={pins}
@@ -356,32 +363,30 @@ export function App() {
         </section>
       )}
 
-      {tab === "map" && veh !== null && stop === null && (
-        <div className="pointer-events-none absolute inset-x-3 bottom-20 z-10 mx-auto max-w-md">
-          <VehicleCard
-            catalog={cat}
-            veh={veh}
-            onStop={(i) => {
-              setStop(i);
-              setVeh(null);
-            }}
-            onClose={() => setVeh(null)}
-          />
-        </div>
-      )}
-
-      {tab === "map" && stop !== null && (
-        <div className="pointer-events-none absolute inset-x-3 bottom-20 z-10 mx-auto max-w-md">
-          <StopCard
-            catalog={cat}
-            stop={stop}
-            arrivals={live.arrivals[String(stop)]}
-            pinned={pins.includes(stop)}
-            onPin={() =>
-              setPinned(pins.includes(stop) ? pins.filter((i) => i !== stop) : [...pins, stop])
-            }
-            onClose={() => setStop(null)}
-          />
+      {tab === "map" && (stop !== null || veh !== null) && (
+        <div className={`pointer-events-none absolute ${clear} bottom-20 right-3 z-10 mx-auto max-w-md`}>
+          {stop !== null ? (
+            <StopCard
+              catalog={cat}
+              stop={stop}
+              arrivals={live.arrivals[String(stop)]}
+              pinned={pins.includes(stop)}
+              onPin={() =>
+                setPinned(pins.includes(stop) ? pins.filter((i) => i !== stop) : [...pins, stop])
+              }
+              onClose={() => setStop(null)}
+            />
+          ) : veh === null ? null : (
+            <VehicleCard
+              catalog={cat}
+              veh={veh}
+              onStop={(i) => {
+                setStop(i);
+                setVeh(null);
+              }}
+              onClose={() => setVeh(null)}
+            />
+          )}
         </div>
       )}
 
