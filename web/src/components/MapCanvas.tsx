@@ -414,6 +414,7 @@ export function MapCanvas({
           loads after Tailwind, so `inset-0` alone would leave it 0 px tall */}
       <div ref={under} className="absolute h-full w-full" />
       <canvas ref={canvas} className="pointer-events-none absolute inset-0" />
+      {/* Below the floating bar rather than beside it: the bar spans the top */}
       <button
         onClick={() => {
           if (locating === "on" && here.current) {
@@ -424,7 +425,7 @@ export function MapCanvas({
           }
         }}
         title={locating === "denied" ? t.noLocation : t.whereAmI}
-        className={`absolute right-2 top-2 z-10 grid size-9 place-items-center rounded-full bg-panel/90 ring-1 ring-hair backdrop-blur-md ${
+        className={`fab absolute right-3 top-19 z-10 ${
           locating === "denied"
             ? "text-slate-600"
             : locating === "on"

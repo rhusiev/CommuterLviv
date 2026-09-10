@@ -39,7 +39,7 @@ export function SignIn({ code, onIn }: { code: string | null; onIn: () => void }
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-plate p-6">
-      <form onSubmit={submit} className="w-full max-w-sm space-y-4">
+      <form onSubmit={submit} className="panel w-full max-w-sm space-y-4 p-6">
         <div>
           <h1 className="text-xl font-semibold text-slate-100">{t.appName}</h1>
           <p className="mt-1 text-sm text-slate-400">

@@ -15,6 +15,7 @@ import 'map_controls.dart';
 import 'map_theme.dart';
 import 'map_tiles.dart';
 import 'models.dart';
+import 'theme.dart';
 import 'vehicle_layer.dart';
 import 'strings.dart';
 
@@ -134,8 +135,9 @@ class MapTab extends StatelessWidget {
           ],
         ),
         Positioned(
-          right: 12,
-          bottom: 24,
+          right: floatingGap,
+          // Above the floating tab pill, which is the bottom of the screen now
+          bottom: floatingBottom(context),
           child: MapControls(map: map, here: here),
         ),
         if (style == null) const LinearProgressIndicator(minHeight: 2),

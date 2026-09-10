@@ -139,12 +139,6 @@ class _MapButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(top: 8),
-    child: Material(
-      color: panel.withValues(alpha: 0.9),
-      surfaceTintColor: Colors.transparent,
-      shape: const CircleBorder(side: BorderSide(color: hair)),
-      elevation: 2,
-      child: IconButton(tooltip: tooltip, onPressed: onPressed, icon: child),
-    ),
+    child: RoundButton(tooltip: tooltip, onPressed: onPressed, child: child),
   );
 }

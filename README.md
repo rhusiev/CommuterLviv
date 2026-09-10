@@ -751,15 +751,24 @@ one for work, one for home - live on the server, so they follow the account
 rather than the browser. Serve `dist/` with a history fallback: every path has to
 return `index.html`, or `/join/<code>` is a 404 and the invite link is dead.
 
-One palette, two clients. `web/src/app.css` declares five colours and two
-radii in a Tailwind `@theme` block, and `mobile/lib/src/theme.dart` repeats the
-same seven values; two of the colours, the near-black plate and the sky accent,
+One palette, two clients. `web/src/app.css` declares five colours, two radii and
+one shadow in a Tailwind `@theme` block, and `mobile/lib/src/theme.dart` repeats
+the same values; two of the colours, the near-black plate and the sky accent,
 are the two colours in `web/public/icon.svg`, so both apps are the colour of
-their own icon. Above that sit five utilities - `panel`, `inset-panel`, `btn`,
-`btn-quiet`, `field` - and anything floating over the map uses `panel`:
-translucent, blurred, a hairline ring and a soft shadow rather than a border,
+their own icon. Above that sit the utilities everything is built from - `panel`,
+`bar`, `fab`, `inset-panel`, `btn`, `btn-quiet`, `field`, `field-bar` - and each
+is translucent, blurred, a hairline ring and a soft shadow rather than a border,
 because the map underneath is the context. Nothing outside `app.css` names a
 `slate-*` shade for a surface.
+
+Nothing is docked to an edge. The map is the whole window in both clients and
+every piece of chrome floats over it: a search bar and a menu at the top, the
+map/times/plan pill at the bottom where a thumb is, round buttons for locate and
+zoom, and cards that rise off the bottom rather than out of it. That is why the
+web layout is one `relative` box of absolutely positioned pieces instead of a
+column, and why the phone's `Scaffold` has neither an `appBar` nor a
+`bottomNavigationBar`: `floatingTop` and `floatingBottom` in `theme.dart` are
+what anything scrollable uses to clear the two floating bars.
 
 `tool/icons.sh` draws every icon of all three clients from that one SVG,
 including the `maskable` PNG the manifest points at, which is framed like the
@@ -794,7 +803,7 @@ uses, so panning moves the city and the vehicles in the same frame.
 `mobile/` is the same client again, in Flutter, for Android and iOS. It adds no
 endpoint and no model - the browser and the phone see the same city, the same
 route sets and the same predictions, and the same journey planner behind the
-directions button in the app bar.
+third choice in the tab pill.
 
 ```sh
 cd mobile && flutter pub get

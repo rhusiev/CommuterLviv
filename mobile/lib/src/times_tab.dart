@@ -7,6 +7,7 @@ import 'due.dart';
 import 'live.dart';
 import 'models.dart';
 import 'strings.dart';
+import 'theme.dart';
 
 class TimesTab extends StatelessWidget {
   const TimesTab({
@@ -31,9 +32,15 @@ class TimesTab extends StatelessWidget {
     if (pins.isEmpty) {
       return Center(child: Text(txt.pinAStop));
     }
+    // The bar and the tab pill float over this list rather than above it, so
+    // the first and last stop have to be scrolled clear of them
     return AnimatedBuilder(
       animation: live,
       builder: (context, _) => ListView(
+        padding: EdgeInsets.only(
+          top: floatingTop(context),
+          bottom: floatingBottom(context),
+        ),
         children: [
           for (final stop in pins)
             _StopTile(

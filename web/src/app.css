@@ -2,10 +2,13 @@
 
 /* The palette both clients draw from. `plate` and `accent` are the two colours
    in public/icon.svg, so the app is the same colour as its own icon;
-   mobile/lib/src/theme.dart repeats these five values and nothing else does.
+   mobile/lib/src/theme.dart repeats these values and nothing else does.
 
-   Depth comes from a hairline ring and a soft shadow rather than a heavy
-   border, which is what keeps a panel readable over a moving map. */
+   Nothing in this app is a docked bar. The map is the whole window and every
+   piece of chrome is a rounded surface floating over it, so depth is a hairline
+   ring and a shadow the map can be seen through rather than a border and an
+   edge. That is the one rule the layout follows; the radii below are large
+   enough that a floating surface never reads as a cropped panel. */
 @theme {
   --color-plate: #0b0f14;
   --color-panel: #121822;
@@ -13,8 +16,10 @@
   --color-accent: #38bdf8;
   --color-hair: rgb(255 255 255 / 8%);
 
-  --radius-panel: 1rem;
-  --radius-control: 0.625rem;
+  --radius-panel: 1.25rem;
+  --radius-control: 0.75rem;
+
+  --shadow-float: 0 12px 32px -12px rgb(0 0 0 / 70%), 0 2px 10px rgb(0 0 0 / 45%);
 }
 
 html,
@@ -31,7 +36,20 @@ body {
 /* Anything that floats above the map: the stop card, the side panels, the
    search results. Translucent, because the map underneath is the context. */
 @utility panel {
-  @apply rounded-panel bg-panel/90 shadow-xl ring-1 ring-hair backdrop-blur-md;
+  @apply rounded-panel bg-panel/80 shadow-float ring-1 ring-hair backdrop-blur-xl;
+}
+
+/* A row of controls floating over the map - the top bar, the tab switcher.
+   Fully round rather than `rounded-panel`: a pill of buttons reads as one
+   object hovering, which is the whole point of not docking it to an edge. */
+@utility bar {
+  @apply rounded-full bg-panel/80 shadow-float ring-1 ring-hair backdrop-blur-xl;
+}
+
+/* One round button floating on its own: locate, the routes drawer. */
+@utility fab {
+  @apply grid size-10 shrink-0 place-items-center rounded-full transition-colors;
+  @apply bg-panel/80 shadow-float ring-1 ring-hair backdrop-blur-xl;
 }
 
 /* The same surface with no blur and no shadow, for a block inside a panel */
@@ -41,7 +59,7 @@ body {
 
 /* What the two buttons below share. Not used directly */
 @utility control {
-  @apply rounded-control px-3 py-1.5 text-sm transition-colors;
+  @apply rounded-full px-3.5 py-1.5 text-sm transition-colors;
   @apply outline-none focus-visible:ring-2 focus-visible:ring-accent/70;
 }
 
@@ -56,6 +74,11 @@ body {
 }
 
 @utility field {
-  @apply w-full rounded-control bg-raised/70 px-3 py-2 text-sm ring-1 ring-hair;
+  @apply w-full rounded-full bg-raised/70 px-3.5 py-2 text-sm ring-1 ring-hair;
   @apply outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-accent/70;
+}
+
+/* A field that floats over the map rather than sitting inside a panel */
+@utility field-bar {
+  @apply field bg-panel/80 shadow-float backdrop-blur-xl;
 }

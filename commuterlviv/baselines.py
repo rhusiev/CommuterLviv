@@ -260,7 +260,10 @@ class MedianLayer:
         self.corr = Ring(ncorr, *args, fast=fast)
         self.glob = Ring(1, *args, fast=fast)
 
-    def update(self, units, vals, now, weights, corr):
+    # `slot` is accepted and ignored: it picks the time-of-day row of the
+    # profile ring, which this layer does not have - the comparison is about
+    # mean against median, so it stays at the two levels both versions share.
+    def update(self, units, vals, now, weights, corr, slot=0):
         total = weights.sum()
         if total <= 0.0:
             return
@@ -280,7 +283,7 @@ class MedianLayer:
                            axis=1)
         return wmedian(val, w)
 
-    def read(self, now):
+    def read(self, now, slot=0):
         glob = float(wmedian(self.glob.val, self.glob.weights(now))[0])
         if self.corridor:
             corr = self._with_parent(self.corr, now,

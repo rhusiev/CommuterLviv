@@ -6,10 +6,16 @@ import { lang, setLang, t } from "../lib/i18n";
 
 /** Which routes are on the map, and the named sets that stand for a selection:
  * one for the way to work, one for home. A set is the selection at the moment
- * it was saved - editing the selection does not touch it until it is saved. */
+ * it was saved - editing the selection does not touch it until it is saved.
+ *
+ * The drawer is also where the account, the language and the basemap live.
+ * Nothing above the map is a settings bar any more, so everything that is set
+ * once and then left alone is behind the one button that opens this. */
 
 type Props = {
   catalog: Catalog;
+  username: string;
+  onOut: () => void;
   theme: Theme;
   onTheme: (theme: Theme) => void;
   picked: Set<string>;
@@ -47,6 +53,13 @@ export function RoutePanel(p: Props) {
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-hidden">
+      <div className="flex items-baseline gap-2">
+        <span className="truncate text-sm font-medium text-slate-200">{p.username}</span>
+        <button onClick={p.onOut} className="ml-auto text-xs text-slate-500 hover:text-slate-200">
+          {t.out}
+        </button>
+      </div>
+
       <section>
         <h2 className="text-xs uppercase tracking-wide text-slate-500">{t.sets}</h2>
         <ul className="mt-2 space-y-1">

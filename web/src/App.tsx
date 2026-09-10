@@ -246,194 +246,210 @@ export function App() {
     );
 
   return (
-    <div className="flex h-dvh flex-col bg-plate text-slate-100">
-      <header className="flex items-center gap-2 px-3 py-2 ring-1 ring-hair">
-        <button onClick={() => setPanel((v) => !v)} className="btn-quiet">
-          {t.routes}
+    // The map is the window and nothing is docked to an edge: the bar, the tab
+    // switcher, the drawers and the cards are all rounded surfaces floating over
+    // it, which is why they carry their own inset rather than taking space from
+    // it. `pointer-events-none` on the strips that only position things keeps
+    // the gaps between them draggable map
+    <div className="relative h-dvh overflow-hidden bg-plate text-slate-100">
+      {/* Mounted whatever the tab is, and never hidden: the timetable and the
+          planner float over the city rather than replacing it, and a map that
+          is unmounted and remounted is a second style download */}
+      <MapCanvas
+        catalog={cat}
+        live={live}
+        stops={stops}
+        selected={stop}
+        onPickStop={(i) => {
+          setStop(i);
+          if (i !== null) setVeh(null);
+        }}
+        vehicle={veh}
+        onPickVehicle={setVeh}
+        focus={focus}
+        picking={picking !== null}
+        onPickPoint={(lat, lon) => {
+          if (picking === "from") setFrom({ lat, lon });
+          if (picking === "to") setTo({ lat, lon });
+          setPicking(null);
+        }}
+        marks={marks}
+        theme={theme}
+      />
+
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start gap-2 p-3">
+        <button
+          onClick={() => setPanel((v) => !v)}
+          title={t.routes}
+          aria-label={t.routes}
+          className={`fab pointer-events-auto ${
+            panel ? "text-accent" : "text-slate-300 hover:text-slate-100"
+          }`}
+        >
+          <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
+          </svg>
         </button>
-        <nav className="flex rounded-control bg-panel p-0.5 text-sm ring-1 ring-hair">
-          {(["map", "times", "plan"] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setTab(v)}
-              className={`rounded-md px-3 py-1 transition-colors ${
-                tab === v
-                  ? "bg-accent/15 font-medium text-accent"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              {v === "map" ? t.map : v === "times" ? t.times : t.plan}
-            </button>
-          ))}
-        </nav>
-        <StopSearch
-          catalog={cat}
-          onGo={(i) => {
-            const s = cat.stops[i]!;
-            setTab("map");
-            setStop(i);
-            setFocus({ lat: s.lat, lon: s.lon });
-          }}
-        />
-        <span className="ml-auto flex items-center gap-2 text-xs text-slate-500">
+        <div className="pointer-events-auto min-w-0 flex-1 sm:max-w-sm">
+          <StopSearch
+            catalog={cat}
+            onGo={(i) => {
+              const s = cat.stops[i]!;
+              setTab("map");
+              setStop(i);
+              setFocus({ lat: s.lat, lon: s.lon });
+            }}
+          />
+        </div>
+        <span
+          className="bar pointer-events-auto ml-auto flex h-10 items-center gap-2 px-3.5 text-xs text-slate-400"
+          title={connection}
+        >
           <span
             className={`size-2 rounded-full ${
               connection === "live" ? "bg-emerald-500" : "bg-amber-500"
             }`}
-            title={connection}
           />
           {t.vehicles(count)}
-          <button
-            onClick={async () => {
-              // Signed out here whether or not the request landed: the session
-              // it is ending may already be the reason it failed
-              await api.logout().catch(() => undefined);
-              setMe(null);
-            }}
-            className="text-slate-500 hover:text-slate-200"
-          >
-            {me.username} · {t.out}
-          </button>
         </span>
       </header>
 
       {notice !== null && (
-        <p className="flex items-center gap-2 bg-rose-500/10 px-3 py-1.5 text-sm text-rose-200">
+        <p className="panel absolute left-1/2 top-19 z-40 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-2 px-3 py-2 text-sm text-rose-200">
           {notice}
-          <button
-            onClick={() => setNotice(null)}
-            className="ml-auto text-rose-400 hover:text-rose-200"
-          >
+          <button onClick={() => setNotice(null)} className="text-rose-400 hover:text-rose-200">
             ✕
           </button>
         </p>
       )}
 
-      <main className="relative flex-1 overflow-hidden">
-        <div className={tab === "map" || tab === "plan" ? "absolute inset-0" : "hidden"}>
-          <MapCanvas
+      {tab === "plan" && (
+        <aside className="panel absolute right-3 top-19 bottom-20 z-20 w-96 max-w-[calc(100vw-1.5rem)] overflow-y-auto p-3">
+          <JourneyPanel
             catalog={cat}
-            live={live}
-            stops={stops}
-            selected={stop}
-            onPickStop={(i) => {
+            from={from}
+            to={to}
+            picking={picking}
+            onPick={setPicking}
+            onSwap={() => {
+              setFrom(to);
+              setTo(from);
+            }}
+            onHere={useHere}
+            onStop={(i) => {
+              setTab("map");
               setStop(i);
-              if (i !== null) setVeh(null);
+              setFocus({ lat: cat.stops[i]!.lat, lon: cat.stops[i]!.lon });
             }}
-            vehicle={veh}
-            onPickVehicle={setVeh}
-            focus={focus}
-            picking={picking !== null}
-            onPickPoint={(lat, lon) => {
-              if (picking === "from") setFrom({ lat, lon });
-              if (picking === "to") setTo({ lat, lon });
-              setPicking(null);
-            }}
-            marks={marks}
-            theme={theme}
           />
-          {tab === "plan" && (
-            <aside className="absolute inset-y-0 right-0 z-20 w-96 max-w-[90vw] bg-panel/90 p-3 ring-1 ring-hair backdrop-blur-md">
-              <JourneyPanel
-                catalog={cat}
-                from={from}
-                to={to}
-                picking={picking}
-                onPick={setPicking}
-                onSwap={() => {
-                  setFrom(to);
-                  setTo(from);
-                }}
-                onHere={useHere}
-                onStop={(i) => {
-                  setTab("map");
-                  setStop(i);
-                  setFocus({ lat: cat.stops[i]!.lat, lon: cat.stops[i]!.lon });
-                }}
-              />
-            </aside>
-          )}
+        </aside>
+      )}
 
-          {tab === "map" && veh !== null && stop === null && (
-            <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 mx-auto max-w-md">
-              <VehicleCard
-                catalog={cat}
-                veh={veh}
-                onStop={(i) => {
-                  setStop(i);
-                  setVeh(null);
-                }}
-                onClose={() => setVeh(null)}
-              />
-            </div>
-          )}
-
-          {tab === "map" && stop !== null && (
-            <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 mx-auto max-w-md">
-              <StopCard
-                catalog={cat}
-                stop={stop}
-                arrivals={live.arrivals[String(stop)]}
-                pinned={pins.includes(stop)}
-                onPin={() =>
-                  setPinned(pins.includes(stop) ? pins.filter((i) => i !== stop) : [...pins, stop])
-                }
-                onClose={() => setStop(null)}
-              />
-            </div>
-          )}
-        </div>
-
-        {tab === "times" && (
+      {tab === "times" && (
+        <section className="panel absolute inset-x-3 top-19 bottom-20 z-20 mx-auto max-w-lg overflow-hidden">
           <Timetable
             catalog={cat}
             stops={pins}
             arrivals={live.arrivals}
             onUnpin={(i) => setPinned(pins.filter((p) => p !== i))}
           />
-        )}
+        </section>
+      )}
 
-        {panel && (
-          <aside className="absolute inset-y-0 left-0 z-20 w-80 max-w-[85vw] bg-panel/90 p-3 ring-1 ring-hair backdrop-blur-md">
-            <RoutePanel
-              catalog={cat}
-              theme={theme}
-              onTheme={(next) => {
-                setTheme(next);
-                saveTheme(next);
-              }}
-              picked={picked}
-              onToggle={(id) =>
-                setPicked((was) => {
-                  const next = new Set(was);
-                  if (!next.delete(id)) next.add(id);
-                  return next;
-                })
-              }
-              onClear={() => setPicked(new Set())}
-              sets={sets}
-              active={active}
-              onActivate={(s) => {
-                setPicked(new Set(s.routes));
-                setActive(s.id);
-                void api.activateSet(s.id).catch(failed);
-              }}
-              onCreate={async (name) => {
-                await api.createSet(name, [...picked]);
-                await refreshSets();
-              }}
-              onUpdate={async (s) => {
-                await api.updateSet(s.id, s.name, [...picked]);
-                await refreshSets();
-              }}
-              onDelete={async (s) => {
-                await api.deleteSet(s.id);
-                await refreshSets();
-              }}
-            />
-          </aside>
-        )}
-      </main>
+      {tab === "map" && veh !== null && stop === null && (
+        <div className="pointer-events-none absolute inset-x-3 bottom-20 z-10 mx-auto max-w-md">
+          <VehicleCard
+            catalog={cat}
+            veh={veh}
+            onStop={(i) => {
+              setStop(i);
+              setVeh(null);
+            }}
+            onClose={() => setVeh(null)}
+          />
+        </div>
+      )}
+
+      {tab === "map" && stop !== null && (
+        <div className="pointer-events-none absolute inset-x-3 bottom-20 z-10 mx-auto max-w-md">
+          <StopCard
+            catalog={cat}
+            stop={stop}
+            arrivals={live.arrivals[String(stop)]}
+            pinned={pins.includes(stop)}
+            onPin={() =>
+              setPinned(pins.includes(stop) ? pins.filter((i) => i !== stop) : [...pins, stop])
+            }
+            onClose={() => setStop(null)}
+          />
+        </div>
+      )}
+
+      {/* Centred at the bottom, where a thumb is, rather than in the bar: it is
+          the one control used at any moment and the only one worth that spot */}
+      <nav className="bar absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 gap-1 p-1 text-sm">
+        {(["map", "times", "plan"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setTab(v)}
+            className={`rounded-full px-4 py-1.5 transition-colors ${
+              tab === v
+                ? "bg-accent/15 font-medium text-accent"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            {v === "map" ? t.map : v === "times" ? t.times : t.plan}
+          </button>
+        ))}
+      </nav>
+
+      {panel && (
+        <aside className="panel absolute left-3 top-19 bottom-20 z-20 w-80 max-w-[calc(100vw-1.5rem)] p-3">
+          <RoutePanel
+            catalog={cat}
+            username={me.username}
+            onOut={async () => {
+              // Signed out here whether or not the request landed: the session
+              // it is ending may already be the reason it failed
+              await api.logout().catch(() => undefined);
+              setMe(null);
+            }}
+            theme={theme}
+            onTheme={(next) => {
+              setTheme(next);
+              saveTheme(next);
+            }}
+            picked={picked}
+            onToggle={(id) =>
+              setPicked((was) => {
+                const next = new Set(was);
+                if (!next.delete(id)) next.add(id);
+                return next;
+              })
+            }
+            onClear={() => setPicked(new Set())}
+            sets={sets}
+            active={active}
+            onActivate={(s) => {
+              setPicked(new Set(s.routes));
+              setActive(s.id);
+              void api.activateSet(s.id).catch(failed);
+            }}
+            onCreate={async (name) => {
+              await api.createSet(name, [...picked]);
+              await refreshSets();
+            }}
+            onUpdate={async (s) => {
+              await api.updateSet(s.id, s.name, [...picked]);
+              await refreshSets();
+            }}
+            onDelete={async (s) => {
+              await api.deleteSet(s.id);
+              await refreshSets();
+            }}
+          />
+        </aside>
+      )}
     </div>
   );
 }
