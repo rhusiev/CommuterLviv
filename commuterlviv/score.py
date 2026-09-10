@@ -22,11 +22,18 @@ vehicle running late is late at every stop still ahead of it, so its errors
 are one fact repeated, not thirty independent ones; resampling predictions
 would report an interval several times narrower than the truth.
 """
+import time
+
 import numpy as np
 
 BUCKETS = [(0, 60), (60, 120), (120, 300), (300, 600), (600, 1200), (1200, 2700)]
 EPOCH = 60.0
 NARROW = ("lad",)   # predictors too narrow to set the support; see paired()
+HOUR_MIN = 300      # paired predictions an hour needs before its MAE is printed
+# The service day rolls here, not at midnight: the last trams run past 00:00 and
+# nothing at all runs until 05:30, so a crossing at 00:20 belongs to the day that
+# is ending rather than to the one that has not started.
+DAY_ROLL = 3 * 3600
 
 
 def keys(s):
@@ -38,6 +45,21 @@ def bucket_of(horizon):
     """Which BUCKETS index each horizon falls in, as an array."""
     edges = np.array([hi for _, hi in BUCKETS[:-1]], dtype=float)
     return np.searchsorted(edges, horizon, "right")
+
+
+def clock(epoch):
+    """Local hour of day and local service date for each prediction.
+
+    Epochs are a minute apart, so a recording holds a few thousand distinct ones
+    however many predictions it carries: the calendar conversion is done on the
+    distinct values and mapped back, not a million times over.
+    """
+    u, inv = np.unique(epoch, return_inverse=True)
+    tm = [time.localtime(t) for t in u]
+    hour = np.array([x.tm_hour for x in tm])[inv]
+    day = np.array([time.strftime("%Y-%m-%d", time.localtime(t - DAY_ROLL))
+                    for t in u])[inv]
+    return hour, day
 
 
 def common(named):
@@ -115,6 +137,35 @@ def table(named, truth=None, ci=False):
         print()
 
 
+def hours(named, min_n=HOUR_MIN):
+    """MAE by local hour of day, with counts.
+
+    An hour with fewer than `min_n` predictions is left out rather than printed:
+    a recording that clips the end of an evening carries a handful of rows at
+    23:00, and an MAE over a handful of rows is a number nobody should read.
+    """
+    out = {}
+    for name, s in named.items():
+        hour, _ = clock(s.epoch)
+        for h in np.unique(hour):
+            m = hour == h
+            if m.sum() >= min_n:
+                out.setdefault(f"{h:02d}", {})[name] = stats(s.error[m])
+    return dict(sorted(out.items()))
+
+
+def hour_table(named, min_n=HOUR_MIN):
+    rows = hours(named, min_n)
+    w = max(len(n) for n in named)
+    print(f"{'hour':>6}  {'name':<{w}}  {'n':>8} {'MAE':>7} {'med':>7} {'bias':>7}")
+    for label, per in rows.items():
+        for name, r in per.items():
+            print(f"{label + ':00':>6}  {name:<{w}}  {r['n']:>8} "
+                  f"{r['mae']:>7.0f} {r['median']:>7.0f} {r['bias']:>+7.0f}")
+        print()
+    return rows
+
+
 def bootstrap(vals, trips, n=500, seed=0, chunk=50):
     """Percentile interval for a mean, resampling whole trips."""
     rng = np.random.default_rng(seed)
@@ -131,6 +182,9 @@ def report(named, truth):
     coverage(named, truth)
     print("each predictor on everything it answered\n")
     table(named)
+    common_support = paired(named)
     print(f"all predictors but {', '.join(NARROW)} on the crossings and "
           "instants every one of them answered\n")
-    table(paired(named), truth, ci=True)
+    table(common_support, truth, ci=True)
+    print("the same predictions, by the hour of day they were made\n")
+    hour_table(common_support)

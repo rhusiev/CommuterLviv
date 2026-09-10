@@ -351,7 +351,12 @@ comes.
       half as much shrinkage rather than longer memory. Sweeping `fast` on a
       base with `fast_hl = 7200`: off costs +9.1 s [+7.8, +10.2]. The term earns
       its place; it just wants a much longer half-life than it ships with.
-- [ ] **Read the direction, not the numbers.** All four grids say the same
+- [x] **Read the direction, not the numbers.** Answered by the cross-day run:
+      it was the recording being too short, not the city having no within-day
+      variation. Finding 14. The rest of this item stands as written and is why
+      nothing was shipped on it.
+
+      All four grids say the same
       thing - less shrinkage, longer memory - and a slow half-life longer than
       the recording is not decay at all. On a single day that is exactly the
       shape you would see if there were no genuine within-day variation worth
@@ -361,12 +366,14 @@ comes.
       not distinguishable here; Phase 6 is what separates them, and no default
       should move before then.
 
-      The same reading applies to `knn` (118 s) sitting a second ahead of
+      The same reading applied to `knn` (118 s) sitting a second ahead of
       `full` (119 s) in the comparison. It has no hierarchy, no decay and no
-      prior - a plain median of the last 10 crossings - so it is the strongest
+      prior - a plain median of the last 10 crossings - so it was the strongest
       single piece of evidence that this recording's structure is thinner than
-      the model assumes. It is the first thing to re-score on a multi-day
-      recording.
+      the model assumes, and the first thing to re-score on a multi-day
+      recording. **Re-scored 2026-09-10: the lead is gone.** Tied with `full` on
+      the Monday and the Tuesday, 3 s behind on the Wednesday. The structure was
+      thin because the days were.
 
 Finding 3 is the specific hypothesis to test here: the cell-fast term supplies
 8.3% of the blend and is diluted almost to nothing by `K_CELL = 4.0`, so a
@@ -647,11 +654,37 @@ that they are unscored rather than quietly omitting them.
       `no-prior` at the two long ones. Over the whole recording, 113 against
       118, tied with `no-prior` and `tuned` on MAE but with a bias of -51 s
       against their -58 and -68 (`reports/slow-day.md`). Finding 11.
-- [ ] **Per-hour scoring.** No per-hour table is published today, which finding 6
-      noted is why nothing shipped is misleading despite the sparse hours. Once
-      there are enough hours, publish MAE by hour with counts, and suppress any
-      hour with fewer than a few hundred paired predictions rather than printing
-      a number nobody should read.
+- [~] **Per-hour scoring.** No per-hour table was published, which finding 6
+      noted is why nothing shipped is misleading despite the sparse hours. Built
+      2026-09-10: `score.hours`/`score.hour_table` cut the paired support by the
+      local hour the prediction was made in and drop any hour under
+      `score.HOUR_MIN` (300 predictions) rather than printing a number nobody
+      should read, and `commuterlviv experiment` writes the table into both
+      `approaches.json` and `approaches.md`. The recording now spans four days,
+      so the hours are no longer sparse; the numbers land with the next full
+      experiment run.
+
+- [x] **Cross-day re-scoring.** Every published number is pooled over the whole
+      recording, which cannot say whether a variant wins because it is better or
+      because it was the one that started cold. `commuterlviv crossday`
+      (`crossday.py`) replays each variant once over the whole recording, so the
+      online models carry across the nights as they would in service, and cuts
+      the paired support by service day afterwards - the day rolling at 03:00,
+      not midnight, because the last trams run past 00:00 and nothing runs until
+      05:30. The support is chosen once over the whole recording and then cut, so
+      the days are comparable to each other; the first day is labelled as the
+      cold one. `reports/crossday.md` and `.json`. The four-day run is what
+      answers `knn` vs `full` and the "read the direction, not the numbers" item
+      in Phase 2.
+
+      **Run 2026-09-10 over five service days, and it reverses three published
+      conclusions.** Finding 14 has the table. On the three full weekdays `full`
+      is first or tied first; `tuned` loses by 6-12 s, `slow-day` by 6-13, and
+      `knn`'s lead is gone (tied Mon and Tue, +3 s Wed). Every one of those three
+      was measured on a Saturday evening and a Sunday. The whole field is 25-35 s
+      worse on a weekday than on the Sunday, which is the size of the effect that
+      was being read as a difference between approaches. **No default should have
+      moved on the old numbers, and none did.**
 
 ## Phase 7 - a live service and a web UI
 

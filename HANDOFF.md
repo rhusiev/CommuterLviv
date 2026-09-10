@@ -296,6 +296,24 @@ which of its parts are carrying it.
   nothing at all. A two-way stretch gets two heads backed 9 px off each other,
   which reads as `-><-`; closer together they read as a diamond.
 
+- **The recording covers five service days now, and scoring it day by day
+  reverses three published conclusions**, at 0.4.5, asked for on 2026-09-10.
+  `commuterlviv crossday` replays each approach once over the whole recording,
+  so the online models carry across the nights as they would in service, and
+  cuts the score by the service day each prediction was made on - the day
+  rolling at 03:00, because the last trams run past midnight and nothing runs
+  until 05:30. On the three full weekdays `full` is first or tied first;
+  `tuned` loses by 6-12 s, `slow-day` by 6-13, and `knn`'s lead is gone. All
+  three of those had been measured on a Saturday evening and a Sunday, and the
+  whole field is 25-35 s worse on a weekday than on that Sunday - which is the
+  size of the effect that was being read as a difference between approaches.
+  Nothing shipped on the old numbers, which is the one thing the plan got right
+  about them. `reports/crossday.md`, finding 14.
+
+  `commuterlviv experiment` also publishes MAE by the hour of day the
+  prediction was made in, dropping any hour under 300 paired predictions, which
+  is the table finding 6 asked for and the sparse hours used to forbid.
+
 ## What just landed, and what it enables
 
 **Phase 5, the blends.** `commuterlviv/stack.py` replays `full`, `no-prior` and

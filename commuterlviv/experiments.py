@@ -57,6 +57,7 @@ def run_all(net=None, variants=None, out=REPORTS, db=replay.DB, **kw):
             "answered": {n: len(s) for n, s in named.items()},
             "scored_on": {n: len(s) for n, s in paired.items()},
             "buckets": score.buckets(paired, truth, ci=True),
+            "hours": score.hours(paired),
             "overall": {n: score.stats(s.error) for n, s in paired.items()},
             "lad": {n: score.stats(s.error) for n, s in lad.items()},
             "approaches": {c.name: c.doc for c in variants}}
@@ -69,6 +70,7 @@ def run_all(net=None, variants=None, out=REPORTS, db=replay.DB, **kw):
 
     score.coverage(named, truth)
     score.table(paired, truth, ci=True)
+    score.hour_table(paired)
     return data
 
 
@@ -84,6 +86,29 @@ def _table(rows):
         out.append(f"| {n} | {r['mae']:.0f} | {d_mae} | {r['median']:.0f} | "
                    f"{r['rmse']:.0f} | {r['bias']:+.0f} | "
                    f"{100 * r['p60']:.1f}% | {100 * r['p120']:.1f}% |")
+    return out
+
+
+def _hours(d, order):
+    """MAE by the hour of day the prediction was made, which is the table
+    finding 6 needs: a model that resets overnight is wrong in the morning and
+    right by noon, and one pooled number cannot say that."""
+    hours = d.get("hours") or {}
+    if not hours:
+        return []
+    counts = {h: max(r["n"] for r in per.values()) for h, per in hours.items()}
+    out = ["", "## MAE by the hour of day the prediction was made", "",
+           f"Hours with fewer than {score.HOUR_MIN} paired predictions are left "
+           "out. The counts are of predictions, not crossings, and a crossing "
+           "is predicted about once a minute until it happens, so an hour with "
+           "few vehicles running still carries many rows.", "",
+           "| approach | " + " | ".join(f"{h}:00" for h in hours) + " |",
+           "|---" * (len(hours) + 1) + "|",
+           "| _predictions_ | " + " | ".join(f"{counts[h]}" for h in hours) + " |"]
+    for n in order:
+        cells = [f"{per[n]['mae']:.0f}" if n in per else "-"
+                 for per in hours.values()]
+        out.append(f"| {n} | " + " | ".join(cells) + " |")
     return out
 
 
@@ -117,6 +142,8 @@ def _markdown(d, variants):
         cells = [f"{b[n]['mae']:.0f}" if n in b else "-"
                  for b in d["buckets"].values()]
         out.append(f"| {n} | " + " | ".join(cells) + " |")
+
+    out += _hours(d, order)
 
     out += ["", "## The public arrivals board, where it answers at all", "",
             f"The same events again, restricted to the {d['lad']['lad']['n']} "

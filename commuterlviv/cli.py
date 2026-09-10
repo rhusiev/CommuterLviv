@@ -1,4 +1,4 @@
-"""One entry point for the fourteen things this project does.
+"""One entry point for the fifteen things this project does.
 
     collect     record the live feeds into data/feed.db, indefinitely
     merge       fold recordings from several machines into one file
@@ -8,6 +8,7 @@
     evaluate    replay what was recorded and score every predictor on it
     experiment  score every switchable approach on the same recording
     sweep       vary one estimator constant and score every value of it
+    crossday    score every approach day by day, not pooled over the recording
     check       take the model apart: is it the model, the tracking or the truth
     diag        ask what methodology the official API is actually using
     walk        fetch the city's footpaths once, for the journey planner
@@ -66,7 +67,9 @@ def _residual(rest):
 
 
 def _stack(rest):
-    from . import config, residual, stack
+    import dataclasses
+
+    from . import config, network, residual, stack
     ap = argparse.ArgumentParser(prog="commuterlviv stack")
     ap.add_argument("--members", nargs="+", metavar="NAME",
                     choices=list(config.BY_NAME), default=list(stack.MEMBERS),
@@ -83,11 +86,18 @@ def _stack(rest):
                     help="the feature table, for the full + residual hybrid")
     ap.add_argument("--from", dest="t_from", type=_when, metavar="TIME")
     ap.add_argument("--to", dest="t_to", type=_when, metavar="TIME")
+    ap.add_argument("--grid", type=float, metavar="METRES",
+                    help="replay the members on a corridor grid of this size, "
+                         "to see whether a sweep's win survives the blend "
+                         f"(default {network.DEFAULT.grid:g})")
     ap.add_argument("--out", default=stack.REPORTS, metavar="DIR")
     ap.add_argument("--label", default="", metavar="NAME",
                     help="suffix for the report, so two splits can coexist")
     a = ap.parse_args(rest)
     kw = {} if a.t_to is None else {"t_to": a.t_to}
+    if a.grid is not None:
+        kw["net"] = network.load(geom=dataclasses.replace(network.DEFAULT,
+                                                          grid=a.grid))
     stack.main(members=tuple(a.members), fit_to=a.fit_to, test_from=a.test_from,
                feats=a.feats, out=a.out, label=a.label, t_from=a.t_from, **kw)
 
@@ -150,6 +160,23 @@ def _sweep(rest):
     kw = {} if a.t_to is None else {"t_to": a.t_to}
     sweep.run(a.field, a.values or None, base=config.BY_NAME[a.base],
               warmup=a.warmup, t_from=a.t_from, **kw)
+
+
+def _crossday(rest):
+    from . import config, crossday
+    ap = argparse.ArgumentParser(prog="commuterlviv crossday")
+    ap.add_argument("--warmup", type=float, default=1800.0,
+                    help="seconds of replay to learn from before scoring begins")
+    ap.add_argument("--from", dest="t_from", type=_when, metavar="TIME")
+    ap.add_argument("--to", dest="t_to", type=_when, metavar="TIME")
+    ap.add_argument("--only", nargs="+", metavar="NAME", choices=list(config.BY_NAME),
+                    help=f"approaches to run (default {', '.join(crossday.DEFAULT)})")
+    ap.add_argument("--out", default=crossday.REPORTS, metavar="DIR")
+    a = ap.parse_args(rest)
+    variants = [config.BY_NAME[n] for n in a.only] if a.only else None
+    kw = {} if a.t_to is None else {"t_to": a.t_to}
+    crossday.run(variants=variants, warmup=a.warmup, out=a.out,
+                 t_from=a.t_from, **kw)
 
 
 def _check(rest):
@@ -242,7 +269,7 @@ def _no_args(name, rest):
 COMMANDS = {"collect": _collect, "merge": _merge,
             "features": _features, "residual": _residual,
             "stack": _stack, "evaluate": _evaluate, "experiment": _experiment,
-            "sweep": _sweep, "check": _check, "diag": _diag,
+            "sweep": _sweep, "crossday": _crossday, "check": _check, "diag": _diag,
             "walk": _walk, "plan": _plan, "serve": _serve, "admin": _admin}
 
 
