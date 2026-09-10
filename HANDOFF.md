@@ -158,6 +158,26 @@ which of its parts are carrying it.
   contains no `r1a.nl` at all, and styles, glyphs, sprites and real tiles at
   z10/z12/z14 all 200. The 0.3.4 APK on `/download/` carries no tile host.
 
+- **Login was broken on production for about three hours on 2026-09-10**, from
+  the 0.3.2 deploy until 0.3.5, and the cause is worth remembering. The
+  Caddyfile asked for the forwarded address as `{$COMMUTERLVIV_CLIENT_IP:{remote_host}}`.
+  Caddy's env-var syntax ends at the **first** `}`, so it read the default as
+  `{remote_host` and left the spare `}` in the header. `auth_events.ip` is an
+  `inet` column, the failed-login audit write is on the login path, and asyncpg
+  refused `172.19.0.1}` - so every sign-in returned 500 and no failure was ever
+  recorded, which is what made it invisible. The line had been wrong since
+  0.3.0; production only reached it today, because the VPS had been on 0.2.0.
+
+  The default now lives in `docker-compose.yml`, and `_address()` in `app.py`
+  validates the header so a bad one can only cost an audit field. `check_live.py`
+  posts a login with `X-Forwarded-For: not-an-address}` and asserts 401.
+
+  Separately: the outer Caddy sets `X-Forwarded-For {remote_host}` correctly,
+  but sees every client as `172.19.0.1`, the Docker gateway, because it is
+  port-published rather than on host networking. **Every rate limit is therefore
+  one global bucket**, which is not what `docker-compose.proxy.yml` assumes. Not
+  changed - it is the user's own Caddy, outside this repo.
+
 - **Production is recording**, from 2026-09-10 06:52. The collector runs behind
   the `collect` profile (`--profile collect up -d collector`, `--keep-days 30
   --min-free-gb 3`, 77 GB free) and appends to the `feed.db` already on the
