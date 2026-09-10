@@ -5,13 +5,19 @@ import { SignIn } from "./components/SignIn";
 import { JourneyPanel, type Point } from "./components/JourneyPanel";
 import { StopCard } from "./components/StopCard";
 import { StopSearch } from "./components/StopSearch";
+import { RouteBadge } from "./components/RouteBadge";
 import { VehicleCard } from "./components/VehicleCard";
 import { Timetable } from "./components/Timetable";
-import { api, ApiError, catalog as fetchCatalog } from "./lib/api";
+import {
+  api,
+  ApiError,
+  catalog as fetchCatalog,
+  shapes as fetchShapes,
+} from "./lib/api";
 import { loadTheme, saveTheme, type Theme } from "./lib/theme";
 import { readUrl, writeUrl } from "./lib/url";
 import { useLive } from "./lib/useLive";
-import type { Catalog, Me, RouteSet } from "./lib/types";
+import type { Catalog, Me, RouteSet, Shapes } from "./lib/types";
 import { t } from "./lib/i18n";
 
 const JOIN = /^\/join\/([\w-]+)\/?$/;
@@ -28,14 +34,24 @@ export function App() {
   // Read once, at mount: from here on this component is what the address bar
   // follows rather than the other way round
   const [opened] = useState(readUrl);
-  const [picked, setPicked] = useState<Set<string>>(new Set(opened.routes ?? []));
+  const [picked, setPicked] = useState<Set<string>>(
+    new Set(opened.routes ?? []),
+  );
   const [sets, setSets] = useState<RouteSet[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [pinIds, setPinIds] = useState<string[]>([]);
   const [stop, setStop] = useState<number | null>(null);
   const [veh, setVeh] = useState<number | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lon: number } | null>(null);
-  const [tab, setTab] = useState<"map" | "times" | "plan">(opened.tab);
+  const [tab, setTab] = useState<"map" | "times" | "plan" | "route">(
+    opened.route === null && opened.tab === "route" ? "map" : opened.tab,
+  );
+  // The route being looked at, and whether every route's line is drawn under
+  // the map. Both need the geometry, which is fetched the first time either
+  // of them asks for it and then kept
+  const [route, setRoute] = useState<number | null>(null);
+  const [allLines, setAllLines] = useState(false);
+  const [geo, setGeo] = useState<Shapes | null>(null);
   const [from, setFrom] = useState<Point | null>(null);
   const [to, setTo] = useState<Point | null>(null);
   const [picking, setPicking] = useState<"from" | "to" | null>(null);
@@ -99,7 +115,10 @@ export function App() {
   /** The socket and every panel address a stop by its position in the catalog;
    * only what is stored is an id. */
   const pins = useMemo(
-    () => pinIds.map((id) => stopIndex.get(id)).filter((i): i is number => i !== undefined),
+    () =>
+      pinIds
+        .map((id) => stopIndex.get(id))
+        .filter((i): i is number => i !== undefined),
     [pinIds, stopIndex],
   );
 
@@ -135,6 +154,16 @@ export function App() {
    * there, because a link to a stop that leaves the camera over the centre of
    * the city has not shown anybody the stop. */
   useEffect(() => {
+    if (!cat || opened.route === null) return;
+    const i = cat.routes.findIndex((r) => r.id === opened.route);
+    // A link naming a route the city has since dropped is a link to the map
+    if (i >= 0) setRoute(i);
+    else setTab("map");
+    // Once, when the catalog arrives: after that the address bar follows
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cat]);
+
+  useEffect(() => {
     if (!cat || opened.stop === null) return;
     const i = stopIndex.get(opened.stop);
     if (i === undefined) return;
@@ -150,9 +179,10 @@ export function App() {
     writeUrl({
       routes: [...picked],
       stop: stop === null ? null : cat.stops[stop]!.id,
+      route: route === null ? null : cat.routes[route]!.id,
       tab,
     });
-  }, [cat, picked, stop, tab]);
+  }, [cat, picked, stop, route, tab]);
 
   const index = useMemo(() => {
     const m = new Map<string, number>();
@@ -160,10 +190,53 @@ export function App() {
     return m;
   }, [cat]);
 
-  const indexes = useMemo(
-    () => [...picked].map((id) => index.get(id)).filter((i): i is number => i !== undefined),
+  const chosen = useMemo(
+    () =>
+      [...picked]
+        .map((id) => index.get(id))
+        .filter((i): i is number => i !== undefined),
     [picked, index],
   );
+
+  /** While one route is being looked at, it is the only one on the map: that
+   * is what "its vehicles" means, and the filter is the socket's own, so the
+   * others are not drawn because they are not sent */
+  const indexes = useMemo(
+    () => (tab === "route" && route !== null ? [route] : chosen),
+    [tab, route, chosen],
+  );
+
+  /** Every route's line, or the one being looked at, or none */
+  const lines = useMemo(() => {
+    if (tab === "route" && route !== null) return [route];
+    if (!allLines || !cat) return [];
+    return cat.routes.map((_, i) => i);
+  }, [tab, route, allLines, cat]);
+
+  /** Opening a route puts the whole of it on screen: it is tens of kilometres
+   * long and wherever the camera happened to be is not on it */
+  const fit = useMemo((): [number, number, number, number] | null => {
+    const shape = tab === "route" && route !== null ? geo?.routes[route] : null;
+    if (!shape) return null;
+    let w = 180,
+      s = 90,
+      e = -180,
+      n = -90;
+    for (const line of shape.lines) {
+      for (const [lat, lon] of line.pts) {
+        w = Math.min(w, lon);
+        e = Math.max(e, lon);
+        s = Math.min(s, lat);
+        n = Math.max(n, lat);
+      }
+    }
+    return w > e ? null : [w, s, e, n];
+  }, [tab, route, geo]);
+
+  useEffect(() => {
+    if (!lines.length || geo) return;
+    void fetchShapes().then(setGeo, failed);
+  }, [lines, geo, failed]);
 
   useEffect(() => {
     if (cat) live.setRoutes(indexes);
@@ -230,7 +303,8 @@ export function App() {
     setActive(s.active);
   };
 
-  if (code !== null && !me) return <SignIn code={code} onIn={() => void load()} />;
+  if (code !== null && !me)
+    return <SignIn code={code} onIn={() => void load()} />;
   if (me === undefined)
     return notice === null ? (
       <Splash text={t.waiting} />
@@ -272,6 +346,7 @@ export function App() {
         vehicle={veh}
         onPickVehicle={setVeh}
         focus={focus}
+        fit={fit}
         picking={picking !== null}
         onPickPoint={(lat, lon) => {
           if (picking === "from") setFrom({ lat, lon });
@@ -279,6 +354,9 @@ export function App() {
           setPicking(null);
         }}
         marks={marks}
+        shapes={geo}
+        lines={lines}
+        arrowed={tab === "route" ? route : null}
         theme={theme}
       />
 
@@ -291,7 +369,13 @@ export function App() {
             panel ? "text-accent" : "text-slate-300 hover:text-slate-100"
           }`}
         >
-          <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg
+            viewBox="0 0 24 24"
+            className="size-5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
             <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
           </svg>
         </button>
@@ -319,10 +403,36 @@ export function App() {
         </span>
       </header>
 
+      {/* Under the map's own locate button, in the same column: it is a thing
+          done to the map and not to the panels */}
+      <button
+        onClick={() => setAllLines((v) => !v)}
+        title={allLines ? t.hideEveryRoute : t.everyRoute}
+        aria-label={allLines ? t.hideEveryRoute : t.everyRoute}
+        className={`fab absolute right-3 top-31 z-10 ${
+          allLines ? "text-accent" : "text-slate-300 hover:text-slate-100"
+        }`}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          className="size-5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        >
+          <path d="M3 18c4 0 3-12 7-12s3 12 7 12" />
+          <path d="M3 6h4M17 18h4" />
+        </svg>
+      </button>
+
       {notice !== null && (
         <p className="panel absolute left-1/2 top-19 z-40 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-2 px-3 py-2 text-sm text-rose-200">
           {notice}
-          <button onClick={() => setNotice(null)} className="text-rose-400 hover:text-rose-200">
+          <button
+            onClick={() => setNotice(null)}
+            className="text-rose-400 hover:text-rose-200"
+          >
             ✕
           </button>
         </p>
@@ -363,8 +473,33 @@ export function App() {
         </section>
       )}
 
+      {tab === "route" && route !== null && (
+        <aside
+          className={`panel absolute ${clear} right-3 top-19 z-20 mx-auto flex max-w-md items-start gap-2 p-3`}
+        >
+          <RouteBadge
+            route={cat.routes[route]!}
+            className="px-1.5 py-0.5 text-xs"
+          />
+          <p className="min-w-0 flex-1 truncate text-sm text-slate-300">
+            {cat.routes[route]!.long}
+          </p>
+          <button
+            onClick={() => {
+              setRoute(null);
+              setTab("map");
+            }}
+            className="px-1 text-slate-500 hover:text-slate-200"
+          >
+            ✕
+          </button>
+        </aside>
+      )}
+
       {tab === "map" && (stop !== null || veh !== null) && (
-        <div className={`pointer-events-none absolute ${clear} bottom-20 right-3 z-10 mx-auto max-w-md`}>
+        <div
+          className={`pointer-events-none absolute ${clear} bottom-20 right-3 z-10 mx-auto max-w-md`}
+        >
           {stop !== null ? (
             <StopCard
               catalog={cat}
@@ -372,7 +507,11 @@ export function App() {
               arrivals={live.arrivals[String(stop)]}
               pinned={pins.includes(stop)}
               onPin={() =>
-                setPinned(pins.includes(stop) ? pins.filter((i) => i !== stop) : [...pins, stop])
+                setPinned(
+                  pins.includes(stop)
+                    ? pins.filter((i) => i !== stop)
+                    : [...pins, stop],
+                )
               }
               onClose={() => setStop(null)}
             />
@@ -384,6 +523,10 @@ export function App() {
                 setStop(i);
                 setVeh(null);
               }}
+              onRoute={(i) => {
+                setRoute(i);
+                setTab("route");
+              }}
               onClose={() => setVeh(null)}
             />
           )}
@@ -394,16 +537,31 @@ export function App() {
           the one control used at any moment and the only one worth that spot.
           Three equal columns and one weight throughout, so choosing a tab moves
           nothing: a heavier label is a wider label, and the other two would slide */}
-      <nav className="bar absolute bottom-3 left-1/2 z-30 grid grid-cols-3 -translate-x-1/2 gap-1 p-1 text-sm">
-        {(["map", "times", "plan"] as const).map((v) => (
+      <nav
+        className={`bar absolute bottom-3 left-1/2 z-30 grid ${
+          route === null ? "grid-cols-3" : "grid-cols-4"
+        } -translate-x-1/2 gap-1 p-1 text-sm`}
+      >
+        {(route === null
+          ? (["map", "times", "plan"] as const)
+          : (["map", "times", "plan", "route"] as const)
+        ).map((v) => (
           <button
             key={v}
             onClick={() => setTab(v)}
             className={`rounded-full px-4 py-1.5 font-medium transition-colors ${
-              tab === v ? "bg-accent/15 text-accent" : "text-slate-400 hover:text-slate-200"
+              tab === v
+                ? "bg-accent/15 text-accent"
+                : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            {v === "map" ? t.map : v === "times" ? t.times : t.plan}
+            {v === "map"
+              ? t.map
+              : v === "times"
+                ? t.times
+                : v === "plan"
+                  ? t.plan
+                  : t.route}
           </button>
         ))}
       </nav>

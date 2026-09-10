@@ -491,6 +491,14 @@ indexes stops by the catalog it was built against and must be rebuilt wherever
 `network.pkl` differs. Without them the service still starts, logs why, and
 `/api/plan` answers 503 - the map and the arrivals do not depend on it.
 
+`GET /api/shapes` is where a route physically goes: per route, the polylines
+its trips follow and a direction arrow every 220 m along them, each arrow
+flagged where the route also runs the other way along that stretch. 535 KB, 111
+KB gzipped, one ETag for the life of the process, and both clients ask for it
+only the first time something wants to draw a line - tapping a vehicle's badge
+to see its route, or the button that puts the whole network on the map. Nobody
+who opens neither pays for it.
+
 Accounts are required for everything except `/api/health`, for two reasons,
 neither of them capacity. They carry a person's named route sets and pinned
 stops between their devices, both stored as feed ids so that a rebuilt catalog

@@ -277,6 +277,25 @@ which of its parts are carrying it.
   routes. Not the basemap or language buttons: their labels are genuinely
   different lengths and "Українська" would give "English" a field of empty pill.
 
+- **A route's own line, and every route at once**, at 0.4.4, asked for on
+  2026-09-10. Tapping the badge on a vehicle card opens a fourth tab holding
+  that route: its polylines in the route's colour, direction arrows along them,
+  and only that route's vehicles - which needed no server code, because the
+  socket already takes a route filter and the view just sends a filter of one.
+  The camera fits the route's bounds on open; a route is tens of kilometres long
+  and wherever the map happened to be is not on it. A second button on the map
+  draws every route's line at once, dimmed and without arrows, because 72 routes
+  of arrowheads is a texture and not information.
+
+  Geometry comes from `GET /api/shapes` (`live/geometry.py`), fetched lazily and
+  held against its ETag next to the catalog. The server spaces arrows 220 m
+  apart, which at the zoom that holds a whole route is five pixels - the line
+  reads as dashed - so both clients drop to every nth arrow for roughly 80 px of
+  spacing and draw none at all below zoom 13. Arrowheads are drawn in the page's
+  ink, not the route's colour: a coloured head on a line of the same colour is
+  nothing at all. A two-way stretch gets two heads backed 9 px off each other,
+  which reads as `-><-`; closer together they read as a diamond.
+
 ## What just landed, and what it enables
 
 **Phase 5, the blends.** `commuterlviv/stack.py` replays `full`, `no-prior` and

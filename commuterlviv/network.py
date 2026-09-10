@@ -44,6 +44,13 @@ def to_xy(lat, lon):
                      (np.asarray(lat) - LAT0) * KY], axis=-1)
 
 
+def to_ll(xy):
+    """The inverse of `to_xy`. The projection is one scale per axis, so going
+    back is division - there is no iteration and no loss beyond float."""
+    xy = np.asarray(xy, dtype=float)
+    return np.stack([xy[..., 1] / KY + LAT0, xy[..., 0] / KX + LON0], axis=-1)
+
+
 def project(xy, cum, p, lo=None, hi=None):
     """Nearest point on a polyline. Returns (distance along, lateral offset)."""
     a, b = xy[:-1], xy[1:]
@@ -95,12 +102,19 @@ class Shape:
 
 
 class Net:
+    # Bump when a field is added or its meaning changes. `fresh` only compares
+    # mtimes, so without this a cache built by an older version loads happily
+    # and is missing whatever the new code reads
+    VERSION = 2
+
     def __init__(self):
+        self.version = self.VERSION
         self.shapes = {}
         self.stops = {}
         self.routes = {}
         self.trip_shape = {}
         self.trip_route = {}
+        self.trip_dir = {}          # trip_id -> 0 or 1, the feed's direction_id
         self.trip_stops = {}        # trip_id -> (stop_ids, dist[], sched_sec[])
         self.pattern_of = {}        # trip_id -> pattern key
 
@@ -188,6 +202,7 @@ def build():
     for t in gtfs.table("trips.txt"):
         net.trip_shape[t["trip_id"]] = t["shape_id"]
         net.trip_route[t["trip_id"]] = t["route_id"]
+        net.trip_dir[t["trip_id"]] = int(t["direction_id"] or 0)
 
     seq = {}
     for r in gtfs.table("stop_times.txt"):
@@ -246,7 +261,9 @@ def _load(rebuild):
     gtfs.static_zip()   # so a feed that changed overnight invalidates the cache
     if not rebuild and fresh():
         with open(CACHE, "rb") as f:
-            return pickle.load(f)
+            net = pickle.load(f)
+        if getattr(net, "version", 0) == Net.VERSION:
+            return net
     net = build()
     tmp = CACHE + ".tmp"
     with open(tmp, "wb") as f:

@@ -13,10 +13,10 @@ import {
   type View,
 } from "../lib/geo";
 import { sample, type Live } from "../lib/live";
-import { build, R, type Sprites } from "../lib/sprites";
+import { build, colour, R, type Sprites } from "../lib/sprites";
 import { t } from "../lib/i18n";
 import { ink, styleUrl, type Theme } from "../lib/theme";
-import type { Catalog } from "../lib/types";
+import type { Catalog, Shapes } from "../lib/types";
 import { MOVING_FLAG, STALE_FLAG } from "../lib/wire";
 
 /** The map. MapLibre draws the city and owns every gesture; the vehicles and
@@ -26,6 +26,12 @@ import { MOVING_FLAG, STALE_FLAG } from "../lib/wire";
  * No React state changes while it runs: a re-render here is a dropped frame. */
 
 const STOP_R = 3.5;
+/** What `live/geometry.py` used, in metres: the arrows arrive that far apart */
+const ARROW_SPACING = 220;
+/** Below this the whole route is on screen and an arrowhead is five pixels of
+ * speckle on the line. The line alone says where the route runs; the zoom that
+ * shows a street is the one where which way it runs is a question */
+const ARROW_ZOOM = 13;
 const HIT = 14;
 const TAU = Math.PI * 2;
 
@@ -46,14 +52,37 @@ type Props = {
   /** Where the search wants the camera. A new object flies, so asking twice for
    * the same stop flies twice */
   focus: { lat: number; lon: number } | null;
+  /** `[west, south, east, north]` the camera should hold, which is how a route
+   * is shown: a line the length of the city has no one point to fly to */
+  fit: [number, number, number, number] | null;
   /** While the planner is waiting for an end of the journey, a click is that
    * point rather than a choice of stop */
   picking: boolean;
   onPickPoint: (lat: number, lon: number) => void;
   /** The journey's two ends, drawn as lettered pins */
   marks: { lat: number; lon: number; label: string }[];
+  /** Every route's geometry, once something has asked for it */
+  shapes: Shapes | null;
+  /** Which routes to draw a line for, and which one - if any - to put the
+   * direction arrows on. Arrows are for the single route being looked at; a
+   * city's worth of them would be a texture, not information */
+  lines: number[];
+  arrowed: number | null;
   theme: Theme;
 };
+
+/** One arrowhead sitting on the line, pointing along `(cos, sin)`. Drawn in the
+ * page's ink rather than the route's colour: it is a notch cut out of the line,
+ * and a coloured head on a line of the same colour is nothing at all. A stretch
+ * the route runs both ways gets two of these back to back. */
+function head(g: CanvasRenderingContext2D, x: number, y: number, cos: number, sin: number) {
+  g.beginPath();
+  g.moveTo(x + cos * 7, y + sin * 7);
+  g.lineTo(x - cos * 3 - sin * 4.5, y - sin * 3 + cos * 4.5);
+  g.lineTo(x - cos * 3 + sin * 4.5, y - sin * 3 - cos * 4.5);
+  g.closePath();
+  g.fill();
+}
 
 const viewOf = (m: MapLibre): View => {
   const c = m.getCenter();
@@ -69,9 +98,13 @@ export function MapCanvas({
   vehicle,
   onPickVehicle,
   focus,
+  fit,
   picking,
   onPickPoint,
   marks,
+  shapes,
+  lines,
+  arrowed,
   theme,
 }: Props) {
   const box = useRef<HTMLDivElement>(null);
@@ -90,6 +123,9 @@ export function MapCanvas({
   const pickPoint = useRef(onPickPoint);
   const picks = useRef(picking);
   const pins = useRef(marks);
+  const geometry = useRef(shapes);
+  const drawn = useRef(lines);
+  const arrows = useRef(arrowed);
   const [locating, setLocating] = useState<Locating>("off");
 
   shown.current = stops;
@@ -101,6 +137,9 @@ export function MapCanvas({
   pickPoint.current = onPickPoint;
   picks.current = picking;
   pins.current = marks;
+  geometry.current = shapes;
+  drawn.current = lines;
+  arrows.current = arrowed;
 
   useEffect(() => {
     const el = canvas.current!;
@@ -140,6 +179,69 @@ export function MapCanvas({
       const c = paint.current;
 
       g.clearRect(0, 0, w, h);
+
+      // Under everything else: a route is the background a rider reads the
+      // vehicles against, and a line over a badge hides the number
+      const geo = geometry.current;
+      if (geo) {
+        g.lineJoin = "round";
+        g.lineCap = "round";
+        for (const i of drawn.current) {
+          const shape = geo.routes[i];
+          const route = catalog.routes[i];
+          if (!shape || !route) continue;
+          const path = new Path2D();
+          for (const line of shape.lines) {
+            let first = true;
+            for (const [lat, lon] of line.pts) {
+              const x = p.x(lon);
+              const y = p.y(lat);
+              if (first) path.moveTo(x, y);
+              else path.lineTo(x, y);
+              first = false;
+            }
+          }
+          // A casing under the colour, so a line crossing another is still one
+          // line and not a knot of the same width
+          g.strokeStyle = c.edge;
+          g.lineWidth = 6;
+          g.globalAlpha = 0.5;
+          g.stroke(path);
+          g.strokeStyle = colour(route.short, route.type);
+          g.lineWidth = 3.5;
+          g.globalAlpha = drawn.current.length > 1 ? 0.75 : 1;
+          g.stroke(path);
+          g.globalAlpha = 1;
+        }
+
+        const one = arrows.current;
+        const shape = one === null ? null : geo.routes[one];
+        if (shape && m.getZoom() >= ARROW_ZOOM) {
+          // The server spaces arrows every 220 m along the line, which at the
+          // zoom that holds a whole route is five pixels: drawn as they come
+          // the line reads as a dashed one. They arrive in order along each
+          // shape, so every nth is still evenly spaced - just further apart
+          const step = Math.max(
+            1,
+            Math.ceil((60 * metresPerPixel(m.getCenter().lat, m.getZoom())) / ARROW_SPACING),
+          );
+          g.fillStyle = c.edge;
+          for (let k = 0; k < shape.arrows.length; k += step) {
+            const [lat, lon, heading, both] = shape.arrows[k]!;
+            const x = p.x(lon);
+            const y = p.y(lat);
+            if (x < -12 || y < -12 || x > w + 12 || y > h + 12) continue;
+            const a = ((heading - 90) * Math.PI) / 180;
+            const cos = Math.cos(a);
+            const sin = Math.sin(a);
+            // Two heads back to back would sit on top of each other and read as
+            // a diamond, so each backs off along the line by its own length
+            const off = both ? 9 : 0;
+            head(g, x + cos * off, y + sin * off, cos, sin);
+            if (both) head(g, x - cos * off, y - sin * off, -cos, -sin);
+          }
+        }
+      }
 
       if (m.getZoom() >= STOPS_ZOOM) {
         // One path for every stop: a fill and a stroke, not two per circle
@@ -363,6 +465,23 @@ export function MapCanvas({
     style.current = url;
     held.current?.setStyle(url);
   }, [theme]);
+
+  // Same waiting as `focus`, and the same reason: a route opened from a link
+  // is asked for before the map exists
+  useEffect(() => {
+    if (!fit) return;
+    let timer = 0;
+    const go = () => {
+      const m = held.current;
+      if (!m) {
+        timer = window.setTimeout(go, 100);
+        return;
+      }
+      m.fitBounds([fit[0], fit[1], fit[2], fit[3]], { padding: 48, duration: 800 });
+    };
+    go();
+    return () => clearTimeout(timer);
+  }, [fit]);
 
   // The map may not exist yet when the first focus arrives - a search hit
   // during the dynamic import - so this waits for it rather than dropping it

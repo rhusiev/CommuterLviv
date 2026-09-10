@@ -27,6 +27,7 @@ class VehicleCard extends StatefulWidget {
     required this.catalog,
     required this.veh,
     required this.onStop,
+    required this.onRoute,
   });
 
   final Api api;
@@ -35,6 +36,9 @@ class VehicleCard extends StatefulWidget {
   /// The wire id, which is what the socket calls this vehicle
   final int veh;
   final void Function(int stop) onStop;
+
+  /// Where the route's own line is opened from, by catalog index
+  final void Function(int route) onRoute;
 
   @override
   State<VehicleCard> createState() => _VehicleCardState();
@@ -76,9 +80,8 @@ class _VehicleCardState extends State<VehicleCard> {
   @override
   Widget build(BuildContext context) {
     final calls = _calls;
-    final route = calls == null || calls.isEmpty
-        ? null
-        : widget.catalog.routes[calls.first.route];
+    final at = calls == null || calls.isEmpty ? null : calls.first.route;
+    final route = at == null ? null : widget.catalog.routes[at];
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -88,8 +91,16 @@ class _VehicleCardState extends State<VehicleCard> {
           children: [
             Row(
               children: [
-                if (route != null) ...[
-                  RouteBadge(route: route),
+                if (route != null && at != null) ...[
+                  // The badge is the way to the route's line: it is already the
+                  // one thing on this card that names the route
+                  Tooltip(
+                    message: txt.showRoute,
+                    child: InkWell(
+                      onTap: () => widget.onRoute(at),
+                      child: RouteBadge(route: route),
+                    ),
+                  ),
                   const SizedBox(width: 10),
                 ],
                 Expanded(

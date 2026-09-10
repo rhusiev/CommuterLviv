@@ -161,14 +161,19 @@ async def main():
             check("registering through the link signed us in", bool(ok))
 
             p.step(f"signing out and back in as {USER}")
+            # Signing out lives in the routes drawer, and the drawer is left as
+            # the previous step had it, so every one of these toggles asks
+            await p.js("if (!document.querySelector('[data-chips]')) document.querySelector('[aria-label=Routes]').click()")
             await p.js("[...document.querySelectorAll('button')].find(b => /out$/.test(b.textContent)).click()")
-            await p.until("!!document.querySelector('form')", "the sign-in form comes back")
+            # The routes drawer has a form of its own, so this waits for the
+            # one with a password in it
+            await p.until("!!document.querySelector('input[type=password]')", "the sign-in form comes back")
             await p.submit(USER, PASS)
             check("signing in as an existing account works",
                   await p.until("document.querySelectorAll('canvas').length > 0", "the map renders"))
 
             p.step("picking routes")
-            await p.js("[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Routes').click()")
+            await p.js("if (!document.querySelector('[data-chips]')) document.querySelector('[aria-label=Routes]').click()")
             await p.until("document.querySelectorAll('aside button').length > 5", "the route panel opens")
             # Every route, not a handful: after dark most routes have nothing on
             # them, and a check that picked the first six failed for no reason
@@ -180,7 +185,7 @@ async def main():
             })()""")
             check("route chips are listed and clickable", bool(picked), str(picked[:6]))
             print(f"   picked {len(picked)} routes:", " ".join(picked[:8]), "…")
-            await p.js("[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Routes').click()")
+            await p.js("if (document.querySelector('[data-chips]')) document.querySelector('[aria-label=Routes]').click()")
 
             got = await p.until("+document.body.innerText.match(/(\\d+) vehicles/)[1] > 0",
                                 "vehicles arrive over the socket", 150)
@@ -248,6 +253,12 @@ async def main():
             await p.shot("/tmp/shot-map.png")
 
             p.step("clicking a stop")
+            # Whether a point on the map is the map's to take, or is covered by
+            # a panel or a button floating over it
+            await p.js("""window.open$ = (x, y) => {
+              const el = document.elementFromPoint(x, y);
+              return !!el && el.tagName === 'CANVAS';
+            }""")
             # The overlay does not take pointer events - MapLibre owns them - so
             # this finds a stop by its fill and lets the browser deliver a real
             # click at those coordinates
@@ -260,7 +271,11 @@ async def main():
                 for (let px = 0; px < c.width; px++) {
                   const o = (py * c.width + px) * 4;
                   if (d[o] === 0xcf && d[o+1] === 0xd8 && d[o+2] === 0xe3) {
-                    return [r.left + px / dpr, r.top + py / dpr];
+                    const x = r.left + px / dpr, y = r.top + py / dpr;
+                    // A stop under the floating header or a button is drawn but
+                    // not clickable: the chrome would take the click
+                    if (!open$(x, y)) continue;
+                    return [x, y];
                   }
                 }
               }
@@ -271,14 +286,15 @@ async def main():
                     await p.call("Input.dispatchMouseEvent", type=kind, x=hit[0], y=hit[1],
                                  button="left", buttons=1, clickCount=1)
             await asyncio.sleep(0.5)
-            card = hit is not None and "pin" in (await p.js("document.body.innerText")).lower()
-            check("clicking a stop opens its card", card)
+            # The pin is a thumbtack rather than the word, so the card is found
+            # by that button's tooltip
+            card = hit is not None and await p.js(
+                "!!document.querySelector('button[title=pin], button[title=unpin]')")
+            check("clicking a stop opens its card", bool(card))
             if hit:
-                print("   hit at", hit)
-                print("   card says:", (await p.js("document.body.innerText")).split("\n")[-8:])
                 await p.shot("/tmp/shot-stop.png")
             if card:
-                await p.js("[...document.querySelectorAll('button')].find(b => /pin/i.test(b.textContent)).click()")
+                await p.js("document.querySelector('button[title=pin]')?.click()")
 
             p.step("the times tab")
             await p.js("[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Times').click()")
@@ -325,7 +341,8 @@ async def main():
                 for (let px = 0; px < c.width; px += 2) {
                   const o = (py * c.width + px) * 4;
                   if (d[o] === 0xcf && d[o+1] === 0xd8 && d[o+2] === 0xe3) {
-                    found.push([r.left + px / dpr, r.top + py / dpr]);
+                    const x = r.left + px / dpr, y = r.top + py / dpr;
+                    if (open$(x, y)) found.push([x, y]);
                   }
                 }
               }
@@ -370,7 +387,7 @@ async def main():
                 await p.shot("/tmp/shot-plan.png")
 
             p.step("changing the map theme")
-            await p.js("[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Routes').click()")
+            await p.js("if (!document.querySelector('[data-chips]')) document.querySelector('[aria-label=Routes]').click()")
             await asyncio.sleep(0.3)
             await p.js("[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Neutrino').click()")
             light = await p.until(
@@ -397,6 +414,43 @@ async def main():
             print(f"   {fills[1]} light stop pixels drawn")
             await p.shot("/tmp/shot-theme.png")
             await p.js("[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Shadow').click()")
+
+            p.step("a route's line and its arrows")
+            # Entered by its link rather than by clicking a vehicle: a badge is
+            # found by hit-testing colours the sprite chose, and the tab this
+            # opens is the same one the badge opens
+            rid = await p.js("fetch('/api/catalog').then(r => r.json()).then(c => c.routes[0].id)")
+            await p.call("Page.navigate", url=f"{BASE}/?tab=route&route={rid}")
+            await p.until("document.querySelectorAll('canvas').length > 0", "the map comes back")
+            drew = await p.until("""(() => {
+              const c = [...document.querySelectorAll('canvas')].at(-1);
+              const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+              let n = 0;
+              for (let o = 0; o < d.length; o += 4) if (d[o + 3] > 0) n++;
+              return n > 2000;
+            })()""", "the route line is drawn", 30)
+            check("the route line is drawn", bool(drew))
+            check("the route tab is showing", "Line" in (await p.js("document.body.innerText")))
+            await p.shot("/tmp/shot-route.png")
+            # The arrowheads only appear at the zoom where a street is a street,
+            # so the overview shot above cannot show them
+            if await p.js("!!window.lvivMap"):
+                await p.js("void lvivMap.setZoom(15)")
+                await asyncio.sleep(1.5)
+                await p.shot("/tmp/shot-arrows.png")
+
+            p.step("every route at once")
+            await p.js("[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Map').click()")
+            await p.js("document.querySelector('[aria-label=\"Every route\"]').click()")
+            check("the whole network draws",
+                  await p.until("""(() => {
+                    const c = [...document.querySelectorAll('canvas')].at(-1);
+                    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+                    let n = 0;
+                    for (let o = 0; o < d.length; o += 4) if (d[o + 3] > 0) n++;
+                    return n > 20000;
+                  })()""", "every line is drawn", 30))
+            await p.shot("/tmp/shot-lines.png")
 
             p.step("the session survives a reload")
             await p.call("Page.navigate", url=BASE + "/")

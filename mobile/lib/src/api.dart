@@ -51,7 +51,7 @@ class Api {
   static const _baseKey = 'commuterlviv.base';
   static const _jarKey = 'commuterlviv.cookies';
   static const _catalogKey = 'commuterlviv.catalog';
-  static const _catalogTagKey = 'commuterlviv.catalog.tag';
+  static const _shapesKey = 'commuterlviv.shapes';
 
   /// The jar and nothing else. Everything else this class stores is a
   /// preference; the jar is a credential, so it lives in the Keystore.
@@ -94,8 +94,10 @@ class Api {
     _cookies.clear();
     await _prefs.setString(_baseKey, trimmed);
     await _safe.delete(key: _jarKey);
-    await _prefs.remove(_catalogKey);
-    await _prefs.remove(_catalogTagKey);
+    for (final key in [_catalogKey, _shapesKey]) {
+      await _prefs.remove(key);
+      await _prefs.remove('$key.tag');
+    }
     return true;
   }
 
@@ -262,31 +264,48 @@ class Api {
   /// The catalog is a megabyte of names that never change while the service is
   /// up, so it is kept on disk against the tag the service sends and the usual
   /// request is a 304 with no body.
-  Future<Catalog> catalog() async {
-    final tag = _prefs.getString(_catalogTagKey);
-    final held = _prefs.getString(_catalogKey);
+  Future<Catalog> catalog() async => Catalog.fromJson(
+    await _held('/api/catalog', _catalogKey, what: 'the catalog'),
+  );
+
+  /// Half a megabyte of route geometry, asked for the first time something
+  /// wants to draw a line: whoever never opens a route never pays for it.
+  Future<Shapes> shapes() async => Shapes.fromJson(
+    await _held('/api/shapes', _shapesKey, what: 'the route lines'),
+  );
+
+  /// A body that never changes while the service is up, kept on disk against
+  /// its tag. Its own key holds the body; the same key with `.tag` holds the
+  /// tag, so the two cannot be stored apart.
+  Future<Map<String, dynamic>> _held(
+    String path,
+    String key, {
+    required String what,
+  }) async {
+    final tag = _prefs.getString('$key.tag');
+    final held = _prefs.getString(key);
     final res = await _send(
       'GET',
-      '/api/catalog',
+      path,
       headers: {if (tag != null && held != null) 'If-None-Match': tag},
     );
     if (res.statusCode == 304 && held != null) {
       await res.drain<void>();
-      return Catalog.fromJson(jsonDecode(held) as Map<String, dynamic>);
+      return jsonDecode(held) as Map<String, dynamic>;
     }
     final text = await res.transform(utf8.decoder).join();
     if (res.statusCode >= 400) {
       throw ApiError(
-        'the catalog would not load (${res.statusCode})',
+        '$what would not load (${res.statusCode})',
         res.statusCode,
       );
     }
     final fresh = res.headers.value('etag');
     if (fresh != null) {
-      await _prefs.setString(_catalogKey, text);
-      await _prefs.setString(_catalogTagKey, fresh);
+      await _prefs.setString(key, text);
+      await _prefs.setString('$key.tag', fresh);
     }
-    return Catalog.fromJson(jsonDecode(text) as Map<String, dynamic>);
+    return jsonDecode(text) as Map<String, dynamic>;
   }
 
   /// The basemap style is a device thing too, and one the app should come back

@@ -58,3 +58,17 @@ export type Leg = {
 export type Journey = { dep: number; arr: number; rides: number; live: boolean; legs: Leg[] };
 
 export type Plan = { t: number; options: Journey[] };
+
+/** One shape the route's trips follow, thinned for the wire. `dir` is the
+ * feed's `direction_id`, kept only so the two directions can be told apart. */
+export type RouteLine = { dir: number; pts: [number, number][] };
+
+/** `[lat, lon, heading in degrees, 1 where the route also runs the other way
+ * along this stretch]`. A list and not an object: a route carries a couple of
+ * hundred of them and the keys would outweigh them. */
+export type Arrow = [number, number, number, number];
+
+export type RouteShape = { lines: RouteLine[]; arrows: Arrow[] };
+
+/** Parallel to `Catalog.routes`, like everything else on this wire */
+export type Shapes = { routes: RouteShape[] };

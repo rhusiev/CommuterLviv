@@ -3,6 +3,8 @@
 /// these lists everywhere on the wire.
 library;
 
+import 'package:latlong2/latlong.dart';
+
 class TransitRoute {
   const TransitRoute({
     required this.id,
@@ -235,4 +237,64 @@ class Journey {
   /// True when every ride in it is a vehicle the model can see
   final bool live;
   final List<Leg> legs;
+}
+
+/// Where a route physically goes, and which way, as `live/geometry.py` works it
+/// out. Lines are drawn; arrows sit on them, and one that is `twoWay` is a
+/// stretch the route also runs the other way along.
+class RouteArrow {
+  const RouteArrow({
+    required this.at,
+    required this.heading,
+    required this.twoWay,
+  });
+
+  /// `[lat, lon, heading, two-way]` - a list on the wire, because a route
+  /// carries a couple of hundred of these and the keys would outweigh them
+  factory RouteArrow.fromJson(List<dynamic> j) => RouteArrow(
+    at: LatLng((j[0] as num).toDouble(), (j[1] as num).toDouble()),
+    heading: (j[2] as num).toDouble(),
+    twoWay: j[3] == 1,
+  );
+
+  final LatLng at;
+  final double heading;
+  final bool twoWay;
+}
+
+class RouteShape {
+  const RouteShape({required this.lines, required this.arrows});
+
+  factory RouteShape.fromJson(Map<String, dynamic> j) => RouteShape(
+    lines: [
+      for (final line in j['lines'] as List)
+        [
+          for (final p in (line as Map<String, dynamic>)['pts'] as List)
+            LatLng(
+              ((p as List)[0] as num).toDouble(),
+              (p[1] as num).toDouble(),
+            ),
+        ],
+    ],
+    arrows: [
+      for (final a in j['arrows'] as List) RouteArrow.fromJson(a as List),
+    ],
+  );
+
+  /// One polyline per shape the route's trips follow - one per direction, and
+  /// more where the city runs short workings
+  final List<List<LatLng>> lines;
+  final List<RouteArrow> arrows;
+}
+
+class Shapes {
+  const Shapes(this.routes);
+
+  factory Shapes.fromJson(Map<String, dynamic> j) => Shapes([
+    for (final r in j['routes'] as List)
+      RouteShape.fromJson(r as Map<String, dynamic>),
+  ]);
+
+  /// Parallel to `Catalog.routes`, like everything else on this wire
+  final List<RouteShape> routes;
 }

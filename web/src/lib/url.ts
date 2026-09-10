@@ -12,8 +12,13 @@ export type UrlState = {
    * account's active set should decide */
   routes: string[] | null;
   stop: string | null;
-  tab: "map" | "times" | "plan";
+  /** The route whose line is being looked at, by feed id. It is its own tab
+   * rather than a mode of the map: it is a thing a link can name */
+  route: string | null;
+  tab: "map" | "times" | "plan" | "route";
 };
+
+const TABS: UrlState["tab"][] = ["map", "times", "plan", "route"];
 
 export function readUrl(): UrlState {
   const q = new URLSearchParams(location.search);
@@ -21,7 +26,8 @@ export function readUrl(): UrlState {
   return {
     routes: routes === null ? null : routes.split(",").filter(Boolean),
     stop: q.get("stop"),
-    tab: q.get("tab") === "times" ? "times" : q.get("tab") === "plan" ? "plan" : "map",
+    route: q.get("route"),
+    tab: TABS.includes(q.get("tab") as UrlState["tab"]) ? (q.get("tab") as UrlState["tab"]) : "map",
   };
 }
 
@@ -31,6 +37,7 @@ export function writeUrl(state: UrlState): void {
   const q = new URLSearchParams();
   if (state.routes?.length) q.set("routes", state.routes.join(","));
   if (state.stop !== null) q.set("stop", state.stop);
+  if (state.route !== null) q.set("route", state.route);
   if (state.tab !== "map") q.set("tab", state.tab);
   const search = q.toString();
   const next = location.pathname + (search ? `?${search}` : "");
