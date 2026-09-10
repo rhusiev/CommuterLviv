@@ -669,6 +669,66 @@ The MAEs above are not comparable to the 118 s that `full` reads in
 `reports/approaches.md`. A sweep scores on the common support of its own points,
 which here is a different and larger set of crossings.
 
+## 14. Every ranking in this project was drawn on a weekend, and the weekdays reverse it
+
+The recording now spans five service days: a Saturday evening, a Sunday, and
+three full weekdays. Everything published before 2026-09-10 was scored pooled
+over a recording that was mostly the first two. `commuterlviv crossday` replays
+each approach once over the whole thing - the models carry across the nights,
+as they would in service - and cuts the score by the day each prediction was
+made on.
+
+```
+| approach | Sat 05 | Sun 06 | Mon 07 | Tue 08 | Wed 09 |
+|---|---|---|---|---|---|
+| predictions | 162 278 | 2 940 299 | 4 280 186 | 4 498 235 | 3 788 628 |
+| full        | 137 | 117 | 142 | 143 | 150 |
+| no-prior    | 113 | 113 | 144 | 144 | 153 |
+| knn         | 127 | 120 | 142 | 143 | 153 |
+| tuned       | 109 | 113 | 154 | 148 | 156 |
+| slow-day    | 120 | 112 | 155 | 150 | 156 |
+| table       | 126 | 150 | 200 | 210 | 221 |
+| api         | 205 | 707 | 575 | 2485 | 2939 |
+| schedule    | 544 | 873 | 871 | 865 | 923 |
+```
+
+Three published conclusions do not survive.
+
+**`tuned` does not beat `full`; it loses by 6 to 12 s on every weekday.** The
+four sweeps behind it (`k_unit=16`, `k_corr=1`, `fast_hl=7200`,
+`slow_hl=43200`) all chose less shrinkage and longer memory, and Phase 2 already
+warned in writing that this is the shape you see either when there is no genuine
+within-day variation or when the recording is too short to show it. It was the
+second. On a weekday there is variation to track, and a model tuned to forget
+nothing is a model that cannot track it: Mon 154 against 142, Tue 148 against
+143, Wed 156 against 150, every gap outside the intervals.
+
+**`slow-day` is the same story.** It wins the Sunday by 5 s and loses every
+weekday by 6 to 13. A half-life of a day is the right idea for the overnight
+gap - finding 11 measured the morning it repairs - but on this evidence what it
+carries across a night is a day that is not much like the next one.
+
+**`knn`'s lead is gone.** Tied with `full` on Monday and Tuesday (141.7 vs
+141.9, 143.4 vs 142.8, both differences an order of magnitude inside their
+intervals) and 3 s behind on Wednesday. The plan called it "the strongest single
+piece of evidence that this recording's structure is thinner than the model
+assumes" and named it the first thing to re-score on a multi-day recording.
+Re-scored: the structure was thin because the days were, not because the city
+is. The hierarchy earns its place.
+
+What does survive is `full` and `no-prior` within a second or two of each other,
+`full` ahead on all three weekdays, and the whole field 25 to 35 s worse on a
+weekday than on the Sunday - which is the size of the effect that was being
+mistaken for a difference between approaches.
+
+Two more things the split says, neither of them about our model. Weekdays are
+harder for everyone, `schedule` included (871, 865, 923 against the Sunday's
+873 - so the timetable is *not* the thing degrading, and the extra weekday error
+is real traffic rather than a worse plan). And `api` blows out on the Tuesday
+and Wednesday, 2485 s and 2939 s against 575 s on the Monday, which is far too
+large to be prediction quality; it is the operator's feed failing for stretches
+of those days and is worth its own look before any of those numbers is quoted.
+
 ## The shape of the model findings
 
 Finding 7 stands apart - it is a defect in the measuring, not a property of the

@@ -7,6 +7,7 @@ compares with the city's own.
 python3 -m commuterlviv collect      # record the live feeds into data/feed.db
 python3 -m commuterlviv evaluate     # replay what was recorded and score everything
 python3 -m commuterlviv experiment   # score every approach on the same recording
+python3 -m commuterlviv crossday     # the same, day by day rather than pooled
 python3 -m commuterlviv check        # model, tracking or truth: which one is wrong
 python3 -m commuterlviv diag         # what methodology is the official API using
 ```
@@ -441,6 +442,22 @@ The nine variants are `full`, `no-prior`, `no-hold`, `no-corridor`, `no-fast`,
 `no-incremental`, `sections`, `vehicle-offset` and `schedule-offset`; the report
 explains what each one is. `reports/approaches.md` is checked in, so what the
 model scored on a given day is part of the history rather than a memory.
+
+The report is cut two ways as well as pooled: by how far ahead the prediction
+was, and by the hour of day it was made in, with any hour under 300 predictions
+left out rather than printed. Pooling hides what a model that resets overnight
+does to a morning peak.
+
+```
+python3 -m commuterlviv crossday                          # every day separately
+```
+
+That one replays each approach over the whole recording and cuts the score by
+service day afterwards, the day rolling at 03:00 because the last trams run past
+midnight. The models are not restarted at the boundaries, so every column but
+the first is an approach that has already seen a day of the city - which is the
+only way to tell an approach that is better from one that was merely the one
+starting cold. `reports/crossday.md`.
 
 ## Serving it live
 
