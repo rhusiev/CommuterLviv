@@ -219,3 +219,19 @@ docker run --rm -u 0 -v commuterlviv_service_data:/d alpine \
 All three, not just `feed.db` - WAL mode writes the `-wal` and `-shm` files beside it and
 fails the same way on either. Then restart the collector. Anything else copied into a
 volume by hand needs the same treatment.
+
+## Caddy's `{$ENV:default}` ends at the first `}`, so a placeholder cannot be the default
+
+`{$COMMUTERLVIV_CLIENT_IP:{remote_host}}` looks like "the variable, or the peer address".
+It is not. Caddy's environment substitution is textual and stops at the first closing
+brace, so it reads the default as `{remote_host` - unterminated - and leaves the extra
+`}` sitting in the output. The header then carries `172.19.0.1}`.
+
+Nothing complains. Caddy starts, the site serves, and the damage shows up wherever that
+value is finally typed: here it was `auth_events.ip`, an `inet` column, so asyncpg raised
+`DataError` and every login returned 500 - including successful ones, because the audit
+write happens after the password is verified. No `login_failed` row was ever written
+either, which is what made it hard to see.
+
+Put the default where the variable is defined instead - `docker-compose.yml` - and keep
+the Caddyfile to the bare `{$VAR}`.
