@@ -38,14 +38,17 @@ on exactly the same events. Ours is currently about twice as accurate as the
 official feed, and the interesting question is no longer whether it works but
 which of its parts are carrying it.
 
-## State of play, 2026-09-07
+## State of play, 2026-09-09
 
-- **The collector now runs on the VPS, not on this machine.** The local one was
-  stopped cleanly on 2026-09-06 18:56 when the repo was converted to the
-  worktree layout below; its recording, `data/feed.db`, is 0.95 GB and covers
-  2026-09-05 20:17 to 2026-09-06 18:56. Phase 6 is blocked until the recording
-  covers three weekdays, so the VPS copy has to be pulled down and merged before
-  that phase can start.
+- **The collector now runs on the VPS, not on this machine**, and it is off in
+  `docker-compose.yml` unless `--profile collect` asks for it, because two
+  machines recording the same feed produce two recordings neither of which is a
+  superset of the other. The three that existed have been folded into one:
+  `data/feed.db` is now 3.98 days, 318 068 polls, 8 574 744 vehicle rows and
+  39 839 957 predictions, built by `commuterlviv merge`, which takes the first
+  source's version of any instant and reads a later one only inside a hole
+  longer than 30 s. `data/feed-host-early.db` is the old single-day file.
+  Phase 6 is no longer blocked.
 - **Phases 0-5 are done and scored.** `tuned` leads the approach comparison at
   114 s MAE, `full` (the shipped model) is at 120 s, the official API is far
   behind. Phase 4's residual models are scored on two splits and finding 9 says
@@ -81,6 +84,101 @@ which of its parts are carrying it.
   swaps the built UI for Vite's dev server and opens the ports. Verified end to
   end against a scratch project, down to a websocket carrying frames. Guides for
   both are in `README.md`.
+
+- **Phase 9, the six things the user asked for on 2026-09-09, are all in**, at
+  version 0.3.0. The journey planner now builds its own `walk.npz` and
+  `transfers.npz` on a fresh volume, in a background task, once
+  (`COMMUTERLVIV_BUILD_PLANNER=false` turns it off), which is why
+  `/api/plan` answered 503 on the VPS. Every icon of all three clients comes out
+  of `tool/icons.sh` and `web/public/icon.svg`. The language switches without a
+  restart. The map's attribution is a permanent ⓘ badge rather than a strip.
+  Both clients share one palette. The recording is merged, the collector is
+  behind a compose profile, and Caddy now overwrites `X-Forwarded-For` instead
+  of appending to it, which had let a caller pick its own rate-limit bucket.
+
+- **A review pass over the whole codebase**, at version 0.3.1, asked for on
+  2026-09-10. Nine fixes, all small and all defensive: Android backup is off
+  (shared preferences held a session cookie and a sixty-day remember-me token);
+  `register()` and route-set `create()` now catch the unique index instead of
+  checking first, which two racing requests could get between; a request body is
+  measured while it streams rather than after it is all in memory; `/api/plan`
+  bounds itself to four searches and refuses the fifth; an account may hold
+  eight sockets; two `int()` calls on unbounded query strings were 500s; a GTFS
+  error page no longer overwrites the cached feed and `table()` no longer leaks
+  a handle per call; the arrivals row-mapping and the admin pool setup were each
+  written twice and are now written once. `README.md` gained a table of every
+  host the deployment talks to, and the phone gained the self-hosted-tiles
+  escape hatch the web already had - as a build define at the time, which 0.3.4
+  replaced with something the client asks for.
+
+- **The four judgement calls from that pass are closed too**, at 0.3.2. The
+  phone's cookie jar moved from `SharedPreferences` to `flutter_secure_storage`,
+  which is the Android Keystore and the iOS Keychain; an existing jar is
+  migrated on first open rather than dropped, so nobody is signed out by the
+  upgrade. `/api/status` needs an operator flag - migration `002_operator.sql`,
+  granted with `admin operator <name>`, and a 404 rather than a 403 to anyone
+  without it. `call()` in `web/src/lib/api.ts` is generic and `live.ts` names
+  the one text frame it reads, so there is no `any` left in the web tree.
+  `gtfs.py` is on `pathlib`.
+
+  Verified against a real stack, not just `check.sh`: `check_live.py` 44/44 and
+  `check_web.py` all green on the dev compose overlay, plus a hand check that an
+  operator gets 200 from `/api/status` where an ordinary account gets 404.
+
+- **The VPS runs 0.3.2** as of 2026-09-10. It was on 0.2.0. Deployed by rsync
+  (excluding `data`, `.env`, build trees) then a rebuild of
+  `docker-compose.yml + docker-compose.proxy.yml`; the previous tree is at
+  `/opt/commuterlviv/app-backup-2026-09-10-0654.tar.gz`. Migration 002 applied
+  cleanly, and `rad1an` is an operator.
+
+- **The VPS runs 0.3.4**, and serves its own basemap. No phone or browser talks
+  to `tiles.versatiles.org` any more. A 20 MB Lviv extract
+  (`--bbox 23.791,49.702,24.233,50.045`, 1400 tiles, maxzoom 14) plus the v3.14
+  frontend archive live in `/opt/commuterlviv/tiles`; `docker-compose.tiles.yml`
+  runs `versatiles serve` beside the stack with no published port, and Caddy's
+  `handle_path /tiles/*` puts it on the app's own origin.
+
+  **Nothing is compiled in.** The overlay sets `COMMUTERLVIV_SELF_TILES` on the
+  service, `/api/health` reports it beside `registration`, and both clients ask
+  before drawing a map - web at `main.tsx` before the first render, the phone in
+  `main()` because a resumed session never reaches the sign-in screen. So one
+  web image and one APK work under any domain, and pointing the phone at another
+  deployment follows that deployment's map. 0.3.3 got this wrong: it baked
+  `commuterlviv.r1a.nl` into both artifacts through build-time defines, which
+  are gone.
+
+  The style files are the one thing that must name the host, because
+  `vector_map_tiles`'s `uri_mapper.dart` parses style URIs with `Uri.parse` and
+  never calls `.resolve()` - a relative sprite or tile URL would break the phone.
+  So `deploy/tiles-setup.sh <site> [dir]` generates them at setup time from the
+  address given once, and nothing is committed. That script also cuts the
+  extract and fetches the frontend; it is re-runnable and keeps the extract.
+
+  Verified live at 0.3.4: `/api/health` reports `"tiles":true`, the bundle
+  contains no `r1a.nl` at all, and styles, glyphs, sprites and real tiles at
+  z10/z12/z14 all 200. The 0.3.4 APK on `/download/` carries no tile host.
+
+- **Production is recording**, from 2026-09-10 06:52. The collector runs behind
+  the `collect` profile (`--profile collect up -d collector`, `--keep-days 30
+  --min-free-gb 3`, 77 GB free) and appends to the `feed.db` already on the
+  volume - same path, `CREATE TABLE IF NOT EXISTS`. The existing rows span
+  2026-09-05 17:17 to 09-09 16:55, well inside the 30-day window, so none of it
+  is pruned. There is a gap from 09-09 16:55 to 09-10 06:52, where the service
+  ran without a collector.
+
+  It failed on the first start, and the reason is worth knowing: `feed.db` had
+  been copied into the volume from the host and kept **uid 1000**, while the
+  containers run as uid **10001**. SQLite reports that as
+  `attempt to write a readonly database`, which names neither the file nor the
+  permission, and the service had never noticed because it only reads. Fixed
+  with a root container over the volume - there is no sudo on the VPS - and
+  written up in `docs/05-gotchas.md`. Confirmed appending afterwards: the file
+  grew 5 370 191 872 -> 5 395 030 016 bytes with no write errors.
+
+  One catch, also in `docs/05-gotchas.md`: the file reports `auto_vacuum: 0`,
+  because the pragma `collect.py` sets only takes on an empty database and this
+  one came from `merge.py`. Pruning will bound the rows but not the bytes, so
+  `--min-free-gb` is the guard that actually stops it.
 
 ## What just landed, and what it enables
 
@@ -327,10 +425,14 @@ which did not survive a reboot and served whatever was last copied there.
 
 ## Do this next
 
-1. **Phase 6's first question, asked of Phase 5's answer.** Pull the VPS
-   recording down and merge it into `data/feed.db`, then refit `stack-robust` on
-   one day and score it on the *next* one. Everything measured so far is fitted
-   and used inside a single recording, and the plan's split already shows how
+0. **The recording is already merged.** `data/feed.db` is 3.98 days, three
+   machines folded together by `commuterlviv merge`; `data/feed-host-early.db`
+   is the old single-day file it superseded. So step 1 below no longer needs the
+   download - only the scoring, which has not been run.
+1. **Phase 6's first question, asked of Phase 5's answer.** Refit `stack-robust`
+   on one day of `data/feed.db` and score it on the *next* one. Everything
+   measured so far is fitted and used inside one recording, and the split
+   already shows how
    much a night costs. This is the cheapest experiment that could invalidate
    finding 10, so it comes before anything that builds on it.
 2. **Confirm `grid=45` on `stack-robust`** and change `network.DEFAULT` if it

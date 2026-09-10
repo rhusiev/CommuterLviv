@@ -23,7 +23,7 @@ import numpy as np
 from . import gtfs
 
 PATH = os.path.join(gtfs.DATA, "model.npz")
-PARTS = ("cf", "cs", "rf", "rs", "g")
+PARTS = ("cf", "cs", "rf", "rs", "g")    # the terms every variant has
 
 
 def signature(net, model):
@@ -39,10 +39,21 @@ def signature(net, model):
 
 def _ewmas(model):
     """Every learned array in the model, named. The only place that reaches
-    into the model's internals, so the model itself stays free of storage."""
+    into the model's internals, so the model itself stays free of storage.
+
+    The optional terms are named the same way and simply absent from a variant
+    that does not have them; which ones exist follows from the variant, and the
+    variant is part of the signature, so a snapshot can never be read back into
+    a model with a different set."""
     for layer in ("pace", "hold"):
+        one = getattr(model, layer)
         for part in PARTS:
-            yield f"{layer}.{part}", getattr(getattr(model, layer), part)
+            yield f"{layer}.{part}", getattr(one, part)
+        for part in ("cd", "rd"):
+            if getattr(one, part, None) is not None:
+                yield f"{layer}.{part}", getattr(one, part)
+        for i, e in enumerate(getattr(one, "pr", None) or ()):
+            yield f"{layer}.pr{i}", e
 
 
 def save(model, net, path=PATH):

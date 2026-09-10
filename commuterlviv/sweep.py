@@ -49,6 +49,11 @@ GRIDS = {
     # 0 is the third term switched off, i.e. the shipped model, so the sweep
     # carries its own baseline.
     "day_hl": [0.0, 21600.0, 43200.0, 86400.0, 259200.0],
+    # The profile back-off, same convention: 0 is off. Its grid starts at two
+    # days because anything shorter cannot span a night and is `day_hl` under
+    # another name; the top of it is longer than any recording, which is the
+    # point - a profile is meant to be the part that does not decay.
+    "prof_hl": [0.0, 172800.0, 604800.0, 2592000.0],
     "knn": [3, 5, 10, 20, 40],
     # The three geometry numbers live on the network, not on the config, so
     # each point of these three replays a differently celled network. Cheap

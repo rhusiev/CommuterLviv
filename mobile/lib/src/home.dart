@@ -348,9 +348,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final at = await _here.start();
     if (!mounted) return;
     if (at == null && _here.state == Locating.denied) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(txt.noLocation)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(txt.noLocation)));
       return;
     }
     setState(() {
@@ -530,34 +529,34 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Stack(
         children: [
           IndexedStack(
-        index: _tab,
-        children: [
-          MapTab(
-            map: _map,
-            style: _style,
-            catalog: catalog,
-            live: live,
-            stops: _drawn,
-            selected: _stop,
-            theme: _theme,
-            here: _here,
-            empty: _routes.isEmpty,
-            marks: [
-              if (_from != null) (at: _from!, label: 'A'),
-              if (_to != null) (at: _to!, label: 'B'),
-            ],
-            onTap: _tap,
-          ),
-          TimesTab(
-            catalog: catalog,
-            live: live,
-            pins: _pins,
-            onUnpin: _pin,
-            onOpen: (stop) {
-              setState(() => _tab = 0);
-              _openStop(stop, fly: true);
-            },
-          ),
+            index: _tab,
+            children: [
+              MapTab(
+                map: _map,
+                style: _style,
+                catalog: catalog,
+                live: live,
+                stops: _drawn,
+                selected: _stop,
+                theme: _theme,
+                here: _here,
+                empty: _routes.isEmpty,
+                marks: [
+                  if (_from != null) (at: _from!, label: 'A'),
+                  if (_to != null) (at: _to!, label: 'B'),
+                ],
+                onTap: _tap,
+              ),
+              TimesTab(
+                catalog: catalog,
+                live: live,
+                pins: _pins,
+                onUnpin: _pin,
+                onOpen: (stop) {
+                  setState(() => _tab = 0);
+                  _openStop(stop, fly: true);
+                },
+              ),
             ],
           ),
           if (_planning && _tab == 0)
@@ -598,10 +597,12 @@ class _HomeScreenState extends State<HomeScreen> {
         destinations: [
           NavigationDestination(
             icon: const Icon(Icons.map_outlined),
+            selectedIcon: const Icon(Icons.map),
             label: txt.map,
           ),
           NavigationDestination(
             icon: const Icon(Icons.schedule_outlined),
+            selectedIcon: const Icon(Icons.schedule),
             label: txt.times,
           ),
         ],

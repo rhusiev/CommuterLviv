@@ -1,16 +1,19 @@
-/// Ukrainian and English, chosen once at launch.
+/// Ukrainian and English, switchable while the app is running.
 ///
 /// A port of `web/src/lib/i18n.ts`, key for key, so the two clients say the
 /// same things. Flutter's own `intl` machinery generates a class per locale
 /// from ARB files; two locales and sixty strings do not pay for the build step,
 /// and this way the strings can be read without a code generator having run.
 ///
-/// `txt` is a top-level value rather than an inherited widget, so changing the
-/// language takes a restart. The picker says so. It is not called `s` because
-/// half the widgets here already call a stop that.
+/// `txt` is a top-level value rather than an inherited widget: a widget reads
+/// it in `build` and so says whatever it says at that moment, and `langChanged`
+/// makes the root rebuild everything once the value has moved. It is not called
+/// `s` because half the widgets here already call a stop that.
 library;
 
 import 'dart:ui' show PlatformDispatcher;
+
+import 'package:flutter/foundation.dart' show ValueNotifier;
 
 enum Lang { uk, en }
 
@@ -54,7 +57,6 @@ class Strings {
     required this.pickARoute,
     required this.pinAStop,
     required this.language,
-    required this.restartToApply,
     required this.noBasemap,
     required this.faceNorth,
     required this.zoomIn,
@@ -124,7 +126,6 @@ class Strings {
   final String pickARoute;
   final String pinAStop;
   final String language;
-  final String restartToApply;
   final String noBasemap;
   final String faceNorth;
   final String zoomIn;
@@ -195,7 +196,6 @@ const _en = Strings(
   pickARoute: 'Pick a route to see it moving',
   pinAStop: 'Pin a stop and its times show up here',
   language: 'Language',
-  restartToApply: 'the app has to be reopened',
   noBasemap: 'the basemap would not load',
   faceNorth: 'Face north',
   zoomIn: 'Zoom in',
@@ -271,7 +271,6 @@ const _uk = Strings(
   pickARoute: 'Оберіть маршрут, щоб побачити рух',
   pinAStop: 'Закріпіть зупинку - і час буде тут',
   language: 'Мова',
-  restartToApply: 'потрібно перезапустити застосунок',
   noBasemap: 'не вдалося завантажити мапу',
   faceNorth: 'На північ',
   zoomIn: 'Наблизити',
@@ -308,14 +307,21 @@ String _ukChangeCount(int n) => n == 1 ? '1 пересадка' : 'переса�
 String _ukMinutes(int m) => '$m хв';
 String _ukUnreachable(String server) => 'не вдалося зʼєднатися з $server';
 
-/// The language for this run: what was chosen before, else Ukrainian for a
-/// phone set to it. Set from `main` before anything is drawn.
+/// The language in use: what was chosen before, else Ukrainian for a phone set
+/// to it. Set from `main` before anything is drawn, and again whenever the
+/// picker is used.
 Lang lang = Lang.uk;
 Strings txt = _uk;
+
+/// What `main` listens to. `txt` is a plain top-level value, so nothing reads
+/// it again until the widget that read it is rebuilt; this is what asks for
+/// that rebuild, from the root, once.
+final langChanged = ValueNotifier(lang);
 
 void useLang(Lang next) {
   lang = next;
   txt = next == Lang.uk ? _uk : _en;
+  langChanged.value = next;
 }
 
 /// The phone's own choice, for the first run, when nothing was stored yet

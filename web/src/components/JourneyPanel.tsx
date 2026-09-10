@@ -83,13 +83,13 @@ export function JourneyPanel({
         <button
           onClick={() => void search()}
           disabled={!from || !to || busy}
-          className="flex-1 rounded-md bg-emerald-700 px-3 py-1.5 text-sm text-white disabled:bg-slate-800 disabled:text-slate-500"
+          className="btn flex-1 disabled:bg-raised/70 disabled:text-slate-500"
         >
           {busy ? t.searching : t.findRoute}
         </button>
         <button
           onClick={onSwap}
-          className="rounded-md bg-slate-800 px-3 py-1.5 text-sm hover:bg-slate-700"
+          className="btn-quiet"
         >
           {t.swap}
         </button>
@@ -129,14 +129,14 @@ function Field({
       <button
         onClick={onPick}
         className={`min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-sm ${
-          picking ? "bg-emerald-800 text-white" : "bg-slate-800 hover:bg-slate-700"
+          picking ? "bg-accent/25 text-accent" : "bg-raised/70 hover:bg-raised"
         }`}
       >
         {point ? `${point.lat.toFixed(4)}, ${point.lon.toFixed(4)}` : t.tapMap}
       </button>
       <button
         onClick={onHere}
-        className="shrink-0 rounded-md bg-slate-800 px-2 py-1.5 text-xs hover:bg-slate-700"
+        className="btn-quiet shrink-0 px-2 text-xs"
       >
         {t.useHere}
       </button>
@@ -155,7 +155,7 @@ function Option({
 }) {
   const changes = Math.max(0, journey.rides - 1);
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-2">
+    <div className="inset-panel p-2">
       <div className="flex items-baseline gap-2">
         <span className="font-medium text-slate-100">
           {t.minutes(mins(journey.arr - journey.dep))}

@@ -150,7 +150,8 @@ check("a journey from nowhere is refused",
       r.status_code in (400, 503), r.text[:80])
 
 r = s.get(BASE + "/api/status")
-check("status", r.status_code == 200, r.text[:200])
+check("status is not readable by an ordinary account",
+      r.status_code == 404, r.text[:200])
 
 
 async def ws_test(cookies, expect_ok, label):
@@ -205,6 +206,13 @@ s4 = requests.Session()
 r = s4.post(BASE + "/api/login", json={"username": "smoke_user", "password": "correct horse battery"},
             headers={"Origin": ORIGIN})
 check("the old password no longer works", r.status_code == 401, r.text[:80])
+# A 500 here rather than a 401 is what a malformed X-Forwarded-For used to
+# cause: `auth_events.ip` is an `inet` column and the failed-login audit write
+# is on this path, so a bad header broke every sign-in on the deployment
+r = s4.post(BASE + "/api/login", json={"username": "smoke_user", "password": "correct horse battery"},
+            headers={"Origin": ORIGIN, "X-Forwarded-For": "not-an-address}"})
+check("a malformed forwarded address does not break login",
+      r.status_code == 401, f"{r.status_code} {r.text[:80]}")
 r = s4.post(BASE + "/api/login", json={"username": "smoke_user", "password": "another good passphrase"},
             headers={"Origin": ORIGIN})
 check("login with the new password", r.status_code == 200, r.text[:120])

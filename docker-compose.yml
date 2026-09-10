@@ -41,6 +41,7 @@ services:
       COMMUTERLVIV_SECURE_COOKIES: ${COMMUTERLVIV_SECURE_COOKIES:-true}
       # Caddy is the only thing that can reach it, and Caddy sets the header
       COMMUTERLVIV_TRUST_PROXY: "true"
+      COMMUTERLVIV_BUILD_PLANNER: ${COMMUTERLVIV_BUILD_PLANNER:-true}
     volumes:
       - service_data:/app/data
     networks:
@@ -64,6 +65,10 @@ services:
     image: commuterlviv-service:${VERSION:-latest}
     container_name: commuterlviv_collector
     restart: unless-stopped
+    # Off unless asked for: `docker compose --profile collect up -d`. Only one
+    # machine should be recording, or the two recordings have to be merged
+    # afterwards and neither is a superset of the other
+    profiles: ["collect"]
     command: ["python", "-m", "commuterlviv", "collect", "--keep-days", "30", "--min-free-gb", "3"]
     volumes:
       - service_data:/app/data
@@ -84,6 +89,10 @@ services:
     restart: unless-stopped
     environment:
       COMMUTERLVIV_SITE_ADDRESS: ${COMMUTERLVIV_SITE_ADDRESS:-:8080}
+      # Which address Caddy puts in X-Forwarded-For. The peer, because here
+      # Caddy is the outermost thing; docker-compose.proxy.yml overrides it with
+      # the header when something else is further out. See deploy/Caddyfile
+      COMMUTERLVIV_CLIENT_IP: "{remote_host}"
     # The release APK, served at /download/. A bind mount and not a volume: a
     # new build has to be visible without rebuilding the image, and the file is
     # too big to want in git

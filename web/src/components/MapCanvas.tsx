@@ -424,11 +424,11 @@ export function MapCanvas({
           }
         }}
         title={locating === "denied" ? t.noLocation : t.whereAmI}
-        className={`absolute right-2 top-2 z-10 grid size-9 place-items-center rounded-full border border-slate-700 bg-slate-900/80 backdrop-blur ${
+        className={`absolute right-2 top-2 z-10 grid size-9 place-items-center rounded-full bg-panel/90 ring-1 ring-hair backdrop-blur-md ${
           locating === "denied"
-            ? "text-slate-700"
+            ? "text-slate-600"
             : locating === "on"
-              ? "text-sky-400"
+              ? "text-accent"
               : "text-slate-300 hover:text-slate-100"
         }`}
       >

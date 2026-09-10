@@ -56,8 +56,8 @@ export function RoutePanel(p: Props) {
                 onClick={() => p.onActivate(s)}
                 className={`flex-1 truncate rounded-md px-2 py-1.5 text-left text-sm ${
                   s.id === p.active
-                    ? "bg-sky-600/20 text-sky-200"
-                    : "text-slate-300 hover:bg-slate-800"
+                    ? "bg-accent/15 text-accent"
+                    : "text-slate-300 hover:bg-raised/70"
                 }`}
               >
                 {s.name}
@@ -66,14 +66,14 @@ export function RoutePanel(p: Props) {
               <button
                 title={t.saveSet}
                 onClick={guard(() => p.onUpdate(s))}
-                className="rounded-md px-2 py-1.5 text-xs text-slate-500 hover:bg-slate-800 hover:text-slate-200"
+                className="rounded-control px-2 py-1.5 text-xs text-slate-500 transition-colors hover:bg-raised/70 hover:text-slate-200"
               >
                 {t.save}
               </button>
               <button
                 title={t.deleteSet}
                 onClick={guard(() => p.onDelete(s))}
-                className="rounded-md px-2 py-1.5 text-xs text-slate-500 hover:bg-slate-800 hover:text-rose-300"
+                className="rounded-control px-2 py-1.5 text-xs text-slate-500 transition-colors hover:bg-raised/70 hover:text-rose-300"
               >
                 ✕
               </button>
@@ -95,9 +95,9 @@ export function RoutePanel(p: Props) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t.newSet}
-            className="min-w-0 flex-1 rounded-md border border-slate-800 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-sky-600"
+            className="field min-w-0 flex-1 py-1.5"
           />
-          <button className="rounded-md bg-slate-800 px-3 text-sm text-slate-200 hover:bg-slate-700">
+          <button className="btn-quiet px-3 py-0">
             {t.add}
           </button>
         </form>
@@ -118,7 +118,7 @@ export function RoutePanel(p: Props) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t.filter}
-          className="mt-2 rounded-md border border-slate-800 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-sky-600"
+          className="field mt-2 py-1.5"
         />
         <div data-chips className="mt-2 flex flex-wrap content-start gap-1 overflow-y-auto">
           {shown.map((r) => {
@@ -132,7 +132,7 @@ export function RoutePanel(p: Props) {
                   on ? { backgroundColor: colour(r.short, r.type), color: "#0b0f14" } : undefined
                 }
                 className={`rounded-md px-2 py-1 text-sm font-medium ${
-                  on ? "" : "bg-slate-800/70 text-slate-400 hover:bg-slate-700"
+                  on ? "" : "bg-raised/70 text-slate-400 hover:bg-raised"
                 }`}
               >
                 {r.short}
@@ -151,8 +151,8 @@ export function RoutePanel(p: Props) {
               onClick={() => setLang(l)}
               className={`rounded-md px-2 py-1 text-xs ${
                 l === lang
-                  ? "bg-sky-600/20 text-sky-200"
-                  : "bg-slate-800/70 text-slate-400 hover:bg-slate-700"
+                  ? "bg-accent/15 text-accent"
+                  : "bg-raised/70 text-slate-400 hover:bg-raised"
               }`}
             >
               {l === "uk" ? "Українська" : "English"}
@@ -170,8 +170,8 @@ export function RoutePanel(p: Props) {
               onClick={() => p.onTheme(m)}
               className={`rounded-md px-2 py-1 text-xs ${
                 m.id === p.theme.id
-                  ? "bg-sky-600/20 text-sky-200"
-                  : "bg-slate-800/70 text-slate-400 hover:bg-slate-700"
+                  ? "bg-accent/15 text-accent"
+                  : "bg-raised/70 text-slate-400 hover:bg-raised"
               }`}
             >
               {m.name}

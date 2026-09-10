@@ -14,7 +14,34 @@
 	# sees which path was asked for
 	@service path /api/* /ws
 	handle @service {
-		reverse_proxy service:8099
+		# The service rate-limits per client address and reads it from the
+		# leftmost `X-Forwarded-For` entry. Caddy *appends* to that header, so
+		# whatever the caller sent stays leftmost - a client that sends its own
+		# gets whichever address it likes and its own private rate limit.
+		# Overwriting with the peer address is what makes the header mean
+		# anything. In front of another proxy that is the wrong peer, so
+		# docker-compose.proxy.yml points this at the header instead and the
+		# outer proxy becomes the one that has to overwrite it.
+		reverse_proxy service:8099 {
+			# The default lives in docker-compose.yml and not here, because
+			# Caddy's env syntax ends at the first `}`: written as
+			# `{$VAR:{remote_host}}` it takes `{remote_host` as the default
+			# and leaves the spare `}` in the header, which is an address
+			# Postgres refuses - and that insert is on the login path
+			header_up X-Forwarded-For {$COMMUTERLVIV_CLIENT_IP}
+		}
+	}
+
+	# The basemap, when it is served from here rather than from
+	# tiles.versatiles.org - see docker-compose.tiles.yml. Same origin as the
+	# app on purpose: no CORS to get wrong, and no third party learning every
+	# visitor's address from their tile requests. `handle_path` strips the
+	# prefix, so the container sees the paths it would serve at its own root.
+	# The tiles behind it change only when the extract is re-cut, and the URLs
+	# are content-addressed by z/x/y, so a long cache is safe
+	handle_path /tiles/* {
+		reverse_proxy tiles:8080
+		header Cache-Control "public, max-age=604800"
 	}
 
 	# The phone app itself, for a phone that cannot reach F-Droid: whatever

@@ -12,6 +12,7 @@ import 'package:flutter_map/flutter_map.dart';
 
 import 'here.dart';
 import 'strings.dart';
+import 'theme.dart';
 
 /// The city fits in one screen at 9; 18 is where the basemap stops having
 /// anything more to say
@@ -139,8 +140,9 @@ class _MapButton extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(top: 8),
     child: Material(
-      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-      shape: const CircleBorder(),
+      color: panel.withValues(alpha: 0.9),
+      surfaceTintColor: Colors.transparent,
+      shape: const CircleBorder(side: BorderSide(color: hair)),
       elevation: 2,
       child: IconButton(tooltip: tooltip, onPressed: onPressed, icon: child),
     ),

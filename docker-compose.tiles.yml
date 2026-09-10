@@ -1,0 +1,46 @@
+# The basemap, served from here instead of tiles.versatiles.org:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.tiles.yml up -d
+#
+# Without this file the map still works - every phone and browser just asks
+# tiles.versatiles.org for every tile, and that server learns each visitor's
+# address and where they are looking. With it nothing leaves this machine.
+#
+# What has to be in COMMUTERLVIV_TILES (default `./tiles`) beforehand:
+#
+#   lviv.versatiles     the extract, cut from the planet over range requests:
+#                         versatiles convert --bbox 23.791,49.702,24.233,50.045 \
+#                           https://download.versatiles.org/osm.versatiles \
+#                           lviv.versatiles
+#                       about 20 MB for Lviv at maxzoom 14
+#   frontend.br.tar.gz  sprites and glyphs, from the versatiles-frontend release
+#   static/assets/styles/<id>/style.json
+#                       the five styles. v3.14 of the frontend builds these in
+#                       the browser and no longer ships them, so they are taken
+#                       from the public server with its origin rewritten to ours
+#
+# Nothing has to be built or configured for the clients: this file turns on
+# COMMUTERLVIV_SELF_TILES, the service reports it from `/api/health`, and the
+# web app and the phone app both ask before they draw a map. One switch, so the
+# two halves cannot drift apart, and no artifact knows this deployment's name.
+#
+# No published port: Caddy reaches it by name on the internal network, and
+# `handle_path /tiles/*` strips the prefix so the paths match what it serves.
+services:
+  service:
+    environment:
+      COMMUTERLVIV_SELF_TILES: "true"
+
+  tiles:
+    image: versatiles/versatiles
+    container_name: commuterlviv_tiles
+    restart: unless-stopped
+    command: serve -s /tiles/static -s /tiles/frontend.br.tar.gz "[osm]/tiles/lviv.versatiles"
+    volumes:
+      - ${COMMUTERLVIV_TILES:-./tiles}:/tiles:ro
+    networks:
+      - internal_backend
+
+  web:
+    depends_on:
+      - tiles

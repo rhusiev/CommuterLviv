@@ -7,10 +7,17 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
 
+    <!-- Backup is on by default, and the cookie jar holds a session cookie and
+         a remember-me token good for sixty days. The jar is encrypted under a
+         Keystore key, and Keystore keys are never backed up - so a restore
+         would carry ciphertext to a device that cannot read it. Off here, so
+         the failure is a sign-in rather than a corrupt jar. -->
     <application
         android:label="CommuterLviv"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -1,8 +1,12 @@
-import type { Arrivals, Call, Catalog, Me, Plan, RouteSet, Sets, Status } from "./types";
+import type { Arrivals, Call, Catalog, Me, Plan, RouteSet, Sets } from "./types";
 
 /** Same origin by default: in development Vite proxies `/api` and `/ws` to the
  * service, so the session cookie is a first-party cookie in both settings. */
 export const BASE = import.meta.env.VITE_API_URL ?? "";
+
+/** What the service says instead, when it says no. Every handler answers in
+ * this shape, so an error body is typed even where the success body is not. */
+type Failure = { error?: string; retry?: number };
 
 export class ApiError extends Error {
   constructor(
@@ -24,7 +28,11 @@ function csrf(): string {
   return "";
 }
 
-async function call(path: string, options: RequestInit = {}): Promise<any> {
+/** The caller names what it expects back. The service is the only source of
+ * that shape and TypeScript cannot check it across the wire, so this is an
+ * assertion rather than a proof - but it is one assertion, made once, instead
+ * of `any` spreading out of every call site. */
+async function call<T>(path: string, options: RequestInit = {}): Promise<T> {
   const unsafe = options.method !== undefined && options.method !== "GET";
   const res = await fetch(BASE + path, {
     ...options,
@@ -36,13 +44,13 @@ async function call(path: string, options: RequestInit = {}): Promise<any> {
     },
   });
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  const data = (text ? JSON.parse(text) : null) as (T & Failure) | null;
   if (!res.ok) throw new ApiError(data?.error ?? res.statusText, res.status, data?.retry);
-  return data;
+  return data as T;
 }
 
-const post = (path: string, body?: unknown) =>
-  call(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
+const post = <T>(path: string, body?: unknown) =>
+  call<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
 
 export const api = {
   me: (): Promise<Me> => call("/api/me"),
@@ -61,13 +69,14 @@ export const api = {
       password,
       remember,
     }),
-  /** `open`, `code` or `closed` - asked before anyone is signed in, so it is on
-   * the one public endpoint */
-  registration: async (): Promise<string> =>
-    ((await call("/api/health")) as { registration?: string }).registration ?? "code",
-  logout: () => post("/api/logout"),
+  /** What a client has to know before anyone is signed in: which registration
+   * mode this service is in, and whether it serves its own basemap. Both are on
+   * the one public endpoint for that reason. */
+  health: (): Promise<{ registration?: string; tiles?: boolean }> =>
+    call("/api/health"),
+  logout: () => post<void>("/api/logout"),
   password: (oldPassword: string, newPassword: string) =>
-    post("/api/password", { old: oldPassword, new: newPassword }),
+    post<void>("/api/password", { old: oldPassword, new: newPassword }),
 
   sets: (): Promise<Sets> => call("/api/sets"),
   /** Pinned stops, by feed id. Indexes are a property of one catalog and the
@@ -79,8 +88,8 @@ export const api = {
     post("/api/sets", { name, routes }),
   updateSet: (id: string, name: string, routes: string[]): Promise<RouteSet> =>
     call(`/api/sets/${id}`, { method: "PUT", body: JSON.stringify({ name, routes }) }),
-  deleteSet: (id: string) => call(`/api/sets/${id}`, { method: "DELETE" }),
-  activateSet: (id: string | null) => post("/api/sets/active", { id }),
+  deleteSet: (id: string) => call<void>(`/api/sets/${id}`, { method: "DELETE" }),
+  activateSet: (id: string | null) => post<void>("/api/sets/active", { id }),
 
   arrivals: (stops: number[]): Promise<Arrivals> =>
     call(`/api/arrivals?stops=${stops.join(",")}`),
@@ -92,7 +101,6 @@ export const api = {
    * is asked once per search and not on every keystroke */
   plan: (from: [number, number], to: [number, number]): Promise<Plan> =>
     call(`/api/plan?from=${from[0]},${from[1]}&to=${to[0]},${to[1]}`),
-  status: (): Promise<Status> => call("/api/status"),
 };
 
 const CATALOG_KEY = "commuterlviv.catalog";

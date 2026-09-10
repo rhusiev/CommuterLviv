@@ -57,7 +57,7 @@ export function VehicleCard({
     calls?.[0] === undefined ? null : catalog.routes[calls[0].route];
 
   return (
-    <div className="pointer-events-auto rounded-xl border border-slate-800 bg-slate-900/95 p-3 shadow-xl backdrop-blur">
+    <div className="panel pointer-events-auto p-3">
       <div className="flex items-start gap-2">
         {route && (
           <span
@@ -99,7 +99,7 @@ export function VehicleCard({
             <li key={c.stop}>
               <button
                 onClick={() => onStop(c.stop)}
-                className="flex w-full items-baseline gap-2 rounded px-1 py-1 text-left hover:bg-slate-800/70"
+                className="flex w-full items-baseline gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-raised/70"
               >
                 <span className="min-w-0 flex-1 truncate text-sm text-slate-200">
                   {s.name}

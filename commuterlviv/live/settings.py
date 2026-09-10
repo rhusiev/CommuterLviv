@@ -40,6 +40,8 @@ class Settings:
     session_max: float           # s a session lives however active
     remember_days: float
     trust_proxy: bool            # whether X-Forwarded-For may name the client
+    build_planner: bool          # fetch the footpaths if the volume has none
+    self_tiles: bool             # whether the basemap is served from this origin
     poll_veh: float
     epoch: float
     dev: bool
@@ -75,6 +77,8 @@ def load():
         session_max=float(_env("SESSION_MAX_S", 86400 * 7)),
         remember_days=float(_env("REMEMBER_DAYS", 60)),
         trust_proxy=_flag("TRUST_PROXY", False),
+        build_planner=_flag("BUILD_PLANNER", True),
+        self_tiles=_flag("SELF_TILES", False),
         poll_veh=float(_env("POLL_VEH_S", 5.0)),
         epoch=float(_env("EPOCH_S", 60.0)),
         dev=dev,

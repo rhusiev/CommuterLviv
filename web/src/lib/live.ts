@@ -7,6 +7,10 @@ import { decode, DELTA, SNAPSHOT } from "./wire";
  * over a second reads as movement without lagging visibly behind the truth. */
 const EASE = 1200;
 
+/** The one text frame the socket carries that says anything. Everything else
+ * on this socket is binary, and `pong` carries nothing worth reading. */
+type ArrivalsMessage = { type: string; t: number; stops: Record<string, Arrival[]> };
+
 type Vehicle = {
   route: number;
   flags: number;
@@ -123,13 +127,13 @@ export class Live {
   }
 
   private text(raw: string) {
-    let msg: any;
+    let msg: Partial<ArrivalsMessage>;
     try {
-      msg = JSON.parse(raw);
+      msg = JSON.parse(raw) as Partial<ArrivalsMessage>;
     } catch {
       return;
     }
-    if (msg.type === "arrivals") {
+    if (msg.type === "arrivals" && msg.stops !== undefined && msg.t !== undefined) {
       this.arrivals = msg.stops;
       this.arrivalsAt = msg.t;
       this.changed();

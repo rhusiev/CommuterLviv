@@ -30,6 +30,19 @@ MSG_RATE = 5.0          # messages a second, sustained
 MSG_BURST = 60.0
 MSG_ABUSE = 500         # messages refused before the socket is closed
 
+# Sockets one account may hold open. A phone, a laptop and a tab each is four,
+# and the handshake rate limit only bounds how fast they are opened, not how
+# many are left open
+MAX_PER_USER = 8
+
+
+def due(arrivals, stops):
+    """What is coming to these stops, as the wire says it. Shared with
+    `/api/arrivals`, so the socket and the request cannot word it differently."""
+    return {"t": arrivals.t, "stops": {
+        str(i): [{"route": int(r["route"]), "veh": int(r["veh"]),
+                  "t": int(r["t"])} for r in arrivals.at(i)] for i in stops}}
+
 
 class Client:
     __slots__ = ("ws", "user_id", "routes", "stops", "last", "frames", "bytes",
@@ -88,6 +101,9 @@ class Hub:
 
     async def serve(self, ws, user_id):
         """One connection, until it goes away."""
+        if sum(c.user_id == user_id for c in self.clients) >= MAX_PER_USER:
+            await ws.close(code=1013)
+            return
         client = Client(ws, user_id, len(self.live.cat.routes))
         self.clients.add(client)
         try:
@@ -191,11 +207,8 @@ class Hub:
 
     async def _send_arrivals(self, client):
         arr = self.live.arrivals
-        stops = {str(si): [{"route": int(r["route"]), "veh": int(r["veh"]),
-                            "t": int(r["t"])} for r in arr.at(si)]
-                 for si in client.stops}
-        await client.ws.send_text(json.dumps({"type": "arrivals", "t": arr.t,
-                                              "stops": stops}))
+        await client.ws.send_text(json.dumps(
+            {"type": "arrivals", **due(arr, client.stops)}))
 
     def stats(self):
         return {"clients": len(self.clients),

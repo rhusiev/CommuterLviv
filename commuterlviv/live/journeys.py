@@ -4,16 +4,25 @@
 things the service has to decide about it.
 
 It is optional. The search needs `data/walk.npz` and `data/transfers.npz`,
-which are built by hand and are not in the checkout, so a service without them
-answers 503 on this one endpoint and serves everything else exactly as before.
+which are not in the checkout, so a service without them answers 503 on this
+one endpoint and serves everything else exactly as before.
+
+On a volume that has never had them, `arrange` builds them once in the
+background and installs the planner when they are ready. That is not the same
+as a request waiting on Overpass, which is the thing `walk.py` refuses to do:
+the endpoint keeps answering 503 for the two or three minutes it takes, and
+every other endpoint is untouched. It happens once, because the result is a
+file on the volume; a deployment that would rather do it by hand sets
+COMMUTERLVIV_BUILD_PLANNER=false and copies the two files in.
 
 And it speaks the client's indices. `plan.py` numbers stops in its own order;
 everything on the wire is numbered in the catalog's. The translation lives here
 rather than in either of them, so neither has to assume the other's ordering.
 """
+import asyncio
 import time
 
-from .. import plan
+from .. import plan, walk as footpaths
 
 
 class Planner:
@@ -54,3 +63,31 @@ class Planner:
             out["veh"] = leg.veh
             out["live"] = leg.live
         return out
+
+
+def _make(net, log):
+    """The two files, built where they are missing. Minutes, and blocking."""
+    if not footpaths.CACHE.exists():
+        log("planner: asking Overpass for the city's footpaths, once")
+        footpaths.save()
+    if not plan.TRANSFERS.exists():
+        log("planner: walking between every pair of stops, once")
+        plan.build_transfers(plan.Timetable(net), footpaths.load())
+
+
+async def arrange(state, net, cat, log):
+    """Build what is missing, then install the planner on the app state.
+
+    Everything slow is handed to a thread, so the event loop keeps serving the
+    map while the city's footpaths come down. A failure here disables one
+    endpoint and is not allowed to take the service with it: Overpass is a
+    public API with a rate limit and it will sometimes simply say no.
+    """
+    try:
+        await asyncio.to_thread(_make, net, log)
+    except Exception as exc:
+        log("planner: giving up on this start -", repr(exc)[:200])
+        return
+    state.planner = Planner.maybe(net, cat, log)
+    if state.planner:
+        log("planner: ready")

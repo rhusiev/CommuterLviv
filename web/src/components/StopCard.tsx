@@ -27,7 +27,7 @@ export function StopCard({
   const due = new Map(nextPerRoute(arrivals ?? []).map((a) => [a.route, a]));
 
   return (
-    <div className="pointer-events-auto rounded-xl border border-slate-800 bg-slate-900/95 p-3 shadow-xl backdrop-blur">
+    <div className="panel pointer-events-auto p-3">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-medium text-slate-100">{s.name}</h3>
@@ -37,10 +37,10 @@ export function StopCard({
         </div>
         <button
           onClick={onPin}
-          className={`rounded-md px-2 py-1 text-xs ${
+          className={`rounded-control px-2 py-1 text-xs transition-colors ${
             pinned
-              ? "bg-sky-600/20 text-sky-200"
-              : "bg-slate-800 text-slate-400 hover:text-slate-200"
+              ? "bg-accent/15 text-accent"
+              : "bg-raised/70 text-slate-400 hover:text-slate-200"
           }`}
         >
           {pinned ? t.pinned : t.pin}
@@ -58,7 +58,7 @@ export function StopCard({
           return (
             <li
               key={i}
-              className="flex items-center gap-1 rounded-md bg-slate-800/70 py-0.5 pl-0.5 pr-1.5"
+              className="flex items-center gap-1 rounded-control bg-raised/70 py-0.5 pl-0.5 pr-1.5"
             >
               <span
                 className="rounded px-1.5 py-0.5 text-xs font-semibold"
