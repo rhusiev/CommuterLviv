@@ -53,7 +53,9 @@ export function RouteBadge({
       title={route.long}
     >
       <ModeIcon type={route.type} />
-      {number(route.short)}
+      {/* A floor of two digits, which is 71 of the city's 72 routes, so a wall of
+          chips lines up instead of stepping in and out by a digit */}
+      <span className="min-w-[2.5ch] text-center tabular-nums">{number(route.short)}</span>
     </span>
   );
 }

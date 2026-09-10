@@ -391,16 +391,16 @@ export function App() {
       )}
 
       {/* Centred at the bottom, where a thumb is, rather than in the bar: it is
-          the one control used at any moment and the only one worth that spot */}
-      <nav className="bar absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 gap-1 p-1 text-sm">
+          the one control used at any moment and the only one worth that spot.
+          Three equal columns and one weight throughout, so choosing a tab moves
+          nothing: a heavier label is a wider label, and the other two would slide */}
+      <nav className="bar absolute bottom-3 left-1/2 z-30 grid grid-cols-3 -translate-x-1/2 gap-1 p-1 text-sm">
         {(["map", "times", "plan"] as const).map((v) => (
           <button
             key={v}
             onClick={() => setTab(v)}
-            className={`rounded-full px-4 py-1.5 transition-colors ${
-              tab === v
-                ? "bg-accent/15 font-medium text-accent"
-                : "text-slate-400 hover:text-slate-200"
+            className={`rounded-full px-4 py-1.5 font-medium transition-colors ${
+              tab === v ? "bg-accent/15 text-accent" : "text-slate-400 hover:text-slate-200"
             }`}
           >
             {v === "map" ? t.map : v === "times" ? t.times : t.plan}

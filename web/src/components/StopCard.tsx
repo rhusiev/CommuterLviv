@@ -35,15 +35,31 @@ export function StopCard({
             {s.code} · {t.routeCount(s.routes.length)}
           </p>
         </div>
+        {/* A pin rather than the word, because the word changes length when it is
+            tapped and the button - and the ✕ beside it - would jump. Filled when
+            pinned, outlined when not, which is what the phone card does too */}
         <button
           onClick={onPin}
-          className={`rounded-control px-2 py-1 text-xs transition-colors ${
+          title={pinned ? t.unpin : t.pin}
+          className={`rounded-control p-1.5 transition-colors ${
             pinned
               ? "bg-accent/15 text-accent"
               : "bg-raised/70 text-slate-400 hover:text-slate-200"
           }`}
         >
-          {pinned ? t.pinned : t.pin}
+          <svg
+            viewBox="0 0 24 24"
+            className="size-5"
+            fill={pinned ? "currentColor" : "none"}
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            aria-hidden
+          >
+            <path d="M9.5 3h5l-.5 6.5 3 2.5v1.5H7V12l3-2.5z" />
+            <path d="M12 13.5V21" />
+          </svg>
         </button>
         <button onClick={onClose} className="px-1 text-slate-500 hover:text-slate-200">
           ✕

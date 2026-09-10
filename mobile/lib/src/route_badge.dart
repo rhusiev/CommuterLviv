@@ -103,12 +103,18 @@ class RouteBadge extends StatelessWidget {
         children: [
           ModeIcon(type: route.type, size: fontSize + 4, colour: ink),
           const SizedBox(width: 4),
-          Text(
-            routeNumber(route.short),
-            style: TextStyle(
-              fontSize: fontSize,
-              fontWeight: FontWeight.w600,
-              color: ink,
+          // A floor of two digits, which is 71 of the city's 72 routes, so a
+          // wall of chips lines up instead of stepping in and out by a digit
+          ConstrainedBox(
+            constraints: BoxConstraints(minWidth: fontSize * 1.4),
+            child: Text(
+              routeNumber(route.short),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: fontSize,
+                fontWeight: FontWeight.w600,
+                color: ink,
+              ),
             ),
           ),
         ],

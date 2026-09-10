@@ -243,6 +243,24 @@ which of its parts are carrying it.
   Also 0.4.1: with the drawer open, the stop card and the timetable centred on
   the window rather than on the map left over and sat flush against it.
 
+- **Nothing resizes when you press it**, at 0.4.3, asked for on 2026-09-10. Four
+  places changed size on their own state, which moves whatever sits beside them
+  under a thumb that is still on the screen: the tab bar bolded the chosen tab
+  in both clients, and a heavier label is a wider one; the phone's route and set
+  chips grew a Material checkmark when selected (`showCheckmark: false` - the
+  colour was already saying it); and the web's pin button said "pin" or
+  "pinned", two different widths, so it and the ✕ beside it jumped. The pin is
+  now the same filled-or-outlined thumbtack the phone card already used, and
+  `t.pinned` is gone from both dictionaries.
+
+  Interchangeable buttons are equal width where the members are alike: the three
+  tabs (`grid-cols-3` on the web, `IntrinsicWidth` over `Expanded` children on
+  the phone - that combination asks the row for the widest child per flex unit,
+  so the bar stays only as wide as it must be, verified in a throwaway test) and
+  the route number in a badge, which has a floor of two digits, 71 of the 72
+  routes. Not the basemap or language buttons: their labels are genuinely
+  different lengths and "Українська" would give "English" a field of empty pill.
+
 ## What just landed, and what it enables
 
 **Phase 5, the blends.** `commuterlviv/stack.py` replays `full`, `no-prior` and

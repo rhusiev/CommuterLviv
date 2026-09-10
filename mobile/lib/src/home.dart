@@ -678,17 +678,24 @@ class _Tabs extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: SizedBox(
         height: tabBarHeight,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final (i, tab) in tabs.indexed)
-              _Tab(
-                icon: tab.$1,
-                label: tab.$2,
-                on: i == selected,
-                onTap: () => onPick(i),
-              ),
-          ],
+        // Three equal columns, each as wide as the widest tab: `IntrinsicWidth`
+        // over flexible children asks the row for the widest child per flex
+        // unit, so the bar is still only as wide as it needs to be
+        child: IntrinsicWidth(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final (i, tab) in tabs.indexed)
+                Expanded(
+                  child: _Tab(
+                    icon: tab.$1,
+                    label: tab.$2,
+                    on: i == selected,
+                    onTap: () => onPick(i),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -721,14 +728,17 @@ class _Tab extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, size: 20, color: on ? accent : Colors.white70),
               const SizedBox(width: 6),
               Text(
                 label,
+                // One weight whichever tab is on: a heavier label is a wider
+                // label, and the other two tabs would slide as you switch
                 style: TextStyle(
                   color: on ? accent : Colors.white70,
-                  fontWeight: on ? FontWeight.w600 : FontWeight.normal,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
