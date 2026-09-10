@@ -59,7 +59,6 @@ const en = {
   tryAgain: "try again",
   noService: "the service is not answering",
   pin: "pin",
-  pinned: "pinned",
   unpin: "unpin",
   routeCount: (n: number) => `${n} routes`,
   nothingPinned: "Nothing pinned yet. Tap a stop on the map and pin it to watch it here.",
@@ -134,7 +133,6 @@ const uk: Strings = {
   tryAgain: "спробувати ще",
   noService: "сервіс не відповідає",
   pin: "закріпити",
-  pinned: "закріплено",
   unpin: "відкріпити",
   routeCount: (n: number) => `маршрутів: ${n}`,
   nothingPinned:

@@ -234,6 +234,9 @@ class _RouteSheetState extends State<RouteSheet> {
                 for (final s in sets)
                   ChoiceChip(
                     label: Text(s.name),
+                    // The colour says it is chosen. A checkmark says it too and
+                    // widens the chip doing so, shuffling every chip after it
+                    showCheckmark: false,
                     selected: s.id == widget.sets?.active,
                     onSelected: (_) => _activate(s),
                   ),
@@ -255,8 +258,12 @@ class _RouteSheetState extends State<RouteSheet> {
             children: [
               for (final i in shown)
                 FilterChip(
-                  label: RouteBadge(route: catalog.routes[i], muted: true),
+                  label: RouteBadge(
+                    route: catalog.routes[i],
+                    muted: !widget.picked.contains(i),
+                  ),
                   tooltip: catalog.routes[i].long,
+                  showCheckmark: false,
                   selected: widget.picked.contains(i),
                   onSelected: (_) {
                     widget.onToggle(i);
