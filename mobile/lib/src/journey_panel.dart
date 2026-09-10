@@ -94,100 +94,102 @@ class _JourneyPanelState extends State<JourneyPanel> {
   @override
   Widget build(BuildContext context) {
     final ready = widget.from != null && widget.to != null;
+    // Rounded on all four corners and left to float: whoever places it keeps it
+    // off the edges, so it is a card over the city rather than a drawer out of
+    // the bottom of the screen
     return Material(
       elevation: 8,
       color: panel,
       surfaceTintColor: Colors.transparent,
-      borderRadius: const BorderRadius.vertical(
-        top: Radius.circular(panelRadius),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(panelRadius),
+        side: const BorderSide(color: hair),
       ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    txt.plan,
-                    style: material.Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: widget.onSwap,
-                    icon: const Icon(Icons.swap_vert),
-                    tooltip: txt.swap,
-                  ),
-                  IconButton(
-                    onPressed: widget.onClose,
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  txt.plan,
+                  style: material.Theme.of(context).textTheme.titleMedium,
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: widget.onSwap,
+                  icon: const Icon(Icons.swap_vert),
+                  tooltip: txt.swap,
+                ),
+                IconButton(
+                  onPressed: widget.onClose,
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            _End(
+              label: txt.from,
+              at: widget.from,
+              picking: widget.picking == End.from,
+              onPick: () =>
+                  widget.onPick(widget.picking == End.from ? null : End.from),
+              onHere: () => widget.onHere(End.from),
+            ),
+            _End(
+              label: txt.to,
+              at: widget.to,
+              picking: widget.picking == End.to,
+              onPick: () =>
+                  widget.onPick(widget.picking == End.to ? null : End.to),
+              onHere: () => widget.onHere(End.to),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: ready && !_busy ? _search : null,
+                child: Text(_busy ? txt.searching : txt.findRoute),
               ),
-              _End(
-                label: txt.from,
-                at: widget.from,
-                picking: widget.picking == End.from,
-                onPick: () =>
-                    widget.onPick(widget.picking == End.from ? null : End.from),
-                onHere: () => widget.onHere(End.from),
-              ),
-              _End(
-                label: txt.to,
-                at: widget.to,
-                picking: widget.picking == End.to,
-                onPick: () =>
-                    widget.onPick(widget.picking == End.to ? null : End.to),
-                onHere: () => widget.onHere(End.to),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: ready && !_busy ? _search : null,
-                  child: Text(_busy ? txt.searching : txt.findRoute),
+            ),
+            if (_failed != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  _failed!,
+                  style: TextStyle(
+                    color: material.Theme.of(context).colorScheme.error,
+                  ),
                 ),
               ),
-              if (_failed != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    _failed!,
-                    style: TextStyle(
-                      color: material.Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
-              if (_options != null)
-                Flexible(
-                  child: _options!.isEmpty
-                      ? Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: Text(txt.noJourney),
-                        )
-                      : ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: _options!.length,
-                          itemBuilder: (_, i) => _Option(
-                            journey: _options![i],
-                            catalog: widget.catalog,
-                            onStop: widget.onStop,
-                          ),
+            if (_options != null)
+              Flexible(
+                child: _options!.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Text(txt.noJourney),
+                      )
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _options!.length,
+                        itemBuilder: (_, i) => _Option(
+                          journey: _options![i],
+                          catalog: widget.catalog,
+                          onStop: widget.onStop,
                         ),
-                )
-              else if (_failed == null && !_busy)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text(
-                    txt.planHint,
-                    style: material.Theme.of(context).textTheme.bodySmall,
-                  ),
+                      ),
+              )
+            else if (_failed == null && !_busy)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  txt.planHint,
+                  style: material.Theme.of(context).textTheme.bodySmall,
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );

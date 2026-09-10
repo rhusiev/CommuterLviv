@@ -27,6 +27,7 @@ import 'server_dialog.dart';
 import 'sheets.dart';
 import 'stop_card.dart';
 import 'stop_search.dart';
+import 'theme.dart';
 import 'times_tab.dart';
 import 'vehicle_card.dart';
 import 'vehicle_layer.dart' show badgeRadius, stopsZoom;
@@ -246,10 +247,9 @@ class _HomeScreenState extends State<HomeScreen> {
         _map.camera.zoom < 15 ? 16 : _map.camera.zoom,
       );
     }
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (_) => StopCard(
+    showFloatingSheet<void>(
+      context,
+      (_) => StopCard(
         catalog: _catalog!,
         live: _live!,
         stop: stop,
@@ -326,10 +326,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openVehicle(int veh) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (_) => VehicleCard(
+    showFloatingSheet<void>(
+      context,
+      (_) => VehicleCard(
         api: widget.api,
         catalog: _catalog!,
         veh: veh,
@@ -395,17 +394,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _menu(String choice) async {
     switch (choice) {
       case 'map':
-        showModalBottomSheet<void>(
-          context: context,
-          showDragHandle: true,
-          builder: (_) => ThemeSheet(current: _theme, onPick: _setTheme),
+        showFloatingSheet<void>(
+          context,
+          (_) => ThemeSheet(current: _theme, onPick: _setTheme),
         );
       case 'lang':
-        showModalBottomSheet<void>(
-          context: context,
-          showDragHandle: true,
-          builder: (_) => LanguageSheet(api: widget.api),
-        );
+        showFloatingSheet<void>(context, (_) => LanguageSheet(api: widget.api));
       case 'server':
         // The session belonged to the old address and is gone with it, so a
         // change lands back on the sign-in screen rather than on a dead map
@@ -455,77 +449,10 @@ class _HomeScreenState extends State<HomeScreen> {
         body: Center(child: CircularProgressIndicator.adaptive()),
       );
     }
+    // No app bar and no navigation bar: the map is the whole screen and the
+    // chrome floats on top of it, which is why every piece below is placed in
+    // the stack with its own inset rather than given a slot by the scaffold
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('CommuterLviv'),
-        actions: [
-          IconButton(
-            onPressed: _search,
-            icon: const Icon(Icons.search),
-            tooltip: txt.findStop,
-          ),
-          IconButton(
-            onPressed: () => setState(() {
-              _planning = !_planning;
-              _tab = 0;
-              if (!_planning) _picking = null;
-            }),
-            icon: Icon(
-              _planning ? Icons.directions : Icons.directions_outlined,
-            ),
-            tooltip: txt.plan,
-          ),
-          IconButton(
-            onPressed: () => showModalBottomSheet<void>(
-              context: context,
-              showDragHandle: true,
-              isScrollControlled: true,
-              builder: (_) => RouteSheet(
-                api: widget.api,
-                catalog: catalog,
-                sets: _sets,
-                picked: _routes,
-                onToggle: _toggleRoute,
-                onClear: () {
-                  setState(_routes.clear);
-                  _push();
-                },
-                onActivated: (set, routes) => setState(() {
-                  _routes
-                    ..clear()
-                    ..addAll(routes);
-                  _sets = Sets(
-                    sets: _sets!.sets,
-                    active: set.id,
-                    pins: _sets!.pins,
-                  );
-                  _push();
-                }),
-                onSets: (sets) => setState(() => _sets = sets),
-              ),
-            ),
-            icon: const Icon(Icons.route_outlined),
-            tooltip: txt.routes,
-          ),
-          PopupMenuButton<String>(
-            onSelected: _menu,
-            itemBuilder: (_) => [
-              PopupMenuItem(value: 'map', child: Text(txt.mapStyle)),
-              PopupMenuItem(value: 'lang', child: Text(txt.language)),
-              PopupMenuItem(
-                value: 'server',
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(txt.server),
-                  subtitle: Text(widget.api.base),
-                ),
-              ),
-              PopupMenuItem(value: 'out', child: Text(txt.signOut)),
-            ],
-          ),
-        ],
-        bottom: _Status(live: live),
-      ),
       body: Stack(
         children: [
           IndexedStack(
@@ -561,9 +488,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           if (_planning && _tab == 0)
             Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
+              left: floatingGap,
+              right: floatingGap,
+              bottom: floatingBottom(context),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   maxHeight: MediaQuery.sizeOf(context).height * 0.6,
@@ -589,46 +516,249 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+          Positioned(
+            left: floatingGap,
+            right: floatingGap,
+            top: MediaQuery.paddingOf(context).top + floatingGap,
+            child: _TopBar(
+              onSearch: _search,
+              onRoutes: () => _openRoutes(catalog),
+              onMenu: _menu,
+              server: widget.api.base,
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: MediaQuery.paddingOf(context).bottom + floatingGap,
+            child: Center(
+              child: _Tabs(selected: _planning ? 2 : _tab, onPick: _pickTab),
+            ),
+          ),
+          _Status(live: live),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.map_outlined),
-            selectedIcon: const Icon(Icons.map),
-            label: txt.map,
+    );
+  }
+
+  void _pickTab(int i) => setState(() {
+    _tab = i == 1 ? 1 : 0;
+    _planning = i == 2;
+    if (!_planning) _picking = null;
+  });
+
+  void _openRoutes(Catalog catalog) => showFloatingSheet<void>(
+    context,
+    (_) => RouteSheet(
+      api: widget.api,
+      catalog: catalog,
+      sets: _sets,
+      picked: _routes,
+      onToggle: _toggleRoute,
+      onClear: () {
+        setState(_routes.clear);
+        _push();
+      },
+      onActivated: (set, routes) => setState(() {
+        _routes
+          ..clear()
+          ..addAll(routes);
+        _sets = Sets(sets: _sets!.sets, active: set.id, pins: _sets!.pins);
+        _push();
+      }),
+      onSets: (sets) => setState(() => _sets = sets),
+    ),
+    scrollControlled: true,
+  );
+}
+
+/// What used to be the app bar: a search pill wide enough to read, and the two
+/// buttons that open everything else. It floats clear of the top edge, so the
+/// map runs behind it and under the status bar.
+class _TopBar extends StatelessWidget {
+  const _TopBar({
+    required this.onSearch,
+    required this.onRoutes,
+    required this.onMenu,
+    required this.server,
+  });
+
+  final VoidCallback onSearch;
+  final VoidCallback onRoutes;
+  final void Function(String choice) onMenu;
+  final String server;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Material(
+          color: panel.withValues(alpha: 0.9),
+          surfaceTintColor: Colors.transparent,
+          shape: const StadiumBorder(side: BorderSide(color: hair)),
+          elevation: 2,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onSearch,
+            child: SizedBox(
+              height: topBarHeight,
+              child: Row(
+                children: [
+                  const SizedBox(width: 14),
+                  const Icon(Icons.search, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      txt.findStop,
+                      overflow: TextOverflow.ellipsis,
+                      style: material.Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(color: Colors.white54),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.schedule_outlined),
-            selectedIcon: const Icon(Icons.schedule),
-            label: txt.times,
-          ),
-        ],
+        ),
+      ),
+      const SizedBox(width: 8),
+      RoundButton(
+        tooltip: txt.routes,
+        onPressed: onRoutes,
+        child: const Icon(Icons.route_outlined),
+      ),
+      const SizedBox(width: 8),
+      Material(
+        color: panel.withValues(alpha: 0.9),
+        surfaceTintColor: Colors.transparent,
+        shape: const CircleBorder(side: BorderSide(color: hair)),
+        elevation: 2,
+        child: PopupMenuButton<String>(
+          onSelected: onMenu,
+          itemBuilder: (_) => [
+            PopupMenuItem(value: 'map', child: Text(txt.mapStyle)),
+            PopupMenuItem(value: 'lang', child: Text(txt.language)),
+            PopupMenuItem(
+              value: 'server',
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(txt.server),
+                subtitle: Text(server),
+              ),
+            ),
+            PopupMenuItem(value: 'out', child: Text(txt.signOut)),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+/// Map, times and the planner, as one pill where a thumb is. The planner is a
+/// third choice rather than a toggle in the bar because that is what it is: a
+/// third thing to be looking at, over the same city.
+class _Tabs extends StatelessWidget {
+  const _Tabs({required this.selected, required this.onPick});
+
+  final int selected;
+  final void Function(int index) onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final tabs = [
+      (Icons.map_outlined, txt.map),
+      (Icons.schedule_outlined, txt.times),
+      (Icons.directions_outlined, txt.plan),
+    ];
+    return Material(
+      color: panel.withValues(alpha: 0.9),
+      surfaceTintColor: Colors.transparent,
+      shape: const StadiumBorder(side: BorderSide(color: hair)),
+      elevation: 4,
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        height: tabBarHeight,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (i, tab) in tabs.indexed)
+              _Tab(
+                icon: tab.$1,
+                label: tab.$2,
+                on: i == selected,
+                onTap: () => onPick(i),
+              ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// A one-pixel line under the app bar, red while the socket is away. Anything
-/// larger would be a banner about a state that is usually over in a second.
-class _Status extends StatelessWidget implements PreferredSizeWidget {
+class _Tab extends StatelessWidget {
+  const _Tab({
+    required this.icon,
+    required this.label,
+    required this.on,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool on;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: on ? accent.withValues(alpha: 0.15) : null,
+          borderRadius: BorderRadius.circular(tabBarHeight),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: on ? accent : Colors.white70),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: on ? accent : Colors.white70,
+                  fontWeight: on ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// A two-pixel line along the very top of the screen, red while the socket is
+/// away. Anything larger would be a banner about a state that is usually over
+/// in a second, and it sits above the bar rather than under it because there is
+/// no bar to sit under any more.
+class _Status extends StatelessWidget {
   const _Status({required this.live});
 
   final Live live;
 
   @override
-  Size get preferredSize => const Size.fromHeight(2);
-
-  @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: live,
     builder: (context, _) => live.connection == Connection.live
-        ? const SizedBox(height: 2)
-        : LinearProgressIndicator(
-            minHeight: 2,
-            color: material.Theme.of(context).colorScheme.error,
+        ? const SizedBox.shrink()
+        : Align(
+            alignment: Alignment.topCenter,
+            child: LinearProgressIndicator(
+              minHeight: 2,
+              color: material.Theme.of(context).colorScheme.error,
+            ),
           ),
   );
 }

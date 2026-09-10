@@ -121,23 +121,23 @@ export function StopSearch({ catalog, onGo }: Props) {
           e.preventDefault();
         }}
         placeholder={t.findStop}
-        className="field w-32 py-1 pr-7 transition-[width] focus:w-56"
+        className="field-bar py-2.5 pr-8"
       />
       <button
         onClick={locate}
         disabled={locating}
         title={t.nearMe}
-        className="absolute right-1 top-1/2 -translate-y-1/2 rounded px-1 text-sm text-slate-500 hover:text-accent disabled:text-slate-600"
+        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-1 text-sm text-slate-500 hover:text-accent disabled:text-slate-600"
       >
         ◎
       </button>
       {why !== "" && (
-        <p className="panel absolute left-0 top-full z-30 mt-1 w-72 px-2 py-1.5 text-xs text-slate-400">
+        <p className="panel absolute inset-x-0 top-full z-30 mt-2 px-3 py-2 text-xs text-slate-400">
           {why}
         </p>
       )}
       {shown.length > 0 && (
-        <ul className="panel absolute left-0 top-full z-30 mt-1 w-72 overflow-hidden">
+        <ul className="panel absolute inset-x-0 top-full z-30 mt-2 overflow-hidden p-1">
           {shown.map((i, n) => {
             const s = catalog.stops[i]!;
             return (
@@ -146,7 +146,7 @@ export function StopSearch({ catalog, onGo }: Props) {
                   onClick={() => go(i)}
                   onMouseEnter={() => setCursor(n)}
                   data-hit={s.name}
-                  className={`block w-full px-2 py-1.5 text-left text-sm ${
+                  className={`block w-full rounded-control px-2.5 py-1.5 text-left text-sm ${
                     n === cursor ? "bg-accent/15 text-accent" : "text-slate-300"
                   }`}
                 >

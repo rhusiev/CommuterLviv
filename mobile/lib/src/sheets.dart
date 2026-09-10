@@ -1,5 +1,8 @@
-/// What the app bar opens: which routes are on the map, which basemap they are
+/// What the top bar opens: which routes are on the map, which basemap they are
 /// drawn on, and which language everything is said in.
+///
+/// [showFloatingSheet] is how every sheet in the app is put on screen, so a
+/// card that rises out of the map matches the cards already on it.
 library;
 
 import 'dart:async' show unawaited;
@@ -11,6 +14,59 @@ import 'api.dart';
 import 'map_theme.dart';
 import 'models.dart';
 import 'strings.dart';
+import 'theme.dart';
+
+/// A sheet that floats rather than docks: rounded on all four corners and
+/// standing off all three edges.
+///
+/// `showModalBottomSheet` is docked by construction, so the gap is padding
+/// inside a sheet that is itself transparent. The drag handle is drawn here for
+/// the same reason - the framework's own would land on the transparent surface,
+/// above the card instead of on it. The bottom is only [floatingGap] because
+/// each sheet's own `SafeArea` is what clears the system bar.
+Future<T?> showFloatingSheet<T>(
+  BuildContext context,
+  WidgetBuilder builder, {
+  bool scrollControlled = false,
+}) => showModalBottomSheet<T>(
+  context: context,
+  isScrollControlled: scrollControlled,
+  backgroundColor: Colors.transparent,
+  builder: (context) => Padding(
+    padding: const EdgeInsets.all(floatingGap),
+    child: Material(
+      color: panel,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(panelRadius),
+        side: const BorderSide(color: hair),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const _Handle(),
+          Flexible(child: builder(context)),
+        ],
+      ),
+    ),
+  ),
+);
+
+class _Handle extends StatelessWidget {
+  const _Handle();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 32,
+    height: 4,
+    margin: const EdgeInsets.symmetric(vertical: 10),
+    decoration: BoxDecoration(
+      color: Colors.white24,
+      borderRadius: BorderRadius.circular(2),
+    ),
+  );
+}
 
 class ThemeSheet extends StatelessWidget {
   const ThemeSheet({super.key, required this.current, required this.onPick});

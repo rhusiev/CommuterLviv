@@ -200,6 +200,27 @@ which of its parts are carrying it.
   one came from `merge.py`. Pruning will bound the rows but not the bytes, so
   `--min-free-gb` is the guard that actually stops it.
 
+- **Both clients were redesigned to float**, at 0.4.0, asked for on 2026-09-10
+  with the Telegram redesign and Google Maps as the examples. One rule: nothing
+  is docked to an edge. The map is the whole window and every piece of chrome -
+  the top bar, the tab pill, the drawers, the cards, the sheets - is a rounded
+  translucent surface over it. The rule is stated once per client, in
+  `web/src/app.css`'s `@theme` comment and `mobile/lib/src/theme.dart`'s library
+  doc, and the geometry with it: `floatingTop`/`floatingBottom` on the phone,
+  `top-19`/`bottom-20` on the web.
+
+  The shape of both changed, not just the paint. The web layout is one
+  `relative` box of absolutely positioned pieces rather than a column; the tab
+  switcher moved to a bottom-centre pill and sign-out into the routes drawer,
+  because the old header was ~540 px of controls and a phone is 360. The
+  `Scaffold` has neither an `appBar` nor a `bottomNavigationBar` any more, every
+  sheet goes through `showFloatingSheet` in `sheets.dart` (a transparent sheet
+  with the gap as padding inside it, and its own drag handle, because
+  `showModalBottomSheet` is docked by construction), and `RoundButton` in
+  `theme.dart` is the one definition of a floating round button.
+
+  `check.sh` green, both screenshotted headless at 1100x700 and 390x780.
+
 ## What just landed, and what it enables
 
 **Phase 5, the blends.** `commuterlviv/stack.py` replays `full`, `no-prior` and
