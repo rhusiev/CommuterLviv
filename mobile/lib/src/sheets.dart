@@ -13,6 +13,7 @@ import 'package:flutter/material.dart' as material show Theme;
 import 'api.dart';
 import 'map_theme.dart';
 import 'models.dart';
+import 'route_badge.dart';
 import 'strings.dart';
 import 'theme.dart';
 
@@ -254,7 +255,7 @@ class _RouteSheetState extends State<RouteSheet> {
             children: [
               for (final i in shown)
                 FilterChip(
-                  label: Text(catalog.routes[i].short),
+                  label: RouteBadge(route: catalog.routes[i], muted: true),
                   tooltip: catalog.routes[i].long,
                   selected: widget.picked.contains(i),
                   onSelected: (_) {

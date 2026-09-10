@@ -1,6 +1,6 @@
 # Approaches, and what each one scored
 
-One recording: 93796 stop crossings over 1143 minutes of replay. Every approach is scored on the 1756722 predictions all of them made, so the numbers below answer the same questions.
+One recording: 717685 stop crossings over 5739 minutes of replay. Every approach is scored on the 15519766 predictions all of them made, so the numbers below answer the same questions.
 
 `lad` is not in that support and not in these tables. It answers about only the 40 stops the collector polls, so intersecting over it too would judge every other approach on a small subsample chosen by which stops we happen to poll. It has its own table at the end, against the approaches it can be compared to.
 
@@ -10,64 +10,70 @@ A switch that scores better than `full` is a claim the shipped model makes and t
 
 | approach | MAE s | vs full | median s | RMSE s | bias s | <60 s | <120 s |
 |---|---|---|---|---|---|---|---|
-| tuned | 114 | -5% | 61 | 206 | -66 | 49.3% | 70.6% |
-| no-prior | 115 | -4% | 65 | 206 | -63 | 47.7% | 69.7% |
-| prior-shape | 119 | -1% | 65 | 210 | -19 | 47.4% | 69.2% |
-| full | 120 | - | 66 | 212 | -10 | 46.9% | 68.7% |
-| knn | 121 | +0% | 67 | 215 | -40 | 46.4% | 68.9% |
-| sections | 122 | +1% | 68 | 215 | -53 | 46.2% | 68.3% |
-| offset-decay | 122 | +1% | 69 | 215 | -38 | 45.6% | 68.1% |
-| no-fast | 123 | +2% | 68 | 214 | -7 | 46.4% | 68.0% |
-| no-incremental | 123 | +2% | 68 | 212 | +18 | 46.0% | 67.7% |
-| sections-no-prior | 128 | +6% | 75 | 218 | -50 | 43.2% | 65.2% |
-| no-hold | 131 | +9% | 74 | 222 | +27 | 43.7% | 65.3% |
-| no-corridor | 132 | +9% | 74 | 224 | +20 | 43.8% | 65.5% |
-| k-split | 140 | +17% | 77 | 235 | +23 | 42.5% | 63.4% |
-| table-live | 144 | +20% | 82 | 242 | -40 | 40.6% | 62.0% |
-| table | 149 | +24% | 85 | 246 | -5 | 39.8% | 60.9% |
-| vehicle-offset | 165 | +37% | 97 | 267 | -109 | 36.8% | 56.4% |
-| median | 177 | +47% | 108 | 280 | -150 | 33.9% | 53.3% |
-| schedule-offset | 199 | +66% | 119 | 304 | +89 | 31.9% | 50.4% |
-| api | 471 | +292% | 147 | 1406 | -105 | 27.7% | 44.7% |
-| schedule | 843 | +601% | 579 | 1268 | +431 | 13.2% | 22.4% |
+| profile | 134 | -3% | 74 | 226 | -64 | 44.0% | 64.9% |
+| profile-no-prior | 136 | -1% | 75 | 229 | -86 | 43.7% | 64.3% |
+| full | 138 | - | 79 | 228 | -35 | 42.0% | 63.1% |
+| prior-shape | 139 | +0% | 78 | 230 | -45 | 42.3% | 63.4% |
+| no-prior | 139 | +1% | 77 | 232 | -81 | 42.7% | 63.3% |
+| knn | 140 | +1% | 82 | 230 | -47 | 40.7% | 62.2% |
+| no-incremental | 141 | +2% | 83 | 225 | +13 | 40.4% | 61.5% |
+| no-fast | 141 | +2% | 80 | 232 | -32 | 41.4% | 62.4% |
+| offset-decay | 143 | +3% | 82 | 234 | -66 | 40.7% | 61.9% |
+| tuned | 144 | +4% | 77 | 241 | -92 | 43.0% | 63.1% |
+| slow-day | 145 | +5% | 77 | 243 | -91 | 42.9% | 62.9% |
+| sections | 146 | +6% | 82 | 241 | -74 | 40.7% | 61.8% |
+| no-corridor | 147 | +6% | 86 | 236 | -11 | 39.3% | 60.4% |
+| no-hold | 149 | +8% | 90 | 235 | +24 | 38.3% | 58.9% |
+| sections-no-prior | 150 | +9% | 87 | 244 | -76 | 39.3% | 59.9% |
+| k-split | 157 | +13% | 92 | 248 | +4 | 37.9% | 58.2% |
+| schedule-offset | 199 | +44% | 125 | 299 | +12 | 29.9% | 48.8% |
+| vehicle-offset | 199 | +44% | 121 | 304 | -154 | 32.1% | 49.7% |
+| table-live | 207 | +49% | 126 | 318 | -119 | 29.9% | 48.4% |
+| table | 209 | +51% | 128 | 317 | -26 | 29.6% | 48.0% |
+| median | 218 | +57% | 135 | 329 | -196 | 29.6% | 46.6% |
+| schedule | 875 | +533% | 623 | 1295 | +427 | 9.5% | 16.9% |
+| api | 1432 | +935% | 163 | 9240 | -1124 | 24.9% | 41.6% |
 
 ## MAE by how far ahead the prediction was
 
 | approach | 0-1 min | 1-2 min | 2-5 min | 5-10 min | 10-20 min | 20-45 min |
 |---|---|---|---|---|---|---|
-| tuned | 15 | 24 | 39 | 65 | 111 | 223 |
-| no-prior | 15 | 25 | 40 | 67 | 114 | 221 |
-| prior-shape | 17 | 29 | 46 | 76 | 123 | 213 |
-| full | 18 | 30 | 48 | 78 | 126 | 214 |
-| knn | 19 | 31 | 48 | 76 | 122 | 219 |
-| sections | 19 | 30 | 47 | 75 | 122 | 227 |
-| offset-decay | 16 | 27 | 46 | 77 | 127 | 221 |
-| no-fast | 18 | 30 | 48 | 79 | 129 | 217 |
-| no-incremental | 18 | 31 | 50 | 81 | 132 | 213 |
-| sections-no-prior | 18 | 30 | 47 | 79 | 132 | 234 |
-| no-hold | 19 | 32 | 52 | 86 | 141 | 227 |
-| no-corridor | 20 | 33 | 54 | 89 | 143 | 225 |
-| k-split | 19 | 34 | 55 | 93 | 151 | 244 |
-| table-live | 20 | 34 | 56 | 93 | 150 | 258 |
-| table | 21 | 36 | 60 | 99 | 160 | 258 |
-| vehicle-offset | 16 | 27 | 47 | 87 | 165 | 330 |
-| median | 16 | 28 | 50 | 93 | 171 | 359 |
-| schedule-offset | 27 | 50 | 84 | 141 | 226 | 324 |
-| api | 305 | 321 | 352 | 406 | 485 | 618 |
-| schedule | 789 | 791 | 795 | 807 | 843 | 912 |
+| profile | 17 | 28 | 44 | 74 | 125 | 240 |
+| profile-no-prior | 16 | 26 | 42 | 71 | 123 | 251 |
+| full | 18 | 30 | 49 | 82 | 135 | 237 |
+| prior-shape | 18 | 30 | 48 | 80 | 133 | 241 |
+| no-prior | 16 | 27 | 43 | 74 | 128 | 254 |
+| knn | 19 | 33 | 52 | 84 | 136 | 239 |
+| no-incremental | 19 | 32 | 53 | 88 | 143 | 231 |
+| no-fast | 18 | 31 | 50 | 83 | 138 | 242 |
+| offset-decay | 16 | 28 | 47 | 82 | 138 | 248 |
+| tuned | 16 | 26 | 42 | 73 | 129 | 268 |
+| slow-day | 16 | 26 | 43 | 74 | 130 | 269 |
+| sections | 20 | 32 | 50 | 82 | 135 | 260 |
+| no-corridor | 20 | 34 | 55 | 92 | 148 | 243 |
+| no-hold | 20 | 33 | 55 | 93 | 153 | 246 |
+| sections-no-prior | 19 | 31 | 49 | 84 | 141 | 267 |
+| k-split | 20 | 35 | 57 | 97 | 159 | 259 |
+| schedule-offset | 27 | 49 | 82 | 135 | 209 | 312 |
+| vehicle-offset | 16 | 27 | 49 | 94 | 181 | 378 |
+| table-live | 22 | 40 | 69 | 118 | 198 | 363 |
+| table | 25 | 46 | 78 | 133 | 213 | 343 |
+| median | 17 | 29 | 54 | 102 | 192 | 419 |
+| schedule | 873 | 872 | 870 | 869 | 872 | 885 |
+| api | 820 | 822 | 840 | 880 | 1075 | 2450 |
 
 ## The public arrivals board, where it answers at all
 
-The same events again, restricted to the 212763 predictions `lad` also made. Nothing here is comparable to the tables above - this is a different, much smaller set of events, and the three familiar approaches are repeated on it so that the board has something to be read against.
+The same events again, restricted to the 1170417 predictions `lad` also made. Nothing here is comparable to the tables above - this is a different, much smaller set of events, and the three familiar approaches are repeated on it so that the board has something to be read against.
 
 The board and `api` are both the operator's, and they are not the same quality: the board is several times the better of the two. Whatever produces it is doing more than replaying `trip_updates`. It is still beaten here, but by much less than the gap to `api` would suggest, and it is the harder of the two to beat.
 
 | approach | MAE s | vs full | median s | RMSE s | bias s | <60 s | <120 s |
 |---|---|---|---|---|---|---|---|
-| full | 87 | - | 49 | 158 | -22 | 56.6% | 79.1% |
-| lad | 114 | +30% | 65 | 182 | -50 | 47.0% | 71.1% |
-| api | 429 | +391% | 104 | 1437 | -184 | 33.5% | 54.5% |
-| schedule | 914 | +947% | 622 | 1330 | +499 | 8.8% | 15.7% |
+| full | 101 | - | 58 | 169 | -33 | 51.0% | 73.4% |
+| lad | 134 | +32% | 79 | 207 | -65 | 40.7% | 64.5% |
+| api | 558 | +450% | 115 | 3351 | -345 | 31.4% | 51.3% |
+| schedule | 939 | +825% | 669 | 1336 | +487 | 7.3% | 13.3% |
 
 ## What each approach is
 
@@ -106,6 +112,18 @@ One shrinkage constant for both layers is measured to be the wrong shape: a cell
 ### tuned
 
 The shipped model at the best value each of its four constants found when swept alone. Every one of those sweeps moved the same way - less shrinkage, longer memory - and the four gains do add: this is the only variant that beats the shipped model at every horizon out to 20 minutes. It pays for that in the 20-45 minute bucket, where trusting live evidence sooner and forgetting it later carries the current state of the road much further ahead than it holds.
+
+### slow-day
+
+A third half-life of one day beneath the other two, at both the cell and the corridor scale. The city runs no service between 00:00 and 05:30, so by 06:00 the 5400 s term has decayed to 1.2% of the blend and the model opens the morning peak back on the timetable - finding 6 measures it believing the city 15% slower than it is. This asks whether what a cell was doing yesterday is a better opening guess than the schedule.
+
+### profile
+
+What this cell does at this hour, learned across days and kept for weeks, put where the corridor used to be: the thing the live terms fall back on when they have nothing. Finding 6 measures the model opening the morning peak believing the city 15% slower than it is, because the overnight gap decays every live term away and leaves only the timetable. `slow-day` carries yesterday across that gap as one number per cell; this carries yesterday's *morning* into this morning, which is the difference that matters if the city's slowness is a shape over the day rather than a level.
+
+### profile-no-prior
+
+The same profile with the timetable removed, so the hour-of-day pattern has to be learned rather than inherited. This is the literal form of finding 6's remedy - a learned profile instead of the schedule's - and the pair with `profile` says whether the schedule still adds anything once the model has its own history of the same hours.
 
 ### sections
 

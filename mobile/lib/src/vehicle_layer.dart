@@ -81,7 +81,7 @@ class _VehicleLayerState extends State<VehicleLayer>
   }
 
   ui.Paragraph _badge(int route) => _badges.putIfAbsent(route, () {
-    final label = widget.catalog.routes[route].short;
+    final label = routeNumber(widget.catalog.routes[route].short);
     final short = label.length > 4 ? label.substring(0, 4) : label;
     final size = short.length > 3 ? 9.0 : (short.length > 2 ? 11.0 : 13.0);
     final builder =

@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { colour } from "../lib/sprites";
 import { THEMES, type Theme } from "../lib/theme";
 import type { Catalog, RouteSet } from "../lib/types";
 import { lang, setLang, t } from "../lib/i18n";
+import { RouteBadge } from "./RouteBadge";
 
 /** Which routes are on the map, and the named sets that stand for a selection:
  * one for the way to work, one for home. A set is the selection at the moment
@@ -137,18 +137,14 @@ export function RoutePanel(p: Props) {
           {shown.map((r) => {
             const on = p.picked.has(r.id);
             return (
-              <button
-                key={r.id}
-                onClick={() => p.onToggle(r.id)}
-                title={r.long}
-                style={
-                  on ? { backgroundColor: colour(r.short, r.type), color: "#0b0f14" } : undefined
-                }
-                className={`rounded-md px-2 py-1 text-sm font-medium ${
-                  on ? "" : "bg-raised/70 text-slate-400 hover:bg-raised"
-                }`}
-              >
-                {r.short}
+              <button key={r.id} onClick={() => p.onToggle(r.id)}>
+                <RouteBadge
+                  route={r}
+                  muted={!on}
+                  className={`px-2 py-1 text-sm ${
+                    on ? "" : "bg-raised/70 text-slate-400 hover:bg-raised"
+                  }`}
+                />
               </button>
             );
           })}

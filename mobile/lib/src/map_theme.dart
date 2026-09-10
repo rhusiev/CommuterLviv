@@ -69,6 +69,13 @@ class Palette {
   final Color here;
 }
 
+/// The number without the letter the city puts in front of it: `А25` is a bus,
+/// `Т07` a tram, `Тр33` a trolleybus. `web/src/lib/sprites.ts` does the same,
+/// so a badge says the same thing in both clients.
+String routeNumber(String short) => short
+    .replaceFirst(RegExp(r'^(Тр|Т|А)'), '')
+    .replaceFirst(RegExp(r'^0+(?=.)'), '');
+
 /// One hue per route short name, so two neighbouring routes are never the same
 /// circle. Trolleybuses and trams read as cooler, buses warmer. The arithmetic
 /// is `web/src/lib/sprites.ts` exactly, so a route is the same colour in both.

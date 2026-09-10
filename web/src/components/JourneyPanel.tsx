@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../lib/api";
-import { colour } from "../lib/sprites";
 import { t } from "../lib/i18n";
+import { RouteBadge } from "./RouteBadge";
 import type { Catalog, Journey, Leg } from "../lib/types";
 
 /** Door to door: two points, and the ways between them.
@@ -206,14 +206,7 @@ function Ride({
   return (
     <>
       <span className="w-14 shrink-0 text-xs tabular-nums text-slate-400">{clock(leg.dep)}</span>
-      {route && (
-        <span
-          className="shrink-0 rounded px-1.5 text-xs font-semibold"
-          style={{ backgroundColor: colour(route.short, route.type), color: "#0b0f14" }}
-        >
-          {route.short}
-        </span>
-      )}
+      {route && <RouteBadge route={route} className="shrink-0 px-1.5 text-xs" />}
       <button
         onClick={() => leg.b >= 0 && onStop(leg.b)}
         className="min-w-0 flex-1 truncate text-left text-slate-200 hover:underline"

@@ -16,8 +16,8 @@ import 'package:flutter/material.dart' as material show Theme;
 import 'package:latlong2/latlong.dart';
 
 import 'api.dart';
-import 'map_theme.dart';
 import 'models.dart';
+import 'route_badge.dart';
 import 'strings.dart';
 import 'theme.dart';
 
@@ -330,17 +330,7 @@ class _LegRow extends StatelessWidget {
         child: Row(
           children: [
             SizedBox(width: 44, child: Text(_clock(leg.dep))),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color: routeColour(route.short, route.type),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                route.short,
-                style: const TextStyle(fontSize: 11, color: plate),
-              ),
-            ),
+            RouteBadge(route: route, fontSize: 11),
             const SizedBox(width: 8),
             Expanded(child: Text(where, overflow: TextOverflow.ellipsis)),
             Text(
