@@ -47,11 +47,27 @@ which of its parts are carrying it.
   `data/feed.db` is now 3.98 days, 318 068 polls, 8 574 744 vehicle rows and
   39 839 957 predictions, built by `commuterlviv merge`, which takes the first
   source's version of any instant and reads a later one only inside a hole
-  longer than 30 s. `data/feed-host-early.db` is the old single-day file.
-  Phase 6 is no longer blocked.
-- **Phases 0-5 are done and scored.** `tuned` leads the approach comparison at
-  114 s MAE, `full` (the shipped model) is at 120 s, the official API is far
-  behind. Phase 4's residual models are scored on two splits and finding 9 says
+  longer than 30 s. Phase 6 is no longer blocked.
+
+  The source recordings are gone as of 2026-09-10; `data/feed.db` is the only
+  copy. **The merge is lossy on purpose and the merged file is not a superset of
+  its sources.** Checked before deleting the last one, `feed-host-early.db`: over
+  its own window `feed.db` holds 75 489 polls against its 75 433, 1 430 017
+  vehicle rows against 1 429 068 and 399 924 board rows against 399 025 - but
+  10 559 *fewer* predictions, 7 117 676 against 7 128 235. That is the policy
+  working, not a bug. `pred` has no unique constraint, so the `INSERT OR IGNORE`
+  cannot be deduplicating (the early file's 7 128 235 rows are 7 128 235
+  distinct rows); the seconds both machines covered were won by whichever source
+  came first, and its samples of those seconds are slightly fewer. Concatenating
+  instead would double the apparent update rate, which several predictors read.
+- **Phases 0-5 are done and scored, and Phase 6 rescored them on the six-day
+  recording.** `profile` now leads at 134 s MAE and is the only switch that beats
+  `full` (138); the official API is far behind at 1432. **`tuned`, which led the
+  single day at 114 against 120, is now +4% and beaten by the model it beat** -
+  it still wins every horizon out to 20 minutes and still loses 20-45 min, but
+  that bucket is a larger share of six days than of one. A constant tuned on one
+  day was fitted to that day, which is the question Phase 6 existed to answer.
+  Phase 4's residual models are scored on two splits and finding 9 says
   what they mean. Phase 5's blends are scored on the same two splits, and
   `stack-robust` is the largest win the project has measured: 8% on the harder
   split, 13% on the easier one, finding 10. See `PLAN.md`.
