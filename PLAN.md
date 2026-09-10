@@ -47,6 +47,31 @@ in `reports/findings.md` is the full account.
 
 ## Where the comparison stands
 
+- [x] **Rescored on the merged recording.** 717 685 crossings over 5739 minutes,
+      15 519 766 predictions every approach answered. Overall MAE, best first:
+      `profile` 134 (-3% vs `full`), `profile-no-prior` 136, `full` 138,
+      `prior-shape` 139, `no-prior` 139, `knn` 140, `no-incremental` 141,
+      `no-fast` 141, `offset-decay` 143, `tuned` 144, `slow-day` 145, `sections`
+      146, `no-corridor` 147, `no-hold` 149, `sections-no-prior` 150, `k-split`
+      157, then `schedule-offset` and `vehicle-offset` 199, `table-live` 207,
+      `table` 209, `median` 218, `schedule` 875, `api` 1432.
+
+      **This reverses the day's headline. `tuned` no longer leads - it is +4%,
+      and the only switch that beats `full` at all is `profile`, by 3%.** The
+      shape is the same one the day showed: `tuned` still wins every bucket out
+      to 20 minutes (16/26/42/73/129 against 18/30/49/82/135) and still pays for
+      it at 20-45 min, 268 against 237. Over six days that last bucket is a
+      larger share of the predictions, so the same trade now loses overall. A
+      constant tuned on one day was fitted to that day, which is what Phase 6
+      was for; that is the answer.
+
+      Nothing is safe to act on from the pooled column alone - check the 95%
+      intervals under `buckets` in `approaches.json` first, as the report says.
+
+The one-day snapshot below is what this replaced. Kept because the reasoning
+about *why* `tuned` and `no-prior` are the same finding still holds, and it is
+the mechanism the multi-day run confirms.
+
 2026-09-06, 93 796 crossings over 1143 minutes, 1 756 722 predictions every
 approach answered. Overall MAE, best first, from `reports/approaches.md`:
 
