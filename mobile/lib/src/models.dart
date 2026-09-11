@@ -214,6 +214,7 @@ class Leg {
     this.route,
     this.veh,
     this.live = false,
+    this.confidence = Confidence.live,
   });
 
   factory Leg.fromJson(Map<String, dynamic> j) => Leg(
@@ -225,6 +226,7 @@ class Leg {
     route: j['route'] as int?,
     veh: j['veh'] as int?,
     live: j['live'] as bool? ?? false,
+    confidence: confidenceOf(j['confidence']),
   );
 
   final String kind;
@@ -235,9 +237,23 @@ class Leg {
   final int? route;
   final int? veh;
   final bool live;
+  final Confidence confidence;
 
   bool get walking => kind == 'walk';
 }
+
+/// What a ride rests on: a vehicle being tracked, the timetable on a route that
+/// is running, or the timetable on one nothing has been seen running on.
+enum Confidence { live, schedule, quiet }
+
+/// Absent is a leg that rests on nothing in particular - a walk, or a server
+/// from before this field. An unknown word reads as the timetable rather than
+/// as a promise of a tracked vehicle.
+Confidence confidenceOf(Object? word) => switch (word) {
+  null || 'live' => Confidence.live,
+  'quiet' => Confidence.quiet,
+  _ => Confidence.schedule,
+};
 
 class Journey {
   const Journey({
@@ -245,6 +261,7 @@ class Journey {
     required this.arr,
     required this.rides,
     required this.live,
+    required this.confidence,
     required this.legs,
   });
 
@@ -253,6 +270,7 @@ class Journey {
     arr: j['arr'] as int,
     rides: j['rides'] as int,
     live: j['live'] as bool,
+    confidence: confidenceOf(j['confidence']),
     legs: [
       for (final l in j['legs'] as List)
         Leg.fromJson(l as Map<String, dynamic>),
@@ -264,7 +282,65 @@ class Journey {
   final int rides;
 
   final bool live;
+
+  /// The weakest ground any ride in it stands on.
+  final Confidence confidence;
   final List<Leg> legs;
+}
+
+/// One row of the place search: an address or a point of interest in the city.
+/// [where] is the line under the name, [kind] the OpenStreetMap value that made
+/// it - `supermarket`, `bus_stop` and so on.
+class Found {
+  const Found({
+    required this.name,
+    required this.where,
+    required this.at,
+    required this.kind,
+  });
+
+  factory Found.fromJson(Map<String, dynamic> j) => Found(
+    name: j['name'] as String,
+    where: j['where'] as String? ?? '',
+    at: LatLng((j['lat'] as num).toDouble(), (j['lon'] as num).toDouble()),
+    kind: j['kind'] as String?,
+  );
+
+  final String name;
+  final String where;
+  final LatLng at;
+  final String? kind;
+}
+
+/// The stretches of street the traffic numbers are measured on. Fixed for the
+/// life of the service, so it is asked for once and kept.
+class Streets {
+  const Streets(this.lines);
+
+  factory Streets.fromJson(Map<String, dynamic> j) => Streets([
+    for (final line in j['lines'] as List)
+      [
+        for (final p in line as List)
+          LatLng(((p as List)[0] as num).toDouble(), (p[1] as num).toDouble()),
+      ],
+  ]);
+
+  final List<List<LatLng>> lines;
+}
+
+/// How each stretch is running: actual over timetabled travel time, so above 1
+/// is slower than scheduled. Null where too little has been seen to say, and
+/// parallel to [Streets.lines].
+class Traffic {
+  const Traffic({required this.t, required this.ratio});
+
+  factory Traffic.fromJson(Map<String, dynamic> j) => Traffic(
+    t: j['t'] as int,
+    ratio: [for (final r in j['ratio'] as List) (r as num?)?.toDouble()],
+  );
+
+  final int t;
+  final List<double?> ratio;
 }
 
 /// Where a route goes and which way. A `twoWay` arrow marks a stretch the

@@ -18,6 +18,7 @@ import 'map_tab.dart';
 import 'map_theme.dart';
 import 'models.dart';
 import 'route_badge.dart';
+import 'saved.dart';
 import 'server_dialog.dart';
 import 'sheets.dart';
 import 'stop_card.dart';
@@ -65,6 +66,9 @@ class _HomeScreenState extends State<HomeScreen> {
   List<int> _pins = const [];
   int? _stop;
   int _tab = 0;
+
+  /// Only while it is on does anything ask the server how the streets run.
+  bool _traffic = false;
 
   bool _planning = false;
   LatLng? _from;
@@ -285,11 +289,15 @@ class _HomeScreenState extends State<HomeScreen> {
     _push();
   }
 
-  Future<void> _pin(int stop) async {
-    final catalog = _catalog;
-    if (catalog == null) return;
+  Future<void> _pin(int stop) {
     final pins = [..._pins];
     pins.contains(stop) ? pins.remove(stop) : pins.add(stop);
+    return _savePins(pins);
+  }
+
+  Future<void> _savePins(List<int> pins) async {
+    final catalog = _catalog;
+    if (catalog == null) return;
     setState(() => _pins = pins);
     _watch();
     try {
@@ -447,18 +455,53 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _search() async {
     final catalog = _catalog;
     if (catalog == null) return;
-    final stop = await showSearch<int?>(
+    final hit = await showSearch<Hit?>(
       context: context,
-      delegate: StopSearch(catalog),
+      delegate: StopSearch(
+        api: widget.api,
+        catalog: catalog,
+        onSave: _savePlace,
+      ),
     );
-    if (stop != null && mounted) {
-      setState(() => _tab = 0);
-      _openStop(stop, fly: true);
+    if (hit == null || !mounted) return;
+    setState(() => _tab = 0);
+    switch (hit) {
+      case StopHit(:final stop):
+        _openStop(stop, fly: true);
+      case PlaceHit(:final at):
+        _fly(at);
     }
   }
 
+  void _fly(LatLng at) =>
+      _map.move(at, _map.camera.zoom < 15 ? 16 : _map.camera.zoom);
+
+  void _openSaved() => showFloatingSheet<void>(
+    context,
+    (_) => SavedSheet(
+      catalog: _catalog!,
+      places: _sets?.places ?? const [],
+      pins: _pins,
+      onPlaces: _places,
+      onPins: _savePins,
+      onShowPlace: (at) {
+        setState(() => _tab = 0);
+        _fly(at);
+      },
+      onShowStop: (stop) {
+        setState(() => _tab = 0);
+        _openStop(stop, fly: true);
+      },
+    ),
+    scrollControlled: true,
+  );
+
   Future<void> _menu(String choice) async {
     switch (choice) {
+      case 'saved':
+        _openSaved();
+      case 'traffic':
+        setState(() => _traffic = !_traffic);
       case 'map':
         showFloatingSheet<void>(
           context,
@@ -522,8 +565,10 @@ class _HomeScreenState extends State<HomeScreen> {
             index: _tab,
             children: [
               MapTab(
+                api: widget.api,
                 map: _map,
                 style: _style,
+                traffic: _traffic,
                 catalog: catalog,
                 live: live,
                 stops: _drawn,
@@ -608,6 +653,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     onRoutes: () => _openRoutes(catalog),
                     onMenu: _menu,
                     server: widget.api.base,
+                    traffic: _traffic,
                     lines: _allLines,
                     onLines: () {
                       setState(() => _allLines = !_allLines);
@@ -717,6 +763,7 @@ class _TopBar extends StatelessWidget {
     required this.server,
     required this.lines,
     required this.onLines,
+    required this.traffic,
   });
 
   final VoidCallback onSearch;
@@ -726,6 +773,9 @@ class _TopBar extends StatelessWidget {
 
   final bool lines;
   final VoidCallback onLines;
+
+  /// Only to word its menu item, which is the toggle.
+  final bool traffic;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -774,6 +824,11 @@ class _TopBar extends StatelessWidget {
         child: PopupMenuButton<String>(
           onSelected: onMenu,
           itemBuilder: (_) => [
+            PopupMenuItem(value: 'saved', child: Text(txt.saved)),
+            PopupMenuItem(
+              value: 'traffic',
+              child: Text(traffic ? txt.hideTraffic : txt.traffic),
+            ),
             PopupMenuItem(value: 'map', child: Text(txt.mapStyle)),
             PopupMenuItem(value: 'lang', child: Text(txt.language)),
             PopupMenuItem(

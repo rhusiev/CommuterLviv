@@ -762,7 +762,10 @@ uses, so panning moves the city and the vehicles in the same frame.
 `mobile/` is the same client again, in Flutter, for Android and iOS. It adds no
 endpoint and no model - the browser and the phone see the same city, the same
 route sets and the same predictions, and the same journey planner behind the
-third choice in the tab pill.
+third choice in the tab pill. Both also carry the same three views added since:
+a saved list where a place can be renamed or dropped, a search that finds
+addresses and shops as well as stop names, and traffic drawn over the streets
+the model can see.
 
 ```sh
 cd mobile && flutter pub get

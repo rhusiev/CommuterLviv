@@ -40,13 +40,25 @@ class Strings {
     required this.saveAsSet,
     required this.updateSet,
     required this.nameSet,
-    required this.renameSet,
-    required this.deleteSet,
+    required this.rename,
+    required this.delete,
     required this.holdForLine,
     required this.places,
     required this.savePlace,
     required this.namePlace,
     required this.noPlaces,
+    required this.saved,
+    required this.pinnedStops,
+    required this.nothingSaved,
+    required this.showOnMap,
+    required this.holdToManage,
+    required this.foundStops,
+    required this.foundPlaces,
+    required this.noSearch,
+    required this.traffic,
+    required this.hideTraffic,
+    required this.departAt,
+    required this.quietPart,
     required this.forget,
     required this.saveHere,
     required this.cancel,
@@ -125,13 +137,27 @@ class Strings {
   final String saveAsSet;
   final String Function(String name) updateSet;
   final String nameSet;
-  final String renameSet;
-  final String deleteSet;
+  final String rename;
+  final String delete;
   final String holdForLine;
   final String places;
   final String savePlace;
   final String namePlace;
   final String noPlaces;
+  final String saved;
+  final String pinnedStops;
+  final String nothingSaved;
+  final String showOnMap;
+  final String holdToManage;
+  final String foundStops;
+  final String foundPlaces;
+  final String noSearch;
+  final String traffic;
+  final String hideTraffic;
+  final String departAt;
+
+  /// The timetable on a line nothing has been seen running on.
+  final String quietPart;
   final String forget;
   final String saveHere;
   final String cancel;
@@ -202,20 +228,32 @@ const _en = Strings(
   showRoute: 'Show this route on the map',
   everyRoute: 'Every route',
   hideEveryRoute: 'Hide the route lines',
-  findStop: 'Find a stop',
+  findStop: 'Find a stop or a place',
   tryAgain: 'Try again',
   filterRoutes: 'Filter routes',
   clear: 'Clear',
   saveAsSet: 'Save as a set',
   updateSet: _enUpdateSet,
   nameSet: 'Name this set',
-  renameSet: 'Rename',
-  deleteSet: 'Delete',
+  rename: 'Rename',
+  delete: 'Delete',
   holdForLine: 'hold a route to see its line',
   places: 'Saved places',
   savePlace: 'Save this place',
   namePlace: 'Name this place',
   noPlaces: 'Save a place and it is offered here',
+  saved: 'Saved',
+  pinnedStops: 'Pinned stops',
+  nothingSaved: 'Nothing saved yet',
+  showOnMap: 'tap a row to show it on the map',
+  holdToManage: 'hold one to rename or remove it',
+  foundStops: 'Stops',
+  foundPlaces: 'Places',
+  noSearch: 'place search is unavailable',
+  traffic: 'Traffic',
+  hideTraffic: 'Hide traffic',
+  departAt: 'Leave at',
+  quietPart: 'nothing seen running',
   forget: 'Forget',
   saveHere: 'Save',
   cancel: 'Cancel',
@@ -292,20 +330,32 @@ const _uk = Strings(
   showRoute: 'Показати цей маршрут на мапі',
   everyRoute: 'Усі маршрути',
   hideEveryRoute: 'Сховати лінії маршрутів',
-  findStop: 'Знайти зупинку',
+  findStop: 'Знайти зупинку або місце',
   tryAgain: 'Спробувати ще',
   filterRoutes: 'Пошук маршруту',
   clear: 'Очистити',
   saveAsSet: 'Зберегти як набір',
   updateSet: _ukUpdateSet,
   nameSet: 'Назва набору',
-  renameSet: 'Перейменувати',
-  deleteSet: 'Видалити',
+  rename: 'Перейменувати',
+  delete: 'Видалити',
   holdForLine: 'утримуйте маршрут, щоб побачити лінію',
   places: 'Збережені місця',
   savePlace: 'Зберегти це місце',
   namePlace: 'Назва місця',
   noPlaces: 'Збережене місце зʼявиться тут',
+  saved: 'Збережене',
+  pinnedStops: 'Закріплені зупинки',
+  nothingSaved: 'Поки нічого не збережено',
+  showOnMap: 'торкніться рядка, щоб показати на мапі',
+  holdToManage: 'утримуйте, щоб перейменувати або видалити',
+  foundStops: 'Зупинки',
+  foundPlaces: 'Місця',
+  noSearch: 'пошук місць недоступний',
+  traffic: 'Затори',
+  hideTraffic: 'Сховати затори',
+  departAt: 'Виїзд о',
+  quietPart: 'рейсів не видно',
   forget: 'Забути',
   saveHere: 'Зберегти',
   cancel: 'Скасувати',

@@ -29,8 +29,11 @@ const _stopRadius = 3.5;
 /// Metres between arrows, as the server spaces them.
 const _arrowSpacing = 220.0;
 
-/// Below this an arrowhead is a speck, so arrows are skipped.
+/// Below this a chevron is a speck, so direction is skipped.
 const _arrowZoom = 13.0;
+
+/// Half the gap between the two tracks of chevrons on a two-way stretch.
+const _twoWayOffset = 3.5;
 
 class VehicleLayer extends StatefulWidget {
   const VehicleLayer({
@@ -215,7 +218,12 @@ class _Painter extends CustomPainter {
         math.cos(camera.center.latitude * math.pi / 180) /
         math.pow(2, camera.zoom);
     final step = math.max(1, (metres / _arrowSpacing).ceil());
-    final head = Paint()..color = ink.edge;
+    final ridge = Paint()
+      ..color = ink.edge
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
     for (var k = 0; k < arrows.length; k += step) {
       final arrow = arrows[k];
       final at = camera.latLngToScreenOffset(arrow.at);
@@ -223,25 +231,32 @@ class _Painter extends CustomPainter {
       final a = (arrow.heading - 90 + camera.rotation) * math.pi / 180;
       final cos = math.cos(a);
       final sin = math.sin(a);
-      // Back-to-back heads would read as a diamond, so each backs off by its
-      // own length
-      final off = arrow.twoWay ? 9.0 : 0.0;
-      _head(canvas, at + Offset(cos * off, sin * off), cos, sin, head);
-      if (arrow.twoWay) {
-        _head(canvas, at - Offset(cos * off, sin * off), -cos, -sin, head);
-      }
+      // A stretch run both ways draws as two tracks of chevrons side by side,
+      // each pointing its own way, rather than one glyph they share
+      final side = arrow.twoWay
+          ? Offset(-sin * _twoWayOffset, cos * _twoWayOffset)
+          : Offset.zero;
+      _chevron(canvas, at + side, cos, sin, ridge);
+      if (arrow.twoWay) _chevron(canvas, at - side, -cos, -sin, ridge);
     }
   }
 
-  /// One arrowhead on the line, pointing along `(cos, sin)`, in the page's ink
-  /// so it reads as a notch cut out of the line.
-  void _head(Canvas canvas, Offset at, double cos, double sin, Paint paint) {
+  /// One chevron on the line, its point along `(cos, sin)` and its arms
+  /// trailing behind, in the page's ink so it reads as a notch on the line.
+  void _chevron(Canvas canvas, Offset at, double cos, double sin, Paint paint) {
+    const reach = 4.0;
+    const wide = 4.0;
     canvas.drawPath(
       ui.Path()
-        ..moveTo(at.dx + cos * 7, at.dy + sin * 7)
-        ..lineTo(at.dx - cos * 3 - sin * 4.5, at.dy - sin * 3 + cos * 4.5)
-        ..lineTo(at.dx - cos * 3 + sin * 4.5, at.dy - sin * 3 - cos * 4.5)
-        ..close(),
+        ..moveTo(
+          at.dx - cos * reach - sin * wide,
+          at.dy - sin * reach + cos * wide,
+        )
+        ..lineTo(at.dx + cos * reach, at.dy + sin * reach)
+        ..lineTo(
+          at.dx - cos * reach + sin * wide,
+          at.dy - sin * reach - cos * wide,
+        ),
       paint,
     );
   }
@@ -264,7 +279,11 @@ class _Painter extends CustomPainter {
       );
     }
     // The halo keeps the dot findable when the ring is too small to draw
-    canvas.drawCircle(at, 15, Paint()..color = ink.here.withValues(alpha: 0.22));
+    canvas.drawCircle(
+      at,
+      15,
+      Paint()..color = ink.here.withValues(alpha: 0.22),
+    );
     canvas.drawCircle(
       at,
       15,

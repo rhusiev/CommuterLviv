@@ -9,10 +9,18 @@ import 'package:latlong2/latlong.dart';
 import 'api.dart';
 import 'models.dart';
 import 'route_badge.dart';
+import 'sheets.dart' show askName;
 import 'strings.dart';
 import 'theme.dart';
 
 enum End { from, to }
+
+/// What a ride rests on, in a word under the route.
+String legPart(Confidence confidence) => switch (confidence) {
+  Confidence.live => txt.livePart,
+  Confidence.schedule => txt.schedulePart,
+  Confidence.quiet => txt.quietPart,
+};
 
 class JourneyPanel extends StatefulWidget {
   const JourneyPanel({
@@ -62,13 +70,37 @@ class _JourneyPanelState extends State<JourneyPanel> {
   bool _busy = false;
   String? _failed;
 
+  /// Unix seconds to leave at; null is now, which is what the server assumes.
+  int? _at;
+
   @override
   void didUpdateWidget(JourneyPanel old) {
     super.didUpdateWidget(old);
-    if (old.from != widget.from || old.to != widget.to) {
-      _options = null;
-      _failed = null;
-    }
+    if (old.from != widget.from || old.to != widget.to) _forget();
+  }
+
+  void _forget() {
+    _options = null;
+    _failed = null;
+  }
+
+  /// A time already past today is meant for tomorrow, which is as far ahead as
+  /// the server plans.
+  Future<void> _pickTime() async {
+    final now = DateTime.now();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(
+        _at == null ? now : DateTime.fromMillisecondsSinceEpoch(_at! * 1000),
+      ),
+    );
+    if (picked == null) return;
+    var at = DateTime(now.year, now.month, now.day, picked.hour, picked.minute);
+    if (at.isBefore(now)) at = at.add(const Duration(days: 1));
+    setState(() {
+      _at = at.millisecondsSinceEpoch ~/ 1000;
+      _forget();
+    });
   }
 
   Future<void> _search() async {
@@ -80,7 +112,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
       _failed = null;
     });
     try {
-      final got = await widget.api.plan(from, to);
+      final got = await widget.api.plan(from, to, at: _at);
       if (mounted) setState(() => _options = got);
     } on ApiError catch (e) {
       if (mounted) setState(() => _failed = e.message);
@@ -132,14 +164,29 @@ class _JourneyPanelState extends State<JourneyPanel> {
                 label: end == End.from ? txt.from : txt.to,
                 at: end == End.from ? widget.from : widget.to,
                 picking: widget.picking == end,
-                onPick: () =>
-                    widget.onPick(widget.picking == end ? null : end),
+                onPick: () => widget.onPick(widget.picking == end ? null : end),
                 onHere: () => widget.onHere(end),
                 places: widget.places,
                 onPlace: (at) => widget.onPlace(end, at),
                 onSave: widget.onSave,
                 onForget: widget.onForget,
               ),
+            Row(
+              children: [
+                SizedBox(width: 56, child: Text(txt.departAt)),
+                InputChip(
+                  avatar: const Icon(Icons.schedule, size: 18),
+                  label: Text(_at == null ? txt.now : _clock(_at!)),
+                  onPressed: _pickTime,
+                  onDeleted: _at == null
+                      ? null
+                      : () => setState(() {
+                          _at = null;
+                          _forget();
+                        }),
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
@@ -273,33 +320,15 @@ class _End extends StatelessWidget {
   }
 
   Future<void> _name(BuildContext context, LatLng where) async {
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        final field = TextEditingController();
-        return AlertDialog.adaptive(
-          title: Text(txt.namePlace),
-          content: TextField(controller: field, autofocus: true),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(txt.cancel),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, field.text.trim()),
-              child: Text(txt.saveHere),
-            ),
-          ],
-        );
-      },
-    );
+    final name = await askName(context, txt.namePlace, action: txt.saveHere);
     if (name != null && name.isNotEmpty) onSave(name, where);
   }
 
   @override
   Widget build(BuildContext context) {
     final saved = _saved;
-    final where = saved?.name ??
+    final where =
+        saved?.name ??
         (at == null
             ? txt.tapMap
             : '${at!.latitude.toStringAsFixed(4)}, '
@@ -407,44 +436,47 @@ class _LegRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = material.Theme.of(context);
+    final small = theme.textTheme.bodySmall;
+    // A walk between two rides is a leg of its own on the wire, so it is one
+    // here too: its own duration, and the stop it ends at
     final where = leg.b < 0 ? txt.toDoor : catalog.stops[leg.b].name;
-    if (leg.walking) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 6),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 92,
-              child: Text(
-                txt.walkLeg(_mins(leg.arr - leg.dep)),
-                style: material.Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-            Expanded(child: Text(where, overflow: TextOverflow.ellipsis)),
-          ],
-        ),
-      );
-    }
-    final route = catalog.routes[leg.route!];
     return InkWell(
       onTap: leg.b < 0 ? null : () => onStop(leg.b),
       child: Padding(
         padding: const EdgeInsets.only(top: 6),
         child: Row(
           children: [
-            SizedBox(width: 44, child: Text(_clock(leg.dep))),
-            // Inside a row that opens the stop, so the badge takes its own taps
-            InkWell(
-              onTap: () => onLine(leg.route!),
-              borderRadius: BorderRadius.circular(6),
-              child: RouteBadge(route: route, fontSize: 11),
-            ),
-            const SizedBox(width: 8),
+            if (leg.walking)
+              SizedBox(
+                width: 92,
+                child: Text(
+                  txt.walkLeg(_mins(leg.arr - leg.dep)),
+                  style: small,
+                ),
+              )
+            else ...[
+              SizedBox(width: 44, child: Text(_clock(leg.dep))),
+              // Inside a row that opens the stop, so the badge takes its own
+              // taps
+              InkWell(
+                onTap: () => onLine(leg.route!),
+                borderRadius: BorderRadius.circular(6),
+                child: RouteBadge(
+                  route: catalog.routes[leg.route!],
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
             Expanded(child: Text(where, overflow: TextOverflow.ellipsis)),
-            Text(
-              leg.live ? txt.livePart : txt.schedulePart,
-              style: material.Theme.of(context).textTheme.bodySmall,
-            ),
+            if (!leg.walking)
+              Text(
+                legPart(leg.confidence),
+                style: leg.confidence == Confidence.quiet
+                    ? small?.copyWith(color: theme.colorScheme.error)
+                    : small,
+              ),
           ],
         ),
       ),
