@@ -896,6 +896,10 @@ class _Tabs extends StatelessWidget {
         child: IntrinsicWidth(
           child: Row(
             mainAxisSize: MainAxisSize.min,
+            // The selected pill is a fill, and a fill that is only as tall as
+            // the label reads as a highlight rather than a button, so each tab
+            // is given the bar's whole height to draw itself in
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (final (i, tab) in tabs.indexed)
                 Expanded(
@@ -933,7 +937,7 @@ class _Tab extends StatelessWidget {
     child: Padding(
       // Tight to the bar, generous inside the pill: the selected state is the
       // fill, and a fill reads as a button only if the label has room in it
-      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: on ? accent.withValues(alpha: 0.15) : null,
@@ -943,6 +947,7 @@ class _Tab extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 18),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 20, color: on ? accent : Colors.white70),
               const SizedBox(width: 6),
