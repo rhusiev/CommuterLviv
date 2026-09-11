@@ -563,6 +563,22 @@ container mounts read-only at `/srv/download`, so the newest build is always at
 VPN. It replaces the `python3 -m http.server` that used to serve `/tmp/apk`,
 which did not survive a reboot and served whatever was last copied there.
 
+**Reaching the line, and saved places, 0.4.6 on 2026-09-11.** Every route badge
+is now the way to that route's line - the stop card, the timetable, a ride in a
+journey - in both clients. The one exception is the list that picks which routes
+are on the map, where a tap already means something: there the line is on a long
+press on the phone (`sheets.dart`) and on `onContextMenu` in the browser
+(`RoutePanel.tsx`), which is one handler for both right-click and touch-hold.
+Saved places - home, work - are the journey planner's ends, kept server-side in
+`user_prefs.data` beside the pins, behind `GET`/`POST /api/places`, at most 24
+and keyed by name, so saving over a name moves that place. The phone's route
+sheet grew a stale-props bug fix worth remembering: `showFloatingSheet` puts the
+sheet on its own route, built once, so the screen's later state never reaches it
+- which is why the highlight used to stay on the previously chosen set. The
+sheet keeps `_active` itself now, and can also update, rename and delete a set.
+The own-location mark is a halo rather than a 6 px dot in both clients, because
+a dot is the same mark as a stop and loses to forty vehicles around it.
+
 ## Do this next
 
 0. **The recording is already merged.** `data/feed.db` is 3.98 days, three

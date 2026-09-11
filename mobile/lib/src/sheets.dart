@@ -137,6 +137,7 @@ class RouteSheet extends StatefulWidget {
     required this.onClear,
     required this.onActivated,
     required this.onSets,
+    required this.onRoute,
   });
 
   final Api api;
@@ -155,6 +156,10 @@ class RouteSheet extends StatefulWidget {
   /// The server's list of sets changed, and this is it
   final void Function(Sets sets) onSets;
 
+  /// A route's line was asked for. A tap here means show it on the map, which
+  /// is what this sheet is for, so the line is on the long press instead
+  final void Function(int route) onRoute;
+
   @override
   State<RouteSheet> createState() => _RouteSheetState();
 }
@@ -162,45 +167,109 @@ class RouteSheet extends StatefulWidget {
 class _RouteSheetState extends State<RouteSheet> {
   String _filter = '';
 
+  /// Which set is showing. The sheet is a route of its own, built once from
+  /// whatever `sets` was then, so the screen's later value never reaches it -
+  /// which is why the highlight used to stay on the set chosen before this one
+  late String? _active = widget.sets?.active;
+  late List<RouteSet> _sets = widget.sets?.sets ?? const [];
+
   Iterable<int> _positions(List<String> ids) =>
       ids.map((id) => widget.catalog.index[id]).whereType<int>();
 
-  Future<void> _save() async {
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        final field = TextEditingController();
-        return AlertDialog.adaptive(
-          title: Text(txt.nameSet),
-          content: TextField(controller: field, autofocus: true),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(txt.cancel),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, field.text.trim()),
-              child: Text(txt.save),
-            ),
-          ],
-        );
-      },
-    );
-    if (name == null || name.isEmpty) return;
-    final ids = [for (final i in widget.picked) widget.catalog.routes[i].id];
-    final made = await widget.api.createSet(name, ids);
-    await widget.api.activateSet(made.id);
+  List<String> get _ids =>
+      [for (final i in widget.picked) widget.catalog.routes[i].id];
+
+  Future<String?> _ask(String title, [String? was]) => showDialog<String>(
+    context: context,
+    builder: (context) {
+      final field = TextEditingController(text: was);
+      return AlertDialog.adaptive(
+        title: Text(title),
+        content: TextField(controller: field, autofocus: true),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(txt.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, field.text.trim()),
+            child: Text(txt.save),
+          ),
+        ],
+      );
+    },
+  );
+
+  /// Whatever the server now holds, into both this sheet and the screen behind
+  /// it
+  Future<void> _reload() async {
     final sets = await widget.api.sets();
     if (!mounted) return;
     widget.onSets(sets);
-    setState(() {});
+    setState(() => _sets = sets.sets);
+  }
+
+  Future<void> _save() async {
+    final name = await _ask(txt.nameSet);
+    if (name == null || name.isEmpty) return;
+    final made = await widget.api.createSet(name, _ids);
+    await widget.api.activateSet(made.id);
+    if (!mounted) return;
+    _active = made.id;
+    await _reload();
+  }
+
+  /// The picked routes, into the set that is showing. The name is left alone -
+  /// this is the set being what is on the map now, not a different set
+  Future<void> _update(RouteSet set) async {
+    await widget.api.updateSet(set.id, set.name, _ids);
+    await _reload();
+  }
+
+  Future<void> _rename(RouteSet set) async {
+    final name = await _ask(txt.renameSet, set.name);
+    if (name == null || name.isEmpty || name == set.name) return;
+    await widget.api.updateSet(set.id, name, set.routes);
+    await _reload();
+  }
+
+  Future<void> _delete(RouteSet set) async {
+    await widget.api.deleteSet(set.id);
+    if (set.id == _active) _active = null;
+    await _reload();
+  }
+
+  /// Rename or delete. Both are rare enough to live under a hold rather than
+  /// take a button beside every chip
+  Future<void> _manage(RouteSet set) async {
+    final what = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.drive_file_rename_outline),
+              title: Text(txt.renameSet),
+              onTap: () => Navigator.pop(context, 'rename'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: Text(txt.deleteSet),
+              onTap: () => Navigator.pop(context, 'delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (what == 'rename') await _rename(set);
+    if (what == 'delete') await _delete(set);
   }
 
   Future<void> _activate(RouteSet set) async {
     await widget.api.activateSet(set.id);
     if (!mounted) return;
     widget.onActivated(set, _positions(set.routes));
-    setState(() {});
+    setState(() => _active = set.id);
   }
 
   @override
@@ -214,7 +283,13 @@ class _RouteSheetState extends State<RouteSheet> {
             catalog.routes[i].long.toLowerCase().contains(needle))
           i,
     ];
-    final sets = widget.sets?.sets ?? const <RouteSet>[];
+    final sets = _sets;
+    final active = sets.where((s) => s.id == _active).firstOrNull;
+    // Only while the picks and the set disagree: a button that does nothing is
+    // a button that has to be read before it can be ignored
+    final changed = active != null &&
+        (active.routes.length != _ids.length ||
+            !active.routes.toSet().containsAll(_ids));
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.7,
@@ -232,13 +307,17 @@ class _RouteSheetState extends State<RouteSheet> {
               spacing: 6,
               children: [
                 for (final s in sets)
-                  ChoiceChip(
-                    label: Text(s.name),
-                    // The colour says it is chosen. A checkmark says it too and
-                    // widens the chip doing so, shuffling every chip after it
-                    showCheckmark: false,
-                    selected: s.id == widget.sets?.active,
-                    onSelected: (_) => _activate(s),
+                  GestureDetector(
+                    onLongPress: () => _manage(s),
+                    child: ChoiceChip(
+                      label: Text(s.name),
+                      // The colour says it is chosen. A checkmark says it too
+                      // and widens the chip doing so, shuffling every chip
+                      // after it
+                      showCheckmark: false,
+                      selected: s.id == _active,
+                      onSelected: (_) => _activate(s),
+                    ),
                   ),
               ],
             ),
@@ -257,20 +336,33 @@ class _RouteSheetState extends State<RouteSheet> {
             runSpacing: 4,
             children: [
               for (final i in shown)
-                FilterChip(
-                  label: RouteBadge(
-                    route: catalog.routes[i],
-                    muted: !widget.picked.contains(i),
-                  ),
-                  tooltip: catalog.routes[i].long,
-                  showCheckmark: false,
-                  selected: widget.picked.contains(i),
-                  onSelected: (_) {
-                    widget.onToggle(i);
-                    setState(() {});
+                GestureDetector(
+                  onLongPress: () {
+                    Navigator.pop(context);
+                    widget.onRoute(i);
                   },
+                  child: FilterChip(
+                    label: RouteBadge(
+                      route: catalog.routes[i],
+                      muted: !widget.picked.contains(i),
+                    ),
+                    tooltip: catalog.routes[i].long,
+                    showCheckmark: false,
+                    selected: widget.picked.contains(i),
+                    onSelected: (_) {
+                      widget.onToggle(i);
+                      setState(() {});
+                    },
+                  ),
                 ),
             ],
+          ),
+          const SizedBox(height: 6),
+          // Everywhere else a badge is the way to the line. Here a tap is
+          // already taken, by the one thing this sheet exists to do
+          Text(
+            txt.holdForLine,
+            style: material.Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 16),
           Row(
@@ -285,6 +377,13 @@ class _RouteSheetState extends State<RouteSheet> {
                 child: Text(txt.clear),
               ),
               const Spacer(),
+              if (changed) ...[
+                FilledButton.tonal(
+                  onPressed: () => _update(active),
+                  child: Text(txt.updateSet(active.name)),
+                ),
+                const SizedBox(width: 8),
+              ],
               FilledButton.tonal(
                 onPressed: widget.picked.isEmpty ? null : _save,
                 child: Text(txt.saveAsSet),

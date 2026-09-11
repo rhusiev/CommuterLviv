@@ -28,7 +28,17 @@ export type RouteSet = {
   ord: number;
 };
 
-export type Sets = { sets: RouteSet[]; active: string | null; pins: string[] };
+/** A place worth keeping - home, work - as an end of a journey. The name is
+ * the identity: saving over a name moves the place rather than making a second
+ * one with the same label. */
+export type Place = { name: string; lat: number; lon: number };
+
+export type Sets = {
+  sets: RouteSet[];
+  active: string | null;
+  pins: string[];
+  places: Place[];
+};
 
 export type Me = { username: string; sets: Sets };
 

@@ -46,7 +46,16 @@ class Strings {
     required this.filterRoutes,
     required this.clear,
     required this.saveAsSet,
+    required this.updateSet,
     required this.nameSet,
+    required this.renameSet,
+    required this.deleteSet,
+    required this.holdForLine,
+    required this.places,
+    required this.savePlace,
+    required this.namePlace,
+    required this.noPlaces,
+    required this.saveHere,
     required this.cancel,
     required this.save,
     required this.use,
@@ -122,7 +131,16 @@ class Strings {
   final String filterRoutes;
   final String clear;
   final String saveAsSet;
+  final String Function(String name) updateSet;
   final String nameSet;
+  final String renameSet;
+  final String deleteSet;
+  final String holdForLine;
+  final String places;
+  final String savePlace;
+  final String namePlace;
+  final String noPlaces;
+  final String saveHere;
   final String cancel;
   final String save;
   final String use;
@@ -196,7 +214,16 @@ const _en = Strings(
   filterRoutes: 'Filter routes',
   clear: 'Clear',
   saveAsSet: 'Save as a set',
+  updateSet: _enUpdateSet,
   nameSet: 'Name this set',
+  renameSet: 'Rename',
+  deleteSet: 'Delete',
+  holdForLine: 'hold a route to see its line',
+  places: 'Saved places',
+  savePlace: 'Save this place',
+  namePlace: 'Name this place',
+  noPlaces: 'Save a place and it is offered here',
+  saveHere: 'Save',
   cancel: 'Cancel',
   save: 'Save',
   use: 'Use',
@@ -242,6 +269,7 @@ const _en = Strings(
   unreachable: _enUnreachable,
 );
 
+String _enUpdateSet(String name) => 'Update “$name”';
 String _enWalkLeg(int m) => 'walk $m min';
 String _enChangeCount(int n) => n == 1 ? '1 change' : '$n changes';
 String _enMinutes(int m) => '$m min';
@@ -275,7 +303,16 @@ const _uk = Strings(
   filterRoutes: 'Пошук маршруту',
   clear: 'Очистити',
   saveAsSet: 'Зберегти як набір',
+  updateSet: _ukUpdateSet,
   nameSet: 'Назва набору',
+  renameSet: 'Перейменувати',
+  deleteSet: 'Видалити',
+  holdForLine: 'утримуйте маршрут, щоб побачити лінію',
+  places: 'Збережені місця',
+  savePlace: 'Зберегти це місце',
+  namePlace: 'Назва місця',
+  noPlaces: 'Збережене місце зʼявиться тут',
+  saveHere: 'Зберегти',
   cancel: 'Скасувати',
   save: 'Зберегти',
   use: 'Використати',
@@ -321,6 +358,7 @@ const _uk = Strings(
   unreachable: _ukUnreachable,
 );
 
+String _ukUpdateSet(String name) => 'Оновити «$name»';
 String _ukWalkLeg(int m) => 'пішки $m хв';
 String _ukChangeCount(int n) => n == 1 ? '1 пересадка' : 'пересадок: $n';
 String _ukMinutes(int m) => '$m хв';

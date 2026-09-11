@@ -422,6 +422,23 @@ async def pins(request, session):
     return JSONResponse({"pins": stops})
 
 
+async def places(request, session):
+    """Saved places - home, work - as the journey planner's ends. Written whole
+    on every change, for the same reason the pins are."""
+    app = request.app.state
+    uid = session["user_id"]
+    if request.method == "GET":
+        return JSONResponse({"places": await prefs.places(app.pool, uid)})
+    data, bad = await body(request)
+    if bad:
+        return bad
+    saved, why = prefs.clean_places(data.get("places"))
+    if why:
+        return error(why)
+    await prefs.set_places(app.pool, uid, saved)
+    return JSONResponse({"places": saved})
+
+
 async def sets(request, session):
     app = request.app.state
     uid = session["user_id"]
@@ -566,6 +583,7 @@ def routes():
         Route("/api/vehicle", protected(vehicle), methods=["GET"]),
         Route("/api/plan", protected(journey), methods=["GET"]),
         Route("/api/pins", protected(pins), methods=["GET", "POST"]),
+        Route("/api/places", protected(places), methods=["GET", "POST"]),
         Route("/api/sets", protected(sets), methods=["GET", "POST"]),
         Route("/api/sets/active", protected(active), methods=["POST"]),
         Route("/api/sets/{sid:uuid}", protected(one_set),

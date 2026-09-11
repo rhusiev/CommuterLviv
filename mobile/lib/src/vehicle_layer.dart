@@ -288,15 +288,27 @@ class _Painter extends CustomPainter {
         Paint()..color = ink.here.withValues(alpha: 0.12),
       );
     }
-    canvas.drawCircle(at, 6, Paint()..color = ink.here);
+    // A 6 px dot is the same mark as a stop and loses to forty vehicles around
+    // it. The halo is what makes it findable without panning: a soft disc that
+    // is there at every zoom, even when the accuracy ring is too small to draw
+    canvas.drawCircle(at, 15, Paint()..color = ink.here.withValues(alpha: 0.22));
     canvas.drawCircle(
       at,
-      6,
+      15,
+      Paint()
+        ..color = ink.here.withValues(alpha: 0.5)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+    canvas.drawCircle(
+      at,
+      9,
       Paint()
         ..color = ink.edge
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
+    canvas.drawCircle(at, 8, Paint()..color = ink.edge);
+    canvas.drawCircle(at, 6, Paint()..color = ink.here);
   }
 
   void _paintStops(Canvas canvas, Rect bounds) {

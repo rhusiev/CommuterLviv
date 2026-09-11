@@ -212,6 +212,44 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Opening a route puts the whole of it on screen: it is tens of kilometres
   /// long and wherever the camera happened to be is not on it
+  /// A place is kept by name, so saving over a name moves that place rather
+  /// than making a second one with the same label
+  Future<void> _savePlace(String name, LatLng at) async {
+    final was = _sets?.places ?? const <Place>[];
+    await _places([
+      for (final p in was)
+        if (p.name != name) p,
+      Place(name: name, at: at),
+    ]);
+  }
+
+  Future<void> _forgetPlace(String name) async {
+    final was = _sets?.places ?? const <Place>[];
+    await _places([
+      for (final p in was)
+        if (p.name != name) p,
+    ]);
+  }
+
+  Future<void> _places(List<Place> next) async {
+    final sets = _sets;
+    if (sets == null) return;
+    try {
+      final saved = await widget.api.setPlaces(next);
+      if (!mounted) return;
+      setState(
+        () => _sets = Sets(
+          sets: sets.sets,
+          active: sets.active,
+          pins: sets.pins,
+          places: saved,
+        ),
+      );
+    } on Exception {
+      if (mounted) setState(() => _error = txt.unreachable(widget.api.base));
+    }
+  }
+
   void _openRoute(int route) {
     setState(() {
       _route = route;
@@ -326,6 +364,10 @@ class _HomeScreenState extends State<HomeScreen> {
         onRoute: (route) {
           Navigator.pop(context);
           _toggleRoute(route);
+        },
+        onLine: (route) {
+          Navigator.pop(context);
+          _openRoute(route);
         },
       ),
     ).whenComplete(() {
@@ -557,6 +599,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   setState(() => _tab = 0);
                   _openStop(stop, fly: true);
                 },
+                onLine: _openRoute,
               ),
             ],
           ),
@@ -583,6 +626,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   }),
                   onHere: _hereFor,
                   onStop: (stop) => _openStop(stop, fly: true),
+                  onLine: _openRoute,
+                  places: _sets?.places ?? const [],
+                  onPlace: (end, at) => setState(() {
+                    if (end == End.from) {
+                      _from = at;
+                    } else {
+                      _to = at;
+                    }
+                  }),
+                  onSave: _savePlace,
+                  onForget: _forgetPlace,
                   onClose: () => setState(() {
                     _planning = false;
                     _picking = null;
@@ -657,10 +711,16 @@ class _HomeScreenState extends State<HomeScreen> {
         _routes
           ..clear()
           ..addAll(routes);
-        _sets = Sets(sets: _sets!.sets, active: set.id, pins: _sets!.pins);
+        _sets = Sets(
+          sets: _sets!.sets,
+          active: set.id,
+          pins: _sets!.pins,
+          places: _sets!.places,
+        );
         _push();
       }),
       onSets: (sets) => setState(() => _sets = sets),
+      onRoute: _openRoute,
     ),
     scrollControlled: true,
   );
@@ -871,14 +931,16 @@ class _Tab extends StatelessWidget {
   Widget build(BuildContext context) => InkWell(
     onTap: onTap,
     child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      // Tight to the bar, generous inside the pill: the selected state is the
+      // fill, and a fill reads as a button only if the label has room in it
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: on ? accent.withValues(alpha: 0.15) : null,
           borderRadius: BorderRadius.circular(tabBarHeight),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

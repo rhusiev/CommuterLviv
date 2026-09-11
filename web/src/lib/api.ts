@@ -1,4 +1,4 @@
-import type { Arrivals, Call, Catalog, Me, Plan, RouteSet, Sets, Shapes } from "./types";
+import type { Arrivals, Call, Catalog, Me, Place, Plan, RouteSet, Sets, Shapes } from "./types";
 
 /** Same origin by default: in development Vite proxies `/api` and `/ws` to the
  * service, so the session cookie is a first-party cookie in both settings. */
@@ -84,6 +84,9 @@ export const api = {
    * quietly becomes a different stop; an id does not. */
   pins: (): Promise<{ pins: string[] }> => call("/api/pins"),
   setPins: (pins: string[]): Promise<{ pins: string[] }> => post("/api/pins", { pins }),
+  /** Whole list on every change, for the same reason the pins are: half a list
+   * applied would be worse than a list that cost a row */
+  setPlaces: (places: Place[]): Promise<{ places: Place[] }> => post("/api/places", { places }),
   createSet: (name: string, routes: string[]): Promise<RouteSet> =>
     post("/api/sets", { name, routes }),
   updateSet: (id: string, name: string, routes: string[]): Promise<RouteSet> =>

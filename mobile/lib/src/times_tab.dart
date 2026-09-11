@@ -17,6 +17,7 @@ class TimesTab extends StatelessWidget {
     required this.pins,
     required this.onUnpin,
     required this.onOpen,
+    required this.onLine,
   });
 
   final Catalog catalog;
@@ -26,6 +27,9 @@ class TimesTab extends StatelessWidget {
   final List<int> pins;
   final void Function(int stop) onUnpin;
   final void Function(int stop) onOpen;
+
+  /// A route's line, from the badge of anything due here
+  final void Function(int route) onLine;
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +53,7 @@ class TimesTab extends StatelessWidget {
               arrivals: live.arrivals[stop] ?? const [],
               onUnpin: () => onUnpin(stop),
               onOpen: () => onOpen(stop),
+              onLine: onLine,
             ),
         ],
       ),
@@ -63,6 +68,7 @@ class _StopTile extends StatelessWidget {
     required this.arrivals,
     required this.onUnpin,
     required this.onOpen,
+    required this.onLine,
   });
 
   final Catalog catalog;
@@ -70,6 +76,7 @@ class _StopTile extends StatelessWidget {
   final List<Arrival> arrivals;
   final VoidCallback onUnpin;
   final VoidCallback onOpen;
+  final void Function(int route) onLine;
 
   @override
   Widget build(BuildContext context) => ListTile(
@@ -81,7 +88,11 @@ class _StopTile extends StatelessWidget {
             runSpacing: 4,
             children: [
               for (final a in arrivals.take(6))
-                Due(route: catalog.routes[a.route], arrival: a),
+                Due(
+                  route: catalog.routes[a.route],
+                  arrival: a,
+                  onLine: () => onLine(a.route),
+                ),
             ],
           ),
     trailing: IconButton(
