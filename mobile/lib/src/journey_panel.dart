@@ -267,14 +267,14 @@ class _End extends StatelessWidget {
                 onTap: () => Navigator.pop(context, p),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete_outline),
-                  tooltip: txt.deleteSet,
+                  tooltip: txt.forget,
                   onPressed: () {
                     Navigator.pop(context);
                     onForget(p.name);
                   },
                 ),
               ),
-            if (here != null) ...[
+            if (here != null && _saved == null) ...[
               const Divider(height: 8),
               ListTile(
                 leading: const Icon(Icons.star_outline),
