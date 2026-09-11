@@ -5,17 +5,13 @@
 # sent as a merge request. It is kept here so the recipe and the app it builds
 # change together.
 #
-# Two things are still the owner's to do, and nobody else can:
+# One rule keeps it working: each release needs an annotated tag named
+# `v<version>` on the commit carrying that version, because `UpdateCheckMode:
+# Tags` looks for one and the build below names it as its commit. `deploy/
+# release-apk.sh` is where a release is cut; tag there or the recipe points at
+# nothing.
 #
-#  1. Publish the source. Every `https://example.invalid/...` below and the
-#     `Repo:` beneath them are placeholders; F-Droid builds from public source
-#     and will not take a recipe it cannot clone.
-#  2. Tag the release. `UpdateCheckMode: Tags` and the build's commit below both
-#     want an annotated tag named `v<version>` on the commit that carries that
-#     version, and this repository has no tags yet.
-#
-# Everything else is ready. The licence is MIT and the file is `LICENSE` at the
-# root, where F-Droid looks. There is no proprietary dependency to strip: the
+# The licence is MIT and the file is `LICENSE` at the root, where F-Droid looks. There is no proprietary dependency to strip: the
 # app pulls no Google Play services, no Firebase and no map vendor SDK, which is
 # why it is a Flutter app talking to `dart:io` sockets rather than an Expo one,
 # and why `MainActivity.kt` writes its own location channel over AOSP's
@@ -30,8 +26,8 @@ Categories:
 License: MIT
 AuthorName: rad1an
 WebSite: https://commuterlviv.r1a.nl
-SourceCode: https://example.invalid/commuterlviv
-IssueTracker: https://example.invalid/commuterlviv/issues
+SourceCode: https://github.com/rhusiev/CommuterLviv
+IssueTracker: https://github.com/rhusiev/CommuterLviv/issues
 
 AutoName: CommuterLviv
 
@@ -72,7 +68,7 @@ Description: |-
   so the browser has it too.
 
 RepoType: git
-Repo: https://example.invalid/commuterlviv.git
+Repo: https://github.com/rhusiev/CommuterLviv.git
 
 Builds:
   - versionName: 0.5.0

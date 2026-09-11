@@ -100,17 +100,25 @@ builds it on its own machines and signs the result with its own key, so the
 whole submission is one YAML file plus a public repository to point it at.
 
 Ours is `fdroid/ua.lviv.commuterlviv.yml`, kept here so the recipe and the app
-it builds change together. It passes `fdroid lint` as it stands. Two things are
-still missing, and they are the owner's:
+it builds change together. It passes `fdroid lint`, it points at
+`github.com/rhusiev/CommuterLviv`, and the tag it builds exists. Nothing is
+blocking the submission.
 
-1. **A public repository.** Every `https://example.invalid/...` in the recipe,
-   and the `Repo:` beneath them, is a placeholder. There is no public remote
-   yet, and F-Droid will not take a recipe it cannot clone.
-2. **A tag.** `commit: v0.5.0` and `UpdateCheckMode: Tags` both want an
-   annotated tag `v<version>` on the commit carrying that version. There are no
-   tags in this repository.
+One thing has to keep happening: **every release needs an annotated tag
+`v<version>`**, because `UpdateCheckMode: Tags` finds new releases by looking
+for one and `commit:` names it. Cutting 0.5.1 means
 
-With those two done, the submission is:
+```sh
+git tag -a v0.5.1 -m "CommuterLviv 0.5.1"
+git push origin v0.5.1
+```
+
+and bumping `versionName`, `versionCode`, `commit`, `CurrentVersion` and
+`CurrentVersionCode` in the recipe - `check.sh` fails if any of them drifts from
+`pubspec.yaml`. `AutoUpdateMode: Version` means F-Droid then does the rest by
+itself and no second merge request is needed.
+
+The submission itself:
 
 ```sh
 # fork https://gitlab.com/fdroid/fdroiddata, then
