@@ -126,6 +126,12 @@ class _StopCardState extends State<StopCard> {
                   ),
               ],
             ),
+            const SizedBox(height: 6),
+            // A tap here is already taken, by watching the route on the map
+            Text(
+              txt.holdForLine,
+              style: material.Theme.of(context).textTheme.bodySmall,
+            ),
           ],
         ),
       ),

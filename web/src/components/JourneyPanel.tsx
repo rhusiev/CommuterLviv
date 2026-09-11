@@ -64,11 +64,8 @@ export function JourneyPanel({
 
   /** Kept by name, so saving over a name moves that place rather than making a
    * second one with the same label */
-  const save = (at: Point) => {
-    const name = window.prompt(t.namePlace)?.trim();
-    if (!name) return;
+  const save = (at: Point, name: string) =>
     onPlaces([...places.filter((p) => p.name !== name), { name, lat: at.lat, lon: at.lon }]);
-  };
 
   const forget = (place: Place) => onPlaces(places.filter((p) => p.name !== place.name));
 
@@ -97,7 +94,7 @@ export function JourneyPanel({
         onHere={() => onHere("from")}
         places={places}
         onPlace={(p) => onPoint("from", p)}
-        onSave={from && (() => save(from))}
+        onSave={from && ((name: string) => save(from, name))}
         onForget={forget}
       />
       <Field
@@ -108,7 +105,7 @@ export function JourneyPanel({
         onHere={() => onHere("to")}
         places={places}
         onPlace={(p) => onPoint("to", p)}
-        onSave={to && (() => save(to))}
+        onSave={to && ((name: string) => save(to, name))}
         onForget={forget}
       />
 
@@ -162,10 +159,11 @@ function Field({
   places: Place[];
   onPlace: (at: Point) => void;
   /** Null until this end has a point: there is nothing to save yet */
-  onSave: (() => void) | null;
+  onSave: ((name: string) => void) | null;
   onForget: (place: Place) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
   const saved = point && places.find((p) => same(point, p));
   return (
     <div className="relative flex items-center gap-2">
@@ -214,15 +212,26 @@ function Field({
             </div>
           ))}
           {onSave && !saved && (
-            <button
-              onClick={() => {
-                onSave();
+            <form
+              className="mt-1 flex gap-1"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!name.trim()) return;
+                onSave(name.trim());
+                setName("");
                 setOpen(false);
               }}
-              className="mt-1 w-full rounded-md px-2 py-1 text-left text-accent hover:bg-raised"
             >
-              {t.savePlace}
-            </button>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t.namePlace}
+                className="field min-w-0 flex-1 py-1"
+              />
+              <button className="btn-quiet px-3 py-0" title={t.savePlace}>
+                {t.add}
+              </button>
+            </form>
           )}
         </div>
       )}

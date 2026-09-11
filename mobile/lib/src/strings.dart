@@ -55,6 +55,7 @@ class Strings {
     required this.savePlace,
     required this.namePlace,
     required this.noPlaces,
+    required this.forget,
     required this.saveHere,
     required this.cancel,
     required this.save,
@@ -140,6 +141,7 @@ class Strings {
   final String savePlace;
   final String namePlace;
   final String noPlaces;
+  final String forget;
   final String saveHere;
   final String cancel;
   final String save;
@@ -223,6 +225,7 @@ const _en = Strings(
   savePlace: 'Save this place',
   namePlace: 'Name this place',
   noPlaces: 'Save a place and it is offered here',
+  forget: 'Forget',
   saveHere: 'Save',
   cancel: 'Cancel',
   save: 'Save',
@@ -312,6 +315,7 @@ const _uk = Strings(
   savePlace: 'Зберегти це місце',
   namePlace: 'Назва місця',
   noPlaces: 'Збережене місце зʼявиться тут',
+  forget: 'Забути',
   saveHere: 'Зберегти',
   cancel: 'Скасувати',
   save: 'Зберегти',
