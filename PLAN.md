@@ -641,11 +641,17 @@ three deviations from the spec above:
 Build now, score when the recording covers three weekdays. Note in the report
 that they are unscored rather than quietly omitting them.
 
-- [ ] **`profile`** - finding 6's fix. A persistent hour-of-day by day-of-week
+- [x] **`profile`** - finding 6's fix. A persistent hour-of-day by day-of-week
       pace profile per section, learned across days, sitting beneath the two
       EWMAs as the thing they back off to instead of the timetable prior. This
       directly addresses the nightly reset, which finding 6 measured as `full`
       opening the morning peak believing the city is 15% slower than it is.
+      Built as `prof_hl=604800` where the corridor term stood. Scored in the
+      21-variant cross-day run: **the best model in the project, and the only
+      one that wins every day** - Mon 138.9, Tue 136.8, Wed 144.4 against
+      `full`'s 140.7, 141.4, 149.1, and 134.3 against 138.2 pooled over the five
+      service days. Shipped: `COMMUTERLVIV_VARIANT` defaults to `profile` in
+      `docker-compose.yml` and the VPS serves it. Finding 14.
 - [x] **`slow-day`** - the cheaper half of the same idea: a third EWMA with a
       half-life of a day or two, so something survives the overnight gap without
       needing a full profile. Built ahead of the rest of Phase 6 because the

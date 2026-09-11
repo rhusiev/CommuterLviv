@@ -676,56 +676,90 @@ three full weekdays. Everything published before 2026-09-10 was scored pooled
 over a recording that was mostly the first two. `commuterlviv crossday` replays
 each approach once over the whole thing - the models carry across the nights,
 as they would in service - and cuts the score by the day each prediction was
-made on.
+made on. This is the second pass, with all 21 model variants in one replay
+rather than six; the common support is chosen over the whole field at once, so
+every number below moved by under a second when the fifteen extra variants
+narrowed it.
 
 ```
-| approach | Sat 05 | Sun 06 | Mon 07 | Tue 08 | Wed 09 |
+| approach         | Sat 05  | Sun 06    | Mon 07    | Tue 08    | Wed 09    |
 |---|---|---|---|---|---|
-| predictions | 162 278 | 2 940 299 | 4 280 186 | 4 498 235 | 3 788 628 |
-| full        | 137 | 117 | 142 | 143 | 150 |
-| no-prior    | 113 | 113 | 144 | 144 | 153 |
-| knn         | 127 | 120 | 142 | 143 | 153 |
-| tuned       | 109 | 113 | 154 | 148 | 156 |
-| slow-day    | 120 | 112 | 155 | 150 | 156 |
-| table       | 126 | 150 | 200 | 210 | 221 |
-| api         | 205 | 707 | 575 | 2485 | 2939 |
-| schedule    | 544 | 873 | 871 | 865 | 923 |
+| predictions      | 160 404 | 2 915 776 | 4 233 260 | 4 422 164 | 3 723 154 |
+| profile          | 122     | 112       | 139       | 137       | 144       |
+| full             | 133     | 116       | 141       | 141       | 149       |
+| profile-no-prior | 109     | 110       | 142       | 139       | 147       |
+| knn              | 125     | 120       | 141       | 142       | 152       |
+| no-prior         | 111     | 112       | 143       | 143       | 153       |
+| tuned            | 107     | 113       | 153       | 147       | 155       |
+| slow-day         | 118     | 112       | 155       | 149       | 156       |
+| table            | 124     | 149       | 200       | 208       | 220       |
+| api              | 202     | 645       | 558       | 1987      | 2476      |
+| schedule         | 540     | 869       | 870       | 862       | 921       |
 ```
+
+**`profile` is the best model in the project, and it is the only one that wins
+every day.** Mon 138.9 against `full`'s 140.7, Tue 136.8 against 141.4, Wed
+144.4 against 149.1, and 134.3 against 138.2 pooled over all five days - with
+44.0% of predictions inside a minute against 42.0%, and 64.9% inside two minutes
+against 63.2%. It is `full` with one term changed: what this cell does at this
+hour, kept with a week-long half-life, standing where the corridor term used to.
+Finding 6 measured the model opening each morning on the timetable, believing
+the city 15% slower than it is, because the overnight gap decays every live term
+away. `slow-day` answered that by carrying yesterday across as one number per
+cell and loses every weekday for it; `profile` carries yesterday's *morning*
+into this morning, and wins. The city's slowness is a shape over the day, not a
+level.
+
+One caveat on how hard that is: the intervals printed per day are each
+variant's own bootstrap, not an interval on the difference, and the saved report
+keeps only the summaries, so a paired interval would cost another three-hour
+replay. What can be said without one is that the series are on an identical
+support, event for event, and `profile` is ahead on five days out of five and on
+all three weekdays by 1.8, 4.6 and 4.7 s.
+
+`profile-no-prior` - the same profile with the timetable removed - is second
+pooled (136.2) but not second on a weekday: it beats `full` on Tuesday and
+Wednesday and loses to it on Monday, 141.9 against 140.7. The learned profile
+is worth having; learning it *instead of* the schedule rather than on top of the
+schedule is not.
 
 Three published conclusions do not survive.
 
-**`tuned` does not beat `full`; it loses by 6 to 12 s on every weekday.** The
+**`tuned` does not beat `full`; it loses by 6 to 13 s on every weekday.** The
 four sweeps behind it (`k_unit=16`, `k_corr=1`, `fast_hl=7200`,
 `slow_hl=43200`) all chose less shrinkage and longer memory, and Phase 2 already
 warned in writing that this is the shape you see either when there is no genuine
 within-day variation or when the recording is too short to show it. It was the
 second. On a weekday there is variation to track, and a model tuned to forget
-nothing is a model that cannot track it: Mon 154 against 142, Tue 148 against
-143, Wed 156 against 150, every gap outside the intervals.
+nothing is a model that cannot track it: Mon 153.2 against 140.7, Tue 147.4
+against 141.4, Wed 155.0 against 149.1, every gap outside the intervals.
 
-**`slow-day` is the same story.** It wins the Sunday by 5 s and loses every
-weekday by 6 to 13. A half-life of a day is the right idea for the overnight
+**`slow-day` is the same story.** It wins the Sunday by 4 s and loses every
+weekday by 7 to 14. A half-life of a day is the right idea for the overnight
 gap - finding 11 measured the morning it repairs - but on this evidence what it
-carries across a night is a day that is not much like the next one.
+carries across a night is a day that is not much like the next one, and
+`profile` is the version of that idea that works.
 
-**`knn`'s lead is gone.** Tied with `full` on Monday and Tuesday (141.7 vs
-141.9, 143.4 vs 142.8, both differences an order of magnitude inside their
+**`knn`'s lead is gone.** Level with `full` on Monday and Tuesday (141.0 against
+140.7, 142.5 against 141.4, both differences an order of magnitude inside their
 intervals) and 3 s behind on Wednesday. The plan called it "the strongest single
 piece of evidence that this recording's structure is thinner than the model
 assumes" and named it the first thing to re-score on a multi-day recording.
 Re-scored: the structure was thin because the days were, not because the city
 is. The hierarchy earns its place.
 
-What does survive is `full` and `no-prior` within a second or two of each other,
-`full` ahead on all three weekdays, and the whole field 25 to 35 s worse on a
-weekday than on the Sunday - which is the size of the effect that was being
-mistaken for a difference between approaches.
+Beyond those, the ordering below the leaders is the ablations behaving as
+ablations. On the Tuesday, against `full`'s 141.4: dropping the corridor costs
+9 s (`no-corridor` 150.3), dropping the hold 10 (`no-hold` 151.6), and splitting
+k 17 (`k-split` 158.8). The whole field is 25 to 35 s worse on a weekday than
+on the Sunday, which is the size of the effect that was being mistaken for a
+difference between approaches.
 
 Two more things the split says, neither of them about our model. Weekdays are
-harder for everyone, `schedule` included (871, 865, 923 against the Sunday's
-873 - so the timetable is *not* the thing degrading, and the extra weekday error
+harder for everyone, `schedule` included (870, 862, 921 against the Sunday's
+869 - so the timetable is *not* the thing degrading, and the extra weekday error
 is real traffic rather than a worse plan). And `api` blows out on the Tuesday
-and Wednesday, 2485 s and 2939 s against 575 s on the Monday, which is far too
+and Wednesday, 1987 s and 2476 s against 558 s on the Monday, which is far too
 large to be prediction quality; it is the operator's feed failing for stretches
 of those days and is worth its own look before any of those numbers is quoted.
 
