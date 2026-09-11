@@ -174,8 +174,10 @@ refused and the map stays empty while everything else works.
 | `lib/src/map_tab.dart` | the basemap, the vehicles and the attribution |
 | `lib/src/times_tab.dart` | the pinned stops and what is due at each |
 | `lib/src/stop_card.dart` | one stop, from the bottom of the map |
-| `lib/src/stop_search.dart` | stops by name, scanned on every keystroke |
-| `lib/src/sheets.dart` | the route sheet and the basemap sheet |
+| `lib/src/stop_search.dart` | stops by name, and places from the service |
+| `lib/src/saved.dart` | the saved places and the pinned stops, in one list |
+| `lib/src/traffic.dart` | how fast the streets are running, while that is on |
+| `lib/src/sheets.dart` | the route sheet, the basemap sheet, and the dialogs each of them shares |
 | `lib/src/due.dart` | one route's countdown chip, drawn in three places |
 | `lib/src/server_dialog.dart` | which server to talk to, asked from two places |
 | `lib/src/map_theme.dart` | the five basemap styles and the colours drawn over them |
@@ -277,11 +279,45 @@ are committed: a build from source must not need a rasteriser.
 The directions button in the app bar opens `journey_panel.dart` over the map.
 Both ends are set by tapping the map, or by the locate button beside either
 field; while an end is being picked, a tap is that point and not the nearest
-stop, because a door rarely is one. `GET /api/plan` answers with options ranked
-by arrival, and each ride leg says whether it came from a tracked vehicle or
-from the timetable - past the model's 45-minute horizon it is the schedule's
-guess, and it says so rather than looking equally certain. A server without the
-planner caches answers 503; the panel shows the message.
+stop, because a door rarely is one. A chip beside the two fields says when to
+leave, `Now` until a time is picked, and passes it as `at=<unix seconds>`; a
+time already past today is meant for tomorrow, which is as far ahead as the
+server plans.
+
+`GET /api/plan` answers with options ranked by arrival, and each ride leg says
+what it rests on: a tracked vehicle, the timetable, or the timetable on a line
+nothing has been seen running on, which is the last one drawn in the error
+colour. Past the model's 45-minute horizon every ride is the schedule's guess,
+and it says so rather than looking equally certain. A walk between two rides is
+its own row with its own duration, because that is how it arrives. A server
+without the planner caches answers 503; the panel shows the message.
+
+## What is saved
+
+`Saved` in the top-bar menu opens `saved.dart`: the named places and the pinned
+stops in one sheet, each row tapping through to the map, held to rename or
+remove, and dragged by its handle to reorder. Both lists are written whole -
+`POST /api/places` and `POST /api/pins` take the entire list - so a rename is a
+delete and a save in one request, which is what keeps it atomic when the name is
+the identity server-side. Search saves too: `GET /api/search?q=` merges
+addresses and shops under their own heading below the stops, a quarter of a
+second after the typing stops, and every row there - stops included - has a star
+that names the point and keeps it.
+
+## Traffic, and which way a line runs
+
+`Traffic` in the same menu puts `GET /api/traffic/streets` on the map as a
+`PolylineLayer` coloured by `GET /api/traffic`: actual over timetabled travel
+time on each stretch, green at 0.85 through red at 1.6, and nothing at all where
+the ratio is null because too little has been seen there. The stretches never
+change, so they are fetched once and kept for the run; the numbers are asked for
+again every 60 seconds, and only while the view is open.
+
+Direction along a route line is a track of chevrons pointing the way of travel,
+spaced by the arrows `/api/shapes` places every 220 m and thinned with the zoom
+so they never crowd. A stretch the route runs both ways draws as two tracks,
+offset to either side and each pointing its own way, rather than one glyph the
+two directions share.
 
 ## Where the phone is
 

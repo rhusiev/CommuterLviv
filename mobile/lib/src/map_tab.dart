@@ -9,6 +9,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:vector_map_tiles/vector_map_tiles.dart';
 
+import 'api.dart';
 import 'here.dart';
 import 'live.dart';
 import 'map_controls.dart';
@@ -16,6 +17,7 @@ import 'map_theme.dart';
 import 'map_tiles.dart';
 import 'models.dart';
 import 'theme.dart';
+import 'traffic.dart';
 import 'vehicle_layer.dart';
 import 'strings.dart';
 
@@ -24,8 +26,10 @@ const lviv = LatLng(49.8397, 24.0297);
 class MapTab extends StatelessWidget {
   const MapTab({
     super.key,
+    required this.api,
     required this.map,
     required this.style,
+    required this.traffic,
     required this.catalog,
     required this.live,
     required this.stops,
@@ -40,10 +44,15 @@ class MapTab extends StatelessWidget {
     required this.onTap,
   });
 
+  final Api api;
   final MapController map;
 
   /// Null while the basemap is still being read.
   final Style? style;
+
+  /// How the streets are running, over the basemap and under everything else.
+  /// Only while this is on is anything asked for.
+  final bool traffic;
   final Catalog catalog;
   final Live live;
   final List<int> stops;
@@ -97,6 +106,7 @@ class MapTab extends StatelessWidget {
                 memoryTileCacheMaxSize: tileMemoryBytes,
                 memoryTileDataCacheMaxSize: tileMemoryCount,
               ),
+            if (traffic) TrafficLayer(api: api),
             VehicleLayer(
               catalog: catalog,
               live: live,

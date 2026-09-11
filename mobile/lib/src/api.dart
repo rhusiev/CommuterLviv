@@ -42,6 +42,7 @@ class Api {
   static const _jarKey = 'commuterlviv.cookies';
   static const _catalogKey = 'commuterlviv.catalog';
   static const _shapesKey = 'commuterlviv.shapes';
+  static const _streetsKey = 'commuterlviv.streets';
 
   /// The jar is a credential, so it lives in the Keystore rather than in prefs.
   static const _safe = FlutterSecureStorage(
@@ -80,7 +81,7 @@ class Api {
     _cookies.clear();
     await _prefs.setString(_baseKey, trimmed);
     await _safe.delete(key: _jarKey);
-    for (final key in [_catalogKey, _shapesKey]) {
+    for (final key in [_catalogKey, _shapesKey, _streetsKey]) {
       await _prefs.remove(key);
       await _prefs.remove('$key.tag');
     }
@@ -222,12 +223,13 @@ class Api {
   }
 
   /// Door to door, ranked by arrival. Near a second on the server, so ask once
-  /// per search.
-  Future<List<Journey>> plan(LatLng from, LatLng to) async {
+  /// per search. [at] is unix seconds, up to a day ahead; null is now.
+  Future<List<Journey>> plan(LatLng from, LatLng to, {int? at}) async {
     final answer = await _call(
       'GET',
       '/api/plan?from=${from.latitude},${from.longitude}'
-          '&to=${to.latitude},${to.longitude}',
+          '&to=${to.latitude},${to.longitude}'
+          '${at == null ? '' : '&at=$at'}',
     ) as Map<String, dynamic>;
     return [
       for (final j in answer['options'] as List)
@@ -243,6 +245,28 @@ class Api {
   Future<Shapes> shapes() async => Shapes.fromJson(
     await _held('/api/shapes', _shapesKey, what: 'the route lines'),
   );
+
+  /// Which stretch of street each traffic number belongs to; unchanging, so
+  /// held on disk like the shapes and read once per run.
+  Future<Streets> streets() async => Streets.fromJson(
+    await _held('/api/traffic/streets', _streetsKey, what: 'the streets'),
+  );
+
+  Future<Traffic> traffic() async => Traffic.fromJson(
+    await _call('GET', '/api/traffic') as Map<String, dynamic>,
+  );
+
+  /// Addresses and points of interest, from OpenStreetMap through the service.
+  Future<List<Found>> find(String q) async {
+    final j = await _call(
+      'GET',
+      '/api/search?q=${Uri.encodeQueryComponent(q)}',
+    ) as Map<String, dynamic>;
+    return [
+      for (final p in j['places'] as List)
+        Found.fromJson(p as Map<String, dynamic>),
+    ];
+  }
 
   /// Cached on disk under [key], with its ETag under `key.tag`.
   Future<Map<String, dynamic>> _held(
@@ -297,13 +321,13 @@ class Api {
       _call('POST', '/api/pins', body: {'pins': stops});
 
   Future<List<Place>> setPlaces(List<Place> places) async {
-    final j =
-        await _call(
-              'POST',
-              '/api/places',
-              body: {'places': [for (final p in places) p.toJson()]},
-            )
-            as Map<String, dynamic>;
+    final j = await _call(
+      'POST',
+      '/api/places',
+      body: {
+        'places': [for (final p in places) p.toJson()],
+      },
+    ) as Map<String, dynamic>;
     return [
       for (final p in j['places'] as List)
         Place.fromJson(p as Map<String, dynamic>),

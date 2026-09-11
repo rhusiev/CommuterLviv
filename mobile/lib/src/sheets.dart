@@ -47,6 +47,64 @@ Future<T?> showFloatingSheet<T>(
   ),
 );
 
+/// The one-field dialog behind every name in the app.
+Future<String?> askName(
+  BuildContext context,
+  String title, {
+  String? was,
+  String? action,
+}) => showDialog<String>(
+  context: context,
+  builder: (context) {
+    final field = TextEditingController(text: was);
+    return AlertDialog.adaptive(
+      title: Text(title),
+      content: TextField(controller: field, autofocus: true),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(txt.cancel),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, field.text.trim()),
+          child: Text(action ?? txt.save),
+        ),
+      ],
+    );
+  },
+);
+
+/// What a long press on a saved thing offers. A thing that cannot be renamed -
+/// a pinned stop wears the stop's own name - passes a null [onRename].
+Future<void> manage(
+  BuildContext context, {
+  Future<void> Function()? onRename,
+  required Future<void> Function() onDelete,
+}) async {
+  final what = await showModalBottomSheet<String>(
+    context: context,
+    builder: (context) => SafeArea(
+      child: Wrap(
+        children: [
+          if (onRename != null)
+            ListTile(
+              leading: const Icon(Icons.drive_file_rename_outline),
+              title: Text(txt.rename),
+              onTap: () => Navigator.pop(context, 'rename'),
+            ),
+          ListTile(
+            leading: const Icon(Icons.delete_outline),
+            title: Text(txt.delete),
+            onTap: () => Navigator.pop(context, 'delete'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (what == 'rename') await onRename!();
+  if (what == 'delete') await onDelete();
+}
+
 class _Handle extends StatelessWidget {
   const _Handle();
 
@@ -156,29 +214,9 @@ class _RouteSheetState extends State<RouteSheet> {
   late String? _active = widget.sets?.active;
   late List<RouteSet> _sets = widget.sets?.sets ?? const [];
 
-  List<String> get _ids =>
-      [for (final i in widget.picked) widget.catalog.routes[i].id];
-
-  Future<String?> _ask(String title, [String? was]) => showDialog<String>(
-    context: context,
-    builder: (context) {
-      final field = TextEditingController(text: was);
-      return AlertDialog.adaptive(
-        title: Text(title),
-        content: TextField(controller: field, autofocus: true),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(txt.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, field.text.trim()),
-            child: Text(txt.save),
-          ),
-        ],
-      );
-    },
-  );
+  List<String> get _ids => [
+    for (final i in widget.picked) widget.catalog.routes[i].id,
+  ];
 
   Future<void> _reload() async {
     final sets = await widget.api.sets();
@@ -188,7 +226,7 @@ class _RouteSheetState extends State<RouteSheet> {
   }
 
   Future<void> _save() async {
-    final name = await _ask(txt.nameSet);
+    final name = await askName(context, txt.nameSet);
     if (name == null || name.isEmpty) return;
     final made = await widget.api.createSet(name, _ids);
     await widget.api.activateSet(made.id);
@@ -203,7 +241,7 @@ class _RouteSheetState extends State<RouteSheet> {
   }
 
   Future<void> _rename(RouteSet set) async {
-    final name = await _ask(txt.renameSet, set.name);
+    final name = await askName(context, txt.rename, was: set.name);
     if (name == null || name.isEmpty || name == set.name) return;
     await widget.api.updateSet(set.id, name, set.routes);
     await _reload();
@@ -215,29 +253,11 @@ class _RouteSheetState extends State<RouteSheet> {
     await _reload();
   }
 
-  Future<void> _manage(RouteSet set) async {
-    final what = await showModalBottomSheet<String>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.drive_file_rename_outline),
-              title: Text(txt.renameSet),
-              onTap: () => Navigator.pop(context, 'rename'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: Text(txt.deleteSet),
-              onTap: () => Navigator.pop(context, 'delete'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (what == 'rename') await _rename(set);
-    if (what == 'delete') await _delete(set);
-  }
+  Future<void> _manage(RouteSet set) => manage(
+    context,
+    onRename: () => _rename(set),
+    onDelete: () => _delete(set),
+  );
 
   Future<void> _activate(RouteSet set) async {
     await widget.api.activateSet(set.id);
@@ -259,7 +279,8 @@ class _RouteSheetState extends State<RouteSheet> {
     ];
     final sets = _sets;
     final active = sets.where((s) => s.id == _active).firstOrNull;
-    final changed = active != null &&
+    final changed =
+        active != null &&
         (active.routes.length != _ids.length ||
             !active.routes.toSet().containsAll(_ids));
     return DraggableScrollableSheet(
