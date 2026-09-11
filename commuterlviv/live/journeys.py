@@ -12,6 +12,10 @@ import time
 
 from .. import plan, walk as footpaths
 
+# a departure this close is still now: the vehicles on the road are the ones
+# that will carry it
+LEAD = 300.0
+
 
 class Planner:
     def __init__(self, tt, walk, transfers, cat):
@@ -31,15 +35,22 @@ class Planner:
 
     def search(self, origin, dest, arrivals, now=None):
         """Ranked journeys, on the wire. Call it from a worker thread: a
-        city-wide search is most of a second of Python."""
-        now = now or time.time()
+        city-wide search is most of a second of Python.
+
+        `now` in the future means no vehicle can be seen yet, so the search is
+        given none and every ride comes back resting on the timetable.
+        """
+        if now is None:
+            now = time.time()
+        elif now > time.time() + LEAD:
+            arrivals = None
         found = plan.journeys(self.tt, self.walk, self.transfers, origin, dest,
                               now, arrivals=arrivals, catalog=self.cat)
         return {"t": now, "options": [self._wire(j) for j in found]}
 
     def _wire(self, j):
         return {"dep": int(j.dep), "arr": int(j.arr), "rides": j.rides,
-                "live": j.live, "legs": [self._leg(x) for x in j.legs]}
+                "live": j.live, "confidence": j.confidence, "legs": [self._leg(x) for x in j.legs]}
 
     def _leg(self, leg):
         out = {"kind": leg.kind, "dep": int(leg.dep), "arr": int(leg.arr),
@@ -49,6 +60,7 @@ class Planner:
             out["route"] = self.route_i.get(leg.route, -1)
             out["veh"] = leg.veh
             out["live"] = leg.live
+            out["confidence"] = leg.confidence
         return out
 
 

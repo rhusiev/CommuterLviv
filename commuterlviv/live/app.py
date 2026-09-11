@@ -340,6 +340,21 @@ def _point(raw):
     return lat, lon
 
 
+def _departure(raw):
+    """(unix seconds or None, complaint). A day ahead is as far as the schedule
+    is worth reading, and the past cannot be planned for."""
+    if not raw:
+        return None, None
+    try:
+        at = float(raw)
+    except ValueError:
+        return None, "at must be a unix time in seconds"
+    now = time.time()
+    if at < now - 3600 or at > now + 86400:
+        return None, "at must be within the next day"
+    return at, None
+
+
 async def journey(request, session):
     """Door to door, ranked by arrival; each leg says whether it came from a
     tracked vehicle or from the timetable."""
@@ -350,13 +365,16 @@ async def journey(request, session):
     dest = _point(request.query_params.get("to"))
     if origin is None or dest is None:
         return error("from and to must each be lat,lon inside Lviv")
+    at, why = _departure(request.query_params.get("at"))
+    if why:
+        return error(why)
     # refused rather than queued when every worker is busy: a queue of
     # second-long searches is a denial of service with a longer fuse
     if app.planning.locked():
         return error("the planner is busy; try that again", 503)
     async with app.planning:
         found = await asyncio.to_thread(app.planner.search, origin, dest,
-                                        app.svc.live.arrivals)
+                                        app.svc.live.arrivals, at)
     return JSONResponse(found)
 
 

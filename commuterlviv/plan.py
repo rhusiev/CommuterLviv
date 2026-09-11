@@ -13,6 +13,7 @@ earliest arrival reachable with k rides, each round scans every route touching a
 stop improved in the previous round, and between rounds a walk from every
 improved stop relaxes its neighbours on foot.
 """
+import dataclasses
 import datetime
 import math
 import pickle
@@ -38,6 +39,14 @@ CHANGE = 60.0   # s of slack per change, over and above the walk
 
 ROUNDS = 3      # rides per journey; a fourth round costs as much as the first three
 
+# a route the schedule wanted QUIET_TRIPS times inside QUIET_WINDOW seconds,
+# with nothing tracked on it since, is taken to not be running
+QUIET_WINDOW = 3600.0
+QUIET_TRIPS = 2
+
+# weakest first, so `min` over this order is the weakest ground a journey stands on
+CONFIDENCE = ("quiet", "schedule", "live")
+
 
 @dataclass(frozen=True, slots=True)
 class Leg:
@@ -50,6 +59,10 @@ class Leg:
     route: str | None = None
     veh: int | None = None
     live: bool = False
+
+    # "live" is a vehicle being tracked, "schedule" is the timetable on a route
+    # that is running, "quiet" is the timetable on one nothing has been seen on
+    confidence: str = "live"
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +86,16 @@ class Journey:
         """True when every ride in it is a vehicle the model can see."""
         rides = [leg for leg in self.legs if leg.kind == "ride"]
         return bool(rides) and all(leg.live for leg in rides)
+
+    @property
+    def walking(self):
+        return sum(leg.arr - leg.dep for leg in self.legs if leg.kind == "walk")
+
+    @property
+    def confidence(self):
+        """The weakest ground any ride in it stands on."""
+        return min((leg.confidence for leg in self.legs if leg.kind == "ride"),
+                   key=CONFIDENCE.index, default="live")
 
 
 class Pattern:
@@ -253,6 +276,32 @@ def live_trips(tt, arrivals, catalog, now, horizon=replay.HORIZON):
     return trips, covered
 
 
+def route_confidence(tt, live, sod, window=QUIET_WINDOW, expected=QUIET_TRIPS):
+    """How much a scheduled departure on each route is worth believing.
+
+    A route with a vehicle being tracked is "live". One with none is "quiet"
+    when the schedule wanted at least `expected` trips out of it in the last
+    `window` seconds and not one of them turned up, which is what a line nobody
+    is running looks like from here; otherwise it is "schedule", because a route
+    that runs twice an hour is silent between runs by design.
+
+    Absent live data at all - a search for a future time - every route is
+    "schedule": nothing is known either way, and the timetable is all there is.
+    """
+    if live is None:
+        return {}
+    running = {trip.route for trip in live}
+    due = {}
+    for pat in tt.patterns:
+        if pat.route in running:
+            continue
+        col = pat.times[:, 0]
+        due[pat.route] = due.get(pat.route, 0) + int(
+            np.count_nonzero((col >= sod - window) & (col <= sod)))
+    return {route: "quiet" if n >= expected else "schedule"
+            for route, n in due.items()}
+
+
 def _reach(walk, lat, lon, limit):
     """Walking seconds from a point to every node within `limit`."""
     sources = [(i, d / footpaths.SPEED)
@@ -275,9 +324,10 @@ def _at_stops(seen, node, limit):
 
 
 def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
-             catalog=None, rounds=ROUNDS, keep=5):
+             catalog=None, rounds=ROUNDS, keep=8):
     """Ranked journeys from `origin` to `dest` (both (lat, lon)) leaving at
-    `now`: soonest arrival first, keeping a slower one only if it changes less."""
+    `now`, which may be in the future - then there are no vehicles to see and
+    every ride rests on the timetable alone."""
     walked = _walk_through(walk, origin, dest)
     limit = walked if walked is not None else TRANSFER_CAP
     access = _at_stops(_reach(walk, *origin, limit), transfers.node, limit)
@@ -293,6 +343,7 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
             at_stop_live[s].append((p, k))
 
     sod, midnight = _seconds_since_midnight(now)
+    trust = route_confidence(tt, None if arrivals is None else live, sod)
     best = {}                      # stop -> earliest arrival, any round
     board = {}                     # (round, stop) -> the leg that got there
     round_best = [dict() for _ in range(rounds + 1)]
@@ -306,7 +357,7 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
         for (kind, p), first in _routes_touching(tt, at_stop_live, touched):
             pat = live[p] if kind == "live" else tt.patterns[p]
             _scan(pat, kind == "live", first, k, sod, midnight, now, covered,
-                  round_best, best, board, marked)
+                  round_best, best, board, marked, trust)
         for i in list(marked):
             here = round_best[k][i]
             for j, t in transfers.near(i, min(limit, TRANSFER_CAP)):
@@ -329,9 +380,9 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
                 arrive, tail = got + t, Leg("walk", got, got + t, i, -1)
         if arrive is not None:
             legs = _unwind(board, k, tail.a) + [tail]
-            found.append(Journey(tuple(legs)))
+            found.append(Journey(_fold(legs)))
     found.extend(_only_walking(walked, now))
-    return _rank(found, keep)
+    return _rank(found, keep, walked)
 
 
 def _routes_touching(tt, at_stop_live, stops):
@@ -354,7 +405,7 @@ def _routes_touching(tt, at_stop_live, stops):
 
 
 def _scan(pat, is_live, first, k, sod, midnight, now, covered,
-          round_best, best, board, marked):
+          round_best, best, board, marked, trust):
     """One route, ridden from the earliest stop it can be boarded at.
 
     A scheduled trip's times are seconds since the service midnight, so one
@@ -372,7 +423,9 @@ def _scan(pat, is_live, first, k, sod, midnight, now, covered,
                 round_best[k][s] = best[s] = arrive
                 board[(k, s)] = Leg("ride", dep_at, arrive, start, s,
                                     pat.route, getattr(pat, "veh", None),
-                                    is_live)
+                                    is_live,
+                                    "live" if is_live
+                                    else trust.get(pat.route, "schedule"))
                 marked.add(s)
         ready = round_best[k - 1].get(s)
         if ready is None:
@@ -441,15 +494,49 @@ def _only_walking(walked, now):
     return [Journey((Leg("walk", now, now + walked, -1, -1),))]
 
 
-def _rank(found, keep):
-    """Soonest first, dropping any journey another one dominates."""
-    found.sort(key=lambda j: (j.arr, j.rides))
+def _score(j):
+    return j.arr, j.rides, j.walking
+
+
+def _rank(found, keep, walked=None):
+    """Soonest first, keeping every journey no other one beats outright.
+
+    Beaten means another is at least as good on arrival, on changes and on
+    seconds spent walking - so a slower ride with one change fewer survives,
+    which is the whole point of offering more than the fastest. Anything not
+    faster than walking the way is dropped, the pure walk itself excepted.
+
+    A journey riding a route nothing has been seen on is held back unless it is
+    the only way of riding at all: better to be told to walk than to be sent to
+    wait for a bus the city is not running.
+    """
+    ceiling = math.inf if walked is None else walked
+    found.sort(key=_score)
     out = []
     for j in found:
-        if any(o.arr <= j.arr and o.rides <= j.rides for o in out):
+        if j.rides and j.arr - j.dep >= ceiling:
+            continue
+        if any(all(a <= b for a, b in zip(_score(o), _score(j))) for o in out):
             continue
         out.append(j)
-    return out[:keep]
+    solid = [j for j in out if j.confidence != "quiet"]
+    return (solid if any(j.rides for j in solid) else out)[:keep]
+
+
+def _fold(legs):
+    """Consecutive walks as one walk.
+
+    A journey that reaches a stop on foot and leaves it on foot never used the
+    stop; unwinding produces that whenever the access walk lands short of where
+    the ride boards.
+    """
+    out = []
+    for leg in legs:
+        if out and leg.kind == "walk" and out[-1].kind == "walk":
+            out[-1] = dataclasses.replace(out[-1], arr=leg.arr, b=leg.b)
+        else:
+            out.append(leg)
+    return tuple(out)
 
 
 def load(net=None):
