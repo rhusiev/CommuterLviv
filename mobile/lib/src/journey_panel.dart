@@ -459,6 +459,8 @@ class _LegRow extends StatelessWidget {
             // is inside a row that opens the stop, so it takes its own taps
             InkWell(
               onTap: () => onLine(leg.route!),
+              // The badge's own corner, so the ink stays inside the badge
+              borderRadius: BorderRadius.circular(6),
               child: RouteBadge(route: route, fontSize: 11),
             ),
             const SizedBox(width: 8),

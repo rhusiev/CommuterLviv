@@ -346,7 +346,9 @@ class _RouteSheetState extends State<RouteSheet> {
                       route: catalog.routes[i],
                       muted: !widget.picked.contains(i),
                     ),
-                    tooltip: catalog.routes[i].long,
+                    // No tooltip: a chip shows one on a long press, and it won
+                    // the gesture, so the line never opened. The line view
+                    // names the route anyway
                     showCheckmark: false,
                     selected: widget.picked.contains(i),
                     onSelected: (_) {
