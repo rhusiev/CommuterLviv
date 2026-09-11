@@ -28,22 +28,24 @@ class Due extends StatelessWidget {
   // for one glyph, and this one is a glyph and a number
   @override
   Widget build(BuildContext context) {
-    final chip = Chip(
-      visualDensity: VisualDensity.compact,
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          RouteBadge(route: route, fontSize: 10),
-          const SizedBox(width: 6),
-          Text(countdown(arrival.t)),
-        ],
-      ),
+    final label = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        RouteBadge(route: route, fontSize: 10),
+        const SizedBox(width: 6),
+        Text(countdown(arrival.t)),
+      ],
     );
-    if (onLine == null) return chip;
-    return InkWell(
-      onTap: onLine,
-      borderRadius: BorderRadius.circular(20),
-      child: chip,
+    // ActionChip rather than a Chip under an InkWell: the ink of a wrapper is
+    // a rectangle the size of the chip's own margins, which on a press spills
+    // out past the stadium it is meant to fill
+    if (onLine == null) {
+      return Chip(visualDensity: VisualDensity.compact, label: label);
+    }
+    return ActionChip(
+      visualDensity: VisualDensity.compact,
+      label: label,
+      onPressed: onLine,
     );
   }
 }
