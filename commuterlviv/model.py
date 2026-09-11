@@ -275,7 +275,7 @@ class BaseModel:
         local = datetime.datetime.fromtimestamp(now, TZ)
         return local.hour + local.minute / 60.0
 
-    def _slot(self, now):
+    def slot(self, now):
         return int(self._hours(now))
 
     def prior_at(self, now):
@@ -364,12 +364,12 @@ class PaceModel(BaseModel):
                      day_hl=self.cfg.day_hl, prof_hl=self.cfg.prof_hl)
 
     def _absorb(self, units, corr, ratio, held, w_pace, w_hold, now):
-        slot = self._slot(now)
+        slot = self.slot(now)
         self.pace.update(units, ratio, now, w_pace, group(corr, ratio, w_pace),
                          slot)
         self.hold.update(units, held, now, w_hold, group(corr, held, w_hold),
                          slot)
 
     def refresh(self, now):
-        slot = self._slot(now)
+        slot = self.slot(now)
         self._apply(self.pace.read(now, slot), self.hold.read(now, slot), now)
