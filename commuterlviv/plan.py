@@ -284,12 +284,7 @@ def route_confidence(tt, live, sod, window=QUIET_WINDOW, expected=QUIET_TRIPS):
     `window` seconds and not one of them turned up, which is what a line nobody
     is running looks like from here; otherwise it is "schedule", because a route
     that runs twice an hour is silent between runs by design.
-
-    Absent live data at all - a search for a future time - every route is
-    "schedule": nothing is known either way, and the timetable is all there is.
     """
-    if live is None:
-        return {}
     running = {trip.route for trip in live}
     due = {}
     for pat in tt.patterns:
@@ -324,10 +319,15 @@ def _at_stops(seen, node, limit):
 
 
 def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
-             catalog=None, rounds=ROUNDS, keep=8):
+             catalog=None, rounds=ROUNDS, keep=8, assess=True):
     """Ranked journeys from `origin` to `dest` (both (lat, lon)) leaving at
-    `now`, which may be in the future - then there are no vehicles to see and
-    every ride rests on the timetable alone."""
+    `now`, which may be in the future: the vehicles being tracked are still
+    used, for as far ahead as their predictions reach.
+
+    `assess` off leaves every scheduled route believed. Silence only means a
+    route is not running when the departure is close enough that the vehicles
+    on the road now are the ones that would carry it.
+    """
     walked = _walk_through(walk, origin, dest)
     limit = walked if walked is not None else TRANSFER_CAP
     access = _at_stops(_reach(walk, *origin, limit), transfers.node, limit)
@@ -343,7 +343,8 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
             at_stop_live[s].append((p, k))
 
     sod, midnight = _seconds_since_midnight(now)
-    trust = route_confidence(tt, None if arrivals is None else live, sod)
+    trust = (route_confidence(tt, live, sod)
+             if assess and arrivals is not None else {})
     best = {}                      # stop -> earliest arrival, any round
     board = {}                     # (round, stop) -> the leg that got there
     round_best = [dict() for _ in range(rounds + 1)]

@@ -10,11 +10,7 @@ which is what the wire uses.
 import asyncio
 import time
 
-from .. import plan, walk as footpaths
-
-# a departure this close is still now: the vehicles on the road are the ones
-# that will carry it
-LEAD = 300.0
+from .. import plan, replay, walk as footpaths
 
 
 class Planner:
@@ -37,20 +33,22 @@ class Planner:
         """Ranked journeys, on the wire. Call it from a worker thread: a
         city-wide search is most of a second of Python.
 
-        `now` in the future means no vehicle can be seen yet, so the search is
-        given none and every ride comes back resting on the timetable.
+        A `now` in the future still gets the vehicles being tracked: the search
+        keeps only their arrivals that lie ahead of it, so a trip starting in
+        ten minutes rides the same predictions an immediate one does. Past the
+        model's horizon there are none left and the timetable takes over, which
+        is also where judging a route quiet stops meaning anything.
         """
-        if now is None:
-            now = time.time()
-        elif now > time.time() + LEAD:
-            arrivals = None
+        now = time.time() if now is None else now
         found = plan.journeys(self.tt, self.walk, self.transfers, origin, dest,
-                              now, arrivals=arrivals, catalog=self.cat)
+                              now, arrivals=arrivals, catalog=self.cat,
+                              assess=now <= time.time() + replay.HORIZON)
         return {"t": now, "options": [self._wire(j) for j in found]}
 
     def _wire(self, j):
         return {"dep": int(j.dep), "arr": int(j.arr), "rides": j.rides,
-                "live": j.live, "confidence": j.confidence, "legs": [self._leg(x) for x in j.legs]}
+                "live": j.live, "confidence": j.confidence,
+                "legs": [self._leg(x) for x in j.legs]}
 
     def _leg(self, leg):
         out = {"kind": leg.kind, "dep": int(leg.dep), "arr": int(leg.arr),
