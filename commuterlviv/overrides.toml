@@ -1,0 +1,37 @@
+# Stops the city's feed leaves off a route that serves them anyway.
+#
+# Read at startup by `overrides.py` and folded into the network as the feed's
+# own `stop_times` rows are, so an added stop is an ordinary stop everywhere
+# after that: it gets a position on the shape, a scheduled time, a place in the
+# catalogue and arrival times of its own.
+#
+# Each rule is checked against the feed on every build. One that no longer
+# applies - because the stop is listed now, or the route no longer passes it -
+# is skipped with a line on stderr rather than failing the build, so a fixed
+# feed never takes the service down. Delete the rule when that line appears.
+#
+#   route   the short name, as a rider reads it: "А16", "Т04"
+#   stop    the code on the sign, as `stops.txt` spells it: "0711"
+#   toward  optional, and needed whenever the route passes the stop in both
+#           directions: a substring of the last stop's name on the pattern to
+#           add it to. Without it the stop is added to every pattern that
+#           passes, which on a two-way street means the wrong platform too.
+#   within  optional, metres: how close the pattern's line must come to the
+#           stop for the rule to apply to it. 50 by default.
+
+[[add]]
+route = "А16"
+stop = "0711"
+toward = "Приміський вокзал"
+why = """Енергетична, checked on 2026-09-08: the line passes 12 m from the
+platform, but no А16 trip lists the stop, and neither the city's trip updates
+nor its own arrival board at api.lad.lviv.ua mentions А16 there. The rider who
+reported it uses the stop."""
+
+[[add]]
+route = "А16"
+stop = "0712"
+toward = "Кавалерідзе"
+why = """The other platform of the same stop, missing А16 for the same reason
+and confirmed by the same rider on 2026-09-08. Two patterns run this way,
+37997 and 38109, and both call here."""

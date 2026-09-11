@@ -1,0 +1,99 @@
+# The build recipe for F-Droid.
+#
+# This file does not live here in the end: it is copied to
+# `metadata/ua.lviv.commuterlviv.yml` in a fork of the `fdroiddata` repository and
+# sent as a merge request. It is kept here so the recipe and the app it builds
+# change together.
+#
+# One rule keeps it working: each release needs an annotated tag named
+# `v<version>` on the commit carrying that version, because `UpdateCheckMode:
+# Tags` looks for one and the build below names it as its commit. `deploy/
+# release-apk.sh` is where a release is cut; tag there or the recipe points at
+# nothing.
+#
+# The licence is MIT and the file is `LICENSE` at the root, where F-Droid looks. There is no proprietary dependency to strip: the
+# app pulls no Google Play services, no Firebase and no map vendor SDK, which is
+# why it is a Flutter app talking to `dart:io` sockets rather than an Expo one,
+# and why `MainActivity.kt` writes its own location channel over AOSP's
+# `LocationManager`. `android/app/build.gradle.kts` already signs a release only
+# if `key.properties` is there, so F-Droid's keyless build produces the unsigned
+# APK it then signs itself, and it drops the Google-signed dependency blob that
+# F-Droid rejects.
+
+Categories:
+  - Navigation
+  - Internet
+License: MIT
+AuthorName: rad1an
+WebSite: https://commuterlviv.r1a.nl
+SourceCode: https://github.com/rhusiev/CommuterLviv
+IssueTracker: https://github.com/rhusiev/CommuterLviv/issues
+
+AutoName: CommuterLviv
+
+# Both are required of a new app, and both are the same text as
+# `mobile/fastlane/metadata/android/en-US/`, which F-Droid reads out of the
+# repository and which is where the wording is edited. Kept in step by hand:
+# there is one listing, not two
+Summary: Where the trams and buses of Lviv actually are, and when yours arrives
+
+Description: |-
+  A live map of Lviv's trams, trolleybuses and buses, and an honest answer to
+  "how long until mine gets here".
+
+  The app is a client. It talks to commuterlviv.r1a.nl by default, and to any other
+  server you or someone you trust runs if you give the sign-in screen a different
+  address. It does nothing on its own. There is no account here that is not an
+  account there, and there is no analytics, advertising or tracking of any kind.
+
+  What it shows:
+
+  * Every vehicle on the routes you pick, moving on the map in real time
+  * An arrow only when the vehicle is actually moving. A bus standing at a light gets no arrow rather than a guessed one
+  * The next arrivals at any stop, predicted from how traffic is running today rather than from the printed timetable
+  * Stops you pin, with their times on one screen
+  * A journey planner, door to door, saying for each ride whether the time came from a tracked vehicle or from the timetable
+  * Saved sets of routes and saved places, kept on the server, so the phone and the browser show the same thing
+  * Five map styles, dark and light
+
+  The map is OpenStreetMap data rendered on the device from VersaTiles' free
+  vector tiles. No key, no account, no map vendor.
+
+  Permissions: internet, and location. Nothing is asked of the system until you
+  press the button that centres the map on you, so the app can be installed and
+  used by somebody who never grants location at all. The fix is kept on the phone
+  and is never reported to the server as your position. The two things that do
+  leave are the ones you ask for: a journey planned from where you are sends that
+  one point so the server can plan it, and a place you save is saved on the server
+  so the browser has it too.
+
+RepoType: git
+Repo: https://github.com/rhusiev/CommuterLviv.git
+
+Builds:
+  - versionName: 0.5.0
+    versionCode: 19
+    commit: v0.5.0
+    subdir: mobile/android/app
+    # The srclib is F-Droid's own pinned checkout of the Flutter SDK, so there
+    # is no tarball to download and no hash to keep in step with one
+    srclibs:
+      - flutter@3.47.2
+    prebuild:
+      - git config --global --add safe.directory $$flutter$$
+      - $$flutter$$/bin/flutter config --no-analytics
+    # The Flutter project is `mobile`, two levels above the Gradle module that
+    # `subdir` points at, and `flutter build` has to run from it
+    build:
+      - cd ../..
+      - $$flutter$$/bin/flutter pub get
+      - $$flutter$$/bin/flutter build apk --release
+    output: ../../build/app/outputs/flutter-apk/app-release.apk
+    ndk: r27c
+
+# The version the app reports and the version F-Droid publishes are the same
+# number, taken from `mobile/pubspec.yaml`
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 0.5.0
+CurrentVersionCode: 19

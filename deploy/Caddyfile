@@ -1,0 +1,68 @@
+{
+	admin off
+}
+
+# `:8080` by default: plain HTTP, for a machine that has something else doing
+# TLS in front. Set COMMUTERLVIV_SITE_ADDRESS to a domain name and Caddy gets a
+# certificate for it on its own - see docker-compose.tls.yml.
+{$COMMUTERLVIV_SITE_ADDRESS::8080} {
+	encode zstd gzip
+
+	# `handle` and not a bare `reverse_proxy`, because the two halves have to be
+	# exclusive: `try_files` below runs in an earlier phase than proxying, so a
+	# shared block rewrites `/api/health` to `/index.html` before the proxy ever
+	# sees which path was asked for
+	@service path /api/* /ws
+	handle @service {
+		# The service rate-limits per client address and reads it from the
+		# leftmost `X-Forwarded-For` entry. Caddy *appends* to that header, so
+		# whatever the caller sent stays leftmost - a client that sends its own
+		# gets whichever address it likes and its own private rate limit.
+		# Overwriting with the peer address is what makes the header mean
+		# anything. In front of another proxy that is the wrong peer, so
+		# docker-compose.proxy.yml points this at the header instead and the
+		# outer proxy becomes the one that has to overwrite it.
+		reverse_proxy service:8099 {
+			# The default lives in docker-compose.yml and not here, because
+			# Caddy's env syntax ends at the first `}`: written as
+			# `{$VAR:{remote_host}}` it takes `{remote_host` as the default
+			# and leaves the spare `}` in the header, which is an address
+			# Postgres refuses - and that insert is on the login path
+			header_up X-Forwarded-For {$COMMUTERLVIV_CLIENT_IP}
+		}
+	}
+
+	# The basemap, when it is served from here rather than from
+	# tiles.versatiles.org - see docker-compose.tiles.yml. Same origin as the
+	# app on purpose: no CORS to get wrong, and no third party learning every
+	# visitor's address from their tile requests. `handle_path` strips the
+	# prefix, so the container sees the paths it would serve at its own root.
+	# The tiles behind it change only when the extract is re-cut, and the URLs
+	# are content-addressed by z/x/y, so a long cache is safe
+	handle_path /tiles/* {
+		reverse_proxy tiles:8080
+		header Cache-Control "public, max-age=604800"
+	}
+
+	# The phone app itself, for a phone that cannot reach F-Droid: whatever
+	# `deploy/release-apk.sh` last put in `deploy/apk/`, listed so the versioned
+	# file and `commuterlviv.apk` are both visible. Android refuses a download
+	# served as text, hence the type
+	handle /download/* {
+		root * /srv
+		header /download/*.apk Content-Type application/vnd.android.package-archive
+		file_server browse
+	}
+
+	handle {
+		root * /srv
+		# The worker decides what every later request is allowed to do, so a
+		# cached copy of it outlives the deploy that replaced it
+		header /sw.js Cache-Control "no-cache"
+		# Every other path serves index.html: `/join/<code>` is a route in the
+		# app and not a file, and a 404 there turns an invite link into a dead
+		# one
+		try_files {path} /index.html
+		file_server
+	}
+}

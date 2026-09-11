@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 8 and newer. The launcher masks and animates the two layers
+     separately, so the plate is a flat colour here rather than part of the
+     drawing; mipmap-*dpi/ic_launcher.png is the whole mark for older Android.
+     `monochrome` is the themed-icon layer Android 13 tints itself - it reads
+     the alpha only, so the foreground doubles as it. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>
