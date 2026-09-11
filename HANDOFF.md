@@ -92,9 +92,11 @@ which of its parts are carrying it.
   registration, the live map, the route sheet, the times and the style switcher.
   It is also installed on the user's own phone, from a debug APK pointed at the
   VPN address - debug because the release manifest forbids cleartext and this
-  deployment has no certificate. The licence is MIT and the app defaults to `https://commuterlviv.r1a.nl`; the one
-  thing still blocking an F-Droid submission is that the project has no public
-  repository, so the recipe's URLs are placeholders.
+  deployment has no certificate. The licence is MIT and the app defaults to `https://commuterlviv.r1a.nl`; the
+  two things still blocking an F-Droid submission are that the project has no
+  public repository, so the recipe's URLs are placeholders, and no tags, so
+  there is no commit for it to build. The recipe itself is lint-clean and
+  `mobile/README.md` has the steps.
 - **The whole stack is now one command.** `docker compose up -d --build` brings
   up Postgres, the service, the collector and Caddy in front; the dev overlay
   swaps the built UI for Vite's dev server and opens the ports. Verified end to
@@ -536,9 +538,12 @@ five-second frames, and each route's badge is laid out once into a
 `ui.Paragraph`. `mobile/README.md` has the rest, including why the
 locate-me button is a hand-written channel - AOSP's `LocationManager` on
 Android, `CoreLocation` on iOS - and that the iOS half has never seen a
-compiler, there being no Mac here. Two fields in `mobile/fdroid/ua.lviv.commuterlviv.yml` are the
-owner's to fill: the licence, since the repository has no LICENCE file, and the
-repository URL, since there is no remote.
+compiler, there being no Mac here. `mobile/fdroid/ua.lviv.commuterlviv.yml` is
+the fdroiddata recipe and passes `fdroid lint`; what is left in it is the
+owner's, and only the owner's - the `https://example.invalid` URLs, because
+there is no public remote, and the `v0.5.0` tag it builds, because there are no
+tags. `mobile/README.md` has the submission steps under "Getting it into
+F-Droid".
 
 **Five fixes on 2026-09-09, from a review of all three clients.** Pinned stops
 now live on the server, in `user_prefs.data`, and are stored as **feed ids**
@@ -904,7 +909,7 @@ mobile/         the phone app: Flutter, Android and iOS, F-Droid-shaped
                 sheets, stop_search,
                 map_theme.dart, strings.dart (uk and en)
   test/         wire_test.dart, against bytes Python encoded
-  fdroid/       the fdroiddata build recipe, two fields still TODO
+  fdroid/       the fdroiddata build recipe; lint-clean, needs a public repo
   fastlane/     the store listing F-Droid reads from the repository
 check.sh           everything checkable with nothing running: ruff's
                    will-it-run rules, the package imports, the web types and

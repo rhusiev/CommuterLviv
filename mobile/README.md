@@ -93,6 +93,54 @@ the web app carry the same number, `check.sh` fails if they disagree, and
 `versionCode` goes up by one with it because F-Droid orders releases by that
 and nothing else.
 
+## Getting it into F-Droid
+
+F-Droid does not take an APK. It takes a recipe, clones the source itself,
+builds it on its own machines and signs the result with its own key, so the
+whole submission is one YAML file plus a public repository to point it at.
+
+Ours is `fdroid/ua.lviv.commuterlviv.yml`, kept here so the recipe and the app
+it builds change together. It passes `fdroid lint` as it stands. Two things are
+still missing, and they are the owner's:
+
+1. **A public repository.** Every `https://example.invalid/...` in the recipe,
+   and the `Repo:` beneath them, is a placeholder. There is no public remote
+   yet, and F-Droid will not take a recipe it cannot clone.
+2. **A tag.** `commit: v0.5.0` and `UpdateCheckMode: Tags` both want an
+   annotated tag `v<version>` on the commit carrying that version. There are no
+   tags in this repository.
+
+With those two done, the submission is:
+
+```sh
+# fork https://gitlab.com/fdroid/fdroiddata, then
+cp mobile/fdroid/ua.lviv.commuterlviv.yml <fdroiddata>/metadata/
+cd <fdroiddata> && fdroid readmeta && fdroid lint ua.lviv.commuterlviv
+fdroid build -v -l ua.lviv.commuterlviv   # optional, needs their buildserver
+```
+
+and a merge request against `fdroiddata`. The reviewer builds it, compares the
+result against nothing (there is no upstream APK to reproduce), and merges.
+
+The build is already shaped for it, and each piece is there for a reason worth
+not undoing:
+
+* `android/app/build.gradle.kts` creates a signing config only if
+  `key.properties` exists, so their keyless build makes the unsigned APK they
+  then sign. It also sets `dependenciesInfo.includeInApk = false`, which strips
+  the Google-signed blob Gradle otherwise embeds and F-Droid rejects.
+* `srclibs: [flutter@3.47.2]` is F-Droid's own pinned Flutter checkout, exposed
+  to the recipe as `$$flutter$$`. It replaced a `sudo:` block that downloaded
+  the SDK tarball and checked a hash by hand - one fewer thing to keep in step
+  with the version above it.
+* `subdir: mobile/android/app` is the Gradle module, but `flutter build` has to
+  run from the Flutter project two levels up, which is what the `cd ../..` in
+  `build:` and the `../../` in `output:` are for.
+* No dependency pulls Play services (see "Where the phone is" below).
+* The listing text lives in `fastlane/metadata/android/en-US/`, which F-Droid
+  reads out of the repository. `Summary` and `Description` in the recipe repeat
+  it because fdroiddata requires both fields; they are kept in step by hand.
+
 ## What the server needs
 
 One line of deployment configuration, because the app is not a web page and has
