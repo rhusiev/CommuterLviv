@@ -402,9 +402,14 @@ All three are run. Finding 13 has the tables; between them they are worth 2 s of
       re-swept at 30, 45, 60, 120: monotone down to 30 (164.4), with 45 (164.7)
       not separated from it and the shipped 120 at 166.7. `octants` 16 (166.7)
       and 8 (166.9) are not separated; 4 costs 1.0 s.
-- [ ] Confirm `grid=45` on `stack-robust` before changing `network.DEFAULT`. The
+- [x] Confirm `grid=45` on `stack-robust` before changing `network.DEFAULT`. The
       corridor layer is one input of four there, and a 2.3 s win on `full` need
-      not survive the blend.
+      not survive the blend. **It does not.** Fitted on Monday and tested on
+      Tuesday - a weekday split, because finding 14 - `stack-robust` is 128.1 s
+      at 45 m against 127.5 at 120, and `full` is 142.9 against 143.3. The
+      sweep's 2.3 s becomes 0.4 s on a weekday and the blend gives back more
+      than that, both differences inside the intervals. `network.DEFAULT.grid`
+      stays at 120. `reports/stack-grid45.md`, `-grid120.md`.
 
 Sweeps are not free: each is a full replay. Run them as a batch overnight rather
 than interactively, and write the grid to `reports/sweeps.json`.
@@ -654,15 +659,17 @@ that they are unscored rather than quietly omitting them.
       `no-prior` at the two long ones. Over the whole recording, 113 against
       118, tied with `no-prior` and `tuned` on MAE but with a bias of -51 s
       against their -58 and -68 (`reports/slow-day.md`). Finding 11.
-- [~] **Per-hour scoring.** No per-hour table was published, which finding 6
+- [x] **Per-hour scoring.** No per-hour table was published, which finding 6
       noted is why nothing shipped is misleading despite the sparse hours. Built
       2026-09-10: `score.hours`/`score.hour_table` cut the paired support by the
       local hour the prediction was made in and drop any hour under
       `score.HOUR_MIN` (300 predictions) rather than printing a number nobody
       should read, and `commuterlviv experiment` writes the table into both
       `approaches.json` and `approaches.md`. The recording now spans four days,
-      so the hours are no longer sparse; the numbers land with the next full
-      experiment run.
+      so the hours are no longer sparse; 05:00 is the only hour near the floor
+      at 11 813 predictions, and every hour from 06:00 to 22:00 carries at least
+      101 350. Run 2026-09-11 and it is finding 15: the midday hours separate
+      nothing, and every difference the scoreboard shows is made in the peaks.
 
 - [x] **Cross-day re-scoring.** Every published number is pooled over the whole
       recording, which cannot say whether a variant wins because it is better or

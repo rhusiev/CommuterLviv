@@ -729,6 +729,50 @@ and Wednesday, 2485 s and 2939 s against 575 s on the Monday, which is far too
 large to be prediction quality; it is the operator's feed failing for stretches
 of those days and is worth its own look before any of those numbers is quoted.
 
+## 15. The midday hours separate nothing, and no switch wins both peaks
+
+The scoreboard is pooled over the day, and most of the day is the flat middle.
+Cutting the same common support by the local hour the prediction was made in
+(`reports/approaches.md`, "MAE by the hour of day") shows where the pooled
+differences actually come from.
+
+| hour | n | `full` | `profile` | `profile-no-prior` | `no-incremental` |
+|---|---|---|---|---|---|
+| 06 | 451 985 | 173 | 135 | **112** | 186 |
+| 08 | 1 182 224 | 208 | 220 | 232 | **178** |
+| 12 | 981 868 | 118 | **114** | 116 | 126 |
+| 13 | 967 589 | 118 | **116** | 120 | 120 |
+| 14 | 975 587 | 118 | 117 | 121 | **117** |
+| 17 | 1 140 983 | 156 | 163 | 169 | **138** |
+| 19 | 919 842 | 125 | 113 | **109** | 148 |
+| 21 | 444 839 | 138 | 118 | **108** | 161 |
+
+MAE in seconds; the whole field is in `approaches.md`.
+
+From 11:00 to 16:00 the leading half of the field is packed into 2-6 s -
+at 15:00 the best six run 116, 118, 118, 119, 119, 123 - and `full` is 1-4 s
+off the best in five of those hours and 8 s off at 11:00. Those six hours are
+6.16 million of the 15.45 million scored predictions, so they dominate the
+pooled MAE while barely ordering the approaches at all. Almost every difference
+the scoreboard reports is made outside them. (The spread over the *whole* field
+is wider, 112 to 221, but that is `table` and `median` being different kinds of
+predictor, not the online variants separating.)
+
+Outside them, the two peaks disagree with each other. `no-incremental` - the
+one that refuses to update a vehicle's estimate between fixes - wins the morning
+peak by 30 s over `full` and the evening peak by 18, and at 21:00 is last of
+the online variants, 53 s behind the best and 23 behind `full`. The
+`profile` pair, which carries a learned time-of-day shape, is the reverse: best
+at 06:00 by 61 s over `full` and best from 19:00 on by up to 30, and beaten at
+08:00 and 17:00 by everything. Nothing is best all day, which is the first
+evidence in this project that a switch chosen by the hour would beat any single
+shipped configuration - and the first argument for measuring one.
+
+`full`'s 325 s at 05:00 is the cold start, on 11 813 predictions in the first
+half hour of service with nothing learned yet. It is not a fact about the model
+and it is the only hour near the 300-prediction floor; 06:00 through 22:00 each
+carry at least 101 350.
+
 ## The shape of the model findings
 
 Finding 7 stands apart - it is a defect in the measuring, not a property of the
