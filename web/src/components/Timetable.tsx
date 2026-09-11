@@ -12,11 +12,14 @@ export function Timetable({
   stops,
   arrivals,
   onUnpin,
+  onRoute,
 }: {
   catalog: Catalog;
   stops: number[];
   arrivals: Record<string, Arrival[]>;
   onUnpin: (i: number) => void;
+  /** The line of a route due here, from its badge */
+  onRoute: (i: number) => void;
 }) {
   const [now, setNow] = useState(Date.now() / 1000);
   useEffect(() => {
@@ -54,7 +57,9 @@ export function Timetable({
                   return (
                     <li key={a.route} className="flex items-center gap-2 py-1.5">
                       {r ? (
-                        <RouteBadge route={r} className="w-14 px-1.5 py-0.5 text-sm" />
+                        <button onClick={() => onRoute(a.route)} title={t.showLine}>
+                          <RouteBadge route={r} className="w-14 px-1.5 py-0.5 text-sm" />
+                        </button>
                       ) : (
                         <span className="w-14 text-center text-sm text-slate-500">?</span>
                       )}

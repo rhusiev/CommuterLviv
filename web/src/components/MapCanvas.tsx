@@ -286,11 +286,24 @@ export function MapCanvas({
           g.fill();
           g.globalAlpha = 1;
         }
+        // A 6 px dot is the same mark as a stop and loses to forty vehicles
+        // around it. The halo is what makes it findable without panning: a soft
+        // disc there at every zoom, even when the accuracy ring is too small
+        g.beginPath();
+        g.arc(x, y, 15, 0, TAU);
+        g.globalAlpha = 0.22;
+        g.fillStyle = c.here;
+        g.fill();
+        g.globalAlpha = 0.5;
+        g.lineWidth = 1.5;
+        g.strokeStyle = c.here;
+        g.stroke();
+        g.globalAlpha = 1;
         g.beginPath();
         g.arc(x, y, 6, 0, TAU);
         g.fillStyle = c.here;
         g.fill();
-        g.lineWidth = 2;
+        g.lineWidth = 3;
         g.strokeStyle = c.edge;
         g.stroke();
       }

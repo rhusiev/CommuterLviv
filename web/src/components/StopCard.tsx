@@ -13,6 +13,7 @@ export function StopCard({
   arrivals,
   pinned,
   onPin,
+  onRoute,
   onClose,
 }: {
   catalog: Catalog;
@@ -20,6 +21,8 @@ export function StopCard({
   arrivals: Arrival[] | undefined;
   pinned: boolean;
   onPin: () => void;
+  /** The line of a route that calls here, from its badge */
+  onRoute: (i: number) => void;
   onClose: () => void;
 }) {
   const s = catalog.stops[stop];
@@ -72,12 +75,15 @@ export function StopCard({
           if (!r) return null;
           const a = due.get(i);
           return (
-            <li
-              key={i}
-              className="flex items-center gap-1 rounded-control bg-raised/70 py-0.5 pl-0.5 pr-1.5"
-            >
-              <RouteBadge route={r} className="px-1.5 py-0.5 text-xs" />
-              <span className="text-xs text-slate-400">{a ? countdown(a.t) : "-"}</span>
+            <li key={i}>
+              <button
+                onClick={() => onRoute(i)}
+                title={t.showLine}
+                className="flex items-center gap-1 rounded-control bg-raised/70 py-0.5 pl-0.5 pr-1.5 hover:bg-raised"
+              >
+                <RouteBadge route={r} className="px-1.5 py-0.5 text-xs" />
+                <span className="text-xs text-slate-400">{a ? countdown(a.t) : "-"}</span>
+              </button>
             </li>
           );
         })}

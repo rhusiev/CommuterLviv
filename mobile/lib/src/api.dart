@@ -332,6 +332,21 @@ class Api {
   Future<void> setPins(List<String> stops) =>
       _call('POST', '/api/pins', body: {'pins': stops});
 
+  /// Saved places, whole list at a time, as the pins are
+  Future<List<Place>> setPlaces(List<Place> places) async {
+    final j =
+        await _call(
+              'POST',
+              '/api/places',
+              body: {'places': [for (final p in places) p.toJson()]},
+            )
+            as Map<String, dynamic>;
+    return [
+      for (final p in j['places'] as List)
+        Place.fromJson(p as Map<String, dynamic>),
+    ];
+  }
+
   /// What this device pinned before the server kept pins, as catalog positions
   /// - the bug that moved them. Read once per account and then forgotten.
   List<int>? oldPins(String user) {

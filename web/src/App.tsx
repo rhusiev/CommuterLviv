@@ -17,7 +17,7 @@ import {
 import { loadTheme, saveTheme, type Theme } from "./lib/theme";
 import { readUrl, writeUrl } from "./lib/url";
 import { useLive } from "./lib/useLive";
-import type { Catalog, Me, RouteSet, Shapes } from "./lib/types";
+import type { Catalog, Me, Place, RouteSet, Shapes } from "./lib/types";
 import { t } from "./lib/i18n";
 
 const JOIN = /^\/join\/([\w-]+)\/?$/;
@@ -40,6 +40,7 @@ export function App() {
   const [sets, setSets] = useState<RouteSet[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [pinIds, setPinIds] = useState<string[]>([]);
+  const [places, setPlaces] = useState<Place[]>([]);
   const [stop, setStop] = useState<number | null>(null);
   const [veh, setVeh] = useState<number | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lon: number } | null>(null);
@@ -87,6 +88,7 @@ export function App() {
       const set = who.sets.sets.find((s) => s.id === who.sets.active);
       if (set && opened.routes === null) setPicked(new Set(set.routes));
       setPinIds(who.sets.pins);
+      setPlaces(who.sets.places);
       setNotice(null);
     } catch (err) {
       failed(err);
@@ -297,6 +299,18 @@ export function App() {
     void api.setPins(ids).catch(() => undefined);
   };
 
+  /** Optimistic, like the pins: a place that failed to save comes back at the
+   * next sign-in, and blocking on a round trip is worse than that */
+  const keepPlaces = (next: Place[]) => {
+    setPlaces(next);
+    void api.setPlaces(next).catch(() => undefined);
+  };
+
+  const openRoute = (i: number) => {
+    setRoute(i);
+    setTab("route");
+  };
+
   const refreshSets = async () => {
     const s = await api.sets();
     setSets(s.sets);
@@ -451,6 +465,10 @@ export function App() {
               setTo(from);
             }}
             onHere={useHere}
+            onLine={openRoute}
+            places={places}
+            onPlaces={keepPlaces}
+            onPoint={(which, at) => (which === "from" ? setFrom(at) : setTo(at))}
             onStop={(i) => {
               setTab("map");
               setStop(i);
@@ -469,6 +487,7 @@ export function App() {
             stops={pins}
             arrivals={live.arrivals}
             onUnpin={(i) => setPinned(pins.filter((p) => p !== i))}
+            onRoute={openRoute}
           />
         </section>
       )}
@@ -513,6 +532,7 @@ export function App() {
                     : [...pins, stop],
                 )
               }
+              onRoute={openRoute}
               onClose={() => setStop(null)}
             />
           ) : veh === null ? null : (
@@ -523,10 +543,7 @@ export function App() {
                 setStop(i);
                 setVeh(null);
               }}
-              onRoute={(i) => {
-                setRoute(i);
-                setTab("route");
-              }}
+              onRoute={openRoute}
               onClose={() => setVeh(null)}
             />
           )}
@@ -591,6 +608,7 @@ export function App() {
               })
             }
             onClear={() => setPicked(new Set())}
+            onRoute={openRoute}
             sets={sets}
             active={active}
             onActivate={(s) => {

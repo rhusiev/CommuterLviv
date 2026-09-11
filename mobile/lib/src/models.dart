@@ -113,8 +113,34 @@ class RouteSet {
   final int ord;
 }
 
+/// Somewhere a person goes that the feed has no name for - home, work, a
+/// friend's door. The name is the identity: the server keeps one place per
+/// name and a second save under the same name moves it.
+class Place {
+  const Place({required this.name, required this.at});
+
+  factory Place.fromJson(Map<String, dynamic> j) => Place(
+    name: j['name'] as String,
+    at: LatLng((j['lat'] as num).toDouble(), (j['lon'] as num).toDouble()),
+  );
+
+  final String name;
+  final LatLng at;
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'lat': at.latitude,
+    'lon': at.longitude,
+  };
+}
+
 class Sets {
-  const Sets({required this.sets, required this.active, required this.pins});
+  const Sets({
+    required this.sets,
+    required this.active,
+    required this.pins,
+    required this.places,
+  });
 
   factory Sets.fromJson(Map<String, dynamic> j) => Sets(
     sets: [
@@ -123,6 +149,10 @@ class Sets {
     ],
     active: j['active'] as String?,
     pins: [for (final p in (j['pins'] as List?) ?? const []) p as String],
+    places: [
+      for (final p in (j['places'] as List?) ?? const [])
+        Place.fromJson(p as Map<String, dynamic>),
+    ],
   );
 
   final List<RouteSet> sets;
@@ -131,6 +161,8 @@ class Sets {
   /// Pinned stops, by feed id. A catalog position means nothing once the city
   /// changes its feed and the catalog is rebuilt around it
   final List<String> pins;
+
+  final List<Place> places;
 }
 
 class Me {

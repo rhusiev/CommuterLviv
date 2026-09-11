@@ -88,6 +88,13 @@ const en = {
   schedulePart: "timetable",
   wholeWalk: "walk the whole way",
   planHint: "Tap the map to set where you are and where you are going.",
+  showLine: "show this line",
+  holdForLine: "right-click or hold a route for its line",
+  places: "Saved places",
+  savePlace: "Save this place",
+  namePlace: "Name this place",
+  noPlaces: "Save a place and it is offered here",
+  forget: "forget",
 };
 
 type Strings = typeof en;
@@ -167,6 +174,13 @@ const uk: Strings = {
   schedulePart: "за розкладом",
   wholeWalk: "пішки весь шлях",
   planHint: "Торкніться мапи, щоб вказати, де ви є і куди прямуєте.",
+  showLine: "показати лінію",
+  holdForLine: "правий клік або утримання - лінія маршруту",
+  places: "Збережені місця",
+  savePlace: "Зберегти це місце",
+  namePlace: "Назва місця",
+  noPlaces: "Збережене місце зʼявиться тут",
+  forget: "забути",
 };
 
 /** What was chosen before, else Ukrainian for a browser that asks for it. */

@@ -36,6 +36,11 @@ class JourneyPanel extends StatefulWidget {
     required this.onSwap,
     required this.onHere,
     required this.onStop,
+    required this.onLine,
+    required this.places,
+    required this.onSave,
+    required this.onForget,
+    required this.onPlace,
     required this.onClose,
   });
 
@@ -50,6 +55,15 @@ class JourneyPanel extends StatefulWidget {
   final VoidCallback onSwap;
   final void Function(End which) onHere;
   final void Function(int stop) onStop;
+
+  /// A route's line, from the badge on a ride
+  final void Function(int route) onLine;
+
+  /// Saved places, and the three things that can be done with one
+  final List<Place> places;
+  final void Function(String name, LatLng at) onSave;
+  final void Function(String name) onForget;
+  final void Function(End end, LatLng at) onPlace;
   final VoidCallback onClose;
 
   @override
@@ -130,22 +144,19 @@ class _JourneyPanelState extends State<JourneyPanel> {
                 ),
               ],
             ),
-            _End(
-              label: txt.from,
-              at: widget.from,
-              picking: widget.picking == End.from,
-              onPick: () =>
-                  widget.onPick(widget.picking == End.from ? null : End.from),
-              onHere: () => widget.onHere(End.from),
-            ),
-            _End(
-              label: txt.to,
-              at: widget.to,
-              picking: widget.picking == End.to,
-              onPick: () =>
-                  widget.onPick(widget.picking == End.to ? null : End.to),
-              onHere: () => widget.onHere(End.to),
-            ),
+            for (final end in End.values)
+              _End(
+                label: end == End.from ? txt.from : txt.to,
+                at: end == End.from ? widget.from : widget.to,
+                picking: widget.picking == end,
+                onPick: () =>
+                    widget.onPick(widget.picking == end ? null : end),
+                onHere: () => widget.onHere(end),
+                places: widget.places,
+                onPlace: (at) => widget.onPlace(end, at),
+                onSave: widget.onSave,
+                onForget: widget.onForget,
+              ),
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
@@ -178,6 +189,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
                           journey: _options![i],
                           catalog: widget.catalog,
                           onStop: widget.onStop,
+                          onLine: widget.onLine,
                         ),
                       ),
               )
@@ -203,6 +215,10 @@ class _End extends StatelessWidget {
     required this.picking,
     required this.onPick,
     required this.onHere,
+    required this.places,
+    required this.onPlace,
+    required this.onSave,
+    required this.onForget,
   });
 
   final String label;
@@ -210,13 +226,104 @@ class _End extends StatelessWidget {
   final bool picking;
   final VoidCallback onPick;
   final VoidCallback onHere;
+  final List<Place> places;
+  final void Function(LatLng at) onPlace;
+  final void Function(String name, LatLng at) onSave;
+  final void Function(String name) onForget;
+
+  /// Within about eleven metres, which is closer than a point can be put on the
+  /// map by hand at any useful zoom
+  static const _same = 1e-4;
+
+  Place? get _saved => places
+      .where(
+        (p) =>
+            at != null &&
+            (p.at.latitude - at!.latitude).abs() < _same &&
+            (p.at.longitude - at!.longitude).abs() < _same,
+      )
+      .firstOrNull;
+
+  Future<void> _menu(BuildContext context) async {
+    final here = at;
+    final chosen = await showModalBottomSheet<Object>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            if (places.isEmpty)
+              ListTile(
+                dense: true,
+                title: Text(
+                  txt.noPlaces,
+                  style: material.Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            for (final p in places)
+              ListTile(
+                leading: const Icon(Icons.place_outlined),
+                title: Text(p.name),
+                onTap: () => Navigator.pop(context, p),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: txt.deleteSet,
+                  onPressed: () {
+                    Navigator.pop(context);
+                    onForget(p.name);
+                  },
+                ),
+              ),
+            if (here != null) ...[
+              const Divider(height: 8),
+              ListTile(
+                leading: const Icon(Icons.star_outline),
+                title: Text(txt.savePlace),
+                onTap: () => Navigator.pop(context, here),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+    if (chosen is Place) onPlace(chosen.at);
+    if (chosen is LatLng && context.mounted) await _name(context, chosen);
+  }
+
+  Future<void> _name(BuildContext context, LatLng where) async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        final field = TextEditingController();
+        return AlertDialog.adaptive(
+          title: Text(txt.namePlace),
+          content: TextField(controller: field, autofocus: true),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(txt.cancel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, field.text.trim()),
+              child: Text(txt.saveHere),
+            ),
+          ],
+        );
+      },
+    );
+    if (name != null && name.isNotEmpty) onSave(name, where);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final where = at == null
-        ? txt.tapMap
-        : '${at!.latitude.toStringAsFixed(4)}, '
-              '${at!.longitude.toStringAsFixed(4)}';
+    final saved = _saved;
+    // A place that has been named is read by its name; a bare point has only
+    // its coordinates to be read by
+    final where = saved?.name ??
+        (at == null
+            ? txt.tapMap
+            : '${at!.latitude.toStringAsFixed(4)}, '
+                  '${at!.longitude.toStringAsFixed(4)}');
     return Row(
       children: [
         SizedBox(width: 56, child: Text(label)),
@@ -233,6 +340,11 @@ class _End extends StatelessWidget {
           ),
         ),
         IconButton(
+          onPressed: () => _menu(context),
+          icon: Icon(saved == null ? Icons.star_outline : Icons.star),
+          tooltip: txt.places,
+        ),
+        IconButton(
           onPressed: onHere,
           icon: const Icon(Icons.my_location),
           tooltip: txt.useHere,
@@ -247,11 +359,15 @@ class _Option extends StatelessWidget {
     required this.journey,
     required this.catalog,
     required this.onStop,
+    required this.onLine,
   });
 
   final Journey journey;
   final Catalog catalog;
   final void Function(int stop) onStop;
+
+  /// A route's line, from the badge on a ride
+  final void Function(int route) onLine;
 
   @override
   Widget build(BuildContext context) {
@@ -283,7 +399,12 @@ class _Option extends StatelessWidget {
               ],
             ),
             for (final leg in journey.legs)
-              _LegRow(leg: leg, catalog: catalog, onStop: onStop),
+              _LegRow(
+                leg: leg,
+                catalog: catalog,
+                onStop: onStop,
+                onLine: onLine,
+              ),
           ],
         ),
       ),
@@ -296,11 +417,15 @@ class _LegRow extends StatelessWidget {
     required this.leg,
     required this.catalog,
     required this.onStop,
+    required this.onLine,
   });
 
   final Leg leg;
   final Catalog catalog;
   final void Function(int stop) onStop;
+
+  /// A route's line, from the badge on a ride
+  final void Function(int route) onLine;
 
   @override
   Widget build(BuildContext context) {
@@ -330,7 +455,12 @@ class _LegRow extends StatelessWidget {
         child: Row(
           children: [
             SizedBox(width: 44, child: Text(_clock(leg.dep))),
-            RouteBadge(route: route, fontSize: 11),
+            // The badge is the way to the line, as it is everywhere else. It
+            // is inside a row that opens the stop, so it takes its own taps
+            InkWell(
+              onTap: () => onLine(leg.route!),
+              child: RouteBadge(route: route, fontSize: 11),
+            ),
             const SizedBox(width: 8),
             Expanded(child: Text(where, overflow: TextOverflow.ellipsis)),
             Text(

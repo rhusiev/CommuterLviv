@@ -21,6 +21,9 @@ type Props = {
   picked: Set<string>;
   onToggle: (id: string) => void;
   onClear: () => void;
+  /** A route's line. A click here already means show it on the map, which is
+   * what this panel is for, so the line is on the secondary press instead */
+  onRoute: (i: number) => void;
   sets: RouteSet[];
   active: string | null;
   onActivate: (set: RouteSet) => void;
@@ -36,9 +39,10 @@ export function RoutePanel(p: Props) {
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return p.catalog.routes;
-    return p.catalog.routes.filter(
-      (r) => r.short.toLowerCase().includes(q) || r.long.toLowerCase().includes(q),
+    const all = p.catalog.routes.map((r, i) => [r, i] as const);
+    if (!q) return all;
+    return all.filter(
+      ([r]) => r.short.toLowerCase().includes(q) || r.long.toLowerCase().includes(q),
     );
   }, [p.catalog, query]);
 
@@ -134,10 +138,17 @@ export function RoutePanel(p: Props) {
           className="field mt-2 py-1.5"
         />
         <div data-chips className="mt-2 flex flex-wrap content-start gap-1 overflow-y-auto">
-          {shown.map((r) => {
+          {shown.map(([r, i]) => {
             const on = p.picked.has(r.id);
             return (
-              <button key={r.id} onClick={() => p.onToggle(r.id)}>
+              <button
+                key={r.id}
+                onClick={() => p.onToggle(r.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  p.onRoute(i);
+                }}
+              >
                 <RouteBadge
                   route={r}
                   muted={!on}
@@ -149,6 +160,9 @@ export function RoutePanel(p: Props) {
             );
           })}
         </div>
+        {/* Everywhere else a badge is the way to the line. Here a click is
+            already taken, by the one thing this list exists to do */}
+        <p className="mt-1.5 text-xs text-slate-500">{t.holdForLine}</p>
       </section>
 
       <section>

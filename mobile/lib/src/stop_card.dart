@@ -20,6 +20,7 @@ class StopCard extends StatefulWidget {
     required this.watching,
     required this.onPin,
     required this.onRoute,
+    required this.onLine,
   });
 
   final Catalog catalog;
@@ -35,6 +36,10 @@ class StopCard extends StatefulWidget {
   final Set<int> watching;
   final VoidCallback onPin;
   final void Function(int route) onRoute;
+
+  /// The same badge, held rather than tapped: a tap here picks the route to
+  /// watch, so the line is on the long press, as it is in the route sheet
+  final void Function(int route) onLine;
 
   @override
   State<StopCard> createState() => _StopCardState();
@@ -89,7 +94,11 @@ class _StopCardState extends State<StopCard> {
                   runSpacing: 4,
                   children: [
                     for (final a in due.take(8))
-                      Due(route: catalog.routes[a.route], arrival: a),
+                      Due(
+                        route: catalog.routes[a.route],
+                        arrival: a,
+                        onLine: () => widget.onLine(a.route),
+                      ),
                   ],
                 );
               },
@@ -105,12 +114,15 @@ class _StopCardState extends State<StopCard> {
               runSpacing: 4,
               children: [
                 for (final r in s.routes)
-                  ActionChip(
-                    label: RouteBadge(route: catalog.routes[r], muted: true),
-                    avatar: widget.watching.contains(r)
-                        ? const Icon(Icons.check, size: 16)
-                        : null,
-                    onPressed: () => widget.onRoute(r),
+                  GestureDetector(
+                    onLongPress: () => widget.onLine(r),
+                    child: ActionChip(
+                      label: RouteBadge(route: catalog.routes[r], muted: true),
+                      avatar: widget.watching.contains(r)
+                          ? const Icon(Icons.check, size: 16)
+                          : null,
+                      onPressed: () => widget.onRoute(r),
+                    ),
                   ),
               ],
             ),

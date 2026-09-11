@@ -1,4 +1,4 @@
-"""Named route sets, pinned stops, and which set is showing.
+"""Named route sets, pinned stops, saved places, and which set is showing.
 
 A set is a list of route ids - "the four routes I watch from the office" - and
 the point of keeping them here rather than in the browser is that the same four
@@ -11,6 +11,13 @@ index after it shifts, and a pin that was Енергетична silently become
 stop along with nothing to show for it. Ids are also validated against the
 catalog before they are stored, so neither can accumulate names of things the
 city stopped running.
+
+A place is the third kind and the only one the feed does not name: home, work,
+a friend's door - a latitude, a longitude and a name, which is exactly what the
+journey planner takes as an end. There is nothing to validate it against, so
+the only checks are that it is on the planet and that the name is short enough,
+and it is stored beside the pins in the same jsonb rather than in a table of
+its own, because a handful of points per person does not earn one.
 """
 import json
 
@@ -23,6 +30,8 @@ MAX_NAME = 40
 # One less than the 64 stops a client may watch at once (`hub.MAX_STOPS`), so
 # the pins plus whichever card is open always fit
 MAX_PINS = 63
+
+MAX_PLACES = 24
 
 
 def clean(name, routes, valid):
@@ -57,22 +66,39 @@ async def listing(pool, user_id):
     active = row["active_set"] if row else None
     return {"sets": [as_json(r) for r in rows],
             "active": str(active) if active else None,
-            "pins": _pins(row)}
+            "pins": _kept(row, "pins"), "places": _kept(row, "places")}
 
 
-def _pins(row):
+def _kept(row, key):
+    """One list out of the jsonb everything small is kept in."""
     if row is None:
         return []
     data = row["data"]
     if isinstance(data, str):        # asyncpg hands back jsonb as text
         data = json.loads(data)
-    pins = (data or {}).get("pins")
-    return pins if isinstance(pins, list) else []
+    kept = (data or {}).get(key)
+    return kept if isinstance(kept, list) else []
+
+
+async def _read(pool, user_id, key):
+    return _kept(await pool.fetchrow(
+        "SELECT data FROM user_prefs WHERE user_id = $1", user_id), key)
+
+
+async def _write(pool, user_id, key, value):
+    """The whole list, on every change. Each one is a few dozen short strings,
+    and half a list applied would be worse than a list that cost a row."""
+    await pool.execute(
+        "INSERT INTO user_prefs(user_id, data) "
+        "VALUES($1, jsonb_build_object($2::text, $3::jsonb)) "
+        "ON CONFLICT (user_id) DO UPDATE "
+        "SET data = user_prefs.data || jsonb_build_object($2::text, $3::jsonb),"
+        "    updated_at = now()",
+        user_id, key, json.dumps(value))
 
 
 async def pins(pool, user_id):
-    return _pins(await pool.fetchrow(
-        "SELECT data FROM user_prefs WHERE user_id = $1", user_id))
+    return await _read(pool, user_id, "pins")
 
 
 def clean_pins(stops, valid):
@@ -94,13 +120,43 @@ def clean_pins(stops, valid):
 
 
 async def set_pins(pool, user_id, stops):
-    await pool.execute(
-        "INSERT INTO user_prefs(user_id, data) "
-        "VALUES($1, jsonb_build_object('pins', $2::jsonb)) "
-        "ON CONFLICT (user_id) DO UPDATE "
-        "SET data = user_prefs.data || jsonb_build_object('pins', $2::jsonb), "
-        "    updated_at = now()",
-        user_id, json.dumps(stops))
+    await _write(pool, user_id, "pins", stops)
+
+
+async def places(pool, user_id):
+    return await _read(pool, user_id, "places")
+
+
+def clean_places(saved):
+    """The places as they will be stored, or (None, why not).
+
+    The name is the identity - there is nothing else to key a point on, and two
+    places called home are a person's mistake rather than a thing to keep - so
+    a repeated name keeps the last one given. Unlike a pin, nothing here can go
+    stale: the city cannot withdraw a doorway.
+    """
+    if not isinstance(saved, list):
+        return None, "places must be a list"
+    seen = {}
+    for p in saved:
+        if not isinstance(p, dict):
+            return None, "a place must be an object"
+        name = (p.get("name") or "").strip()
+        lat, lon = p.get("lat"), p.get("lon")
+        if not 1 <= len(name) <= MAX_NAME:
+            return None, f"a name must be 1 to {MAX_NAME} characters"
+        if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+            return None, "a place needs a lat and a lon"
+        if not -90 <= lat <= 90 or not -180 <= lon <= 180:
+            return None, "that is not a point on the planet"
+        seen[name] = {"name": name, "lat": float(lat), "lon": float(lon)}
+    if len(seen) > MAX_PLACES:
+        return None, f"at most {MAX_PLACES} saved places"
+    return list(seen.values()), None
+
+
+async def set_places(pool, user_id, saved):
+    await _write(pool, user_id, "places", saved)
 
 
 async def create(pool, user_id, name, routes):
