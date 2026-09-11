@@ -14,7 +14,7 @@ live feeds so everything else can be replayed against them offline.
 | [README.md](README.md) | how our predictor works, in eight steps from a GPS fix to an ETA; also how to run the collector and on a VPS |
 | [mobile/README.md](mobile/README.md) | only if you are touching the phone app: how to run it on a phone or on the emulator, and the seven things to know before changing it |
 | [PLAN.md](PLAN.md) | the approach comparison, phase by phase, with every item's status. **Reread it after every compaction** |
-| [reports/findings.md](reports/findings.md) | what the numbers turned out to mean. Thirteen findings, each with the measurement behind it |
+| [reports/findings.md](reports/findings.md) | what the numbers turned out to mean. Fifteen findings, each with the measurement behind it |
 | [reports/approaches.md](reports/approaches.md) | the current scoreboard |
 | [reports/residual.md](reports/residual.md) and [-midday](reports/residual-midday.md) | Phase 4's two splits: what an offline model of the model's own error is worth |
 | [reports/stack.md](reports/stack.md) and [-midday](reports/stack-midday.md) | Phase 5's same two splits: what blending the predictors is worth, and the weights it fits |
@@ -309,6 +309,12 @@ which of its parts are carrying it.
   size of the effect that was being read as a difference between approaches.
   Nothing shipped on the old numbers, which is the one thing the plan got right
   about them. `reports/crossday.md`, finding 14.
+
+  The first thing rechecked on a weekday split was the corridor grid, and it
+  went the same way: `stack --grid 45` fitted on Monday and tested on Tuesday
+  puts `stack-robust` at 128.1 s against 127.5 at the shipped 120 m, so the
+  sweep's 2.3 s win on `full` does not survive the blend and
+  `network.DEFAULT.grid` stays where it is.
 
   `commuterlviv experiment` also publishes MAE by the hour of day the
   prediction was made in, dropping any hour under 300 paired predictions, which
