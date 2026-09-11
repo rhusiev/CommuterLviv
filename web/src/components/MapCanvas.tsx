@@ -12,7 +12,9 @@ import {
   STOPS_ZOOM,
   type View,
 } from "../lib/geo";
+import { sync } from "../lib/layers";
 import { sample, type Live } from "../lib/live";
+import type { Pace } from "../lib/traffic";
 import { build, colour, R, type Sprites } from "../lib/sprites";
 import { t } from "../lib/i18n";
 import { ink, styleUrl, type Theme } from "../lib/theme";
@@ -24,10 +26,6 @@ import { MOVING_FLAG, STALE_FLAG } from "../lib/wire";
  * reads the camera one frame late. No React state changes during the draw. */
 
 const STOP_R = 3.5;
-/** Metres between the arrows the server sends along a shape */
-const ARROW_SPACING = 220;
-/** Below this an arrowhead is a few pixels of speckle on the line */
-const ARROW_ZOOM = 13;
 const HIT = 14;
 const TAU = Math.PI * 2;
 
@@ -52,19 +50,11 @@ type Props = {
   marks: { lat: number; lon: number; label: string }[];
   shapes: Shapes | null;
   lines: number[];
-  arrowed: number | null;
+  /** The route whose direction of travel is marked with chevrons */
+  directed: number | null;
+  traffic: Pace | null;
   theme: Theme;
 };
-
-/** One arrowhead on the line, pointing along `(cos, sin)` */
-function head(g: CanvasRenderingContext2D, x: number, y: number, cos: number, sin: number) {
-  g.beginPath();
-  g.moveTo(x + cos * 7, y + sin * 7);
-  g.lineTo(x - cos * 3 - sin * 4.5, y - sin * 3 + cos * 4.5);
-  g.lineTo(x - cos * 3 + sin * 4.5, y - sin * 3 - cos * 4.5);
-  g.closePath();
-  g.fill();
-}
 
 const viewOf = (m: MapLibre): View => {
   const c = m.getCenter();
@@ -86,7 +76,8 @@ export function MapCanvas({
   marks,
   shapes,
   lines,
-  arrowed,
+  directed,
+  traffic,
   theme,
 }: Props) {
   const box = useRef<HTMLDivElement>(null);
@@ -107,8 +98,10 @@ export function MapCanvas({
   const pins = useRef(marks);
   const geometry = useRef(shapes);
   const drawn = useRef(lines);
-  const arrows = useRef(arrowed);
+  /** What the basemap's own layers draw, read again on every `styledata` */
+  const beneath = useRef({ shapes, directed, traffic, dark: theme.dark });
   const [locating, setLocating] = useState<Locating>("off");
+  const [ready, setReady] = useState(false);
 
   shown.current = stops;
   pick.current = selected;
@@ -121,7 +114,7 @@ export function MapCanvas({
   pins.current = marks;
   geometry.current = shapes;
   drawn.current = lines;
-  arrows.current = arrowed;
+  beneath.current = { shapes, directed, traffic, dark: theme.dark };
 
   useEffect(() => {
     const el = canvas.current!;
@@ -191,31 +184,6 @@ export function MapCanvas({
           g.globalAlpha = drawn.current.length > 1 ? 0.75 : 1;
           g.stroke(path);
           g.globalAlpha = 1;
-        }
-
-        const one = arrows.current;
-        const shape = one === null ? null : geo.routes[one];
-        if (shape && m.getZoom() >= ARROW_ZOOM) {
-          // Arrows arrive in order along the shape, so every nth is still
-          // evenly spaced - here, at least 60 px apart on screen
-          const step = Math.max(
-            1,
-            Math.ceil((60 * metresPerPixel(m.getCenter().lat, m.getZoom())) / ARROW_SPACING),
-          );
-          g.fillStyle = c.edge;
-          for (let k = 0; k < shape.arrows.length; k += step) {
-            const [lat, lon, heading, both] = shape.arrows[k]!;
-            const x = p.x(lon);
-            const y = p.y(lat);
-            if (x < -12 || y < -12 || x > w + 12 || y > h + 12) continue;
-            const a = ((heading - 90) * Math.PI) / 180;
-            const cos = Math.cos(a);
-            const sin = Math.sin(a);
-            // Back-to-back heads each back off by their own length
-            const off = both ? 9 : 0;
-            head(g, x + cos * off, y + sin * off, cos, sin);
-            if (both) head(g, x - cos * off, y - sin * off, -cos, -sin);
-          }
         }
       }
 
@@ -416,7 +384,12 @@ export function MapCanvas({
         onPick.current(best);
       });
       map.on("render", draw);
+      // Every style swap throws the sources and layers away and leaves this the
+      // only notice of it, so the layers are rebuilt from here rather than from
+      // the effect that asked for the new style
+      map.on("styledata", () => sync(map!, beneath.current));
       held.current = map;
+      setReady(true);
       resize();
       if (import.meta.env.DEV) (window as { lvivMap?: MapLibre }).lvivMap = map;
     });
@@ -425,9 +398,14 @@ export function MapCanvas({
       gone = true;
       observer.disconnect();
       held.current = null;
+      setReady(false);
       map?.remove();
     };
   }, [catalog, live]);
+
+  useEffect(() => {
+    if (ready && held.current) sync(held.current, { shapes, directed, traffic, dark: theme.dark });
+  }, [ready, shapes, directed, traffic, theme]);
 
   // `setStyle` keeps the camera, the gestures and the overlay
   useEffect(() => {

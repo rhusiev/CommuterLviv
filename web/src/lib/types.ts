@@ -47,6 +47,10 @@ export type Call = { stop: number; route: number; t: number };
 
 export type VehicleStops = { t: number; veh: number; stops: Call[] };
 
+/** What a ride rests on: a tracked vehicle, the timetable, or the timetable on
+ * a line nothing has been seen running on lately */
+export type Confidence = "live" | "schedule" | "quiet";
+
 /** `a` and `b` are catalog stop indexes, or -1 for the door at either end; a
  * walk has no route. `live` marks a tracked vehicle rather than a timetable. */
 export type Leg = {
@@ -58,20 +62,45 @@ export type Leg = {
   route?: number;
   veh?: number | null;
   live?: boolean;
+  confidence?: Confidence;
 };
 
-export type Journey = { dep: number; arr: number; rides: number; live: boolean; legs: Leg[] };
+/** The journey's confidence is the weakest of its rides */
+export type Journey = {
+  dep: number;
+  arr: number;
+  rides: number;
+  live: boolean;
+  confidence: Confidence;
+  legs: Leg[];
+};
 
 export type Plan = { t: number; options: Journey[] };
 
 /** `dir` is the feed's `direction_id`, kept only to tell the two apart */
 export type RouteLine = { dir: number; pts: [number, number][] };
 
-/** `[lat, lon, heading in degrees, 1 where the route also runs the other way
- * along this stretch]` */
-export type Arrow = [number, number, number, number];
-
-export type RouteShape = { lines: RouteLine[]; arrows: Arrow[] };
+export type RouteShape = { lines: RouteLine[] };
 
 /** Parallel to `Catalog.routes` */
 export type Shapes = { routes: RouteShape[] };
+
+/** A place found by name in OpenStreetMap. `where` is the line under the name,
+ * enough to tell two identical names apart; `kind` is the OSM value, so a shop
+ * and a street can be told apart. */
+export type Found = {
+  name: string;
+  where: string;
+  lat: number;
+  lon: number;
+  kind: string | null;
+};
+
+/** One polyline per stretch of street with transit on it. Fixed for the life of
+ * the service, so it is fetched once and kept. */
+export type Streets = { lines: [number, number][][] };
+
+/** Parallel to `Streets.lines`: actual over timetabled travel time on that
+ * stretch, above 1 being slower than scheduled. Null is too little seen there
+ * to say anything, and is drawn as nothing. */
+export type Traffic = { t: number; ratio: (number | null)[] };

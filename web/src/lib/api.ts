@@ -1,4 +1,17 @@
-import type { Arrivals, Call, Catalog, Me, Place, Plan, RouteSet, Sets, Shapes } from "./types";
+import type {
+  Arrivals,
+  Call,
+  Catalog,
+  Found,
+  Me,
+  Place,
+  Plan,
+  RouteSet,
+  Sets,
+  Shapes,
+  Streets,
+  Traffic,
+} from "./types";
 
 /** Same origin by default: Vite proxies `/api` and `/ws` in development, so the
  * session cookie is first-party either way. */
@@ -75,6 +88,9 @@ export const api = {
    * changes, so a stored index quietly becomes a different stop. */
   pins: (): Promise<{ pins: string[] }> => call("/api/pins"),
   setPins: (pins: string[]): Promise<{ pins: string[] }> => post("/api/pins", { pins }),
+  places: (): Promise<{ places: Place[] }> => call("/api/places"),
+  /** The whole list, every time: the name is the identity server-side, so a
+   * rename is the old one dropped and the new one saved in one write */
   setPlaces: (places: Place[]): Promise<{ places: Place[] }> => post("/api/places", { places }),
   createSet: (name: string, routes: string[]): Promise<RouteSet> =>
     post("/api/sets", { name, routes }),
@@ -87,8 +103,16 @@ export const api = {
     call(`/api/arrivals?stops=${stops.join(",")}`),
   vehicle: (veh: number): Promise<{ t: number; veh: number; stops: Call[] }> =>
     call(`/api/vehicle?veh=${veh}`),
-  plan: (from: [number, number], to: [number, number]): Promise<Plan> =>
-    call(`/api/plan?from=${from[0]},${from[1]}&to=${to[0]},${to[1]}`),
+  /** `at` in unix seconds leaves at that time instead of now; a future one has
+   * no vehicles to see, so every leg comes back on the timetable */
+  plan: (from: [number, number], to: [number, number], at?: number | null): Promise<Plan> =>
+    call(
+      `/api/plan?from=${from[0]},${from[1]}&to=${to[0]},${to[1]}` +
+        (at ? `&at=${Math.round(at)}` : ""),
+    ),
+  search: (q: string, signal?: AbortSignal): Promise<{ places: Found[] }> =>
+    call(`/api/search?q=${encodeURIComponent(q)}`, { signal }),
+  traffic: (): Promise<Traffic> => call("/api/traffic"),
 };
 
 /** Cached in local storage against the service's ETag: the usual request comes
@@ -118,3 +142,7 @@ export const catalog = () => held<Catalog>("/api/catalog", "commuterlviv.catalog
 
 /** Half a megabyte, so fetched only once something draws a route line */
 export const shapes = () => held<Shapes>("/api/shapes", "commuterlviv.shapes");
+
+/** Which stretch of street each traffic number belongs to: a quarter of a
+ * megabyte that never changes, against numbers that change every minute */
+export const streets = () => held<Streets>("/api/traffic/streets", "commuterlviv.streets");

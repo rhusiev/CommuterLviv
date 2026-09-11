@@ -6,10 +6,10 @@ export type UrlState = {
   routes: string[] | null;
   stop: string | null;
   route: string | null;
-  tab: "map" | "times" | "plan" | "route";
+  tab: "map" | "times" | "plan" | "saved" | "route";
 };
 
-const TABS: UrlState["tab"][] = ["map", "times", "plan", "route"];
+const TABS: UrlState["tab"][] = ["map", "times", "plan", "saved", "route"];
 
 export function readUrl(): UrlState {
   const q = new URLSearchParams(location.search);

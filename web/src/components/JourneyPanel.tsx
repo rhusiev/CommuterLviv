@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { api } from "../lib/api";
 import { t } from "../lib/i18n";
+import { dropped, saved } from "../lib/places";
 import { RouteBadge } from "./RouteBadge";
-import type { Catalog, Journey, Leg, Place } from "../lib/types";
+import type { Catalog, Confidence, Journey, Leg, Place } from "../lib/types";
 
 export type Point = { lat: number; lon: number };
 
@@ -10,6 +11,19 @@ const clock = (t: number) =>
   new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 const mins = (s: number) => Math.max(1, Math.round(s / 60));
+
+/** What the leg rests on, and how loudly to say so */
+const RESTS: Record<Confidence, { word: string; tone: string; hint?: string }> = {
+  live: { word: t.livePart, tone: "text-emerald-400" },
+  schedule: { word: t.schedulePart, tone: "text-slate-500" },
+  quiet: { word: t.quietPart, tone: "text-amber-400", hint: t.quietHint },
+};
+
+/** What `<input type="datetime-local">` wants: local wall clock, no zone */
+const onClock = (at: number) => {
+  const d = new Date(at * 1000);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+};
 
 /** The same place: 1e-4 degrees is about 11 m */
 const same = (a: Point, b: Place) =>
@@ -45,18 +59,20 @@ export function JourneyPanel({
   const [options, setOptions] = useState<Journey[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  /** Unix seconds, or null for now - which is what the service assumes */
+  const [at, setAt] = useState<number | null>(null);
 
-  const save = (at: Point, name: string) =>
-    onPlaces([...places.filter((p) => p.name !== name), { name, lat: at.lat, lon: at.lon }]);
+  const save = (point: Point, name: string) =>
+    onPlaces(saved(places, name, point.lat, point.lon));
 
-  const forget = (place: Place) => onPlaces(places.filter((p) => p.name !== place.name));
+  const forget = (place: Place) => onPlaces(dropped(places, place.name));
 
   const search = async () => {
     if (!from || !to) return;
     setBusy(true);
     setFailed(null);
     try {
-      const got = await api.plan([from.lat, from.lon], [to.lat, to.lon]);
+      const got = await api.plan([from.lat, from.lon], [to.lat, to.lon], at);
       setOptions(got.options);
     } catch (err) {
       setFailed(err instanceof Error ? err.message : t.failed);
@@ -90,6 +106,26 @@ export function JourneyPanel({
         onSave={to && ((name: string) => save(to, name))}
         onForget={forget}
       />
+
+      <div className="flex items-center gap-2">
+        <span className="w-12 shrink-0 text-xs uppercase tracking-wide text-slate-500">
+          {t.leaveAt}
+        </span>
+        <input
+          type="datetime-local"
+          value={at === null ? "" : onClock(at)}
+          onChange={(e) =>
+            setAt(e.target.value === "" ? null : Math.round(new Date(e.target.value).getTime() / 1000))
+          }
+          className="field min-w-0 flex-1 py-1.5"
+        />
+        <button
+          onClick={() => setAt(null)}
+          className={`btn-quiet shrink-0 px-2 text-xs ${at === null ? "text-accent" : ""}`}
+        >
+          {t.leaveNow}
+        </button>
+      </div>
 
       <div className="flex gap-2">
         <button
@@ -259,7 +295,13 @@ function Option({
                   {t.walkLeg(mins(leg.arr - leg.dep))}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-slate-400">
-                  {leg.b < 0 ? t.toDoor : (catalog.stops[leg.b]?.name ?? "")}
+                  {leg.b < 0
+                    ? t.toDoor
+                    : // Consecutive walks are folded before they are sent, so a
+                      // walk with a ride either side is the change itself
+                      i > 0 && i < journey.legs.length - 1
+                      ? t.changeAt(catalog.stops[leg.b]?.name ?? "")
+                      : (catalog.stops[leg.b]?.name ?? "")}
                 </span>
               </>
             ) : (
@@ -284,6 +326,8 @@ function Ride({
   onLine: (i: number) => void;
 }) {
   const route = leg.route === undefined ? undefined : catalog.routes[leg.route];
+  // An older service says only whether a vehicle was seen
+  const rests = RESTS[leg.confidence ?? (leg.live ? "live" : "schedule")];
   return (
     <>
       <span className="w-14 shrink-0 text-xs tabular-nums text-slate-400">{clock(leg.dep)}</span>
@@ -298,8 +342,8 @@ function Ride({
       >
         {catalog.stops[leg.b]?.name ?? ""}
       </button>
-      <span className={`shrink-0 text-xs ${leg.live ? "text-emerald-400" : "text-slate-500"}`}>
-        {leg.live ? t.livePart : t.schedulePart}
+      <span title={rests.hint} className={`shrink-0 text-xs ${rests.tone}`}>
+        {rests.word}
       </span>
     </>
   );

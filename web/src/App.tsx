@@ -4,6 +4,7 @@ import { RoutePanel } from "./components/RoutePanel";
 import { SignIn } from "./components/SignIn";
 import { JourneyPanel, type Point } from "./components/JourneyPanel";
 import { StopCard } from "./components/StopCard";
+import { SavedPanel } from "./components/SavedPanel";
 import { StopSearch } from "./components/StopSearch";
 import { RouteBadge } from "./components/RouteBadge";
 import { VehicleCard } from "./components/VehicleCard";
@@ -15,8 +16,10 @@ import {
   shapes as fetchShapes,
 } from "./lib/api";
 import { useIndex, usePositions } from "./lib/catalog";
+import { saved } from "./lib/places";
 import { loadTheme, saveTheme, type Theme } from "./lib/theme";
-import { readUrl, writeUrl } from "./lib/url";
+import { RAMP, useTraffic } from "./lib/traffic";
+import { readUrl, writeUrl, type UrlState } from "./lib/url";
 import { useLive } from "./lib/useLive";
 import type { Catalog, Me, Place, RouteSet, Shapes } from "./lib/types";
 import { t } from "./lib/i18n";
@@ -26,6 +29,14 @@ const JOIN = /^\/join\/([\w-]+)\/?$/;
 /** Pins from before the server kept them, as catalog positions. Read once per
  * account against whatever catalog is loaded now, then deleted. */
 const oldPinKey = (user: string) => `commuterlviv.pins.${user}`;
+
+const TAB_NAMES: Record<UrlState["tab"], string> = {
+  map: t.map,
+  times: t.times,
+  plan: t.plan,
+  saved: t.saved,
+  route: t.route,
+};
 
 export function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
@@ -42,7 +53,7 @@ export function App() {
   const [stop, setStop] = useState<number | null>(null);
   const [veh, setVeh] = useState<number | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lon: number } | null>(null);
-  const [tab, setTab] = useState<"map" | "times" | "plan" | "route">(
+  const [tab, setTab] = useState<UrlState["tab"]>(
     opened.route === null && opened.tab === "route" ? "map" : opened.tab,
   );
   const [route, setRoute] = useState<number | null>(null);
@@ -54,9 +65,12 @@ export function App() {
   const [panel, setPanel] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const [notice, setNotice] = useState<string | null>(null);
+  const [jams, setJams] = useState(false);
 
   const code = JOIN.exec(location.pathname)?.[1] ?? null;
   const { live, connection, count } = useLive();
+  // Asked for again every minute, and only while the view is open
+  const traffic = useTraffic(jams);
 
   const failed = useCallback((err: unknown) => {
     if (err instanceof ApiError && err.status === 401) {
@@ -261,6 +275,12 @@ export function App() {
     void api.setPlaces(next).catch(() => undefined);
   };
 
+  const showPlace = (at: { lat: number; lon: number }) => {
+    setTab("map");
+    setStop(null);
+    setFocus({ lat: at.lat, lon: at.lon });
+  };
+
   const openRoute = (i: number) => {
     setRoute(i);
     setTab("route");
@@ -319,7 +339,8 @@ export function App() {
         marks={marks}
         shapes={geo}
         lines={lines}
-        arrowed={tab === "route" ? route : null}
+        directed={tab === "route" ? route : null}
+        traffic={traffic}
         theme={theme}
       />
 
@@ -346,6 +367,8 @@ export function App() {
           <StopSearch
             catalog={cat}
             onGo={showStop}
+            onPlace={showPlace}
+            onSave={(name, lat, lon) => keepPlaces(saved(places, name, lat, lon))}
           />
         </div>
         <span
@@ -381,6 +404,42 @@ export function App() {
           <path d="M3 6h4M17 18h4" />
         </svg>
       </button>
+
+      <button
+        onClick={() => setJams((v) => !v)}
+        title={jams ? t.hideTraffic : t.traffic}
+        aria-label={jams ? t.hideTraffic : t.traffic}
+        className={`fab absolute right-3 top-43 z-10 ${
+          jams ? "text-accent" : "text-slate-300 hover:text-slate-100"
+        }`}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          className="size-5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        >
+          <rect x="8" y="2.5" width="8" height="19" rx="3" />
+          <path d="M12 7h.01M12 12h.01M12 17h.01" />
+        </svg>
+      </button>
+
+      {jams && (
+        <div className="panel absolute right-3 top-55 z-10 w-44 p-2.5 text-xs text-slate-400">
+          <div className="flex h-1.5 overflow-hidden rounded-full">
+            {RAMP.map(([, colour]) => (
+              <span key={colour} className="flex-1" style={{ background: colour }} />
+            ))}
+          </div>
+          <p className="mt-1.5 flex justify-between">
+            <span>{t.trafficFree}</span>
+            <span>{t.trafficSlow}</span>
+          </p>
+          <p className="mt-1.5 text-slate-500">{t.trafficHint}</p>
+        </div>
+      )}
 
       {notice !== null && (
         <p className="panel absolute left-1/2 top-19 z-40 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-2 px-3 py-2 text-sm text-rose-200">
@@ -426,6 +485,22 @@ export function App() {
             arrivals={live.arrivals}
             onUnpin={(i) => setPinned(pins.filter((p) => p !== i))}
             onRoute={openRoute}
+          />
+        </section>
+      )}
+
+      {tab === "saved" && (
+        <section
+          className={`panel absolute ${clear} right-3 top-19 bottom-20 z-20 mx-auto max-w-md p-3`}
+        >
+          <SavedPanel
+            catalog={cat}
+            places={places}
+            onPlaces={keepPlaces}
+            pins={pins}
+            onUnpin={(i) => setPinned(pins.filter((p) => p !== i))}
+            onPlace={showPlace}
+            onStop={showStop}
           />
         </section>
       )}
@@ -492,29 +567,23 @@ export function App() {
           not resize its label and slide the others */}
       <nav
         className={`bar absolute bottom-3 left-1/2 z-30 grid ${
-          route === null ? "grid-cols-3" : "grid-cols-4"
+          route === null ? "grid-cols-4" : "grid-cols-5"
         } -translate-x-1/2 gap-1 p-1 text-sm`}
       >
         {(route === null
-          ? (["map", "times", "plan"] as const)
-          : (["map", "times", "plan", "route"] as const)
+          ? (["map", "times", "plan", "saved"] as const)
+          : (["map", "times", "plan", "saved", "route"] as const)
         ).map((v) => (
           <button
             key={v}
             onClick={() => setTab(v)}
-            className={`rounded-full px-4 py-1.5 font-medium transition-colors ${
+            className={`rounded-full px-3 py-1.5 font-medium transition-colors sm:px-4 ${
               tab === v
                 ? "bg-accent/15 text-accent"
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            {v === "map"
-              ? t.map
-              : v === "times"
-                ? t.times
-                : v === "plan"
-                  ? t.plan
-                  : t.route}
+            {TAB_NAMES[v]}
           </button>
         ))}
       </nav>
