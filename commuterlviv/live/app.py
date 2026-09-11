@@ -21,7 +21,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from .. import __version__, network
 from . import (auth, db, geocode, geometry, hub, journeys, prefs, security,
-               service, settings, state)
+               service, settings, state, traffic)
 
 SESSION_COOKIE = "lp_sess"
 CSRF_COOKIE = "lp_csrf"
@@ -301,6 +301,25 @@ async def shapes(request, session):
                              "Cache-Control": "private, max-age=86400"})
 
 
+async def traffic_streets(request, session):
+    """Which piece of street each traffic number belongs to; fixed for the life
+    of the service, so it is cached like the shapes."""
+    app = request.app.state
+    if request.headers.get("if-none-match") == app.traffic_tag:
+        return Response(status_code=304, headers={"ETag": app.traffic_tag})
+    return Response(app.traffic_json, media_type="application/json",
+                    headers={"ETag": app.traffic_tag,
+                             "Cache-Control": "private, max-age=86400"})
+
+
+async def traffic_now(request, session):
+    """How each of those is running against its timetable, now."""
+    app = request.app.state
+    live = app.svc.live
+    return JSONResponse(traffic.reading(live.model, app.traffic_units,
+                                        time.time()))
+
+
 async def arrivals(request, session):
     """The timetable tab: what is coming to these stops, soonest first."""
     app = request.app.state
@@ -551,6 +570,8 @@ def routes():
         Route("/api/password", protected(password), methods=["POST"]),
         Route("/api/me", protected(me), methods=["GET"]),
         Route("/api/catalog", protected(catalog), methods=["GET"]),
+        Route("/api/traffic", protected(traffic_now, unsafe=False)),
+        Route("/api/traffic/streets", protected(traffic_streets, unsafe=False)),
         Route("/api/shapes", protected(shapes), methods=["GET"]),
         Route("/api/arrivals", protected(arrivals), methods=["GET"]),
         Route("/api/vehicle", protected(vehicle), methods=["GET"]),
@@ -589,6 +610,10 @@ def build(st=None, net=None):
             geometry.describe(loaded, cat.routes)).encode()
         s.shapes_tag = f'W/"{len(s.shapes_json):x}-{len(cat.routes):x}"'
         s.svc = service.Service(st, loaded, cat, log)
+        streets = traffic.segments(loaded, s.svc.live.model)
+        s.traffic_units = streets.pop("unit")
+        s.traffic_json = json.dumps(streets).encode()
+        s.traffic_tag = f'W/"{len(s.traffic_json):x}-{len(s.traffic_units):x}"'
         s.planner = journeys.Planner.maybe(loaded, cat, log)
         s.geocoder = (geocode.Geocoder(st.photon_url) if st.photon_url
                       else None)

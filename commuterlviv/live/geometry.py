@@ -30,7 +30,7 @@ def _route(net, pairs):
     lines, arrows = [], []
     for d, sid in pairs:
         shape = net.shapes[sid]
-        lines.append({"dir": d, "pts": _points(_simplify(shape.xy, SIMPLIFY))})
+        lines.append({"dir": d, "pts": points(simplify(shape.xy, SIMPLIFY))})
         arrows.append((sid, *_arrows(shape)))
     return {"lines": lines,
             "arrows": _thin(arrows, {sid: net.shapes[sid] for _, sid in pairs})}
@@ -76,7 +76,7 @@ def _opposed(shape, p, h):
     return abs((h - there + 180.0) % 360.0 - 180.0) >= 180.0 - OPPOSED
 
 
-def _points(xy):
+def points(xy):
     ll = network.to_ll(xy)
     return [[round(float(a), 5), round(float(b), 5)] for a, b in ll]
 
@@ -84,10 +84,10 @@ def _points(xy):
 def _wire(arrows):
     """`[lat, lon, heading, two-way]`, as a list: a route carries hundreds and
     the keys would outweigh the values."""
-    return [[*_points([p])[0], int(round(h)) % 360, int(t)] for p, h, t in arrows]
+    return [[*points([p])[0], int(round(h)) % 360, int(t)] for p, h, t in arrows]
 
 
-def _simplify(xy, tol):
+def simplify(xy, tol):
     """Ramer-Douglas-Peucker, iteratively to keep off the recursion stack."""
     keep = np.zeros(len(xy), bool)
     keep[0] = keep[-1] = True
