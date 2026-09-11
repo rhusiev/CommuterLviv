@@ -20,8 +20,8 @@ from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
 
 from .. import __version__, network
-from . import (auth, db, geometry, hub, journeys, prefs, security, service,
-               settings, state)
+from . import (auth, db, geocode, geometry, hub, journeys, prefs, security,
+               service, settings, state)
 
 SESSION_COOKIE = "lp_sess"
 CSRF_COOKIE = "lp_csrf"
@@ -55,6 +55,7 @@ class Guard:
         self.auth_user = security.Bucket(per_minute=5, burst=5)
         self.api = security.Bucket(per_minute=600, burst=200)
         self.socket = security.Bucket(per_minute=60, burst=20)
+        self.search = security.Bucket(per_minute=60, burst=15)
 
     def name(self, base):
         return self.prefix + base
@@ -335,7 +336,7 @@ def _point(raw):
         lat, lon = float(parts[0]), float(parts[1])
     except ValueError:
         return None
-    if not (49.7 <= lat <= 50.05 and 23.8 <= lon <= 24.25):
+    if not geocode.inside(lat, lon):
         return None
     return lat, lon
 
@@ -376,6 +377,25 @@ async def journey(request, session):
         found = await asyncio.to_thread(app.planner.search, origin, dest,
                                         app.svc.live.arrivals, at)
     return JSONResponse(found)
+
+
+async def places_near(request, session):
+    """Addresses and places by name, from OpenStreetMap. One search at a time
+    per caller, because each one leaves this machine."""
+    app = request.app.state
+    if app.geocoder is None:
+        return error("this service has no place search", status=503)
+    q = (request.query_params.get("q") or "").strip()
+    if len(q) < 2:
+        return JSONResponse({"places": []})
+    if not app.guard.search.take(session["user_id"]):
+        return error("slow down", 429)
+    try:
+        found = await asyncio.to_thread(app.geocoder.find, q[:120])
+    except Exception as exc:
+        log("geocode:", repr(exc)[:200])
+        return error("place search is unavailable", status=502)
+    return JSONResponse({"places": found})
 
 
 async def pins(request, session):
@@ -537,6 +557,7 @@ def routes():
         Route("/api/plan", protected(journey), methods=["GET"]),
         Route("/api/pins", protected(pins), methods=["GET", "POST"]),
         Route("/api/places", protected(places), methods=["GET", "POST"]),
+        Route("/api/search", protected(places_near, unsafe=False)),
         Route("/api/sets", protected(sets), methods=["GET", "POST"]),
         Route("/api/sets/active", protected(active), methods=["POST"]),
         Route("/api/sets/{sid:uuid}", protected(one_set),
@@ -569,6 +590,8 @@ def build(st=None, net=None):
         s.shapes_tag = f'W/"{len(s.shapes_json):x}-{len(cat.routes):x}"'
         s.svc = service.Service(st, loaded, cat, log)
         s.planner = journeys.Planner.maybe(loaded, cat, log)
+        s.geocoder = (geocode.Geocoder(st.photon_url) if st.photon_url
+                      else None)
         s.hub = hub.Hub(s.svc.live)
         s.planning = asyncio.Semaphore(PLAN_WORKERS)
         s.tasks = [*await s.svc.start(s.hub), asyncio.create_task(sweeper(s.pool))]

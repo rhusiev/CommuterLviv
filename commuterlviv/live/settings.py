@@ -38,6 +38,7 @@ class Settings:
     trust_proxy: bool            # whether X-Forwarded-For may name the client
     build_planner: bool          # fetch the footpaths if the volume has none
     self_tiles: bool             # whether the basemap is served from this origin
+    photon_url: str              # the Photon instance search asks; "" turns search off
     poll_veh: float
     epoch: float
     dev: bool
@@ -75,6 +76,7 @@ def load():
         trust_proxy=_flag("TRUST_PROXY", False),
         build_planner=_flag("BUILD_PLANNER", True),
         self_tiles=_flag("SELF_TILES", False),
+        photon_url=_env("PHOTON_URL", "https://photon.komoot.io").rstrip("/"),
         poll_veh=float(_env("POLL_VEH_S", 5.0)),
         epoch=float(_env("EPOCH_S", 60.0)),
         dev=dev,

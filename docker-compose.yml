@@ -42,6 +42,7 @@ services:
       # Caddy is the only thing that can reach it, and Caddy sets the header
       COMMUTERLVIV_TRUST_PROXY: "true"
       COMMUTERLVIV_BUILD_PLANNER: ${COMMUTERLVIV_BUILD_PLANNER:-true}
+      COMMUTERLVIV_PHOTON_URL: ${COMMUTERLVIV_PHOTON_URL-https://photon.komoot.io}
     volumes:
       - service_data:/app/data
     networks:
