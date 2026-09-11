@@ -5,14 +5,24 @@
 # sent as a merge request. It is kept here so the recipe and the app it builds
 # change together.
 #
-# One field is still a placeholder, and only the owner of the project can fill
-# it: every `https://example.invalid/...` below, and the `Repo:` beneath them.
-# The project has no public repository yet. Everything else is ready - the
-# licence is MIT, the file is `LICENSE` at the root, and F-Droid takes it.
+# Two things are still the owner's to do, and nobody else can:
 #
-# There is no proprietary dependency to strip either: the app pulls no Google
-# Play services, no Firebase and no map vendor SDK, which is why it is a Flutter
-# app talking to `dart:io` sockets rather than an Expo one.
+#  1. Publish the source. Every `https://example.invalid/...` below and the
+#     `Repo:` beneath them are placeholders; F-Droid builds from public source
+#     and will not take a recipe it cannot clone.
+#  2. Tag the release. `UpdateCheckMode: Tags` and the build's commit below both
+#     want an annotated tag named `v<version>` on the commit that carries that
+#     version, and this repository has no tags yet.
+#
+# Everything else is ready. The licence is MIT and the file is `LICENSE` at the
+# root, where F-Droid looks. There is no proprietary dependency to strip: the
+# app pulls no Google Play services, no Firebase and no map vendor SDK, which is
+# why it is a Flutter app talking to `dart:io` sockets rather than an Expo one,
+# and why `MainActivity.kt` writes its own location channel over AOSP's
+# `LocationManager`. `android/app/build.gradle.kts` already signs a release only
+# if `key.properties` is there, so F-Droid's keyless build produces the unsigned
+# APK it then signs itself, and it drops the Google-signed dependency blob that
+# F-Droid rejects.
 
 Categories:
   - Navigation
@@ -25,6 +35,42 @@ IssueTracker: https://example.invalid/commuterlviv/issues
 
 AutoName: CommuterLviv
 
+# Both are required of a new app, and both are the same text as
+# `mobile/fastlane/metadata/android/en-US/`, which F-Droid reads out of the
+# repository and which is where the wording is edited. Kept in step by hand:
+# there is one listing, not two
+Summary: Where the trams and buses of Lviv actually are, and when yours arrives
+
+Description: |-
+  A live map of Lviv's trams, trolleybuses and buses, and an honest answer to
+  "how long until mine gets here".
+
+  The app is a client. It talks to commuterlviv.r1a.nl by default, and to any other
+  server you or someone you trust runs if you give the sign-in screen a different
+  address. It does nothing on its own. There is no account here that is not an
+  account there, and there is no analytics, advertising or tracking of any kind.
+
+  What it shows:
+
+  * Every vehicle on the routes you pick, moving on the map in real time
+  * An arrow only when the vehicle is actually moving. A bus standing at a light gets no arrow rather than a guessed one
+  * The next arrivals at any stop, predicted from how traffic is running today rather than from the printed timetable
+  * Stops you pin, with their times on one screen
+  * A journey planner, door to door, saying for each ride whether the time came from a tracked vehicle or from the timetable
+  * Saved sets of routes and saved places, kept on the server, so the phone and the browser show the same thing
+  * Five map styles, dark and light
+
+  The map is OpenStreetMap data rendered on the device from VersaTiles' free
+  vector tiles. No key, no account, no map vendor.
+
+  Permissions: internet, and location. Nothing is asked of the system until you
+  press the button that centres the map on you, so the app can be installed and
+  used by somebody who never grants location at all. The fix is kept on the phone
+  and is never reported to the server as your position. The two things that do
+  leave are the ones you ask for: a journey planned from where you are sends that
+  one point so the server can plan it, and a place you save is saved on the server
+  so the browser has it too.
+
 RepoType: git
 Repo: https://example.invalid/commuterlviv.git
 
@@ -33,21 +79,20 @@ Builds:
     versionCode: 19
     commit: v0.5.0
     subdir: mobile/android/app
-    sudo:
-      - apt-get update
-      - apt-get install -y curl unzip xz-utils
-      - curl -o flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.2-stable.tar.xz
-      - echo "TODO sha256 of the archive  flutter.tar.xz" | sha256sum -c -
-      - tar xf flutter.tar.xz -C /opt
-      - chown -R vagrant:vagrant /opt/flutter
-    output: build/app/outputs/flutter-apk/app-release.apk
+    # The srclib is F-Droid's own pinned checkout of the Flutter SDK, so there
+    # is no tarball to download and no hash to keep in step with one
     srclibs:
       - flutter@3.47.2
     prebuild:
-      - git config --global --add safe.directory /opt/flutter
+      - git config --global --add safe.directory $$flutter$$
+      - $$flutter$$/bin/flutter config --no-analytics
+    # The Flutter project is `mobile`, two levels above the Gradle module that
+    # `subdir` points at, and `flutter build` has to run from it
     build:
-      - PATH=/opt/flutter/bin:$PATH flutter config --no-analytics
-      - PATH=/opt/flutter/bin:$PATH flutter build apk --release
+      - cd ../..
+      - $$flutter$$/bin/flutter pub get
+      - $$flutter$$/bin/flutter build apk --release
+    output: ../../build/app/outputs/flutter-apk/app-release.apk
     ndk: r27c
 
 # The version the app reports and the version F-Droid publishes are the same
