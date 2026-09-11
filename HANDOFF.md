@@ -318,6 +318,17 @@ which of its parts are carrying it.
   Nothing shipped on the old numbers, which is the one thing the plan got right
   about them. `reports/crossday.md`, finding 14.
 
+  **The second pass put all 21 variants in one replay, and it changed what is
+  served.** `profile` - `full` with a week-long hour-of-day pace profile where
+  the corridor term stood - wins all five days and all three weekdays: 138.9,
+  136.8 and 144.4 against `full`'s 140.7, 141.4 and 149.1, and 134.3 against
+  138.2 pooled. It is finding 6's remedy in the form that works, where
+  `slow-day`'s one-number-per-cell version of the same idea loses every weekday.
+  `COMMUTERLVIV_VARIANT` now defaults to `profile` in `docker-compose.yml`, and
+  the VPS serves it. The intervals in the report are each variant's own, not an
+  interval on the difference; the series share an identical support event for
+  event, but a paired interval would cost another three-hour replay.
+
   The first thing rechecked on a weekday split was the corridor grid, and it
   went the same way: `stack --grid 45` fitted on Monday and tested on Tuesday
   puts `stack-robust` at 128.1 s against 127.5 at the shipped 120 m, so the
