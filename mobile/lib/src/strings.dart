@@ -1,0 +1,378 @@
+/// Ukrainian and English, switchable while the app is running. `txt` is a
+/// top-level value read in `build`, and `langChanged` rebuilds from the root
+/// once it has moved.
+library;
+
+import 'dart:ui' show PlatformDispatcher;
+
+import 'package:flutter/foundation.dart' show ValueNotifier;
+
+enum Lang { uk, en }
+
+class Strings {
+  const Strings({
+    required this.signIn,
+    required this.tagline,
+    required this.inviteCode,
+    required this.inviteHint,
+    required this.username,
+    required this.password,
+    required this.stayIn,
+    required this.createAccount,
+    required this.join,
+    required this.haveAccount,
+    required this.wantAccount,
+    required this.haveInvite,
+    required this.map,
+    required this.times,
+    required this.mapStyle,
+    required this.server,
+    required this.signOut,
+    required this.routes,
+    required this.routeLine,
+    required this.showRoute,
+    required this.everyRoute,
+    required this.hideEveryRoute,
+    required this.findStop,
+    required this.tryAgain,
+    required this.filterRoutes,
+    required this.clear,
+    required this.saveAsSet,
+    required this.updateSet,
+    required this.nameSet,
+    required this.renameSet,
+    required this.deleteSet,
+    required this.holdForLine,
+    required this.places,
+    required this.savePlace,
+    required this.namePlace,
+    required this.noPlaces,
+    required this.forget,
+    required this.saveHere,
+    required this.cancel,
+    required this.save,
+    required this.use,
+    required this.sets,
+    required this.dark,
+    required this.light,
+    required this.pin,
+    required this.unpin,
+    required this.callsHere,
+    required this.nothingDueWatched,
+    required this.nothingDue,
+    required this.pickARoute,
+    required this.pinAStop,
+    required this.language,
+    required this.noBasemap,
+    required this.faceNorth,
+    required this.zoomIn,
+    required this.zoomOut,
+    required this.whereAmI,
+    required this.noLocation,
+    required this.stopsAhead,
+    required this.vehicleGone,
+    required this.now,
+    required this.oneMinute,
+    required this.plan,
+    required this.from,
+    required this.to,
+    required this.tapMap,
+    required this.useHere,
+    required this.swap,
+    required this.findRoute,
+    required this.searching,
+    required this.noJourney,
+    required this.toDoor,
+    required this.noChange,
+    required this.livePart,
+    required this.schedulePart,
+    required this.wholeWalk,
+    required this.planHint,
+    required this.walkLeg,
+    required this.changeCount,
+    required this.minutes,
+    required this.unreachable,
+  });
+
+  final String signIn;
+  final String tagline;
+  final String inviteCode;
+  final String inviteHint;
+  final String username;
+  final String password;
+  final String stayIn;
+  final String createAccount;
+  final String join;
+  final String haveAccount;
+  final String wantAccount;
+  final String haveInvite;
+  final String map;
+  final String times;
+  final String mapStyle;
+  final String server;
+  final String signOut;
+  final String routes;
+
+  /// A second word for "route": Ukrainian already spends one on `plan`.
+  final String routeLine;
+  final String showRoute;
+  final String everyRoute;
+  final String hideEveryRoute;
+  final String findStop;
+  final String tryAgain;
+  final String filterRoutes;
+  final String clear;
+  final String saveAsSet;
+  final String Function(String name) updateSet;
+  final String nameSet;
+  final String renameSet;
+  final String deleteSet;
+  final String holdForLine;
+  final String places;
+  final String savePlace;
+  final String namePlace;
+  final String noPlaces;
+  final String forget;
+  final String saveHere;
+  final String cancel;
+  final String save;
+  final String use;
+  final String sets;
+  final String dark;
+  final String light;
+  final String pin;
+  final String unpin;
+  final String callsHere;
+  final String nothingDueWatched;
+  final String nothingDue;
+  final String pickARoute;
+  final String pinAStop;
+  final String language;
+  final String noBasemap;
+  final String faceNorth;
+  final String zoomIn;
+  final String zoomOut;
+  final String whereAmI;
+  final String noLocation;
+  final String stopsAhead;
+  final String vehicleGone;
+  final String now;
+  final String oneMinute;
+  final String plan;
+  final String from;
+  final String to;
+  final String tapMap;
+  final String useHere;
+  final String swap;
+  final String findRoute;
+  final String searching;
+  final String noJourney;
+  final String toDoor;
+  final String noChange;
+  final String livePart;
+  final String schedulePart;
+  final String wholeWalk;
+  final String planHint;
+  final String Function(int minutes) walkLeg;
+  final String Function(int changes) changeCount;
+  final String Function(int minutes) minutes;
+  final String Function(String server) unreachable;
+}
+
+const _en = Strings(
+  signIn: 'Sign in',
+  tagline: 'where the buses actually are',
+  inviteCode: 'Invite code',
+  inviteHint: 'the last part of the link you were sent',
+  username: 'Username',
+  password: 'Password',
+  stayIn: 'Stay signed in',
+  createAccount: 'Create the account',
+  join: 'Join',
+  haveAccount: 'I already have an account',
+  wantAccount: 'Create an account',
+  haveInvite: 'I have an invite code',
+  map: 'Map',
+  times: 'Times',
+  mapStyle: 'Map style',
+  server: 'Server',
+  signOut: 'Sign out',
+  routes: 'Routes',
+  routeLine: 'Line',
+  showRoute: 'Show this route on the map',
+  everyRoute: 'Every route',
+  hideEveryRoute: 'Hide the route lines',
+  findStop: 'Find a stop',
+  tryAgain: 'Try again',
+  filterRoutes: 'Filter routes',
+  clear: 'Clear',
+  saveAsSet: 'Save as a set',
+  updateSet: _enUpdateSet,
+  nameSet: 'Name this set',
+  renameSet: 'Rename',
+  deleteSet: 'Delete',
+  holdForLine: 'hold a route to see its line',
+  places: 'Saved places',
+  savePlace: 'Save this place',
+  namePlace: 'Name this place',
+  noPlaces: 'Save a place and it is offered here',
+  forget: 'Forget',
+  saveHere: 'Save',
+  cancel: 'Cancel',
+  save: 'Save',
+  use: 'Use',
+  sets: 'Sets',
+  dark: 'dark',
+  light: 'light',
+  pin: 'Pin',
+  unpin: 'Unpin',
+  callsHere: 'Calls here',
+  nothingDueWatched: 'nothing due on the routes you are watching',
+  nothingDue: 'nothing due',
+  pickARoute: 'Pick a route to see it moving',
+  pinAStop: 'Pin a stop and its times show up here',
+  language: 'Language',
+  noBasemap: 'the basemap would not load',
+  faceNorth: 'Face north',
+  zoomIn: 'Zoom in',
+  zoomOut: 'Zoom out',
+  whereAmI: 'Where I am',
+  noLocation: 'Location is not available',
+  plan: 'Journey',
+  from: 'From',
+  to: 'To',
+  tapMap: 'tap the map',
+  useHere: 'where I am',
+  swap: 'swap',
+  findRoute: 'Find a way',
+  searching: 'looking for a way',
+  noJourney: 'no way to get there was found',
+  toDoor: 'to the door',
+  noChange: 'no changes',
+  livePart: 'tracked',
+  schedulePart: 'timetable',
+  wholeWalk: 'walk the whole way',
+  planHint: 'Tap the map to set where you are and where you are going.',
+  walkLeg: _enWalkLeg,
+  changeCount: _enChangeCount,
+  stopsAhead: 'Stops ahead',
+  vehicleGone: 'This one is no longer being tracked',
+  now: 'now',
+  oneMinute: '1 min',
+  minutes: _enMinutes,
+  unreachable: _enUnreachable,
+);
+
+String _enUpdateSet(String name) => 'Update “$name”';
+String _enWalkLeg(int m) => 'walk $m min';
+String _enChangeCount(int n) => n == 1 ? '1 change' : '$n changes';
+String _enMinutes(int m) => '$m min';
+String _enUnreachable(String server) => 'could not reach $server';
+
+const _uk = Strings(
+  signIn: 'Увійти',
+  tagline: 'де насправді їде транспорт',
+  inviteCode: 'Код запрошення',
+  inviteHint: 'остання частина надісланого посилання',
+  username: 'Імʼя',
+  password: 'Пароль',
+  stayIn: 'Не виходити',
+  createAccount: 'Створити акаунт',
+  join: 'Приєднатися',
+  haveAccount: 'У мене вже є акаунт',
+  wantAccount: 'Створити акаунт',
+  haveInvite: 'У мене є код запрошення',
+  map: 'Мапа',
+  times: 'Час',
+  mapStyle: 'Вигляд мапи',
+  server: 'Сервер',
+  signOut: 'Вийти',
+  routes: 'Маршрути',
+  routeLine: 'Лінія',
+  showRoute: 'Показати цей маршрут на мапі',
+  everyRoute: 'Усі маршрути',
+  hideEveryRoute: 'Сховати лінії маршрутів',
+  findStop: 'Знайти зупинку',
+  tryAgain: 'Спробувати ще',
+  filterRoutes: 'Пошук маршруту',
+  clear: 'Очистити',
+  saveAsSet: 'Зберегти як набір',
+  updateSet: _ukUpdateSet,
+  nameSet: 'Назва набору',
+  renameSet: 'Перейменувати',
+  deleteSet: 'Видалити',
+  holdForLine: 'утримуйте маршрут, щоб побачити лінію',
+  places: 'Збережені місця',
+  savePlace: 'Зберегти це місце',
+  namePlace: 'Назва місця',
+  noPlaces: 'Збережене місце зʼявиться тут',
+  forget: 'Забути',
+  saveHere: 'Зберегти',
+  cancel: 'Скасувати',
+  save: 'Зберегти',
+  use: 'Використати',
+  sets: 'Набори',
+  dark: 'темна',
+  light: 'світла',
+  pin: 'Закріпити',
+  unpin: 'Відкріпити',
+  callsHere: 'Тут зупиняються',
+  nothingDueWatched: 'на обраних маршрутах нічого не їде',
+  nothingDue: 'нічого не їде',
+  pickARoute: 'Оберіть маршрут, щоб побачити рух',
+  pinAStop: 'Закріпіть зупинку - і час буде тут',
+  language: 'Мова',
+  noBasemap: 'не вдалося завантажити мапу',
+  faceNorth: 'На північ',
+  zoomIn: 'Наблизити',
+  zoomOut: 'Віддалити',
+  whereAmI: 'Де я',
+  noLocation: 'Місцеперебування недоступне',
+  plan: 'Маршрут',
+  from: 'Звідки',
+  to: 'Куди',
+  tapMap: 'торкніться мапи',
+  useHere: 'де я',
+  swap: 'поміняти',
+  findRoute: 'Знайти шлях',
+  searching: 'шукаємо шлях',
+  noJourney: 'шляху не знайдено',
+  toDoor: 'до місця',
+  noChange: 'без пересадок',
+  livePart: 'за відстеженням',
+  schedulePart: 'за розкладом',
+  wholeWalk: 'пішки весь шлях',
+  planHint: 'Торкніться мапи, щоб вказати, де ви є і куди прямуєте.',
+  walkLeg: _ukWalkLeg,
+  changeCount: _ukChangeCount,
+  stopsAhead: 'Наступні зупинки',
+  vehicleGone: 'Цей транспорт більше не відстежується',
+  now: 'зараз',
+  oneMinute: '1 хв',
+  minutes: _ukMinutes,
+  unreachable: _ukUnreachable,
+);
+
+String _ukUpdateSet(String name) => 'Оновити «$name»';
+String _ukWalkLeg(int m) => 'пішки $m хв';
+String _ukChangeCount(int n) => n == 1 ? '1 пересадка' : 'пересадок: $n';
+String _ukMinutes(int m) => '$m хв';
+String _ukUnreachable(String server) => 'не вдалося зʼєднатися з $server';
+
+/// Set from `main` before anything is drawn, and again from the picker.
+Lang lang = Lang.uk;
+Strings txt = _uk;
+
+/// What `main` listens to, to rebuild the tree from the root once.
+final langChanged = ValueNotifier(lang);
+
+void useLang(Lang next) {
+  lang = next;
+  txt = next == Lang.uk ? _uk : _en;
+  langChanged.value = next;
+}
+
+Lang phoneLang() =>
+    PlatformDispatcher.instance.locales.any((l) => l.languageCode == 'uk')
+    ? Lang.uk
+    : Lang.en;

@@ -1,0 +1,24 @@
+# Use this when the machine running the stack is the one the domain points at,
+# and nothing else on it is already listening on 80 and 443:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+#
+# Caddy obtains and renews the certificate itself. Set COMMUTERLVIV_SITE_ADDRESS in
+# `.env` to the bare domain, and COMMUTERLVIV_ORIGINS to https:// that domain.
+services:
+  web:
+    environment:
+      COMMUTERLVIV_SITE_ADDRESS: ${COMMUTERLVIV_SITE_ADDRESS:?set it in .env to the domain this machine answers on}
+    ports: !override
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      # The certificates and the account key. Losing this volume means asking
+      # the certificate authority for everything again, and it rate-limits.
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

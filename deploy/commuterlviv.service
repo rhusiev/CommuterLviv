@@ -1,0 +1,32 @@
+[Unit]
+Description=commuterlviv feed collector
+After=network-online.target
+Wants=network-online.target
+# Systemd gives up restarting a service that fails too often. A collector that
+# cannot start is usually waiting on something that will come back - the network
+# after a reboot, the far end after an outage - so it must keep trying forever.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=commuterlviv
+WorkingDirectory=/opt/commuterlviv
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/commuterlviv/.venv/bin/python -m commuterlviv collect --keep-days 30 --min-free-gb 3
+
+# The collector handles SIGTERM itself: it stops the pollers, drains the write
+# queue and closes the database. Give it room to do that before being killed.
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
+Restart=always
+RestartSec=15
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/commuterlviv/data
+
+[Install]
+WantedBy=multi-user.target
