@@ -147,6 +147,14 @@ which of its parts are carrying it.
   `/opt/commuterlviv/app-backup-2026-09-10-0654.tar.gz`. Migration 002 applied
   cleanly, and `rad1an` is an operator.
 
+- **The `.env` exclusion above is not optional.** A deploy on 2026-09-11 left it
+  out, and the laptop's `.env` replaced the server's: the Postgres password,
+  `CADDY_NETWORK`, `COMMUTERLVIV_TILES` and `COMMUTERLVIV_VARIANT` all went with
+  it, so the service crash-looped on `InvalidPasswordError` and the tile server
+  on a missing `/tiles/lviv.versatiles`. The file came back out of
+  `/opt/commuterlviv/app-backup-2026-09-11-0732.tar.gz`. The two files are
+  different deployments, not drifted copies of one.
+
 - **The VPS runs 0.3.4**, and serves its own basemap. No phone or browser talks
   to `tiles.versatiles.org` any more. A 20 MB Lviv extract
   (`--bbox 23.791,49.702,24.233,50.045`, 1400 tiles, maxzoom 14) plus the v3.14
