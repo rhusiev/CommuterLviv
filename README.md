@@ -414,6 +414,37 @@ somebody deciding whether to run for a bus deserves to know which of the two
 they are reading. How much accuracy is lost at the far end of that horizon is
 still unmeasured - it needs the VPS recording.
 
+Every ride also carries a `confidence`, which is what the schedule is worth on
+that route right now. `live` is a vehicle being tracked. `schedule` is the
+timetable on a route that is running. `quiet` is the timetable on a route the
+schedule wanted at least twice in the last hour and nothing has been seen on
+since - a line the city is not running today, which the timetable alone will
+happily promise you a bus from. A `quiet` ride is held back unless it is the
+only ride on offer, in which case it is returned and flagged: an unreliable bus
+is worth knowing about, an invented one is not.
+
+The options are ranked by a front over arrival time, number of changes and
+seconds spent walking, so a slower journey with one change fewer survives
+alongside the fastest, and every option that does not beat simply walking the
+way is dropped. `&at=<unix seconds>` plans a trip that starts later instead of
+now; a departure more than five minutes out has no vehicles to see yet, so it
+comes back on the timetable alone and says so.
+
+`GET /api/traffic/streets` and `GET /api/traffic` are the same numbers the
+model uses for its ETAs, drawn as a map: per 100 m of track, the ratio of how
+long vehicles are actually taking to how long the timetable expects. The
+streets are fixed for the life of the process and cached by ETag (268 KB
+gzipped); the ratios come separately, in the same order. A stretch too little
+has crossed lately comes back as `null` and is not drawn - the model would
+happily hand back the corridor's number there, which is a fair ETA and a
+meaningless traffic reading.
+
+`GET /api/search?q=` finds addresses and places by name, which the catalog
+cannot: it is Photon over OpenStreetMap, biased to the city and clamped to it,
+with answers cached for a day so typing costs one request per new prefix.
+`COMMUTERLVIV_PHOTON_URL` points it at a self-hosted instance, and emptying it
+turns the feature off and leaves searching to stop names.
+
 The planner needs two caches that are built once and are not in the image:
 
 ```sh
