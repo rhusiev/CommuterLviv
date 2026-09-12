@@ -26,6 +26,15 @@ const stopsZoom = 14.0;
 
 const _stopRadius = 3.5;
 
+/// A pinned stop is ringed at every zoom, a saved place is a dot with its name.
+/// The ring is the quieter of the two: a pin marks a stop that is already drawn,
+/// while a place is the only thing marking itself.
+const _pinRadius = 6.0;
+const _placeRadius = 5.0;
+
+/// Below this a name is more clutter than help, so places are dots alone.
+const _labelZoom = 12.5;
+
 /// Pixels between chevrons along a line. Measured on screen rather than on the
 /// ground, so they stay this far apart at every zoom without being respaced.
 const _arrowSpacing = 90.0;
@@ -48,6 +57,8 @@ class VehicleLayer extends StatefulWidget {
     required this.shapes,
     required this.lines,
     required this.arrowed,
+    required this.pins,
+    required this.places,
   });
 
   final Catalog catalog;
@@ -63,6 +74,12 @@ class VehicleLayer extends StatefulWidget {
   final int? selected;
   final MapTheme theme;
 
+  /// What the account kept: pinned stops as catalog positions, places as they
+  /// were saved. Drawn whatever else is on the map, so the map says where they
+  /// are without being asked.
+  final List<int> pins;
+  final List<Place> places;
+
   final Here here;
 
   @override
@@ -74,6 +91,7 @@ class _VehicleLayerState extends State<VehicleLayer>
   late final Ticker _ticker;
   final ValueNotifier<int> _frame = ValueNotifier(0);
   final Map<int, ui.Paragraph> _badges = {};
+  final Map<String, ui.Paragraph> _labels = {};
 
   @override
   void initState() {
@@ -106,6 +124,18 @@ class _VehicleLayerState extends State<VehicleLayer>
       ..layout(const ui.ParagraphConstraints(width: badgeRadius * 2));
   });
 
+  ui.Paragraph _label(String name, Color colour) =>
+      _labels.putIfAbsent('$name|${colour.toARGB32()}', () {
+        final builder =
+            ui.ParagraphBuilder(
+                ui.ParagraphStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              )
+              ..pushStyle(ui.TextStyle(color: colour))
+              ..addText(name);
+        return builder.build()
+          ..layout(const ui.ParagraphConstraints(width: 140));
+      });
+
   @override
   Widget build(BuildContext context) {
     final camera = MapCamera.of(context);
@@ -123,8 +153,11 @@ class _VehicleLayerState extends State<VehicleLayer>
           shapes: widget.shapes,
           lines: widget.lines,
           arrowed: widget.arrowed,
+          pins: widget.pins,
+          places: widget.places,
           ink: Palette.of(widget.theme.dark),
           badge: _badge,
+          label: _label,
         ),
       ),
     );
@@ -143,8 +176,11 @@ class _Painter extends CustomPainter {
     required this.shapes,
     required this.lines,
     required this.arrowed,
+    required this.pins,
+    required this.places,
     required this.ink,
     required this.badge,
+    required this.label,
   }) : super(repaint: repaint);
 
   final MapCamera camera;
@@ -155,11 +191,14 @@ class _Painter extends CustomPainter {
   final Shapes? shapes;
   final List<int> lines;
   final int? arrowed;
+  final List<int> pins;
+  final List<Place> places;
 
   /// Read at paint time: a fix arriving between builds must still be drawn.
   final Here here;
   final Palette ink;
   final ui.Paragraph Function(int route) badge;
+  final ui.Paragraph Function(String name, Color colour) label;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -167,6 +206,7 @@ class _Painter extends CustomPainter {
     // Under everything else: a line over a badge hides the number
     _paintLines(canvas, bounds);
     if (camera.zoom >= stopsZoom) _paintStops(canvas, bounds);
+    _paintSaved(canvas, bounds);
     _paintHere(canvas);
     _paintVehicles(canvas, bounds);
   }
@@ -342,6 +382,47 @@ class _Painter extends CustomPainter {
             ..strokeWidth = 2,
         );
       }
+    }
+  }
+
+  void _paintSaved(Canvas canvas, Rect bounds) {
+    final ring = Paint()
+      ..color = ink.saved.withValues(alpha: 0.8)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    for (final i in pins) {
+      final s = catalog.stops.elementAtOrNull(i);
+      if (s == null) continue;
+      final at = camera.latLngToScreenOffset(LatLng(s.lat, s.lon));
+      if (!bounds.inflate(_pinRadius).contains(at)) continue;
+      canvas.drawCircle(at, _pinRadius, ring);
+    }
+
+    final named = camera.zoom >= _labelZoom;
+    final edge = Paint()
+      ..color = ink.edge
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    final fill = Paint()..color = ink.saved;
+    for (final place in places) {
+      final at = camera.latLngToScreenOffset(place.at);
+      if (!bounds.inflate(_placeRadius).contains(at)) continue;
+      canvas.drawCircle(at, _placeRadius, fill);
+      canvas.drawCircle(at, _placeRadius, edge);
+      if (!named) continue;
+      final text = label(place.name, ink.saved);
+      // The plate keeps the name readable over a street or a route line
+      final box = Rect.fromLTWH(
+        at.dx + _placeRadius + 4,
+        at.dy - text.height / 2 - 1,
+        text.longestLine + 8,
+        text.height + 2,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(box, const Radius.circular(3)),
+        Paint()..color = ink.edge.withValues(alpha: 0.72),
+      );
+      canvas.drawParagraph(text, Offset(box.left + 4, box.top + 1));
     }
   }
 

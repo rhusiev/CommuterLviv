@@ -47,5 +47,5 @@ export const saveTheme = (t: Theme) => {
 /** What the overlay draws with, over a basemap of this brightness */
 export const ink = (dark: boolean) =>
   dark
-    ? { stop: "#cfd8e3", edge: "#0b0f14", nub: "#e8eef7", here: "#38bdf8" }
-    : { stop: "#334155", edge: "#f8fafc", nub: "#1e293b", here: "#0284c7" };
+    ? { stop: "#cfd8e3", edge: "#0b0f14", nub: "#e8eef7", here: "#38bdf8", saved: "#fbbf24" }
+    : { stop: "#334155", edge: "#f8fafc", nub: "#1e293b", here: "#0284c7", saved: "#b45309" };

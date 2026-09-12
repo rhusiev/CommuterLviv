@@ -39,6 +39,7 @@ class Palette {
     required this.edge,
     required this.nub,
     required this.here,
+    required this.saved,
   });
 
   factory Palette.of(bool dark) => dark
@@ -47,18 +48,23 @@ class Palette {
           edge: Color(0xff0b0f14),
           nub: Color(0xffe8eef7),
           here: Color(0xff38bdf8),
+          saved: Color(0xfffbbf24),
         )
       : const Palette(
           stop: Color(0xff334155),
           edge: Color(0xfff8fafc),
           nub: Color(0xff1e293b),
           here: Color(0xff0284c7),
+          saved: Color(0xffb45309),
         );
 
   final Color stop;
   final Color edge;
   final Color nub;
   final Color here;
+
+  /// What the account kept: a saved place, and more faintly a pinned stop.
+  final Color saved;
 }
 
 /// The number without the city's kind letter: `А25` bus, `Т07` tram, `Тр33`

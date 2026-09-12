@@ -580,6 +580,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (_from != null) (at: _from!, label: 'A'),
                   if (_to != null) (at: _to!, label: 'B'),
                 ],
+                pins: _pins,
+                places: _sets?.places ?? const [],
                 shapes: _shapes,
                 lines: _lines,
                 arrowed: _onRoute ? _route : null,

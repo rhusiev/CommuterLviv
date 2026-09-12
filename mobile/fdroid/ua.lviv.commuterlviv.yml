@@ -52,9 +52,10 @@ Description: |-
   * An arrow only when the vehicle is actually moving. A bus standing at a light gets no arrow rather than a guessed one
   * The next arrivals at any stop, predicted from how traffic is running today rather than from the printed timetable
   * Stops you pin, with their times on one screen
+  * Saved places and pinned stops marked on the map wherever you are looking - the places named, the pins ringed
   * A journey planner, door to door, leaving now or at a time you pick, saying for each ride whether the time came from a tracked vehicle, from the timetable, or from a timetable on a line nothing has been seen running on
   * Saved sets of routes and saved places, kept on the server, so the phone and the browser show the same thing
-  * A traffic view, colouring the streets the trams and buses can see by how far behind the timetable they are running, and colouring nothing where too few have passed to say
+  * A traffic view, colouring the streets the trams and buses can see by how far behind the timetable they are running, and colouring nothing where too few have passed to say or at the ends of a line, where standing at a terminus is not traffic
   * Five map styles, dark and light
 
   The map is OpenStreetMap data rendered on the device from VersaTiles' free
@@ -72,9 +73,9 @@ RepoType: git
 Repo: https://github.com/rhusiev/CommuterLviv.git
 
 Builds:
-  - versionName: 0.7.0
-    versionCode: 21
-    commit: v0.7.0
+  - versionName: 0.8.0
+    versionCode: 22
+    commit: v0.8.0
     subdir: mobile/android/app
     # The srclib is F-Droid's own pinned checkout of the Flutter SDK, so there
     # is no tarball to download and no hash to keep in step with one
@@ -96,5 +97,5 @@ Builds:
 # number, taken from `mobile/pubspec.yaml`
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 0.7.0
-CurrentVersionCode: 21
+CurrentVersion: 0.8.0
+CurrentVersionCode: 22

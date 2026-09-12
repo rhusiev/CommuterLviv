@@ -427,19 +427,33 @@ The options are ranked by a front over arrival time, number of changes and
 seconds spent walking, so a slower journey with one change fewer survives
 alongside the fastest, and every option that does not beat simply walking the
 way is dropped. `&at=<unix seconds>` plans a trip that starts later instead of
-now; a departure more than five minutes out has no vehicles to see yet, so it
-comes back on the timetable alone and says so.
+now. A later departure still rides the vehicles being tracked - only their
+arrivals that lie ahead of it are kept - so nothing is thrown away at some
+cutoff; past the model's 45 minute horizon there are none left and the timetable
+takes over on its own.
 
 `GET /api/traffic/streets` and `GET /api/traffic` are the same numbers the
 model uses for its ETAs, drawn as a map: per 100 m of track, the ratio of how
 long vehicles are actually taking to how long the timetable expects. The
-streets are fixed for the life of the process and cached by ETag (268 KB
-gzipped); the ratios come separately, in the same order, and are built and
-serialised once every 30 s rather than per request, since the clients poll every
-minute and the numbers move slower than that. A stretch too little
+streets are 25,625 stretches, fixed for the life of the process and cached by
+ETag (204 KB gzipped); the ratios come separately, in the same order, and are
+built and serialised once every 30 s rather than per request, since the clients
+poll every minute and the numbers move slower than that. A stretch too little
 has crossed lately comes back as `null` and is not drawn - the model would
 happily hand back the corridor's number there, which is a fair ETA and a
 meaningless traffic reading.
+
+Two hundred metres at either end of every shape are left out entirely. A vehicle
+at a terminus crawls in, parks, and crawls out, and the crawling is rolling time
+over cells whose timetabled pace is short, so the ratio there is high on every
+route in the city - which is a layover and not traffic. That drops 1087 of the
+26,712 units the model learns.
+
+Neither client draws the stretches one at a time. The phone projects them once,
+at zoom 18, and gathers them into one path per colour, so a frame is a couple of
+dozen `drawPath` calls under a single transform and panning re-projects nothing;
+the browser hands maplibre one GeoJSON source and replaces its data only when
+new numbers arrive.
 
 `GET /api/search?q=` finds addresses and places by name, which the catalog
 cannot: it is Photon over OpenStreetMap, biased to the city and clamped to it,

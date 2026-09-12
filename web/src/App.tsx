@@ -337,6 +337,8 @@ export function App() {
           setPicking(null);
         }}
         marks={marks}
+        pinned={pins}
+        places={places}
         shapes={geo}
         lines={lines}
         directed={tab === "route" ? route : null}

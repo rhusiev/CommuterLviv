@@ -38,6 +38,8 @@ class MapTab extends StatelessWidget {
     required this.here,
     required this.empty,
     required this.marks,
+    required this.pins,
+    required this.places,
     required this.shapes,
     required this.lines,
     required this.arrowed,
@@ -65,6 +67,11 @@ class MapTab extends StatelessWidget {
 
   /// The ends of a journey being planned, lettered rather than coloured.
   final List<({LatLng at, String label})> marks;
+
+  /// What the account kept, always on the map: pinned stops ringed, saved places
+  /// as named dots.
+  final List<int> pins;
+  final List<Place> places;
 
   /// Every route's geometry; `arrowed` is the one route that gets arrows.
   final Shapes? shapes;
@@ -117,6 +124,8 @@ class MapTab extends StatelessWidget {
               shapes: shapes,
               lines: lines,
               arrowed: arrowed,
+              pins: pins,
+              places: places,
             ),
             if (marks.isNotEmpty)
               MarkerLayer(

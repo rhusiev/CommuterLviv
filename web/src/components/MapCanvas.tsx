@@ -18,7 +18,7 @@ import type { Pace } from "../lib/traffic";
 import { build, colour, R, type Sprites } from "../lib/sprites";
 import { t } from "../lib/i18n";
 import { ink, styleUrl, type Theme } from "../lib/theme";
-import type { Catalog, Shapes } from "../lib/types";
+import type { Catalog, Place, Shapes } from "../lib/types";
 import { MOVING_FLAG, STALE_FLAG } from "../lib/wire";
 
 /** The vehicle/stop overlay is a 2D canvas drawn from MapLibre's own `render`
@@ -26,6 +26,16 @@ import { MOVING_FLAG, STALE_FLAG } from "../lib/wire";
  * reads the camera one frame late. No React state changes during the draw. */
 
 const STOP_R = 3.5;
+
+/** A pinned stop is ringed at every zoom, a saved place is a dot with its name.
+ * The ring is the quieter of the two: a pin marks a stop that is already drawn,
+ * while a place is the only thing marking itself. */
+const PIN_R = 6;
+const PLACE_R = 5;
+
+/** Below this a name is more clutter than help, so places are dots alone */
+const LABEL_ZOOM = 12.5;
+
 const HIT = 14;
 const TAU = Math.PI * 2;
 
@@ -48,6 +58,9 @@ type Props = {
   picking: boolean;
   onPickPoint: (lat: number, lon: number) => void;
   marks: { lat: number; lon: number; label: string }[];
+  /** What the account kept, always on the map: stop positions and saved places */
+  pinned: number[];
+  places: Place[];
   shapes: Shapes | null;
   lines: number[];
   /** The route whose direction of travel is marked with chevrons */
@@ -74,6 +87,8 @@ export function MapCanvas({
   picking,
   onPickPoint,
   marks,
+  pinned,
+  places,
   shapes,
   lines,
   directed,
@@ -96,6 +111,8 @@ export function MapCanvas({
   const pickPoint = useRef(onPickPoint);
   const picks = useRef(picking);
   const pins = useRef(marks);
+  const kept = useRef(pinned);
+  const saved = useRef(places);
   const geometry = useRef(shapes);
   const drawn = useRef(lines);
   /** What the basemap's own layers draw, read again on every `styledata` */
@@ -112,6 +129,8 @@ export function MapCanvas({
   pickPoint.current = onPickPoint;
   picks.current = picking;
   pins.current = marks;
+  kept.current = pinned;
+  saved.current = places;
   geometry.current = shapes;
   drawn.current = lines;
   beneath.current = { shapes, directed, traffic, dark: theme.dark };
@@ -246,6 +265,49 @@ export function MapCanvas({
         g.lineWidth = 3;
         g.strokeStyle = c.edge;
         g.stroke();
+      }
+
+      // What the account kept, over the stops and under the journey's ends
+      const ringed = new Path2D();
+      for (const i of kept.current) {
+        const s = catalog.stops[i];
+        if (!s) continue;
+        const x = p.x(s.lon);
+        const y = p.y(s.lat);
+        if (x < -PIN_R || y < -PIN_R || x > w + PIN_R || y > h + PIN_R) continue;
+        ringed.moveTo(x + PIN_R, y);
+        ringed.arc(x, y, PIN_R, 0, TAU);
+      }
+      g.globalAlpha = 0.8;
+      g.lineWidth = 2;
+      g.strokeStyle = c.saved;
+      g.stroke(ringed);
+      g.globalAlpha = 1;
+
+      const named = m.getZoom() >= LABEL_ZOOM;
+      g.font = "600 11px system-ui, sans-serif";
+      g.textBaseline = "middle";
+      for (const place of saved.current) {
+        const x = p.x(place.lon);
+        const y = p.y(place.lat);
+        if (x < -PLACE_R || y < -PLACE_R || x > w + PLACE_R || y > h + PLACE_R) continue;
+        g.beginPath();
+        g.arc(x, y, PLACE_R, 0, TAU);
+        g.fillStyle = c.saved;
+        g.fill();
+        g.lineWidth = 2;
+        g.strokeStyle = c.edge;
+        g.stroke();
+        if (!named) continue;
+        // The plate keeps the name readable over a street or a route line
+        const width = g.measureText(place.name).width;
+        g.globalAlpha = 0.72;
+        g.fillStyle = c.edge;
+        g.fillRect(x + PLACE_R + 4, y - 8, width + 8, 16);
+        g.globalAlpha = 1;
+        g.fillStyle = c.saved;
+        g.textAlign = "left";
+        g.fillText(place.name, x + PLACE_R + 8, y);
       }
 
       for (const mark of pins.current) {

@@ -14,6 +14,7 @@ What it shows:
 * The next arrivals at any stop, predicted from how traffic is running today
   rather than from the printed timetable
 * Stops you pin, with their times on one screen
+* Saved places and pinned stops marked on the map wherever you are looking - the places named, the pins ringed
 * A journey planner, door to door, leaving now or at a time you pick, saying
   for each ride whether the time came from a tracked vehicle, from the
   timetable, or from a timetable on a line nothing has been seen running on
@@ -21,7 +22,8 @@ What it shows:
   the browser show the same thing
 * A traffic view, colouring the streets the trams and buses can see by how far
   behind the timetable they are running - and colouring nothing where too few
-  have passed to say
+  have passed to say, or at the ends of a line, where standing at a terminus is
+  not traffic
 * Five map styles, dark and light
 
 The map is OpenStreetMap data rendered on the device from VersaTiles' free
