@@ -3,7 +3,7 @@
 /// openings; the numbers are small, and are asked for again every minute while
 /// the view is up and not at all while it is down.
 ///
-/// There are about 27,000 stretches, which is too many to hand the map as
+/// There are about 5,900 stretches, which is too many to hand the map as
 /// polylines: each one costs its own culling and its own stroked path every
 /// frame. Instead they are projected once, at [_zoom], into the plane the map
 /// itself draws in, and gathered into one path per colour. A frame is then a
@@ -27,13 +27,20 @@ const trafficPeriod = Duration(seconds: 60);
 const _zoom = 18.0;
 
 /// Colour steps between [_low] and [_high]. A stretch is drawn in the nearest
-/// one, which is what lets tens of thousands of them share a handful of paths;
+/// one, which is what lets thousands of them share a handful of paths;
 /// the ramp moves far less than an eye can see over one step.
 const _bands = 20;
 const _low = 0.7;
 const _high = 1.7;
 
 const _width = 4.0;
+
+/// Both directions of a street are drawn and their route shapes often sit on
+/// the same centreline, so each line is pushed to the right of its own travel
+/// and the busy way cannot hide under the clear one. Baked into the projection
+/// rather than applied per frame, so it is measured in [_zoom]'s pixels: about
+/// 3 px at zoom 17, and gone by 15, where a street is a line anyway.
+const _aside = 6.0;
 
 /// The ramp: actual over timetabled travel time, and the colour for it. 1 is
 /// exactly the timetable, so green is ahead of it and red is a crawl.
@@ -69,8 +76,25 @@ const _crs = Epsg3857();
 
 List<List<Offset>> _project(Streets streets) => [
   for (final line in streets.lines)
-    [for (final p in line) _crs.latLngToOffset(p, _zoom)],
+    _right([for (final p in line) _crs.latLngToOffset(p, _zoom)]),
 ];
+
+/// The same line, shifted [_aside] to the right of the way it is travelled.
+/// Screen y runs down, so the right of a step is its normal turned that way.
+List<Offset> _right(List<Offset> pts) {
+  if (pts.length < 2) return pts;
+  final out = <Offset>[];
+  for (var i = 0; i < pts.length; i++) {
+    final step = pts[math.min(i + 1, pts.length - 1)] - pts[math.max(i - 1, 0)];
+    final length = step.distance;
+    out.add(
+      length == 0
+          ? pts[i]
+          : pts[i] + Offset(-step.dy, step.dx) / length * _aside,
+    );
+  }
+  return out;
+}
 
 /// One colour's worth of stretches, in the projected plane.
 typedef _Band = ({Path path, Color colour});

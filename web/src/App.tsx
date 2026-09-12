@@ -4,6 +4,8 @@ import { RoutePanel } from "./components/RoutePanel";
 import { SignIn } from "./components/SignIn";
 import { JourneyPanel, type Point } from "./components/JourneyPanel";
 import { StopCard } from "./components/StopCard";
+import { AccountMenu } from "./components/AccountMenu";
+import { LayersPanel } from "./components/LayersPanel";
 import { SavedPanel } from "./components/SavedPanel";
 import { StopSearch } from "./components/StopSearch";
 import { RouteBadge } from "./components/RouteBadge";
@@ -66,6 +68,8 @@ export function App() {
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const [notice, setNotice] = useState<string | null>(null);
   const [jams, setJams] = useState(false);
+  const [layers, setLayers] = useState(false);
+  const [account, setAccount] = useState(false);
 
   const code = JOIN.exec(location.pathname)?.[1] ?? null;
   const { live, connection, count } = useLive();
@@ -370,7 +374,9 @@ export function App() {
             catalog={cat}
             onGo={showStop}
             onPlace={showPlace}
-            onSave={(name, lat, lon) => keepPlaces(saved(places, name, lat, lon))}
+            onSave={(name, lat, lon) =>
+              keepPlaces(saved(places, name, lat, lon))
+            }
           />
         </div>
         <span
@@ -384,55 +390,111 @@ export function App() {
           />
           {t.vehicles(count)}
         </span>
+        <div className="pointer-events-auto relative">
+          <button
+            onClick={() => {
+              setAccount((v) => !v);
+              setLayers(false);
+            }}
+            title={t.account}
+            aria-label={t.account}
+            className={`fab ${account ? "text-accent" : "text-slate-300 hover:text-slate-100"}`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="size-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
+              <circle cx="12" cy="8" r="3.5" />
+              <path d="M5 20c1.2-3.4 4-5 7-5s5.8 1.6 7 5" />
+            </svg>
+          </button>
+          {account && (
+            <>
+              <button
+                aria-hidden
+                tabIndex={-1}
+                onClick={() => setAccount(false)}
+                className="fixed inset-0 -z-10 cursor-default"
+              />
+              <div className="panel absolute right-0 top-12 w-52 p-2">
+                <AccountMenu
+                  username={me.username}
+                  onOut={async () => {
+                    // Signed out whether or not the request landed
+                    await api.logout().catch(() => undefined);
+                    setMe(null);
+                  }}
+                />
+              </div>
+            </>
+          )}
+        </div>
       </header>
 
-      <button
-        onClick={() => setAllLines((v) => !v)}
-        title={allLines ? t.hideEveryRoute : t.everyRoute}
-        aria-label={allLines ? t.hideEveryRoute : t.everyRoute}
-        className={`fab absolute right-3 top-31 z-10 ${
-          allLines ? "text-accent" : "text-slate-300 hover:text-slate-100"
-        }`}
-      >
-        <svg
-          viewBox="0 0 24 24"
-          className="size-5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
+      <div className="absolute right-3 top-31 z-20">
+        <button
+          onClick={() => {
+            setLayers((v) => !v);
+            setAccount(false);
+          }}
+          title={t.layers}
+          aria-label={t.layers}
+          className={`fab ${
+            allLines || jams
+              ? "text-accent"
+              : "text-slate-300 hover:text-slate-100"
+          }`}
         >
-          <path d="M3 18c4 0 3-12 7-12s3 12 7 12" />
-          <path d="M3 6h4M17 18h4" />
-        </svg>
-      </button>
-
-      <button
-        onClick={() => setJams((v) => !v)}
-        title={jams ? t.hideTraffic : t.traffic}
-        aria-label={jams ? t.hideTraffic : t.traffic}
-        className={`fab absolute right-3 top-43 z-10 ${
-          jams ? "text-accent" : "text-slate-300 hover:text-slate-100"
-        }`}
-      >
-        <svg
-          viewBox="0 0 24 24"
-          className="size-5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        >
-          <rect x="8" y="2.5" width="8" height="19" rx="3" />
-          <path d="M12 7h.01M12 12h.01M12 17h.01" />
-        </svg>
-      </button>
+          <svg
+            viewBox="0 0 24 24"
+            className="size-5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          >
+            <path d="M12 3 3 8l9 5 9-5-9-5Z" />
+            <path d="m3 13 9 5 9-5" />
+          </svg>
+        </button>
+        {layers && (
+          <>
+            <button
+              aria-hidden
+              tabIndex={-1}
+              onClick={() => setLayers(false)}
+              className="fixed inset-0 -z-10 cursor-default"
+            />
+            <div className="panel absolute right-0 top-12 w-52 p-2">
+              <LayersPanel
+                lines={allLines}
+                onLines={setAllLines}
+                traffic={jams}
+                onTraffic={setJams}
+                theme={theme}
+                onTheme={(next) => {
+                  setTheme(next);
+                  saveTheme(next);
+                }}
+              />
+            </div>
+          </>
+        )}
+      </div>
 
       {jams && (
-        <div className="panel absolute right-3 top-55 z-10 w-44 p-2.5 text-xs text-slate-400">
+        <div className="panel absolute right-3 top-43 z-10 w-44 p-2.5 text-xs text-slate-400">
           <div className="flex h-1.5 overflow-hidden rounded-full">
             {RAMP.map(([, colour]) => (
-              <span key={colour} className="flex-1" style={{ background: colour }} />
+              <span
+                key={colour}
+                className="flex-1"
+                style={{ background: colour }}
+              />
             ))}
           </div>
           <p className="mt-1.5 flex justify-between">
@@ -471,7 +533,9 @@ export function App() {
             onLine={openRoute}
             places={places}
             onPlaces={keepPlaces}
-            onPoint={(which, at) => (which === "from" ? setFrom(at) : setTo(at))}
+            onPoint={(which, at) =>
+              which === "from" ? setFrom(at) : setTo(at)
+            }
             onStop={showStop}
           />
         </aside>
@@ -594,17 +658,6 @@ export function App() {
         <aside className="panel absolute left-3 top-19 bottom-20 z-20 w-80 max-w-[calc(100vw-1.5rem)] p-3">
           <RoutePanel
             catalog={cat}
-            username={me.username}
-            onOut={async () => {
-              // Signed out whether or not the request landed
-              await api.logout().catch(() => undefined);
-              setMe(null);
-            }}
-            theme={theme}
-            onTheme={(next) => {
-              setTheme(next);
-              saveTheme(next);
-            }}
             picked={picked}
             onToggle={(id) =>
               setPicked((was) => {

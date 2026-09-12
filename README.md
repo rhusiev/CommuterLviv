@@ -434,26 +434,38 @@ takes over on its own.
 
 `GET /api/traffic/streets` and `GET /api/traffic` are the same numbers the
 model uses for its ETAs, drawn as a map: per 100 m of track, the ratio of how
-long vehicles are actually taking to how long the timetable expects. The
-streets are 25,625 stretches, fixed for the life of the process and cached by
-ETag (204 KB gzipped); the ratios come separately, in the same order, and are
-built and serialised once every 30 s rather than per request, since the clients
-poll every minute and the numbers move slower than that. A stretch too little
-has crossed lately comes back as `null` and is not drawn - the model would
-happily hand back the corridor's number there, which is a fair ETA and a
+long vehicles are actually taking to how long the timetable expects. A stretch
+too little has crossed lately comes back as `null` and is not drawn - the model
+would happily hand back the corridor's number there, which is a fair ETA and a
 meaningless traffic reading.
+
+The numbers are pooled before they are drawn. A unit belongs to one route's
+shape, so a street ten routes run down carries ten units, each with its own
+number and its own idea of where the kerb is; drawn as they are, that is ten
+near-parallel lines crossing each other. They are pooled on `Shape.corridor` -
+the key the model already pools evidence on, a 120 m box of the city crossed on
+one of eight headings - which turns 25,625 stretches into 5,867 lines, one per
+piece of street per direction of travel, coloured by the weighted mean of the
+units in it. The one split kept is tram against road: a tram on its own track is
+not in the traffic the buses are in, while a trolleybus is on the road with them
+and is pooled with them. The geometry is 55 KB gzipped, fixed for the life of the
+process and cached by ETag; the ratios come separately, in the same order, and
+are built and serialised once every 30 s rather than per request, since the
+clients poll every minute and the numbers move slower than that.
 
 Two hundred metres at either end of every shape are left out entirely. A vehicle
 at a terminus crawls in, parks, and crawls out, and the crawling is rolling time
 over cells whose timetabled pace is short, so the ratio there is high on every
 route in the city - which is a layover and not traffic. That drops 1087 of the
-26,712 units the model learns.
+26,712 units the model learns. Only that shape's own units go: a route running
+past another's terminus still pools its own view of the street.
 
 Neither client draws the stretches one at a time. The phone projects them once,
 at zoom 18, and gathers them into one path per colour, so a frame is a couple of
 dozen `drawPath` calls under a single transform and panning re-projects nothing;
 the browser hands maplibre one GeoJSON source and replaces its data only when
-new numbers arrive.
+new numbers arrive. Both push each line to the right of its own travel, so the
+two directions of a street sit side by side rather than one hiding the other.
 
 `GET /api/search?q=` finds addresses and places by name, which the catalog
 cannot: it is Photon over OpenStreetMap, biased to the city and clamped to it,
@@ -735,6 +747,17 @@ web layout is one `relative` box of absolutely positioned pieces instead of a
 column, and why the phone's `Scaffold` has neither an `appBar` nor a
 `bottomNavigationBar`: `floatingTop` and `floatingBottom` in `theme.dart` are
 what anything scrollable uses to clear the two floating bars.
+
+What goes where is decided by what a control does, not by how often it is
+wanted. Routes choose what is tracked and open the routes panel. Layers change
+what the map draws - the route lines, the traffic, the basemap - and live in one
+sheet behind a layers button, whose icon is lit while anything in it is on.
+Everything belonging to the account rather than to the map - what is saved, the
+language, the server, signing out - lives behind an account button, with signing
+out below a rule so it is never the tap next to anything else. Nothing that is a
+toggle and nothing that signs you out sits loose on the map. That is
+`LayersSheet` and `AccountSheet` in `mobile/lib/src/sheets.dart`, and
+`LayersPanel.tsx` and `AccountMenu.tsx` on the web.
 
 A route is named the same way everywhere: the kind of vehicle as a glyph, then
 the number. The city writes the kind as the letter in front of the number - `А25`

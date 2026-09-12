@@ -67,7 +67,7 @@ function directions(shapes: Shapes | null, route: number | null): FeatureCollect
   return out;
 }
 
-/** The stretches are tens of thousands of lines that never move, so each one is
+/** The stretches are thousands of lines that never move, so each one is
  * projected once and kept against the list it came in. */
 const projected = new WeakMap<object, LineString[]>();
 
@@ -78,7 +78,8 @@ function geometries(lines: Pace["lines"]): LineString[] {
 }
 
 /** Rebuilt only when the numbers themselves are new: `sync` runs again on every
- * style event, and folding 26k features each time is what made that expensive. */
+ * style event, and folding every feature each time is what made that
+ * expensive. */
 let last: { ratio: object; out: FeatureCollection<LineString> } | null = null;
 
 function pace(now: Pace | null): FeatureCollection<LineString> {
@@ -134,6 +135,9 @@ export function sync(map: MapLibre, state: State) {
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-width": ["interpolate", ["linear"], ["zoom"], 11, 2.5, 16, 7],
+        // Each direction is pushed to the right of its own travel, so a street
+        // busy one way only does not hide under the way that is clear
+        "line-offset": ["interpolate", ["linear"], ["zoom"], 11, 1.5, 16, 4],
         "line-opacity": 0.85,
         "line-color": ["interpolate", ["linear"], ["get", "r"], ...RAMP.flat()],
       },
