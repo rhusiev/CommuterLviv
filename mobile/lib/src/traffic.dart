@@ -53,7 +53,9 @@ class TrafficLayer extends StatefulWidget {
 }
 
 class _TrafficLayerState extends State<TrafficLayer> {
-  Traffic? _now;
+  /// Built when a reading arrives rather than in `build`, which the map calls on
+  /// every pan and frame: there are tens of thousands of stretches
+  List<Polyline>? _drawn;
   Timer? _timer;
 
   @override
@@ -84,7 +86,17 @@ class _TrafficLayerState extends State<TrafficLayer> {
   Future<void> _ask() async {
     try {
       final got = await widget.api.traffic();
-      if (mounted) setState(() => _now = got);
+      final streets = _held!.lines.lines;
+      final drawn = [
+        for (var i = 0; i < streets.length && i < got.ratio.length; i++)
+          if (trafficColour(got.ratio[i]) case final colour?)
+            Polyline(
+              points: streets[i],
+              color: colour.withValues(alpha: 0.85),
+              strokeWidth: 4,
+            ),
+      ];
+      if (mounted) setState(() => _drawn = drawn);
     } on Exception {
       // The last numbers stay up rather than the view emptying for a minute
     }
@@ -92,19 +104,8 @@ class _TrafficLayerState extends State<TrafficLayer> {
 
   @override
   Widget build(BuildContext context) {
-    final streets = _held?.lines;
-    final now = _now;
-    if (streets == null || now == null) return const SizedBox.shrink();
-    return PolylineLayer(
-      polylines: [
-        for (var i = 0; i < streets.lines.length && i < now.ratio.length; i++)
-          if (trafficColour(now.ratio[i]) case final colour?)
-            Polyline(
-              points: streets.lines[i],
-              color: colour.withValues(alpha: 0.85),
-              strokeWidth: 4,
-            ),
-      ],
-    );
+    final drawn = _drawn;
+    if (drawn == null) return const SizedBox.shrink();
+    return PolylineLayer(polylines: drawn);
   }
 }

@@ -434,7 +434,9 @@ comes back on the timetable alone and says so.
 model uses for its ETAs, drawn as a map: per 100 m of track, the ratio of how
 long vehicles are actually taking to how long the timetable expects. The
 streets are fixed for the life of the process and cached by ETag (268 KB
-gzipped); the ratios come separately, in the same order. A stretch too little
+gzipped); the ratios come separately, in the same order, and are built and
+serialised once every 30 s rather than per request, since the clients poll every
+minute and the numbers move slower than that. A stretch too little
 has crossed lately comes back as `null` and is not drawn - the model would
 happily hand back the corridor's number there, which is a fair ETA and a
 meaningless traffic reading.
@@ -457,10 +459,11 @@ indexes stops by the catalog it was built against and must be rebuilt wherever
 `network.pkl` differs. Without them the service still starts, logs why, and
 `/api/plan` answers 503 - the map and the arrivals do not depend on it.
 
-`GET /api/shapes` is where a route physically goes: per route, the polylines
-its trips follow and a direction arrow every 220 m along them, each arrow
-flagged where the route also runs the other way along that stretch. 535 KB, 111
-KB gzipped, one ETag for the life of the process, and both clients ask for it
+`GET /api/shapes` is where a route physically goes: per route, the polylines its
+trips follow, each marked with the feed direction it runs. Direction is drawn by
+the clients, not served - a run both ways gets two tracks of chevrons, one per
+side, spaced on screen rather than on the ground, which is why nothing here has
+to be respaced per zoom. 245 KB, 33 KB gzipped, one ETag for the life of the process, and both clients ask for it
 only the first time something wants to draw a line - tapping a vehicle's badge
 to see its route, or the button that puts the whole network on the map. Nobody
 who opens neither pays for it.

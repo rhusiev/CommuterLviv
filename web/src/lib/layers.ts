@@ -45,14 +45,17 @@ const along = (pts: [number, number][]): LineString => ({
   coordinates: pts.map(([lat, lon]) => [lon, lat]),
 });
 
+let drawn: { shape: object; out: FeatureCollection<LineString> } | null = null;
+
 function directions(shapes: Shapes | null, route: number | null): FeatureCollection<LineString> {
   const shape = shapes && route !== null ? shapes.routes[route] : null;
   if (!shape) return EMPTY;
+  if (drawn?.shape === shape) return drawn.out;
   // Only a stretch with both directions is pushed aside; a one-way line keeps
   // its chevrons on the centre, where the wings show either side of it
   const both =
     shape.lines.some((l) => l.dir === 0) && shape.lines.some((l) => l.dir === 1);
-  return {
+  const out: FeatureCollection<LineString> = {
     type: "FeatureCollection",
     features: shape.lines.map((line) => ({
       type: "Feature",
@@ -60,24 +63,49 @@ function directions(shapes: Shapes | null, route: number | null): FeatureCollect
       geometry: along(line.pts),
     })),
   };
+  drawn = { shape, out };
+  return out;
 }
+
+/** The stretches are tens of thousands of lines that never move, so each one is
+ * projected once and kept against the list it came in. */
+const projected = new WeakMap<object, LineString[]>();
+
+function geometries(lines: Pace["lines"]): LineString[] {
+  let had = projected.get(lines);
+  if (!had) projected.set(lines, (had = lines.map(along)));
+  return had;
+}
+
+/** Rebuilt only when the numbers themselves are new: `sync` runs again on every
+ * style event, and folding 26k features each time is what made that expensive. */
+let last: { ratio: object; out: FeatureCollection<LineString> } | null = null;
 
 function pace(now: Pace | null): FeatureCollection<LineString> {
   if (!now) return EMPTY;
+  if (last?.ratio === now.ratio) return last.out;
+  const shapes = geometries(now.lines);
   const features: Feature<LineString>[] = [];
-  now.lines.forEach((pts, i) => {
-    const r = now.ratio[i];
+  now.ratio.forEach((r, i) => {
+    const geometry = shapes[i];
     // Too little seen on this stretch to say anything, so it is not drawn
-    if (r === null || r === undefined || pts.length < 2) return;
-    features.push({ type: "Feature", properties: { r }, geometry: along(pts) });
+    if (r === null || r === undefined || !geometry || geometry.coordinates.length < 2) return;
+    features.push({ type: "Feature", properties: { r }, geometry });
   });
-  return { type: "FeatureCollection", features };
+  const out: FeatureCollection<LineString> = { type: "FeatureCollection", features };
+  last = { ratio: now.ratio, out };
+  return out;
 }
+
+/** What each source was last given, so a style event does not re-upload it */
+const fed = new Map<string, FeatureCollection<LineString>>();
 
 function feed(map: MapLibre, id: string, data: FeatureCollection<LineString>) {
   const had = map.getSource(id) as GeoJSONSource | undefined;
+  if (had && fed.get(id) === data) return;
   if (had) had.setData(data);
   else map.addSource(id, { type: "geojson", data });
+  fed.set(id, data);
 }
 
 type State = {

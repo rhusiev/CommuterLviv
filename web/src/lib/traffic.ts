@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, streets as fetchStreets } from "./api";
 import type { Streets, Traffic } from "./types";
 
@@ -53,5 +53,10 @@ export function useTraffic(open: boolean): Pace | null {
     };
   }, [open]);
 
-  return lines && now ? { lines: lines.lines, ratio: now.ratio } : null;
+  // One object per set of numbers, so what reads it can tell a new reading from
+  // a re-render it does not need to rebuild anything for
+  return useMemo(
+    () => (lines && now ? { lines: lines.lines, ratio: now.ratio } : null),
+    [lines, now],
+  );
 }

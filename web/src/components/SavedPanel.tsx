@@ -1,20 +1,22 @@
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { t } from "../lib/i18n";
 import { dropped, renamed } from "../lib/places";
+import { useReorder } from "../lib/reorder";
 import type { Catalog, Place } from "../lib/types";
 
-/** Everything the account has kept: places by name, stops by id. A place is
- * renamed by writing the whole list with the old name gone and the new one in
- * its position, because the name is what identifies it server-side. A pinned
- * stop has no name of its own - it is the catalog's - so it is only shown,
- * unpinned, or opened. */
+/** Everything the account has kept: places by name, stops by id. Both lists are
+ * in the order the account chose, and a row is dragged by its grip to change it.
+ * A place is renamed by writing the whole list with the old name gone and the new
+ * one in its position, because the name is what identifies it server-side. A
+ * pinned stop has no name of its own - it is the catalog's - so it is only
+ * shown, unpinned, or opened. */
 
 export function SavedPanel({
   catalog,
   places,
   onPlaces,
   pins,
-  onUnpin,
+  onPins,
   onPlace,
   onStop,
 }: {
@@ -22,10 +24,12 @@ export function SavedPanel({
   places: Place[];
   onPlaces: (next: Place[]) => void;
   pins: number[];
-  onUnpin: (stop: number) => void;
+  onPins: (next: number[]) => void;
   onPlace: (place: Place) => void;
   onStop: (stop: number) => void;
 }) {
+  const kept = useReorder(places, onPlaces);
+  const pinned = useReorder(pins, onPins);
   const empty = places.length === 0 && pins.length === 0;
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto">
@@ -35,10 +39,11 @@ export function SavedPanel({
         <section>
           <h2 className="text-xs uppercase tracking-wide text-slate-500">{t.places}</h2>
           <ul className="mt-2 space-y-1">
-            {places.map((p) => (
+            {kept.shown.map((p, i) => (
               <PlaceRow
                 key={p.name}
                 place={p}
+                drag={kept.row(i)}
                 onShow={() => onPlace(p)}
                 onRename={(name) => onPlaces(renamed(places, p, name))}
                 onForget={() => onPlaces(dropped(places, p.name))}
@@ -52,8 +57,13 @@ export function SavedPanel({
         <section>
           <h2 className="text-xs uppercase tracking-wide text-slate-500">{t.pinnedStops}</h2>
           <ul className="mt-2 space-y-1">
-            {pins.map((i) => (
-              <li key={catalog.stops[i]?.id ?? i} className="flex items-center gap-1">
+            {pinned.shown.map((i, at) => (
+              <li
+                key={catalog.stops[i]?.id ?? i}
+                {...pinned.row(at)}
+                className="flex items-center gap-1"
+              >
+                <Grip />
                 <button
                   onClick={() => onStop(i)}
                   title={t.showOnMap}
@@ -62,7 +72,7 @@ export function SavedPanel({
                   {catalog.stops[i]?.name ?? ""}
                 </button>
                 <button
-                  onClick={() => onUnpin(i)}
+                  onClick={() => onPins(pins.filter((p) => p !== i))}
                   className="rounded-control px-2 py-1.5 text-xs text-slate-500 transition-colors hover:bg-raised/70 hover:text-rose-300"
                 >
                   ✕
@@ -76,13 +86,26 @@ export function SavedPanel({
   );
 }
 
+function Grip() {
+  return (
+    <span
+      title={t.dragToOrder}
+      className="cursor-grab select-none px-1 text-xs leading-none text-slate-600"
+    >
+      ⠿
+    </span>
+  );
+}
+
 function PlaceRow({
   place,
+  drag,
   onShow,
   onRename,
   onForget,
 }: {
   place: Place;
+  drag: ComponentProps<"li">;
   onShow: () => void;
   onRename: (name: string) => void;
   onForget: () => void;
@@ -115,7 +138,8 @@ function PlaceRow({
     );
 
   return (
-    <li className="flex items-center gap-1">
+    <li {...drag} className="flex items-center gap-1">
+      <Grip />
       <button
         onClick={onShow}
         title={t.showOnMap}

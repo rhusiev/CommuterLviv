@@ -72,9 +72,9 @@ RepoType: git
 Repo: https://github.com/rhusiev/CommuterLviv.git
 
 Builds:
-  - versionName: 0.6.0
-    versionCode: 20
-    commit: v0.6.0
+  - versionName: 0.7.0
+    versionCode: 21
+    commit: v0.7.0
     subdir: mobile/android/app
     # The srclib is F-Droid's own pinned checkout of the Flutter SDK, so there
     # is no tarball to download and no hash to keep in step with one
@@ -96,5 +96,5 @@ Builds:
 # number, taken from `mobile/pubspec.yaml`
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 0.6.0
-CurrentVersionCode: 20
+CurrentVersion: 0.7.0
+CurrentVersionCode: 21
