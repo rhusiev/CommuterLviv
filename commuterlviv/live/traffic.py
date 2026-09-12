@@ -14,6 +14,12 @@ to the corridor and then to the city, which is a reasonable ETA and a
 meaningless traffic reading. Those segments are sent as null and drawn as
 nothing, which is why a street with no transit on it stays grey instead of
 being invented.
+
+The ends of a shape are left out altogether. A vehicle at a terminus crawls in,
+parks, and crawls out again, and the crawling is rolling time on a cell whose
+timetabled pace is short, so the ratio there is high on every route in the city.
+That is a layover, not traffic, so `TERMINUS` metres at either end of every
+shape are not drawn rather than drawn red.
 """
 import json
 
@@ -29,6 +35,8 @@ SIMPLIFY = 12.0     # m a drawn segment may stray from the street
 
 PERIOD = 30.0       # s one reading is served for; the clients ask every 60
 
+TERMINUS = 200.0    # m at either end of a shape whose pace is layover, not traffic
+
 
 def segments(net, model):
     """Every run of cells sharing a unit, as a polyline, with the unit it reads.
@@ -37,7 +45,9 @@ def segments(net, model):
     geometry is a slice of one shape's polyline - no stitching, and the drawn
     line is the street the number was measured on.
     """
-    lines, units, seen = [], [], set()
+    lines, units = [], []
+    # the termini count as already drawn, so nothing is emitted for them
+    seen = _termini(net, model)
     for sid, base in model.shape_base.items():
         shape = net.shapes[sid]
         step = shape.length / shape.cells
@@ -53,6 +63,24 @@ def segments(net, model):
                 geometry.simplify(shape.at(at), SIMPLIFY)))
             units.append(unit)
     return {"lines": lines, "unit": units}
+
+
+def _termini(net, model, reach=TERMINUS):
+    """The units within `reach` of either end of any shape.
+
+    Asked of every shape the unit appears on, not just the one it is drawn from:
+    a unit that is a terminus anywhere is a terminus in the numbers, since the
+    layover there is folded into the same average.
+    """
+    out = set()
+    for sid, base in model.shape_base.items():
+        shape = net.shapes[sid]
+        step = shape.length / shape.cells
+        edge = int(min(reach / step, shape.cells / 2.0))
+        cells = model.unit[base:base + shape.cells]
+        out.update(cells[:edge + 1].tolist())
+        out.update(cells[shape.cells - edge - 1:].tolist())
+    return out
 
 
 def _runs(unit):
