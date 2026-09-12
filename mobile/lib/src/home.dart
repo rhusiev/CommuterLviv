@@ -496,25 +496,44 @@ class _HomeScreenState extends State<HomeScreen> {
     scrollControlled: true,
   );
 
-  Future<void> _menu(String choice) async {
-    switch (choice) {
-      case 'saved':
+  void _openLayers() => showFloatingSheet<void>(
+    context,
+    (_) => LayersSheet(
+      lines: _allLines,
+      onLines: (on) {
+        setState(() => _allLines = on);
+        if (on) unawaited(_geometry());
+      },
+      traffic: _traffic,
+      onTraffic: (on) => setState(() => _traffic = on),
+      theme: _theme,
+      onTheme: _setTheme,
+    ),
+    scrollControlled: true,
+  );
+
+  void _openAccount() => showFloatingSheet<void>(
+    context,
+    (sheet) => AccountSheet(
+      server: widget.api.base,
+      onSaved: () {
+        Navigator.pop(sheet);
         _openSaved();
-      case 'traffic':
-        setState(() => _traffic = !_traffic);
-      case 'map':
-        showFloatingSheet<void>(
-          context,
-          (_) => ThemeSheet(current: _theme, onPick: _setTheme),
-        );
-      case 'lang':
+      },
+      onLanguage: () {
+        Navigator.pop(sheet);
         showFloatingSheet<void>(context, (_) => LanguageSheet(api: widget.api));
-      case 'server':
+      },
+      onServer: () async {
+        Navigator.pop(sheet);
         if (await editServer(context, widget.api) && mounted) widget.onOut();
-      case 'out':
-        await _signOut();
-    }
-  }
+      },
+      onOut: () {
+        Navigator.pop(sheet);
+        unawaited(_signOut());
+      },
+    ),
+  );
 
   Future<void> _signOut() async {
     try {
@@ -653,14 +672,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 : _TopBar(
                     onSearch: _search,
                     onRoutes: () => _openRoutes(catalog),
-                    onMenu: _menu,
-                    server: widget.api.base,
-                    traffic: _traffic,
-                    lines: _allLines,
-                    onLines: () {
-                      setState(() => _allLines = !_allLines);
-                      if (_allLines) unawaited(_geometry());
-                    },
+                    onLayers: _openLayers,
+                    onAccount: _openAccount,
+                    layered: _allLines || _traffic,
                   ),
           ),
           Positioned(
@@ -755,29 +769,30 @@ class _RouteStrip extends StatelessWidget {
   );
 }
 
-/// A search pill and the buttons that open everything else, floating over the
-/// map and clear of the status bar.
+/// A search pill and the three buttons everything else hangs off, floating over
+/// the map and clear of the status bar.
+///
+/// The split is by what a thing does, not by how often it is wanted: routes
+/// choose what is tracked, layers change what the map draws, and the account
+/// holds what is kept and how the app is set up. Nothing that is a toggle and
+/// nothing that signs you out sits loose on the map.
 class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.onSearch,
     required this.onRoutes,
-    required this.onMenu,
-    required this.server,
-    required this.lines,
-    required this.onLines,
-    required this.traffic,
+    required this.onLayers,
+    required this.onAccount,
+    required this.layered,
   });
 
   final VoidCallback onSearch;
   final VoidCallback onRoutes;
-  final void Function(String choice) onMenu;
-  final String server;
+  final VoidCallback onLayers;
+  final VoidCallback onAccount;
 
-  final bool lines;
-  final VoidCallback onLines;
-
-  /// Only to word its menu item, which is the toggle.
-  final bool traffic;
+  /// Whether anything inside the layers sheet is on, which is the only sign the
+  /// map gives that the sheet is holding something.
+  final bool layered;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -816,34 +831,15 @@ class _TopBar extends StatelessWidget {
       ),
       const SizedBox(width: 8),
       RoundButton(
-        tooltip: lines ? txt.hideEveryRoute : txt.everyRoute,
-        onPressed: onLines,
-        child: Icon(Icons.polyline_outlined, color: lines ? accent : null),
+        tooltip: txt.layers,
+        onPressed: onLayers,
+        child: Icon(Icons.layers_outlined, color: layered ? accent : null),
       ),
       const SizedBox(width: 8),
-      Floating(
-        shape: circle,
-        child: PopupMenuButton<String>(
-          onSelected: onMenu,
-          itemBuilder: (_) => [
-            PopupMenuItem(value: 'saved', child: Text(txt.saved)),
-            PopupMenuItem(
-              value: 'traffic',
-              child: Text(traffic ? txt.hideTraffic : txt.traffic),
-            ),
-            PopupMenuItem(value: 'map', child: Text(txt.mapStyle)),
-            PopupMenuItem(value: 'lang', child: Text(txt.language)),
-            PopupMenuItem(
-              value: 'server',
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(txt.server),
-                subtitle: Text(server),
-              ),
-            ),
-            PopupMenuItem(value: 'out', child: Text(txt.signOut)),
-          ],
-        ),
+      RoundButton(
+        tooltip: txt.account,
+        onPressed: onAccount,
+        child: const Icon(Icons.person_outline),
       ),
     ],
   );

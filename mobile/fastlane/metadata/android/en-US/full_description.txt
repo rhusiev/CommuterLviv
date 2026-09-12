@@ -21,9 +21,11 @@ What it shows:
 * Saved sets of routes and saved places, kept on the server, so the phone and
   the browser show the same thing
 * A traffic view, colouring the streets the trams and buses can see by how far
-  behind the timetable they are running - and colouring nothing where too few
-  have passed to say, or at the ends of a line, where standing at a terminus is
-  not traffic
+  behind the timetable they are running: one line per street per direction
+  rather than one per route, with trams on their own track kept apart from the
+  road
+* Nothing coloured where too few have passed to say, or at the ends of a line,
+  where standing at a terminus is not traffic
 * Five map styles, dark and light
 
 The map is OpenStreetMap data rendered on the device from VersaTiles' free

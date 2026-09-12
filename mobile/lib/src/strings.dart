@@ -32,7 +32,8 @@ class Strings {
     required this.routeLine,
     required this.showRoute,
     required this.everyRoute,
-    required this.hideEveryRoute,
+    required this.layers,
+    required this.account,
     required this.findStop,
     required this.tryAgain,
     required this.filterRoutes,
@@ -56,7 +57,6 @@ class Strings {
     required this.foundPlaces,
     required this.noSearch,
     required this.traffic,
-    required this.hideTraffic,
     required this.departAt,
     required this.quietPart,
     required this.forget,
@@ -65,8 +65,6 @@ class Strings {
     required this.save,
     required this.use,
     required this.sets,
-    required this.dark,
-    required this.light,
     required this.pin,
     required this.unpin,
     required this.callsHere,
@@ -129,7 +127,8 @@ class Strings {
   final String routeLine;
   final String showRoute;
   final String everyRoute;
-  final String hideEveryRoute;
+  final String layers;
+  final String account;
   final String findStop;
   final String tryAgain;
   final String filterRoutes;
@@ -153,7 +152,6 @@ class Strings {
   final String foundPlaces;
   final String noSearch;
   final String traffic;
-  final String hideTraffic;
   final String departAt;
 
   /// The timetable on a line nothing has been seen running on.
@@ -164,8 +162,6 @@ class Strings {
   final String save;
   final String use;
   final String sets;
-  final String dark;
-  final String light;
   final String pin;
   final String unpin;
   final String callsHere;
@@ -227,7 +223,8 @@ const _en = Strings(
   routeLine: 'Line',
   showRoute: 'Show this route on the map',
   everyRoute: 'Every route',
-  hideEveryRoute: 'Hide the route lines',
+  layers: 'Layers',
+  account: 'Account',
   findStop: 'Find a stop or a place',
   tryAgain: 'Try again',
   filterRoutes: 'Filter routes',
@@ -251,7 +248,6 @@ const _en = Strings(
   foundPlaces: 'Places',
   noSearch: 'place search is unavailable',
   traffic: 'Traffic',
-  hideTraffic: 'Hide traffic',
   departAt: 'Leave at',
   quietPart: 'nothing seen running',
   forget: 'Forget',
@@ -260,8 +256,6 @@ const _en = Strings(
   save: 'Save',
   use: 'Use',
   sets: 'Sets',
-  dark: 'dark',
-  light: 'light',
   pin: 'Pin',
   unpin: 'Unpin',
   callsHere: 'Calls here',
@@ -329,7 +323,8 @@ const _uk = Strings(
   routeLine: 'Лінія',
   showRoute: 'Показати цей маршрут на мапі',
   everyRoute: 'Усі маршрути',
-  hideEveryRoute: 'Сховати лінії маршрутів',
+  layers: 'Шари',
+  account: 'Обліковий запис',
   findStop: 'Знайти зупинку або місце',
   tryAgain: 'Спробувати ще',
   filterRoutes: 'Пошук маршруту',
@@ -353,7 +348,6 @@ const _uk = Strings(
   foundPlaces: 'Місця',
   noSearch: 'пошук місць недоступний',
   traffic: 'Затори',
-  hideTraffic: 'Сховати затори',
   departAt: 'Виїзд о',
   quietPart: 'рейсів не видно',
   forget: 'Забути',
@@ -362,8 +356,6 @@ const _uk = Strings(
   save: 'Зберегти',
   use: 'Використати',
   sets: 'Набори',
-  dark: 'темна',
-  light: 'світла',
   pin: 'Закріпити',
   unpin: 'Відкріпити',
   callsHere: 'Тут зупиняються',

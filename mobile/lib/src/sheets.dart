@@ -120,28 +120,149 @@ class _Handle extends StatelessWidget {
   );
 }
 
-class ThemeSheet extends StatelessWidget {
-  const ThemeSheet({super.key, required this.current, required this.onPick});
+/// Everything that changes what the map shows, in one place: the overlays as
+/// switches, the basemap as a choice. Anything here is visible on the map the
+/// moment it is touched, which is the rule for what belongs in this sheet
+/// rather than behind the account button.
+class LayersSheet extends StatefulWidget {
+  const LayersSheet({
+    super.key,
+    required this.lines,
+    required this.onLines,
+    required this.traffic,
+    required this.onTraffic,
+    required this.theme,
+    required this.onTheme,
+  });
 
-  final MapTheme current;
-  final void Function(MapTheme theme) onPick;
+  final bool lines;
+  final ValueChanged<bool> onLines;
+  final bool traffic;
+  final ValueChanged<bool> onTraffic;
+  final MapTheme theme;
+  final void Function(MapTheme theme) onTheme;
+
+  @override
+  State<LayersSheet> createState() => _LayersSheetState();
+}
+
+/// The sheet is its own route and the screen behind it never rebuilds it, so a
+/// switch has to hold its own position while the map changes under the sheet.
+class _LayersSheetState extends State<LayersSheet> {
+  late bool _lines = widget.lines;
+  late bool _traffic = widget.traffic;
+  late MapTheme _theme = widget.theme;
 
   @override
   Widget build(BuildContext context) => SafeArea(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final t in mapThemes)
-          ListTile(
-            onTap: () {
-              Navigator.pop(context);
-              onPick(t);
+    child: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SwitchListTile(
+            secondary: const Icon(Icons.polyline_outlined),
+            title: Text(txt.everyRoute),
+            value: _lines,
+            onChanged: (on) {
+              setState(() => _lines = on);
+              widget.onLines(on);
             },
-            title: Text(t.name),
-            subtitle: Text(t.dark ? txt.dark : txt.light),
-            trailing: t.id == current.id ? const Icon(Icons.check) : null,
           ),
-      ],
+          SwitchListTile(
+            secondary: const Icon(Icons.traffic_outlined),
+            title: Text(txt.traffic),
+            value: _traffic,
+            onChanged: (on) {
+              setState(() => _traffic = on);
+              widget.onTraffic(on);
+            },
+          ),
+          const Divider(height: 1),
+          _Label(txt.mapStyle),
+          for (final t in mapThemes)
+            ListTile(
+              leading: Icon(
+                t.dark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+              ),
+              title: Text(t.name),
+              trailing: t.id == _theme.id ? const Icon(Icons.check) : null,
+              onTap: () {
+                setState(() => _theme = t);
+                widget.onTheme(t);
+              },
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Everything that belongs to the account rather than to the map, in the order
+/// it is reached for: what was kept, then how the app is set up, then the way
+/// out, set apart below a rule so it is never the tap next to anything else.
+class AccountSheet extends StatelessWidget {
+  const AccountSheet({
+    super.key,
+    required this.server,
+    required this.onSaved,
+    required this.onLanguage,
+    required this.onServer,
+    required this.onOut,
+  });
+
+  final String server;
+  final VoidCallback onSaved;
+  final VoidCallback onLanguage;
+  final VoidCallback onServer;
+  final VoidCallback onOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final colours = material.Theme.of(context).colorScheme;
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.bookmark_outline),
+            title: Text(txt.saved),
+            onTap: onSaved,
+          ),
+          ListTile(
+            leading: const Icon(Icons.translate),
+            title: Text(txt.language),
+            trailing: Text(lang == Lang.uk ? 'Українська' : 'English'),
+            onTap: onLanguage,
+          ),
+          ListTile(
+            leading: const Icon(Icons.dns_outlined),
+            title: Text(txt.server),
+            subtitle: Text(server),
+            onTap: onServer,
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: Icon(Icons.logout, color: colours.error),
+            title: Text(txt.signOut, style: TextStyle(color: colours.error)),
+            onTap: onOut,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Label extends StatelessWidget {
+  const _Label(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+      child: Text(text, style: material.Theme.of(context).textTheme.labelLarge),
     ),
   );
 }

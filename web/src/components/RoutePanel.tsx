@@ -1,18 +1,16 @@
 import { useMemo, useState } from "react";
-import { THEMES, type Theme } from "../lib/theme";
 import type { Catalog, RouteSet } from "../lib/types";
-import { lang, setLang, t } from "../lib/i18n";
+import { t } from "../lib/i18n";
 import { RouteBadge } from "./RouteBadge";
 
-/** A set is the selection at the moment it was saved: editing the selection
+/** Which routes are tracked, and the saved sets of them - nothing else. What
+ * the map draws lives in the layers panel, and the account in its own menu.
+ *
+ * A set is the selection at the moment it was saved: editing the selection
  * does not touch it until it is saved again. */
 
 type Props = {
   catalog: Catalog;
-  username: string;
-  onOut: () => void;
-  theme: Theme;
-  onTheme: (theme: Theme) => void;
   picked: Set<string>;
   onToggle: (id: string) => void;
   onClear: () => void;
@@ -51,13 +49,6 @@ export function RoutePanel(p: Props) {
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-hidden">
-      <div className="flex items-baseline gap-2">
-        <span className="truncate text-sm font-medium text-slate-200">{p.username}</span>
-        <button onClick={p.onOut} className="ml-auto text-xs text-slate-500 hover:text-slate-200">
-          {t.out}
-        </button>
-      </div>
-
       <section>
         <h2 className="text-xs uppercase tracking-wide text-slate-500">{t.sets}</h2>
         <ul className="mt-2 space-y-1">
@@ -156,44 +147,6 @@ export function RoutePanel(p: Props) {
           })}
         </div>
         <p className="mt-1.5 text-xs text-slate-500">{t.holdForLine}</p>
-      </section>
-
-      <section>
-        <h2 className="text-xs uppercase tracking-wide text-slate-500">{t.language}</h2>
-        <div className="mt-2 flex gap-1">
-          {(["uk", "en"] as const).map((l) => (
-            <button
-              key={l}
-              onClick={() => setLang(l)}
-              className={`rounded-md px-2 py-1 text-xs ${
-                l === lang
-                  ? "bg-accent/15 text-accent"
-                  : "bg-raised/70 text-slate-400 hover:bg-raised"
-              }`}
-            >
-              {l === "uk" ? "Українська" : "English"}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-xs uppercase tracking-wide text-slate-500">{t.basemap}</h2>
-        <div className="mt-2 flex flex-wrap gap-1">
-          {THEMES.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => p.onTheme(m)}
-              className={`rounded-md px-2 py-1 text-xs ${
-                m.id === p.theme.id
-                  ? "bg-accent/15 text-accent"
-                  : "bg-raised/70 text-slate-400 hover:bg-raised"
-              }`}
-            >
-              {m.name}
-            </button>
-          ))}
-        </div>
       </section>
     </div>
   );
