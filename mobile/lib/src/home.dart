@@ -227,7 +227,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _geometry().then((_) {
       final shape = _shapes?.routes.elementAtOrNull(route);
       final points = [
-        for (final line in shape?.lines ?? const <List<LatLng>>[]) ...line,
+        for (final line in shape?.lines ?? const <RouteLine>[]) ...line.pts,
       ];
       if (!mounted || points.isEmpty) return;
       _map.fitCamera(

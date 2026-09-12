@@ -315,9 +315,8 @@ async def traffic_streets(request, session):
 async def traffic_now(request, session):
     """How each of those is running against its timetable, now."""
     app = request.app.state
-    live = app.svc.live
-    return JSONResponse(traffic.reading(live.model, app.traffic_units,
-                                        time.time()))
+    return Response(app.traffic_cache.read(time.time()),
+                    media_type="application/json")
 
 
 async def arrivals(request, session):
@@ -614,6 +613,7 @@ def build(st=None, net=None):
         s.traffic_units = streets.pop("unit")
         s.traffic_json = json.dumps(streets).encode()
         s.traffic_tag = f'W/"{len(s.traffic_json):x}-{len(s.traffic_units):x}"'
+        s.traffic_cache = traffic.Cache(s.svc.live.model, s.traffic_units)
         s.planner = journeys.Planner.maybe(loaded, cat, log)
         s.geocoder = (geocode.Geocoder(st.photon_url) if st.photon_url
                       else None)

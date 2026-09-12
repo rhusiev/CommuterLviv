@@ -26,8 +26,9 @@ const stopsZoom = 14.0;
 
 const _stopRadius = 3.5;
 
-/// Metres between arrows, as the server spaces them.
-const _arrowSpacing = 220.0;
+/// Pixels between chevrons along a line. Measured on screen rather than on the
+/// ground, so they stay this far apart at every zoom without being respaced.
+const _arrowSpacing = 90.0;
 
 /// Below this a chevron is a speck, so direction is skipped.
 const _arrowZoom = 13.0;
@@ -185,7 +186,7 @@ class _Painter extends CustomPainter {
       final path = ui.Path();
       for (final line in geometry.routes[i].lines) {
         var first = true;
-        for (final p in line) {
+        for (final p in line.pts) {
           final at = camera.latLngToScreenOffset(p);
           first ? path.moveTo(at.dx, at.dy) : path.lineTo(at.dx, at.dy);
           first = false;
@@ -209,35 +210,51 @@ class _Painter extends CustomPainter {
     final one = arrowed;
     if (one == null || one >= geometry.routes.length) return;
     if (camera.zoom < _arrowZoom) return;
-    final arrows = geometry.routes[one].arrows;
-    // Arrows arrive in order along each shape, so every nth is still evenly
-    // spaced. Web mercator at the camera's latitude: metres per 80 px
-    final metres =
-        80 *
-        156543.03392 *
-        math.cos(camera.center.latitude * math.pi / 180) /
-        math.pow(2, camera.zoom);
-    final step = math.max(1, (metres / _arrowSpacing).ceil());
+    final shape = geometry.routes[one];
     final ridge = Paint()
       ..color = ink.edge
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5
       ..strokeJoin = StrokeJoin.round
       ..strokeCap = StrokeCap.round;
-    for (var k = 0; k < arrows.length; k += step) {
-      final arrow = arrows[k];
-      final at = camera.latLngToScreenOffset(arrow.at);
-      if (!bounds.inflate(12).contains(at)) continue;
-      final a = (arrow.heading - 90 + camera.rotation) * math.pi / 180;
-      final cos = math.cos(a);
-      final sin = math.sin(a);
-      // A stretch run both ways draws as two tracks of chevrons side by side,
-      // each pointing its own way, rather than one glyph they share
-      final side = arrow.twoWay
-          ? Offset(-sin * _twoWayOffset, cos * _twoWayOffset)
-          : Offset.zero;
-      _chevron(canvas, at + side, cos, sin, ridge);
-      if (arrow.twoWay) _chevron(canvas, at - side, -cos, -sin, ridge);
+    for (final line in shape.lines) {
+      // A route run both ways draws each direction as its own track of
+      // chevrons, pushed to its own side, rather than two sharing one glyph
+      final side = shape.twoWay
+          ? (line.dir == 1 ? -_twoWayOffset : _twoWayOffset)
+          : 0.0;
+      _chevronsAlong(canvas, bounds, line.pts, side, ridge);
+    }
+  }
+
+  /// Chevrons every `_arrowSpacing` pixels along one projected line, pointing
+  /// the way it runs. Walking the line on screen rather than on the ground is
+  /// what keeps the spacing even at every zoom, and lets a stretch off screen
+  /// be skipped a point at a time.
+  void _chevronsAlong(
+    Canvas canvas,
+    Rect bounds,
+    List<LatLng> pts,
+    double side,
+    Paint paint,
+  ) {
+    final room = bounds.inflate(24);
+    var at = camera.latLngToScreenOffset(pts.first);
+    var run = _arrowSpacing / 2;
+    for (var k = 1; k < pts.length; k++) {
+      final next = camera.latLngToScreenOffset(pts[k]);
+      final step = next - at;
+      final length = step.distance;
+      if (length > 0) {
+        final cos = step.dx / length;
+        final sin = step.dy / length;
+        for (run += length; run >= _arrowSpacing; run -= _arrowSpacing) {
+          final on = next - Offset(cos, sin) * (run - _arrowSpacing);
+          final push = Offset(-sin * side, cos * side);
+          if (room.contains(on)) _chevron(canvas, on + push, cos, sin, paint);
+        }
+      }
+      at = next;
     }
   }
 

@@ -343,48 +343,42 @@ class Traffic {
   final List<double?> ratio;
 }
 
-/// Where a route goes and which way. A `twoWay` arrow marks a stretch the
-/// route also runs the other way along.
-class RouteArrow {
-  const RouteArrow({
-    required this.at,
-    required this.heading,
-    required this.twoWay,
-  });
+/// One run of a route, and which of the feed's two directions it is. The
+/// direction is what tells a stretch run both ways from a one-way one, so the
+/// chevrons on it can be drawn as two tracks rather than one.
+class RouteLine {
+  const RouteLine({required this.dir, required this.pts});
 
-  /// `[lat, lon, heading, two-way]` on the wire.
-  factory RouteArrow.fromJson(List<dynamic> j) => RouteArrow(
-    at: LatLng((j[0] as num).toDouble(), (j[1] as num).toDouble()),
-    heading: (j[2] as num).toDouble(),
-    twoWay: j[3] == 1,
+  factory RouteLine.fromJson(Map<String, dynamic> j) => RouteLine(
+    dir: j['dir'] as int,
+    pts: [
+      for (final p in j['pts'] as List)
+        LatLng(((p as List)[0] as num).toDouble(), (p[1] as num).toDouble()),
+    ],
   );
 
-  final LatLng at;
-  final double heading;
-  final bool twoWay;
+  final int dir;
+  final List<LatLng> pts;
 }
 
 class RouteShape {
-  const RouteShape({required this.lines, required this.arrows});
+  const RouteShape({required this.lines, required this.twoWay});
 
-  factory RouteShape.fromJson(Map<String, dynamic> j) => RouteShape(
-    lines: [
+  factory RouteShape.fromJson(Map<String, dynamic> j) {
+    final lines = [
       for (final line in j['lines'] as List)
-        [
-          for (final p in (line as Map<String, dynamic>)['pts'] as List)
-            LatLng(
-              ((p as List)[0] as num).toDouble(),
-              (p[1] as num).toDouble(),
-            ),
-        ],
-    ],
-    arrows: [
-      for (final a in j['arrows'] as List) RouteArrow.fromJson(a as List),
-    ],
-  );
+        RouteLine.fromJson(line as Map<String, dynamic>),
+    ];
+    return RouteShape(
+      lines: lines,
+      twoWay: lines.any((l) => l.dir == 0) && lines.any((l) => l.dir == 1),
+    );
+  }
 
-  final List<List<LatLng>> lines;
-  final List<RouteArrow> arrows;
+  final List<RouteLine> lines;
+
+  /// Whether the route has runs both ways, and so wants two tracks of chevrons.
+  final bool twoWay;
 }
 
 class Shapes {

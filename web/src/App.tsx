@@ -498,7 +498,7 @@ export function App() {
             places={places}
             onPlaces={keepPlaces}
             pins={pins}
-            onUnpin={(i) => setPinned(pins.filter((p) => p !== i))}
+            onPins={setPinned}
             onPlace={showPlace}
             onStop={showStop}
           />

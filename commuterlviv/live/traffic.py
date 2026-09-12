@@ -15,6 +15,8 @@ meaningless traffic reading. Those segments are sent as null and drawn as
 nothing, which is why a street with no transit on it stays grey instead of
 being invented.
 """
+import json
+
 import numpy as np
 
 from . import geometry
@@ -24,6 +26,8 @@ from . import geometry
 CONFIDENCE = 3.0
 
 SIMPLIFY = 12.0     # m a drawn segment may stray from the street
+
+PERIOD = 30.0       # s one reading is served for; the clients ask every 60
 
 
 def segments(net, model):
@@ -72,3 +76,23 @@ def reading(model, units, now, floor=CONFIDENCE):
     return {"t": int(now),
             "ratio": [round(float(pace[u]), 3) if weight[u] >= floor else None
                       for u in units]}
+
+
+class Cache:
+    """One reading per `PERIOD` seconds, serialised once.
+
+    Reading it is a pass over every unit and a JSON array of tens of thousands
+    of numbers, while the numbers themselves move on the scale of minutes. Every
+    client polling inside the same period therefore gets the same bytes.
+    """
+
+    def __init__(self, model, units, period=PERIOD):
+        self.model, self.units, self.period = model, units, period
+        self.epoch, self.body = None, b""
+
+    def read(self, now):
+        epoch = int(now // self.period)
+        if epoch != self.epoch:
+            self.epoch = epoch
+            self.body = json.dumps(reading(self.model, self.units, now)).encode()
+        return self.body
