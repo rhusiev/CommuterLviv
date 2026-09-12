@@ -67,28 +67,44 @@ def segments(net, model):
         base = model.shape_base[sid]
         shape = net.shapes[sid]
         cells = model.unit[base:base + shape.cells]
-        key_of = shape.corridor
-        for lo, hi in _runs(key_of):
-            units = {u for u in cells[lo:hi + 1].tolist() if u not in drop}
-            if not units:
+        for lo, hi in _runs(shape.corridor):
+            here = {u for u in cells[lo:hi + 1].tolist() if u not in drop}
+            if not here:
                 continue
-            group = pooled.setdefault((int(key_of[lo]), kinds.get(sid, ROAD)),
-                                      {"units": set(), "run": None})
-            group["units"] |= units
-            run = group["run"]
-            if run is None or hi - lo > run[2] - run[1]:
-                group["run"] = (sid, lo, hi)
+            key = (int(shape.corridor[lo]), kinds.get(sid, ROAD))
+            group = pooled.get(key)
+            if group is None:
+                pooled[key] = _Group(here, sid, lo, hi)
+            else:
+                group.add(here, sid, lo, hi)
     lines, units = [], []
     for key in sorted(pooled):
         group = pooled[key]
-        sid, lo, hi = group["run"]
-        shape = net.shapes[sid]
+        shape = net.shapes[group.sid]
         step = shape.length / shape.cells
         # both ends of the run, so a one-cell piece is still a line
-        at = np.minimum(np.arange(lo, hi + 2) * step, shape.length)
+        at = np.minimum(np.arange(group.lo, group.hi + 2) * step, shape.length)
         lines.append(geometry.points(geometry.simplify(shape.at(at), SIMPLIFY)))
-        units.append(sorted(group["units"]))
+        units.append(sorted(group.units))
     return {"lines": lines, "unit": units}
+
+
+class _Group:
+    """The units on one piece of street, and the run of cells to draw it as.
+
+    The run kept is the longest offered, so the line follows the street as far
+    as any one route does rather than stopping where the first one turned off.
+    """
+
+    __slots__ = ("hi", "lo", "sid", "units")
+
+    def __init__(self, units, sid, lo, hi):
+        self.units, self.sid, self.lo, self.hi = set(units), sid, lo, hi
+
+    def add(self, units, sid, lo, hi):
+        self.units |= units
+        if hi - lo > self.hi - self.lo:
+            self.sid, self.lo, self.hi = sid, lo, hi
 
 
 def _kinds(net):
@@ -100,9 +116,12 @@ def _kinds(net):
     out = {}
     for trip, sid in net.trip_shape.items():
         route = net.routes.get(net.trip_route.get(trip))
-        if route is not None and sid in net.shapes:
-            kind = TRAM if route["type"] == "tram" else ROAD
-            out[sid] = min(out.get(sid, kind), kind)
+        if route is None or sid not in net.shapes:
+            continue
+        if route["type"] == "tram":
+            out[sid] = TRAM
+        else:
+            out.setdefault(sid, ROAD)
     return out
 
 

@@ -418,7 +418,7 @@ export function App() {
                 aria-hidden
                 tabIndex={-1}
                 onClick={() => setAccount(false)}
-                className="fixed inset-0 -z-10 cursor-default"
+                className="fixed inset-0 cursor-default"
               />
               <div className="panel absolute right-0 top-12 w-52 p-2">
                 <AccountMenu
@@ -467,7 +467,7 @@ export function App() {
               aria-hidden
               tabIndex={-1}
               onClick={() => setLayers(false)}
-              className="fixed inset-0 -z-10 cursor-default"
+              className="fixed inset-0 cursor-default"
             />
             <div className="panel absolute right-0 top-12 w-52 p-2">
               <LayersPanel
@@ -642,7 +642,11 @@ export function App() {
         ).map((v) => (
           <button
             key={v}
-            onClick={() => setTab(v)}
+            onClick={() => {
+              setTab(v);
+              setLayers(false);
+              setAccount(false);
+            }}
             className={`rounded-full px-3 py-1.5 font-medium transition-colors sm:px-4 ${
               tab === v
                 ? "bg-accent/15 text-accent"
