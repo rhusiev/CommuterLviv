@@ -98,8 +98,18 @@ Builds:
     ndk: r27c
 
 # The version the app reports and the version F-Droid publishes are the same
-# number, taken from `mobile/pubspec.yaml`
+# number, taken from `mobile/pubspec.yaml`.
+#
+# `UpdateCheckData` is what says so, and without it nothing updates: told only
+# `Tags`, `check_tags` reads the version out of the Gradle files, and a Flutter
+# project's say `versionCode = flutter.versionCode` rather than a number, so it
+# finds nothing on any tag and fails with "Couldn't find any version
+# information". The four fields are the file and regex for the code, then the
+# file and regex for the name, each path from the root of the repository. The
+# regexes are unanchored because `checkupdates` matches without `re.MULTILINE`,
+# so a `^` here would only ever match the start of the whole file
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
+UpdateCheckData: mobile/pubspec.yaml|version:\s[0-9.]+\+(\d+)|mobile/pubspec.yaml|version:\s([0-9.]+)\+
 CurrentVersion: 0.9.0
 CurrentVersionCode: 23
