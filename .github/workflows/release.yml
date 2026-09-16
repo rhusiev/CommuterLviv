@@ -58,8 +58,12 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           echo "$ANDROID_KEYSTORE_B64" | base64 -d > commuterlviv-release.jks
+          # Gradle's `file()` resolves `storeFile` relative to the app
+          # module's project directory (mobile/android/app/), but the
+          # keystore lives one level up at mobile/android/, so the path
+          # has to step up: ../commuterlviv-release.jks
           cat > key.properties <<EOF
-          storeFile=commuterlviv-release.jks
+          storeFile=../commuterlviv-release.jks
           storePassword=$ANDROID_KEYSTORE_PASSWORD
           keyAlias=$ANDROID_KEY_ALIAS
           keyPassword=$ANDROID_KEY_PASSWORD
