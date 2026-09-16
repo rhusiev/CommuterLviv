@@ -30,5 +30,6 @@ mobile/**/GeneratedPluginRegistrant.*
 .env
 deploy/*.env
 
-# Release builds, served at /download by the stack; not history
-deploy/apk/*.apk
+# Per-release APKs that `deploy/release-apk.sh` builds for the GitHub
+# release; never commit the binaries
+release/

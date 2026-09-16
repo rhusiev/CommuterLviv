@@ -549,11 +549,10 @@ answer. It goes up with every substantial change and stays under 1.0 while this
 is alpha - and the Android `versionCode` goes up with it, because F-Droid
 orders releases by that alone.
 
-**The phone app is downloadable from the stack.** `deploy/release-apk.sh`
-builds a release APK into `deploy/apk/`, which the web container mounts, so
-`<site>/download/commuterlviv.apk` is always the newest build - the way onto a
-phone that cannot reach F-Droid. The directory is listed, so the versioned file
-is there too, and neither is in git.
+**The phone app is on F-Droid.** `deploy/release-apk.sh` builds the three
+per-ABI APKs the same way F-Droid does and prints the `gh release create`
+command that puts them on the GitHub release page; F-Droid downloads them
+back, rebuilds from source, and refuses to publish unless the bytes match.
 
 Two lines of `.env` decide everything and neither has a safe guess:
 `POSTGRES_PASSWORD`, and `COMMUTERLVIV_ORIGINS` - the exact origins allowed to make
@@ -601,14 +600,13 @@ reachable directly.
 ### Moving it to a machine that is already collecting
 
 The repository has no remote, so the checkout is what travels. Everything the
-stack needs is in it except three gitignored things worth carrying by hand: the
-recording, the walking graph and the phone build.
+stack needs is in it except two gitignored things worth carrying by hand: the
+recording and the walking graph.
 
 ```sh
 rsync -a --delete --exclude data --exclude node_modules --exclude build \
       --exclude .git ./ vps:/opt/commuterlviv/app/
 scp .env vps:/opt/commuterlviv/app/.env          # then fix ORIGINS on the far side
-scp deploy/apk/*.apk vps:/opt/commuterlviv/app/deploy/apk/
 scp data/walk.npz vps:/opt/commuterlviv/walk.npz
 ```
 

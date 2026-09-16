@@ -94,11 +94,6 @@ services:
       # Caddy is the outermost thing; docker-compose.proxy.yml overrides it with
       # the header when something else is further out. See deploy/Caddyfile
       COMMUTERLVIV_CLIENT_IP: "{remote_host}"
-    # The release APK, served at /download/. A bind mount and not a volume: a
-    # new build has to be visible without rebuilding the image, and the file is
-    # too big to want in git
-    volumes:
-      - ./deploy/apk:/srv/download:ro
     # Loopback by default: whatever terminates TLS on this machine is what the
     # world talks to. docker-compose.tls.yml is the other way round.
     ports:
