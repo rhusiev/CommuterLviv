@@ -32,9 +32,12 @@ IssueTracker: https://github.com/rhusiev/CommuterLviv/issues
 AutoName: CommuterLviv
 
 # Both are required of a new app, and both are the same text as
-# `mobile/fastlane/metadata/android/en-US/`, which F-Droid reads out of the
-# repository and which is where the wording is edited. Kept in step by hand:
-# there is one listing, not two
+# `fastlane/metadata/android/en-US/`, which F-Droid reads out of the repository
+# and which is where the wording is edited. That directory is at the root and
+# not beside the app it describes, because `insert_localized_app_metadata` in
+# fdroidserver globs `build/<applicationId>/fastlane/metadata/android/<locale>`
+# and nothing deeper: under `mobile/` it is simply never found. Kept in step by
+# hand: there is one listing, not two
 Summary: Where the trams and buses of Lviv actually are, and when yours arrives
 
 Description: |-
@@ -77,7 +80,7 @@ Builds:
   - versionName: 0.9.0
     versionCode: 23
     commit: v0.9.0
-    subdir: mobile/android/app
+    subdir: mobile
     # The srclib is F-Droid's own pinned checkout of the Flutter SDK, so there
     # is no tarball to download and no hash to keep in step with one
     srclibs:
@@ -85,13 +88,13 @@ Builds:
     prebuild:
       - git config --global --add safe.directory $$flutter$$
       - $$flutter$$/bin/flutter config --no-analytics
-    # The Flutter project is `mobile`, two levels above the Gradle module that
-    # `subdir` points at, and `flutter build` has to run from it
+    # `subdir` is the Flutter project, not the Gradle module inside it: it is
+    # both the working directory for the commands below and what `output` is
+    # relative to, and `flutter build` has to run from the Flutter project
     build:
-      - cd ../..
       - $$flutter$$/bin/flutter pub get
       - $$flutter$$/bin/flutter build apk --release
-    output: ../../build/app/outputs/flutter-apk/app-release.apk
+    output: build/app/outputs/flutter-apk/app-release.apk
     ndk: r27c
 
 # The version the app reports and the version F-Droid publishes are the same

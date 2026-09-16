@@ -1,0 +1,9 @@
+First release on F-Droid.
+
+Live trams, trolleybuses and buses on a map of Lviv, with arrival times
+predicted from how traffic is running today rather than from the timetable.
+
+This version adds the door-to-door journey planner, search for addresses and
+places rather than only stop names, saved places shown on the map, a traffic
+view colouring each street by how far behind the vehicles on it are running,
+and an arrow on a vehicle only when it is actually moving.

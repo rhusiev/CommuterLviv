@@ -141,13 +141,17 @@ not undoing:
   to the recipe as `$$flutter$$`. It replaced a `sudo:` block that downloaded
   the SDK tarball and checked a hash by hand - one fewer thing to keep in step
   with the version above it.
-* `subdir: mobile/android/app` is the Gradle module, but `flutter build` has to
-  run from the Flutter project two levels up, which is what the `cd ../..` in
-  `build:` and the `../../` in `output:` are for.
+* `subdir: mobile` is the Flutter project, not the Gradle module inside it: it
+  is where the `build:` commands run and what `output:` is relative to, and
+  `flutter build` has to run from the Flutter project.
 * No dependency pulls Play services (see "Where the phone is" below).
-* The listing text lives in `fastlane/metadata/android/en-US/`, which F-Droid
-  reads out of the repository. `Summary` and `Description` in the recipe repeat
-  it because fdroiddata requires both fields; they are kept in step by hand.
+* The listing - text, screenshots, changelogs - lives in
+  `fastlane/metadata/android/en-US/` at the root of the repository, not here
+  beside the app, because F-Droid looks for it only at the root of the checkout.
+  `Summary` and `Description` in the recipe repeat the text because fdroiddata
+  requires both fields; they are kept in step by hand.
+* A screenshot is read from the commit the build names, so it has to be in the
+  tree the release tag points at, not merely on the branch.
 
 ## What the server needs
 
