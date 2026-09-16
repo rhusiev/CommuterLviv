@@ -6,10 +6,13 @@
 # commit F-Droid builds from too.
 #
 # Reproducibility note: both this workflow and F-Droid's recipe symlink
-# their checkout to `/srv/build/nl.r1a.commuterlviv` and `cd` through it,
+# their checkout to `/tmp/build/nl.r1a.commuterlviv` and `cd` through it,
 # so the absolute path Flutter's Gradle plugin bakes into `libapp.so` is
 # the same on both sides. Without that, the cross-build `diff -r` fails
-# on the baked-in `dart_plugin_registrant.dart` path.
+# on the baked-in `dart_plugin_registrant.dart` path. `/tmp` is chosen
+# because both this runner (rootless `runner` user) and F-Droid's build
+# (which removes sudo before running the recipe) can write to `/tmp`,
+# while `/srv` is root-owned and rejected by both.
 #
 # Secrets this workflow expects (set them at
 # https://github.com/rhusiev/CommuterLviv/settings/secrets/actions):
@@ -41,13 +44,13 @@ jobs:
           android-sdk-version: 35
           ndk-version: r27c
 
-      - name: Stage source at /srv/build/nl.r1a.commuterlviv
+      - name: Stage source at /tmp/build/nl.r1a.commuterlviv
         run: |
-          mkdir -p /srv/build
-          ln -sfn "$GITHUB_WORKSPACE" /srv/build/nl.r1a.commuterlviv
+          mkdir -p /tmp/build
+          ln -sfn "$GITHUB_WORKSPACE" /tmp/build/nl.r1a.commuterlviv
 
       - name: Decode keystore and write key.properties
-        working-directory: /srv/build/nl.r1a.commuterlviv/mobile/android
+        working-directory: /tmp/build/nl.r1a.commuterlviv/mobile/android
         env:
           ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -63,13 +66,13 @@ jobs:
           EOF
 
       - name: Build per-ABI APKs
-        working-directory: /srv/build/nl.r1a.commuterlviv/mobile
+        working-directory: /tmp/build/nl.r1a.commuterlviv/mobile
         run: |
           flutter pub get --enforce-lockfile
           flutter build apk --release --split-per-abi
 
       - name: Verify signatures and rename for release
-        working-directory: /srv/build/nl.r1a.commuterlviv/mobile
+        working-directory: /tmp/build/nl.r1a.commuterlviv/mobile
         env:
           KEYSTORE_SHA256: 22e0d82c02f7a01805f121b40648bb4f6a2954b847e97089d3f73142ade31c32
         run: |
@@ -93,5 +96,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            /srv/build/nl.r1a.commuterlviv/mobile/release/commuterlviv-*.apk
+            /tmp/build/nl.r1a.commuterlviv/mobile/release/commuterlviv-*.apk
           generate_release_notes: true

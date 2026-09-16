@@ -95,15 +95,19 @@ Builds:
     srclibs:
       - flutter@3.47.2
     prebuild:
-      # The GHA release workflow symlinks its checkout to
-      # `/srv/build/nl.r1a.commuterlviv` before building, so Flutter's Gradle
-      # plugin bakes that absolute path into `libapp.so`. We do the same here:
-      # F-Droid's workdir becomes the same path through a symlink, and the
-      # baked-in path matches the one in the APK the maintainer uploaded
-      - mkdir -p /srv/build
+      # Both this build and the GHA release workflow symlink their checkout
+      # to `/tmp/build/nl.r1a.commuterlviv` before building, so Flutter's
+      # Gradle plugin bakes that absolute path into `libapp.so`. We do the
+      # same here: F-Droid's workdir becomes the same path through a
+      # symlink, and the baked-in path matches the one in the APK the
+      # maintainer uploaded. `/tmp` is chosen because `/srv` is root-owned
+      # and the F-Droid build runs as `vagrant` (sudo is removed before
+      # the recipe runs), while the GHA runner is also unprivileged, so
+      # both sides need a world-writable root
+      - mkdir -p /tmp/build
       - cd ..
-      - ln -sfn "$(pwd -P)" /srv/build/nl.r1a.commuterlviv
-      - cd /srv/build/nl.r1a.commuterlviv/mobile
+      - ln -sfn "$(pwd -P)" /tmp/build/nl.r1a.commuterlviv
+      - cd /tmp/build/nl.r1a.commuterlviv/mobile
       - git config --global --add safe.directory $$flutter$$
       - $$flutter$$/bin/flutter config --no-analytics
     # `subdir` is the Flutter project, not the Gradle module inside it: it is
