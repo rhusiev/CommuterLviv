@@ -130,10 +130,10 @@ Builds:
     srclibs:
       - flutter@3.47.2
     prebuild:
-      - mkdir -p /srv/build
+      - mkdir -p /tmp/build
       - cd ..
-      - ln -sfn "$(pwd -P)" /srv/build/nl.r1a.commuterlviv
-      - cd /srv/build/nl.r1a.commuterlviv/mobile
+      - ln -sfn "$(pwd -P)" /tmp/build/nl.r1a.commuterlviv
+      - cd /tmp/build/nl.r1a.commuterlviv/mobile
       - git config --global --add safe.directory $$flutter$$
       - $$flutter$$/bin/flutter config --no-analytics
     build:
@@ -150,10 +150,10 @@ Builds:
     srclibs:
       - flutter@3.47.2
     prebuild:
-      - mkdir -p /srv/build
+      - mkdir -p /tmp/build
       - cd ..
-      - ln -sfn "$(pwd -P)" /srv/build/nl.r1a.commuterlviv
-      - cd /srv/build/nl.r1a.commuterlviv/mobile
+      - ln -sfn "$(pwd -P)" /tmp/build/nl.r1a.commuterlviv
+      - cd /tmp/build/nl.r1a.commuterlviv/mobile
       - git config --global --add safe.directory $$flutter$$
       - $$flutter$$/bin/flutter config --no-analytics
     build:
