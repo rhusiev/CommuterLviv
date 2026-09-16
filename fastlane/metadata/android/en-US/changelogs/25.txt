@@ -1,0 +1,2 @@
+Internal: the GitHub Actions release workflow now stages the build at
+/tmp/build instead of /srv/build. Same APK from the user's point of view.
