@@ -1,0 +1,3 @@
+The app's package id is now nl.r1a.commuterlviv. A new install will not
+replace the previous ua.lviv.commuterlviv: Android refuses an update across
+an applicationId change, so uninstall the old one before installing this one.
