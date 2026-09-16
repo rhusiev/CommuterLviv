@@ -82,7 +82,7 @@ jobs:
         run: |
           ver=${GITHUB_REF_NAME#v}
           mkdir -p release
-          signer=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | tail -1)/apksigner
+          signer=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | tail -1)
           for abi in armeabi-v7a arm64-v8a x86_64; do
             src="build/app/outputs/flutter-apk/app-${abi}-release.apk"
             dst="release/commuterlviv-${ver}-${abi}.apk"
