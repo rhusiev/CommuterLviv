@@ -2,7 +2,7 @@ import CoreLocation
 import Flutter
 
 /// Where the phone is, over CoreLocation - the other half of
-/// `android/app/src/main/kotlin/ua/lviv/commuterlviv/MainActivity.kt`.
+/// `android/app/src/main/kotlin/nl/r1a/commuterlviv/MainActivity.kt`.
 ///
 /// The two channels and their shapes are the Android ones exactly, because
 /// `lib/src/here.dart` talks to both through one code path: `start` answers
@@ -12,8 +12,8 @@ import Flutter
 ///
 /// CoreLocation is part of iOS, so nothing here costs the build its place in
 /// F-Droid the way `geolocator` would.
-private let channelName = "ua.lviv.commuterlviv/here"
-private let fixesName = "ua.lviv.commuterlviv/here/fixes"
+private let channelName = "nl.r1a.commuterlviv/here"
+private let fixesName = "nl.r1a.commuterlviv/here/fixes"
 
 final class Here: NSObject, CLLocationManagerDelegate, FlutterStreamHandler {
   private let locations = CLLocationManager()

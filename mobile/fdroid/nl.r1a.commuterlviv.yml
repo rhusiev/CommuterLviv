@@ -1,15 +1,17 @@
 # The build recipe for F-Droid.
 #
 # This file does not live here in the end: it is copied to
-# `metadata/ua.lviv.commuterlviv.yml` in a fork of the `fdroiddata` repository and
+# `metadata/nl.r1a.commuterlviv.yml` in a fork of the `fdroiddata` repository and
 # sent as a merge request. It is kept here so the recipe and the app it builds
 # change together.
 #
 # One rule keeps it working: each release needs an annotated tag named
 # `v<version>` on the commit carrying that version, because `UpdateCheckMode:
-# Tags` looks for one and the build below names it as its commit. `deploy/
-# release-apk.sh` is where a release is cut; tag there or the recipe points at
-# nothing.
+# Tags` looks for one and the build below names it as its commit. The recipe
+# also expects the three per-ABI APKs to be on the matching GitHub release
+# under the `binary:` URLs below, because `Builds:` rebuilds from source and
+# `apksigcopier` only accepts a release whose signed bytes match. `deploy/
+# release-apk.sh` builds them and prints the `gh release create` command.
 #
 # The licence is MIT and the file is `LICENSE` at the root, where F-Droid looks. There is no proprietary dependency to strip: the
 # app pulls no Google Play services, no Firebase and no map vendor SDK, which is
@@ -77,8 +79,15 @@ RepoType: git
 Repo: https://github.com/rhusiev/CommuterLviv.git
 
 Builds:
+  # One APK per ABI rather than one carrying all three, so a phone downloads
+  # about a third. The blocks differ only in `--target-platform`, `output` and
+  # `versionCode`. `--split-per-abi` makes Flutter's Gradle plugin override the
+  # version code as `<abi> * 1000 + <pubspec code>`, with arm 1, arm64 2 and
+  # x86_64 4 (`ABI_VERSION` in `FlutterPluginConstants.kt`), and F-Droid rejects
+  # an APK whose code differs from its block, so these are those numbers. arm64
+  # must outrank arm: a 64-bit phone can run both and gets the higher one
   - versionName: 0.9.0
-    versionCode: 23
+    versionCode: 1023
     commit: v0.9.0
     subdir: mobile
     # The srclib is F-Droid's own pinned checkout of the Flutter SDK, so there
@@ -86,6 +95,15 @@ Builds:
     srclibs:
       - flutter@3.47.2
     prebuild:
+      # The GHA release workflow symlinks its checkout to
+      # `/srv/build/nl.r1a.commuterlviv` before building, so Flutter's Gradle
+      # plugin bakes that absolute path into `libapp.so`. We do the same here:
+      # F-Droid's workdir becomes the same path through a symlink, and the
+      # baked-in path matches the one in the APK the maintainer uploaded
+      - mkdir -p /srv/build
+      - cd ..
+      - ln -sfn "$(pwd -P)" /srv/build/nl.r1a.commuterlviv
+      - cd /srv/build/nl.r1a.commuterlviv/mobile
       - git config --global --add safe.directory $$flutter$$
       - $$flutter$$/bin/flutter config --no-analytics
     # `subdir` is the Flutter project, not the Gradle module inside it: it is
@@ -96,8 +114,49 @@ Builds:
     # the one this release was tested and built against
     build:
       - $$flutter$$/bin/flutter pub get --enforce-lockfile
-      - $$flutter$$/bin/flutter build apk --release
-    output: build/app/outputs/flutter-apk/app-release.apk
+      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-arm
+    output: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+    binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-armeabi-v7a.apk
+    ndk: r27c
+
+  - versionName: 0.9.0
+    versionCode: 2023
+    commit: v0.9.0
+    subdir: mobile
+    srclibs:
+      - flutter@3.47.2
+    prebuild:
+      - mkdir -p /srv/build
+      - cd ..
+      - ln -sfn "$(pwd -P)" /srv/build/nl.r1a.commuterlviv
+      - cd /srv/build/nl.r1a.commuterlviv/mobile
+      - git config --global --add safe.directory $$flutter$$
+      - $$flutter$$/bin/flutter config --no-analytics
+    build:
+      - $$flutter$$/bin/flutter pub get --enforce-lockfile
+      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-arm64
+    output: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+    binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-arm64-v8a.apk
+    ndk: r27c
+
+  - versionName: 0.9.0
+    versionCode: 4023
+    commit: v0.9.0
+    subdir: mobile
+    srclibs:
+      - flutter@3.47.2
+    prebuild:
+      - mkdir -p /srv/build
+      - cd ..
+      - ln -sfn "$(pwd -P)" /srv/build/nl.r1a.commuterlviv
+      - cd /srv/build/nl.r1a.commuterlviv/mobile
+      - git config --global --add safe.directory $$flutter$$
+      - $$flutter$$/bin/flutter config --no-analytics
+    build:
+      - $$flutter$$/bin/flutter pub get --enforce-lockfile
+      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-x64
+    output: build/app/outputs/flutter-apk/app-x86_64-release.apk
+    binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-x86_64.apk
     ndk: r27c
 
 # The version the app reports and the version F-Droid publishes are the same
@@ -110,9 +169,24 @@ Builds:
 # information". The four fields are the file and regex for the code, then the
 # file and regex for the name, each path from the root of the repository. The
 # regexes are unanchored because `checkupdates` matches without `re.MULTILINE`,
-# so a `^` here would only ever match the start of the whole file
+# so a `^` here would only ever match the start of the whole file.
+# `VercodeOperation` turns that code into the three per-ABI ones, one block
+# each, and `CurrentVersionCode` is the highest of them
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
+VercodeOperation:
+  - 1000 + %c
+  - 2000 + %c
+  - 4000 + %c
 UpdateCheckData: mobile/pubspec.yaml|version:\s[0-9.]+\+(\d+)|mobile/pubspec.yaml|version:\s([0-9.]+)\+
 CurrentVersion: 0.9.0
-CurrentVersionCode: 23
+CurrentVersionCode: 4023
+
+# The maintainer ships per-ABI APKs at the same URL on each GitHub release:
+# fdroidserver downloads the matching one, rebuilds the unsigned APK from the
+# `Builds:` above, copies the signature from the downloaded one with
+# `apksigcopier`, and only publishes the downloaded APK if the unzipped content
+# matches bit-for-bit (the `diff -r` step in `verify_apks`). The signing key
+# fingerprint pins it: the maintainer's certificate SHA-256, lowercased hex
+# without separators, as `apksigner verify --print-certs` reports
+AllowedAPKSigningKeys: 22e0d82c02f7a01805f121b40648bb4f6a2954b847e97089d3f73142ade31c32

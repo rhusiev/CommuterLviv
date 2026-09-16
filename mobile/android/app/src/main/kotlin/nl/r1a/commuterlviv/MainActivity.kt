@@ -1,4 +1,4 @@
-package ua.lviv.commuterlviv
+package nl.r1a.commuterlviv
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -23,8 +23,8 @@ import io.flutter.plugin.common.MethodChannel
  * no iOS half yet: the Dart side treats a missing channel as a refusal, so an
  * iPhone gets a dead button rather than a crash.
  */
-private const val CHANNEL = "ua.lviv.commuterlviv/here"
-private const val FIXES = "ua.lviv.commuterlviv/here/fixes"
+private const val CHANNEL = "nl.r1a.commuterlviv/here"
+private const val FIXES = "nl.r1a.commuterlviv/here/fixes"
 private const val REQUEST = 4711
 
 /** Both are AOSP; the coarse one is what a user may downgrade the grant to */
