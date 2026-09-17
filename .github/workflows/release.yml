@@ -32,6 +32,16 @@ on:
 permissions:
   contents: write
 
+# The pub cache must be at the same absolute path in this workflow as in the
+# F-Droid build (which sets PUB_CACHE there in its recipe): whether the build
+# is reproducible hinges on every path that gets baked into the .so files
+# matching, and the pub cache path shows up in the debug info that
+# `libdartjni.so` carries. The build-id computed before the resulting
+# strip-a-thon strips that info retains the path difference even after the
+# strip removes the info that carried it
+env:
+  PUB_CACHE: /tmp/pubcache
+
 jobs:
   release:
     runs-on: ubuntu-latest

@@ -104,6 +104,12 @@ Builds:
       # match. `/tmp` is chosen because `/srv` is root-owned and the
       # F-Droid build runs as `vagrant` (sudo is removed before the
       # recipe runs), while the GHA runner is also unprivileged, so
+      # `PUB_CACHE=/tmp/pubcache` in front of pub get and build keeps the
+      # pub cache at the same absolute path here (where `%vagrant%/.pub-cache`
+      # is the F-Droid default) as in the GHA workflow (job env): the path
+      # shows up in debug info that `libdartjni.so` carries out of its
+      # compile, and the build-id hash of the pre-strip file keeps the
+      # difference even though the strip is what removes the info
       # both sides need a world-writable root. The `mv` round-trip
       # restores the original directory name and location, which is what
       # fdroidserver expects when its own bookkeeping looks for it.
@@ -128,8 +134,8 @@ Builds:
       - appdir=$(cd .. && pwd)
       - mv $appdir /tmp/build/nl.r1a.commuterlviv
       - cd /tmp/build/nl.r1a.commuterlviv/mobile
-      - $$flutter$$/bin/flutter pub get --enforce-lockfile
-      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-arm
+      - PUB_CACHE=/tmp/pubcache $$flutter$$/bin/flutter pub get --enforce-lockfile
+      - PUB_CACHE=/tmp/pubcache $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-arm
       - mv /tmp/build/nl.r1a.commuterlviv $appdir
     output: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
     binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-armeabi-v7a.apk
@@ -153,8 +159,8 @@ Builds:
       - appdir=$(cd .. && pwd)
       - mv $appdir /tmp/build/nl.r1a.commuterlviv
       - cd /tmp/build/nl.r1a.commuterlviv/mobile
-      - $$flutter$$/bin/flutter pub get --enforce-lockfile
-      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-arm64
+      - PUB_CACHE=/tmp/pubcache $$flutter$$/bin/flutter pub get --enforce-lockfile
+      - PUB_CACHE=/tmp/pubcache $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-arm64
       - mv /tmp/build/nl.r1a.commuterlviv $appdir
     output: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
     binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-arm64-v8a.apk
@@ -178,8 +184,8 @@ Builds:
       - appdir=$(cd .. && pwd)
       - mv $appdir /tmp/build/nl.r1a.commuterlviv
       - cd /tmp/build/nl.r1a.commuterlviv/mobile
-      - $$flutter$$/bin/flutter pub get --enforce-lockfile
-      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-x64
+      - PUB_CACHE=/tmp/pubcache $$flutter$$/bin/flutter pub get --enforce-lockfile
+      - PUB_CACHE=/tmp/pubcache $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-x64
       - mv /tmp/build/nl.r1a.commuterlviv $appdir
     output: build/app/outputs/flutter-apk/app-x86_64-release.apk
     binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-x86_64.apk
