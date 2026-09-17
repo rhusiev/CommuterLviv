@@ -30,14 +30,14 @@ subprojects {
 // identical (`llvm-objcopy` output is fully deterministic)
 subprojects {
     afterEvaluate {
-        val objcopy = extensions.findByName("android")
-            ?.let { t -> t as com.android.build.gradle.BaseExtension }
-            ?.ndkDirectory
-            ?.walk()
-            ?.firstOrNull { it.isFile && it.name == "llvm-objcopy" }
-            ?: return@afterEvaluate
         tasks.matching { it.name.startsWith("strip") && it.name.contains("Release") }.configureEach {
             doLast {
+                val objcopy = project.extensions.findByName("android")
+                    ?.let { it as com.android.build.gradle.BaseExtension }
+                    ?.ndkDirectory
+                    ?.walk()
+                    ?.firstOrNull { it.isFile && it.name == "llvm-objcopy" }
+                    ?: return@doLast
                 project.layout.buildDirectory.get().asFile
                     .resolve("intermediates/stripped_native_libs")
                     .walkTopDown()
