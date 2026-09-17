@@ -31,7 +31,7 @@ subprojects {
 subprojects {
     afterEvaluate {
         val objcopy = extensions.findByName("android")
-            ?.let { it as com.android.build.gradle.BaseExtension }
+            ?.let { t -> t as com.android.build.gradle.BaseExtension }
             ?.ndkDirectory
             ?.walk()
             ?.firstOrNull { it.isFile && it.name == "llvm-objcopy" }
@@ -44,12 +44,14 @@ subprojects {
                     .forEach { dir ->
                         if (dir.isDirectory) {
                             dir.resolve("libdartjni.so").takeIf(File::isFile)?.let { lib ->
-                                project.exec {
-                                    commandLine(
-                                        objcopy.absolutePath,
-                                        "--remove-section=.note.gnu.build-id",
-                                        lib.absolutePath
-                                    )
+                                val pb = ProcessBuilder(
+                                    objcopy.absolutePath,
+                                    "--remove-section=.note.gnu.build-id",
+                                    lib.absolutePath
+                                )
+                                pb.inheritIO()
+                                if (pb.start().waitFor() != 0) {
+                                    throw GradleException("llvm-objcopy failed on " + lib.path)
                                 }
                             }
                         }
