@@ -107,6 +107,10 @@ jobs:
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
+        # The mv above removed $GITHUB_WORKSPACE, and the action starts its
+        # Node process from ${{ github.workspace }} unless told otherwise,
+        # which failed with "No such file or directory" on v0.9.3
+        working-directory: /tmp/build/nl.r1a.commuterlviv
         with:
           files: |
             /tmp/build/nl.r1a.commuterlviv/mobile/release/commuterlviv-*.apk

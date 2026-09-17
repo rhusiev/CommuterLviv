@@ -86,9 +86,9 @@ Builds:
   # x86_64 4 (`ABI_VERSION` in `FlutterPluginConstants.kt`), and F-Droid rejects
   # an APK whose code differs from its block, so these are those numbers. arm64
   # must outrank arm: a 64-bit phone can run both and gets the higher one
-  - versionName: 0.9.3
-    versionCode: 1026
-    commit: v0.9.3
+  - versionName: 0.9.4
+    versionCode: 1027
+    commit: v0.9.4
     subdir: mobile
     # The srclib is F-Droid's own pinned checkout of the Flutter SDK, so there
     # is no tarball to download and no hash to keep in step with one
@@ -131,9 +131,9 @@ Builds:
     binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-armeabi-v7a.apk
     ndk: r27c
 
-  - versionName: 0.9.3
-    versionCode: 2026
-    commit: v0.9.3
+  - versionName: 0.9.4
+    versionCode: 2027
+    commit: v0.9.4
     subdir: mobile
     srclibs:
       - flutter@3.47.2
@@ -156,9 +156,9 @@ Builds:
     binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-arm64-v8a.apk
     ndk: r27c
 
-  - versionName: 0.9.3
-    versionCode: 4026
-    commit: v0.9.3
+  - versionName: 0.9.4
+    versionCode: 4027
+    commit: v0.9.4
     subdir: mobile
     srclibs:
       - flutter@3.47.2
@@ -201,8 +201,8 @@ VercodeOperation:
   - 2000 + %c
   - 4000 + %c
 UpdateCheckData: mobile/pubspec.yaml|version:\s[0-9.]+\+(\d+)|mobile/pubspec.yaml|version:\s([0-9.]+)\+
-CurrentVersion: 0.9.3
-CurrentVersionCode: 4026
+CurrentVersion: 0.9.4
+CurrentVersionCode: 4027
 
 # The maintainer ships per-ABI APKs at the same URL on each GitHub release:
 # fdroidserver downloads the matching one, rebuilds the unsigned APK from the
