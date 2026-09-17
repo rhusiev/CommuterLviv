@@ -105,12 +105,17 @@ jobs:
           done
           ls -l release/
 
+      - name: Restore the workspace path for the release action
+        # The obsolete path has to exist again before any step runs from it:
+        # softprops/action-gh-release starts its Node process with
+        # ${{ github.workspace }} as cwd despite the files being read from an
+        # absolute path, and that failed with "No such file or directory" on
+        # v0.9.3. An empty dir is enough - the builds already ran in /tmp,
+        # and that is the path baked into the built APKs
+        run: mkdir -p "$GITHUB_WORKSPACE"
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
-        # The mv above removed $GITHUB_WORKSPACE, and the action starts its
-        # Node process from ${{ github.workspace }} unless told otherwise,
-        # which failed with "No such file or directory" on v0.9.3
-        working-directory: /tmp/build/nl.r1a.commuterlviv
         with:
           files: |
             /tmp/build/nl.r1a.commuterlviv/mobile/release/commuterlviv-*.apk
