@@ -105,15 +105,19 @@ Builds:
       # F-Droid build runs as `vagrant` (sudo is removed before the
       # recipe runs), while the GHA runner is also unprivileged, so
       # both sides need a world-writable root. The `mv` round-trip
-      # restores the original directory name, which is what fdroidserver
-      # expects when its own bookkeeping looks for it
+      # restores the original directory name and location, which is what
+      # fdroidserver expects when its own bookkeeping looks for it.
+      # `$PWD` at phase start is the phase's working dir for every command
+      # in the phase, so this avoids both absolute paths and the "cd ..;
+      # mv nl.r1a.commuterlviv" dance, which broke once prebuild ran from
+      # the app dir's own subdir: `..` there is the app dir, not its parent
+      - appdir=$(cd .. && pwd)
       - mkdir -p /tmp/build
-      - cd ..
-      - mv nl.r1a.commuterlviv /tmp/build/nl.r1a.commuterlviv
+      - mv $appdir /tmp/build/nl.r1a.commuterlviv
       - cd /tmp/build/nl.r1a.commuterlviv/mobile
       - git config --global --add safe.directory $$flutter$$
       - $$flutter$$/bin/flutter config --no-analytics
-      - mv /tmp/build/nl.r1a.commuterlviv ../nl.r1a.commuterlviv
+      - mv /tmp/build/nl.r1a.commuterlviv $appdir
     # `subdir` is the Flutter project, not the Gradle module inside it: it is
     # both the working directory for the commands below and what `output` is
     # relative to, and `flutter build` has to run from the Flutter project
@@ -121,12 +125,12 @@ Builds:
     # and fails if it cannot, rather than quietly taking a newer package than
     # the one this release was tested and built against
     build:
-      - cd ..
-      - mv nl.r1a.commuterlviv /tmp/build/nl.r1a.commuterlviv
+      - appdir=$(cd .. && pwd)
+      - mv $appdir /tmp/build/nl.r1a.commuterlviv
       - cd /tmp/build/nl.r1a.commuterlviv/mobile
       - $$flutter$$/bin/flutter pub get --enforce-lockfile
       - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-arm
-      - mv /tmp/build/nl.r1a.commuterlviv ../nl.r1a.commuterlviv
+      - mv /tmp/build/nl.r1a.commuterlviv $appdir
     output: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
     binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-armeabi-v7a.apk
     ndk: r27c
@@ -138,20 +142,20 @@ Builds:
     srclibs:
       - flutter@3.47.2
     prebuild:
+      - appdir=$(cd .. && pwd)
       - mkdir -p /tmp/build
-      - cd ..
-      - mv nl.r1a.commuterlviv /tmp/build/nl.r1a.commuterlviv
+      - mv $appdir /tmp/build/nl.r1a.commuterlviv
       - cd /tmp/build/nl.r1a.commuterlviv/mobile
       - git config --global --add safe.directory $$flutter$$
       - $$flutter$$/bin/flutter config --no-analytics
-      - mv /tmp/build/nl.r1a.commuterlviv ../nl.r1a.commuterlviv
+      - mv /tmp/build/nl.r1a.commuterlviv $appdir
     build:
-      - cd ..
-      - mv nl.r1a.commuterlviv /tmp/build/nl.r1a.commuterlviv
+      - appdir=$(cd .. && pwd)
+      - mv $appdir /tmp/build/nl.r1a.commuterlviv
       - cd /tmp/build/nl.r1a.commuterlviv/mobile
       - $$flutter$$/bin/flutter pub get --enforce-lockfile
       - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-arm64
-      - mv /tmp/build/nl.r1a.commuterlviv ../nl.r1a.commuterlviv
+      - mv /tmp/build/nl.r1a.commuterlviv $appdir
     output: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
     binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-arm64-v8a.apk
     ndk: r27c
@@ -163,20 +167,20 @@ Builds:
     srclibs:
       - flutter@3.47.2
     prebuild:
+      - appdir=$(cd .. && pwd)
       - mkdir -p /tmp/build
-      - cd ..
-      - mv nl.r1a.commuterlviv /tmp/build/nl.r1a.commuterlviv
+      - mv $appdir /tmp/build/nl.r1a.commuterlviv
       - cd /tmp/build/nl.r1a.commuterlviv/mobile
       - git config --global --add safe.directory $$flutter$$
       - $$flutter$$/bin/flutter config --no-analytics
-      - mv /tmp/build/nl.r1a.commuterlviv ../nl.r1a.commuterlviv
+      - mv /tmp/build/nl.r1a.commuterlviv $appdir
     build:
-      - cd ..
-      - mv nl.r1a.commuterlviv /tmp/build/nl.r1a.commuterlviv
+      - appdir=$(cd .. && pwd)
+      - mv $appdir /tmp/build/nl.r1a.commuterlviv
       - cd /tmp/build/nl.r1a.commuterlviv/mobile
       - $$flutter$$/bin/flutter pub get --enforce-lockfile
       - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-x64
-      - mv /tmp/build/nl.r1a.commuterlviv ../nl.r1a.commuterlviv
+      - mv /tmp/build/nl.r1a.commuterlviv $appdir
     output: build/app/outputs/flutter-apk/app-x86_64-release.apk
     binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-x86_64.apk
     ndk: r27c
