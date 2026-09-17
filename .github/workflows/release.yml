@@ -32,13 +32,13 @@ on:
 permissions:
   contents: write
 
-# The pub cache must be at the same absolute path in this workflow as in the
-# F-Droid build (which sets PUB_CACHE there in its recipe): whether the build
-# is reproducible hinges on every path that gets baked into the .so files
-# matching, and the pub cache path shows up in the debug info that
-# `libdartjni.so` carries. The build-id computed before the resulting
-# strip-a-thon strips that info retains the path difference even after the
-# strip removes the info that carried it
+# The pub cache path used to have to match F-Droid's, because it reached the
+# debug info `libdartjni.so` carries out of its compile and the build-id
+# hashed before the strip kept the difference even after the strip removed
+# the info that carried it. `mobile/android/build.gradle.kts` now drops the
+# build-id note outright, and F-Droid's recipe leaves its own pub cache at
+# the default `%vagrant%/.pub-cache`, so this pin no longer decides anything
+# and is only kept because moving it would change the reference APKs
 env:
   PUB_CACHE: /tmp/pubcache
 
@@ -91,27 +91,42 @@ jobs:
       - name: Build per-ABI APKs
         working-directory: /tmp/build/nl.r1a.commuterlviv/mobile
         run: |
+          ver=${GITHUB_REF_NAME#v}
+          mkdir -p release
           flutter pub get --enforce-lockfile
-          flutter build apk --release --split-per-abi
+          # One Gradle run per ABI, the way each of the recipe's three
+          # `Builds:` blocks does it, rather than one --split-per-abi run
+          # emitting all three. AGP packages the merged manifest of the
+          # first split verbatim and re-serialises it for every later one,
+          # and the re-serialisation inserts a blank line before a comment:
+          # every line number in the packaged AndroidManifest.xml shifts by
+          # one, which is a byte difference F-Droid's verification fails on.
+          # A single-split run is always the first split, so building one at
+          # a time is what makes all three match the recipe's rebuilds
+          for abi in armeabi-v7a arm64-v8a x86_64; do
+            case $abi in
+              armeabi-v7a) target=android-arm ;;
+              arm64-v8a) target=android-arm64 ;;
+              x86_64) target=android-x64 ;;
+            esac
+            flutter build apk --release --split-per-abi --target-platform=$target
+            cp "build/app/outputs/flutter-apk/app-${abi}-release.apk" \
+               "release/commuterlviv-${ver}-${abi}.apk"
+          done
 
-      - name: Verify signatures and rename for release
+      - name: Verify signatures
         working-directory: /tmp/build/nl.r1a.commuterlviv/mobile
         env:
           KEYSTORE_SHA256: 22e0d82c02f7a01805f121b40648bb4f6a2954b847e97089d3f73142ade31c32
         run: |
-          ver=${GITHUB_REF_NAME#v}
-          mkdir -p release
           signer=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | tail -1)
-          for abi in armeabi-v7a arm64-v8a x86_64; do
-            src="build/app/outputs/flutter-apk/app-${abi}-release.apk"
-            dst="release/commuterlviv-${ver}-${abi}.apk"
-            "$signer" verify --print-certs "$src" > verify.log
+          for apk in release/*.apk; do
+            "$signer" verify --print-certs "$apk" > verify.log
             grep -qi "$KEYSTORE_SHA256" verify.log || {
-              echo "$src is not signed by the expected key; aborting"
+              echo "$apk is not signed by the expected key; aborting"
               cat verify.log
               exit 1
             }
-            cp "$src" "$dst"
           done
           ls -l release/
 

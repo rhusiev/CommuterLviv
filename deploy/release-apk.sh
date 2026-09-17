@@ -19,7 +19,6 @@ command -v flutter >/dev/null || {
 }
 
 cd "$root/mobile"
-flutter build apk --release --split-per-abi
 
 # An unsigned APK installs nowhere: Android rejects it without saying why.
 # The release build is signed only if android/key.properties exists, so this
@@ -30,9 +29,21 @@ signer=$(ls -d "${ANDROID_HOME:-$HOME/.local/share/android-sdk}"/build-tools/*/a
   echo "no apksigner in the SDK - the signatures were not checked" >&2
 }
 
+# One Gradle run per ABI, the way each of the recipe's three `Builds:` blocks
+# does it. AGP packages the merged manifest of the first split verbatim and
+# re-serialises it for every later one, inserting a blank line before a
+# comment, so a single --split-per-abi run emitting all three would shift
+# every line number in two of the three packaged manifests and F-Droid would
+# fail to reproduce them
 mkdir -p "$out"
 flutter_apk="$root/mobile/build/app/outputs/flutter-apk"
 for abi in armeabi-v7a arm64-v8a x86_64; do
+  case $abi in
+    armeabi-v7a) target=android-arm ;;
+    arm64-v8a) target=android-arm64 ;;
+    x86_64) target=android-x64 ;;
+  esac
+  flutter build apk --release --split-per-abi --target-platform="$target"
   src="$flutter_apk/app-$abi-release.apk"
   dst="$out/commuterlviv-$(basename "$out")-$abi.apk"
   if [ -n "$signer" ]; then

@@ -101,18 +101,17 @@ Builds:
       # absolute path into `libapp.so`. A symlink would resolve to
       # `/home/vagrant/build/nl.r1a.commuterlviv` here and to a different
       # path on the GHA runner, and the baked-in strings would not
-      # match. `/tmp` is chosen because `/srv` is root-owned and the
-      # F-Droid build runs as `vagrant` (sudo is removed before the
-      # recipe runs), while the GHA runner is also unprivileged, so
-      # `PUB_CACHE=/tmp/pubcache` in front of pub get and build keeps the
-      # pub cache at the same absolute path here (where `%vagrant%/.pub-cache`
-      # is the F-Droid default) as in the GHA workflow (job env): the path
-      # shows up in debug info that `libdartjni.so` carries out of its
-      # compile, and the build-id hash of the pre-strip file keeps the
-      # difference even though the strip is what removes the info
-      # both sides need a world-writable root. The `mv` round-trip
-      # restores the original directory name and location, which is what
-      # fdroidserver expects when its own bookkeeping looks for it.
+      # match. `/tmp` is chosen because both sides need a world-writable
+      # root: `/srv` is root-owned, this build runs as `vagrant` with sudo
+      # removed before the recipe runs, and the GHA runner is unprivileged
+      # too. The pub cache is deliberately not pinned here, and this build's
+      # `%vagrant%/.pub-cache` verifies against the workflow's
+      # `/tmp/pubcache`: that path used to reach the pre-strip build-id of
+      # `libdartjni.so`, and `android/build.gradle.kts` now drops the
+      # build-id note outright, so it no longer reaches anything.
+      # The `mv` round-trip restores the original directory name and
+      # location, which is what fdroidserver expects when its own
+      # bookkeeping looks for it.
       # `$PWD` at phase start is the phase's working dir for every command
       # in the phase, so this avoids both absolute paths and the "cd ..;
       # mv nl.r1a.commuterlviv" dance, which broke once prebuild ran from
@@ -134,8 +133,8 @@ Builds:
       - appdir=$(cd .. && pwd)
       - mv $appdir /tmp/build/nl.r1a.commuterlviv
       - cd /tmp/build/nl.r1a.commuterlviv/mobile
-      - PUB_CACHE=/tmp/pubcache $$flutter$$/bin/flutter pub get --enforce-lockfile
-      - PUB_CACHE=/tmp/pubcache $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-arm
+      - $$flutter$$/bin/flutter pub get --enforce-lockfile
+      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-arm
       - mv /tmp/build/nl.r1a.commuterlviv $appdir
     output: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
     binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-armeabi-v7a.apk
@@ -159,8 +158,8 @@ Builds:
       - appdir=$(cd .. && pwd)
       - mv $appdir /tmp/build/nl.r1a.commuterlviv
       - cd /tmp/build/nl.r1a.commuterlviv/mobile
-      - PUB_CACHE=/tmp/pubcache $$flutter$$/bin/flutter pub get --enforce-lockfile
-      - PUB_CACHE=/tmp/pubcache $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-arm64
+      - $$flutter$$/bin/flutter pub get --enforce-lockfile
+      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-arm64
       - mv /tmp/build/nl.r1a.commuterlviv $appdir
     output: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
     binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-arm64-v8a.apk
@@ -184,8 +183,8 @@ Builds:
       - appdir=$(cd .. && pwd)
       - mv $appdir /tmp/build/nl.r1a.commuterlviv
       - cd /tmp/build/nl.r1a.commuterlviv/mobile
-      - PUB_CACHE=/tmp/pubcache $$flutter$$/bin/flutter pub get --enforce-lockfile
-      - PUB_CACHE=/tmp/pubcache $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-x64
+      - $$flutter$$/bin/flutter pub get --enforce-lockfile
+      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-x64
       - mv /tmp/build/nl.r1a.commuterlviv $appdir
     output: build/app/outputs/flutter-apk/app-x86_64-release.apk
     binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-x86_64.apk
