@@ -5,14 +5,16 @@
 # recipe, GHA) is whatever the tag's commit says it is, and that is the
 # commit F-Droid builds from too.
 #
-# Reproducibility note: both this workflow and F-Droid's recipe symlink
-# their checkout to `/tmp/build/nl.r1a.commuterlviv` and `cd` through it,
+# Reproducibility note: both this workflow and F-Droid's recipe physically
+# `mv` their checkout to `/tmp/build/nl.r1a.commuterlviv` before building,
 # so the absolute path Flutter's Gradle plugin bakes into `libapp.so` is
-# the same on both sides. Without that, the cross-build `diff -r` fails
-# on the baked-in `dart_plugin_registrant.dart` path. `/tmp` is chosen
-# because both this runner (rootless `runner` user) and F-Droid's build
-# (which removes sudo before running the recipe) can write to `/tmp`,
-# while `/srv` is root-owned and rejected by both.
+# the real directory location on both sides (not a resolved-through-
+# symlink path like `/home/runner/work/...` here or `/home/vagrant/build/...`
+# on F-Droid). Without that, the cross-build `diff -r` fails on the
+# baked-in `dart_plugin_registrant.dart` path. `/tmp` is chosen because
+# both this runner (rootless `runner` user) and F-Droid's build (which
+# removes sudo before running the recipe) can write to `/tmp`, while
+# `/srv` is root-owned and rejected by both.
 #
 # Secrets this workflow expects (set them at
 # https://github.com/rhusiev/CommuterLviv/settings/secrets/actions):
@@ -46,8 +48,15 @@ jobs:
 
       - name: Stage source at /tmp/build/nl.r1a.commuterlviv
         run: |
+          # Move the checkout to /tmp/build/nl.r1a.commuterlviv (rather than
+          # symlinking it) so the absolute path Flutter's Gradle plugin
+          # bakes into libapp.so is the real directory location, not the
+          # resolved-through-symlink path (/home/runner/work/... here and
+          # /home/vagrant/build/... on F-Droid). The mv lets us match
+          # F-Droid's `mv` staging exactly, which is the only way the
+          # cross-build `diff -r` in apksigcopier can pass.
           mkdir -p /tmp/build
-          ln -sfn "$GITHUB_WORKSPACE" /tmp/build/nl.r1a.commuterlviv
+          mv "$GITHUB_WORKSPACE" /tmp/build/nl.r1a.commuterlviv
 
       - name: Decode keystore and write key.properties
         working-directory: /tmp/build/nl.r1a.commuterlviv/mobile/android
