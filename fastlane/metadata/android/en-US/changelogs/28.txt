@@ -1,0 +1,6 @@
+- Start stops show the next departure, marked as planned until the vehicle sets off
+- The chosen journey is drawn on the map: walks dotted, rides along the route, with times
+- Long-press the map to save a place
+- Search forgives typos and finds more places
+- Traffic follows the streets instead of cutting across bends
+- Layer toggles are remembered, and edge swipes no longer move the map

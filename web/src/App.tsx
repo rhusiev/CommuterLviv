@@ -19,13 +19,15 @@ import {
 } from "./lib/api";
 import { useIndex, usePositions } from "./lib/catalog";
 import { saved } from "./lib/places";
-import { loadTheme, saveTheme, type Theme } from "./lib/theme";
+import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from "./lib/theme";
 import { RAMP, useTraffic } from "./lib/traffic";
 import { readUrl, writeUrl, type UrlState } from "./lib/url";
 import { useLive } from "./lib/useLive";
-import type { Catalog, Me, Place, RouteSet, Shapes } from "./lib/types";
+import type { Catalog, Journey, Me, Place, RouteSet, Shapes } from "./lib/types";
 import { t } from "./lib/i18n";
 
+const LINES_KEY = "commuterlviv.lines";
+const TRAFFIC_KEY = "commuterlviv.traffic";
 const JOIN = /^\/join\/([\w-]+)\/?$/;
 
 /** Pins from before the server kept them, as catalog positions. Read once per
@@ -59,15 +61,16 @@ export function App() {
     opened.route === null && opened.tab === "route" ? "map" : opened.tab,
   );
   const [route, setRoute] = useState<number | null>(null);
-  const [allLines, setAllLines] = useState(false);
+  const [allLines, setAllLines] = useState(() => loadFlag(LINES_KEY));
   const [geo, setGeo] = useState<Shapes | null>(null);
   const [from, setFrom] = useState<Point | null>(null);
   const [to, setTo] = useState<Point | null>(null);
+  const [journey, setJourney] = useState<Journey | null>(null);
   const [picking, setPicking] = useState<"from" | "to" | null>(null);
   const [panel, setPanel] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const [notice, setNotice] = useState<string | null>(null);
-  const [jams, setJams] = useState(false);
+  const [jams, setJams] = useState(() => loadFlag(TRAFFIC_KEY));
   const [layers, setLayers] = useState(false);
   const [account, setAccount] = useState(false);
 
@@ -248,10 +251,11 @@ export function App() {
 
   const marks = useMemo(() => {
     const out: { lat: number; lon: number; label: string }[] = [];
+    if (tab !== "plan") return out;
     if (from) out.push({ ...from, label: "A" });
     if (to) out.push({ ...to, label: "B" });
     return out;
-  }, [from, to]);
+  }, [tab, from, to]);
 
   /** Asked separately from the map's own locate button, so a refusal here does
    * not turn the map's dot off */
@@ -340,7 +344,12 @@ export function App() {
           if (picking === "to") setTo({ lat, lon });
           setPicking(null);
         }}
+        onHoldPoint={(lat, lon) => {
+          const name = prompt(t.namePlace)?.trim();
+          if (name) keepPlaces(saved(places, name, lat, lon));
+        }}
         marks={marks}
+        journey={tab === "plan" ? journey : null}
         pinned={pins}
         places={places}
         shapes={geo}
@@ -472,9 +481,15 @@ export function App() {
             <div className="panel absolute right-0 top-12 w-52 p-2">
               <LayersPanel
                 lines={allLines}
-                onLines={setAllLines}
+                onLines={(on) => {
+                  setAllLines(on);
+                  saveFlag(LINES_KEY, on);
+                }}
                 traffic={jams}
-                onTraffic={setJams}
+                onTraffic={(on) => {
+                  setJams(on);
+                  saveFlag(TRAFFIC_KEY, on);
+                }}
                 theme={theme}
                 onTheme={(next) => {
                   setTheme(next);
@@ -530,6 +545,7 @@ export function App() {
               setTo(from);
             }}
             onHere={useHere}
+            onShow={setJourney}
             onLine={openRoute}
             places={places}
             onPlaces={keepPlaces}

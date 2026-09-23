@@ -38,7 +38,7 @@ class Settings:
     trust_proxy: bool            # whether X-Forwarded-For may name the client
     build_planner: bool          # fetch the footpaths if the volume has none
     self_tiles: bool             # whether the basemap is served from this origin
-    photon_url: str              # the Photon instance search asks; "" turns search off
+    photon_url: str              # the Photon instance search asks; "" leaves only the local index
     poll_veh: float
     epoch: float
     dev: bool

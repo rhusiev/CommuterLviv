@@ -1,16 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { clock, mins } from "../lib/eta";
 import { t } from "../lib/i18n";
 import { dropped, saved } from "../lib/places";
 import { RouteBadge } from "./RouteBadge";
 import type { Catalog, Confidence, Journey, Leg, Place } from "../lib/types";
 
 export type Point = { lat: number; lon: number };
-
-const clock = (t: number) =>
-  new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-const mins = (s: number) => Math.max(1, Math.round(s / 60));
 
 /** What the leg rests on, and how loudly to say so */
 const RESTS: Record<Confidence, { word: string; tone: string; hint?: string }> = {
@@ -42,6 +38,7 @@ export function JourneyPanel({
   onLine,
   places,
   onPlaces,
+  onShow,
 }: {
   catalog: Catalog;
   from: Point | null;
@@ -55,8 +52,17 @@ export function JourneyPanel({
   onLine: (i: number) => void;
   places: Place[];
   onPlaces: (next: Place[]) => void;
+  /** The option picked to be drawn on the map, or null once none is */
+  onShow: (j: Journey | null) => void;
 }) {
   const [options, setOptions] = useState<Journey[] | null>(null);
+  const [shown, setShown] = useState<Journey | null>(null);
+  const show = (j: Journey | null) => {
+    setShown(j);
+    onShow(j);
+  };
+  // Leaving the planner takes its journey off the map
+  useEffect(() => () => onShow(null), [onShow]);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   /** Unix seconds, or null for now - which is what the service assumes */
@@ -71,6 +77,7 @@ export function JourneyPanel({
     if (!from || !to) return;
     setBusy(true);
     setFailed(null);
+    show(null);
     try {
       const got = await api.plan([from.lat, from.lon], [to.lat, to.lon], at);
       setOptions(got.options);
@@ -152,7 +159,15 @@ export function JourneyPanel({
       )}
 
       {options?.map((j, i) => (
-        <Option key={i} journey={j} catalog={catalog} onStop={onStop} onLine={onLine} />
+        <Option
+          key={i}
+          journey={j}
+          shown={j === shown}
+          onShow={() => show(j)}
+          catalog={catalog}
+          onStop={onStop}
+          onLine={onLine}
+        />
       ))}
     </div>
   );
@@ -259,18 +274,26 @@ function Field({
 
 function Option({
   journey,
+  shown,
+  onShow,
   catalog,
   onStop,
   onLine,
 }: {
   journey: Journey;
+  /** Drawn on the map; a click anywhere on the card, links too, draws it */
+  shown: boolean;
+  onShow: () => void;
   catalog: Catalog;
   onStop: (i: number) => void;
   onLine: (i: number) => void;
 }) {
   const changes = Math.max(0, journey.rides - 1);
   return (
-    <div className="inset-panel p-2">
+    <div
+      onClick={onShow}
+      className={`inset-panel cursor-pointer p-2 ${shown ? "ring-2 ring-accent" : ""}`}
+    >
       <div className="flex items-baseline gap-2">
         <span className="font-medium text-slate-100">
           {t.minutes(mins(journey.arr - journey.dep))}

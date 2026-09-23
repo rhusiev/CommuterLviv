@@ -340,7 +340,8 @@ async def vehicle(request, session):
     arr = app.svc.live.arrivals
     rows = arr.of(int(want))
     return JSONResponse({"t": arr.t, "veh": int(want), "stops": [
-        {"stop": int(r["stop"]), "route": int(r["route"]), "t": int(r["t"])}
+        {"stop": int(r["stop"]), "route": int(r["route"]), "t": int(r["t"]),
+         **({"planned": True} if r["planned"] else {})}
         for r in rows]})
 
 
@@ -615,8 +616,7 @@ def build(st=None, net=None):
         s.traffic_tag = f'W/"{len(s.traffic_json):x}-{len(s.traffic_units):x}"'
         s.traffic_cache = traffic.Cache(s.svc.live.model, s.traffic_units)
         s.planner = journeys.Planner.maybe(loaded, cat, log)
-        s.geocoder = (geocode.Geocoder(st.photon_url) if st.photon_url
-                      else None)
+        s.geocoder = geocode.Geocoder.maybe(st.photon_url)
         s.hub = hub.Hub(s.svc.live)
         s.planning = asyncio.Semaphore(PLAN_WORKERS)
         s.tasks = [*await s.svc.start(s.hub), asyncio.create_task(sweeper(s.pool))]

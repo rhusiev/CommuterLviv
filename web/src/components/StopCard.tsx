@@ -78,7 +78,9 @@ export function StopCard({
                 className="flex items-center gap-1 rounded-control bg-raised/70 py-0.5 pl-0.5 pr-1.5 hover:bg-raised"
               >
                 <RouteBadge route={r} className="px-1.5 py-0.5 text-xs" />
-                <span className="text-xs text-slate-400">{a ? countdown(a.t) : "-"}</span>
+                <span className={`text-xs text-slate-400 ${a?.planned ? "italic" : ""}`}>
+                  {a ? countdown(a.t) : "-"}
+                </span>
               </button>
             </li>
           );

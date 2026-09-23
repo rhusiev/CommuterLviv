@@ -92,7 +92,7 @@ class Shape:
 class Net:
     # bump when a field is added or its meaning changes: `fresh` compares only
     # mtimes, so an older cache would otherwise load with fields missing
-    VERSION = 2
+    VERSION = 3
 
     def __init__(self):
         self.version = self.VERSION
@@ -104,6 +104,7 @@ class Net:
         self.trip_dir = {}          # trip_id -> 0 or 1, the feed's direction_id
         self.trip_stops = {}        # trip_id -> (stop_ids, dist[], sched_sec[])
         self.pattern_of = {}        # trip_id -> pattern key
+        self.trip_next = {}         # trip_id -> the block's next trip, same vehicle
 
 
 def candidates(shape, p, slack=250.0, cap=10):
@@ -186,7 +187,10 @@ def build():
             "short": r["route_short_name"], "long": r["route_long_name"],
             "type": gtfs.vehicle_type(r["route_short_name"])}
 
+    blocks = {}
     for t in gtfs.table("trips.txt"):
+        if t.get("block_id"):
+            blocks.setdefault(t["block_id"], []).append(t["trip_id"])
         net.trip_shape[t["trip_id"]] = t["shape_id"]
         net.trip_route[t["trip_id"]] = t["route_id"]
         net.trip_dir[t["trip_id"]] = int(t["direction_id"] or 0)
@@ -215,6 +219,10 @@ def build():
         net.pattern_of[trip] = key
         net.trip_stops[trip] = (ids, solved[key], np.array(when, dtype=float))
     extra.report()
+    for trips in blocks.values():
+        trips = sorted((t for t in trips if t in net.trip_stops),
+                       key=lambda t: net.trip_stops[t][2][0])
+        net.trip_next.update(zip(trips, trips[1:]))
     return net
 
 

@@ -10,7 +10,12 @@ which is what the wire uses.
 import asyncio
 import time
 
-from .. import plan, replay, walk as footpaths
+import numpy as np
+
+from .. import network, plan, replay, walk as footpaths
+from . import geometry
+
+DETAIL = 4.0    # m a drawn leg may stray from the real line
 
 
 class Planner:
@@ -18,6 +23,12 @@ class Planner:
         self.tt, self.walk, self.transfers, self.cat = tt, walk, transfers, cat
         self.stop_i = [cat.stop_i.get(s, -1) for s in tt.stops]
         self.route_i = cat.route_i
+        net = tt.net
+        self.rides = {}     # route -> every distinct (shape, stop ids, dist)
+        for trip, key in net.pattern_of.items():
+            ids, dist, _ = net.trip_stops[trip]
+            self.rides.setdefault(net.trip_route[trip], {})[key] = \
+                (key[0], ids, dist)
 
     @classmethod
     def maybe(cls, net, cat, log):
@@ -43,17 +54,27 @@ class Planner:
         found = plan.journeys(self.tt, self.walk, self.transfers, origin, dest,
                               now, arrivals=arrivals, catalog=self.cat,
                               assess=now <= time.time() + replay.HORIZON)
-        return {"t": now, "options": [self._wire(j) for j in found]}
+        # options share their first and last walks, so each is drawn once
+        paths = {}
 
-    def _wire(self, j):
+        def path(leg):
+            key = (leg.kind, leg.route, leg.a, leg.b)
+            if key not in paths:
+                paths[key] = self._path(leg, origin, dest)
+            return paths[key]
+
+        return {"t": now, "options": [self._wire(j, path) for j in found]}
+
+    def _wire(self, j, path):
         return {"dep": int(j.dep), "arr": int(j.arr), "rides": j.rides,
                 "live": j.live, "confidence": j.confidence,
-                "legs": [self._leg(x) for x in j.legs]}
+                "legs": [self._leg(x, path) for x in j.legs]}
 
-    def _leg(self, leg):
+    def _leg(self, leg, path):
         out = {"kind": leg.kind, "dep": int(leg.dep), "arr": int(leg.arr),
                "a": self.stop_i[leg.a] if leg.a >= 0 else -1,
-               "b": self.stop_i[leg.b] if leg.b >= 0 else -1}
+               "b": self.stop_i[leg.b] if leg.b >= 0 else -1,
+               "pts": path(leg)}
         if leg.kind == "ride":
             out["route"] = self.route_i.get(leg.route, -1)
             out["veh"] = leg.veh
@@ -61,25 +82,30 @@ class Planner:
             out["confidence"] = leg.confidence
         return out
 
+    def _where(self, i, end):
+        if i < 0:
+            return end
+        s = self.tt.net.stops[self.tt.stops[i]]
+        return s["lat"], s["lon"]
 
-def _make(net, log):
-    """The two files, built where they are missing. Minutes, and blocking."""
-    if not footpaths.CACHE.exists():
-        log("planner: asking Overpass for the city's footpaths, once")
-        footpaths.save()
-    if not plan.TRANSFERS.exists():
-        log("planner: walking between every pair of stops, once")
-        plan.build_transfers(plan.Timetable(net), footpaths.load())
+    def _path(self, leg, origin, dest):
+        """Where the leg goes: the footpath walked, or the stretch of the
+        route's line between boarding and alighting."""
+        return geometry.points(geometry.simplify(
+            self._line(leg, origin, dest), DETAIL))
 
-
-async def arrange(state, net, cat, log):
-    """Build what is missing in a thread, then install the planner on the app
-    state. A failure here disables one endpoint and never the service."""
-    try:
-        await asyncio.to_thread(_make, net, log)
-    except Exception as exc:
-        log("planner: giving up on this start -", repr(exc)[:200])
-        return
-    state.planner = Planner.maybe(net, cat, log)
-    if state.planner:
-        log("planner: ready")
+    def _line(self, leg, origin, dest):
+        a, b = self._where(leg.a, origin), self._where(leg.b, dest)
+        if leg.kind == "walk":
+            limit = (leg.arr - leg.dep) * 1.5 + 60.0
+            return network.to_xy(*np.array(self.walk.path(a, b, limit)).T)
+        at, to = self.tt.stops[leg.a], self.tt.stops[leg.b]
+        for sid, ids, dist in self.rides.get(leg.route, {}).values():
+            if at not in ids or to not in ids[ids.index(at) + 1:]:
+                continue
+            i = ids.index(at)
+            d0, d1 = dist[i], dist[ids.index(to, i + 1)]
+            shape = self.tt.net.shapes[sid]
+            inner = shape.xy[(shape.cum > d0) & (shape.cum < d1)]
+            return np.vstack([shape.at(d0), inner, shape.at(d1)])
+        return network.to_xy(*np.array([a, b]).T)

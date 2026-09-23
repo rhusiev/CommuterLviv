@@ -36,6 +36,23 @@ export const loadTheme = (): Theme => {
   }
 };
 
+/** An on/off setting kept in the browser, off until set */
+export const loadFlag = (key: string): boolean => {
+  try {
+    return localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+};
+
+export const saveFlag = (key: string, on: boolean) => {
+  try {
+    localStorage.setItem(key, on ? "1" : "0");
+  } catch {
+    // The choice simply will not survive a reload
+  }
+};
+
 export const saveTheme = (t: Theme) => {
   try {
     localStorage.setItem(KEY, t.id);

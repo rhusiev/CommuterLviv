@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { metres } from "../lib/geo";
+import { score, words } from "../lib/match";
 import type { Catalog, Found } from "../lib/types";
 import { t } from "../lib/i18n";
 
@@ -34,22 +35,19 @@ export function StopSearch({ catalog, onGo, onPlace, onSave }: Props) {
   const [why, setWhy] = useState("");
   const box = useRef<HTMLDivElement>(null);
 
+  const names = useMemo(() => catalog.stops.map((s) => words(s.name)), [catalog]);
   const hits = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (q.length < 2) return [];
-    const out: number[] = [];
-    // Prefix hits first, and the scan stops early rather than sorting a
-    // thousand stops on every keystroke
-    const rest: number[] = [];
-    for (let i = 0; i < catalog.stops.length; i++) {
-      const name = catalog.stops[i]!.name.toLowerCase();
-      const at = name.indexOf(q);
-      if (at === 0) out.push(i);
-      else if (at > 0 && rest.length < LIMIT) rest.push(i);
-      if (out.length >= LIMIT) break;
-    }
-    return [...out, ...rest].slice(0, LIMIT);
-  }, [catalog, query]);
+    const q = words(query);
+    if (q.join("").length < 2) return [];
+    const scored: [number, number][] = [];
+    names.forEach((name, i) => {
+      const s = score(q, name);
+      if (s > 0) scored.push([s, i]);
+    });
+    // Shorter names first among equals: "Ринок" before "Ринок Шувар"
+    scored.sort(([a, i], [b, j]) => b - a || catalog.stops[i]!.name.length - catalog.stops[j]!.name.length);
+    return scored.slice(0, LIMIT).map(([, i]) => i);
+  }, [catalog, names, query]);
 
   useEffect(() => {
     const q = query.trim();

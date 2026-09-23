@@ -113,3 +113,26 @@ the fix: `working-directory:` is not valid on a `uses:` step (it fails at 0s),
 and an empty directory is enough, since the builds have already run. So a `run:`
 step with its own `working-directory:` recreates the path with `mkdir -p
 "$GITHUB_WORKSPACE"` before the release step.
+
+## The live feed switches a vehicle's trip only at the first stop of the next
+
+A vehicle that has reached its terminus keeps reporting the trip it finished,
+while it stands and turns, and takes the next trip id only once it leaves that
+trip's first stop. So a start stop such as tram 3's Аквапарк (519, 519-01) has
+no vehicle "on" the trip about to depart, and a server that predicts only the
+current trip shows nothing there. The GTFS `block_id` chains a vehicle's trips
+in order, which is how the next trip is found
+
+## Long press on Android WebView/Chrome arrives as `contextmenu`
+
+maplibre has no long-press event. A touch held on the map fires the browser's
+`contextmenu` event on Android, the same event a right click fires on desktop,
+so one handler serves both
+
+## A recording copied onto a spinning disk reads at seek speed
+
+`feed.db` pulled from the server (23 GB) was written by appending over weeks, so
+its pages are scattered. On the HDD the evaluation's random reads, and a full
+`SELECT max(veh_ts) FROM veh`, stalled for tens of minutes. Reading the file
+once sequentially (`cat feed.db > /dev/null`) and then `VACUUM INTO` a packed
+copy makes the reads sequential again

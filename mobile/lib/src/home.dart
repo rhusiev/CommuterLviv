@@ -60,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// The route outlives its tab, so leaving and coming back keeps it.
   int? _route;
   bool _onRoute = false;
-  bool _allLines = false;
+  late bool _allLines = widget.api.showLines;
   Shapes? _shapes;
   List<int> _drawn = const [];
   List<int> _pins = const [];
@@ -68,9 +68,12 @@ class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
 
   /// Only while it is on does anything ask the server how the streets run.
-  bool _traffic = false;
+  late bool _traffic = widget.api.showTraffic;
 
   bool _planning = false;
+
+  /// The planner option drawn on the map, only while planning
+  Journey? _journey;
   LatLng? _from;
   LatLng? _to;
   End? _picking;
@@ -88,6 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _load();
     _loadStyle();
+    if (_allLines) unawaited(_geometry());
     _here.addListener(_fixArrived);
   }
 
@@ -195,6 +199,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _savePlace(String name, LatLng at) =>
       _places([..._withoutPlace(name), Place(name: name, at: at)]);
 
+  Future<void> _nameSpot(LatLng at) async {
+    final name = await askName(context, txt.namePlace, action: txt.saveHere);
+    if (name != null && name.isNotEmpty) await _savePlace(name, at);
+  }
+
   Future<void> _forgetPlace(String name) => _places(_withoutPlace(name));
 
   Future<void> _places(List<Place> next) async {
@@ -222,6 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _onRoute = true;
       _tab = 0;
       _planning = false;
+      _journey = null;
     });
     _push();
     _geometry().then((_) {
@@ -502,10 +512,14 @@ class _HomeScreenState extends State<HomeScreen> {
       lines: _allLines,
       onLines: (on) {
         setState(() => _allLines = on);
+        unawaited(widget.api.setShowLines(on));
         if (on) unawaited(_geometry());
       },
       traffic: _traffic,
-      onTraffic: (on) => setState(() => _traffic = on),
+      onTraffic: (on) {
+        setState(() => _traffic = on);
+        unawaited(widget.api.setShowTraffic(on));
+      },
       theme: _theme,
       onTheme: _setTheme,
     ),
@@ -596,15 +610,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 here: _here,
                 empty: _routes.isEmpty,
                 marks: [
-                  if (_from != null) (at: _from!, label: 'A'),
-                  if (_to != null) (at: _to!, label: 'B'),
+                  if (_planning && _from != null) (at: _from!, label: 'A'),
+                  if (_planning && _to != null) (at: _to!, label: 'B'),
                 ],
+                journey: _planning ? _journey : null,
                 pins: _pins,
                 places: _sets?.places ?? const [],
                 shapes: _shapes,
                 lines: _lines,
                 arrowed: _onRoute ? _route : null,
                 onTap: _tap,
+                onHold: _nameSpot,
               ),
               TimesTab(
                 catalog: catalog,
@@ -656,7 +672,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   onClose: () => setState(() {
                     _planning = false;
                     _picking = null;
+                    _journey = null;
                   }),
+                  onShow: (journey) => setState(() => _journey = journey),
                 ),
               ),
             ),
@@ -700,7 +718,10 @@ class _HomeScreenState extends State<HomeScreen> {
       _tab = i == 1 ? 1 : 0;
       _planning = i == 2;
       _onRoute = i == 3;
-      if (!_planning) _picking = null;
+      if (!_planning) {
+        _picking = null;
+        _journey = null;
+      }
     });
     _push();
   }

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart' as material show Theme;
 import 'package:latlong2/latlong.dart';
 
 import 'api.dart';
+import 'eta.dart';
 import 'models.dart';
 import 'route_badge.dart';
 import 'sheets.dart' show askName;
@@ -40,6 +41,7 @@ class JourneyPanel extends StatefulWidget {
     required this.onForget,
     required this.onPlace,
     required this.onClose,
+    required this.onShow,
   });
 
   final Api api;
@@ -61,12 +63,16 @@ class JourneyPanel extends StatefulWidget {
   final void Function(End end, LatLng at) onPlace;
   final VoidCallback onClose;
 
+  /// The option picked to be drawn on the map, or null once none is
+  final void Function(Journey? journey) onShow;
+
   @override
   State<JourneyPanel> createState() => _JourneyPanelState();
 }
 
 class _JourneyPanelState extends State<JourneyPanel> {
   List<Journey>? _options;
+  Journey? _shown;
   bool _busy = false;
   String? _failed;
 
@@ -82,6 +88,13 @@ class _JourneyPanelState extends State<JourneyPanel> {
   void _forget() {
     _options = null;
     _failed = null;
+    _show(null);
+  }
+
+  void _show(Journey? journey) {
+    if (journey == _shown) return;
+    _shown = journey;
+    widget.onShow(journey);
   }
 
   /// A time already past today is meant for tomorrow, which is as far ahead as
@@ -113,7 +126,9 @@ class _JourneyPanelState extends State<JourneyPanel> {
     });
     try {
       final got = await widget.api.plan(from, to, at: _at);
-      if (mounted) setState(() => _options = got);
+      if (!mounted) return;
+      setState(() => _options = got);
+      _show(null);
     } on ApiError catch (e) {
       if (mounted) setState(() => _failed = e.message);
     } on Exception {
@@ -176,7 +191,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
                 SizedBox(width: 56, child: Text(txt.departAt)),
                 InputChip(
                   avatar: const Icon(Icons.schedule, size: 18),
-                  label: Text(_at == null ? txt.now : _clock(_at!)),
+                  label: Text(_at == null ? txt.now : clockTime(_at!)),
                   onPressed: _pickTime,
                   onDeleted: _at == null
                       ? null
@@ -217,6 +232,12 @@ class _JourneyPanelState extends State<JourneyPanel> {
                         itemCount: _options!.length,
                         itemBuilder: (_, i) => _Option(
                           journey: _options![i],
+                          shown: _options![i] == _shown,
+                          onShow: () => setState(
+                            () => _show(
+                              _options![i] == _shown ? null : _options![i],
+                            ),
+                          ),
                           catalog: widget.catalog,
                           onStop: widget.onStop,
                           onLine: widget.onLine,
@@ -366,12 +387,18 @@ class _End extends StatelessWidget {
 class _Option extends StatelessWidget {
   const _Option({
     required this.journey,
+    required this.shown,
+    required this.onShow,
     required this.catalog,
     required this.onStop,
     required this.onLine,
   });
 
   final Journey journey;
+
+  /// Whether this is the option drawn on the map; a tap toggles it
+  final bool shown;
+  final VoidCallback onShow;
   final Catalog catalog;
   final void Function(int stop) onStop;
 
@@ -382,38 +409,51 @@ class _Option extends StatelessWidget {
     final changes = journey.rides - 1;
     return Card(
       margin: const EdgeInsets.only(top: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  txt.minutes(_mins(journey.arr - journey.dep)),
-                  style: material.Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(width: 8),
-                Text('${_clock(journey.dep)} - ${_clock(journey.arr)}'),
-                const Spacer(),
-                Text(
-                  journey.rides == 0
-                      ? txt.wholeWalk
-                      : changes <= 0
-                      ? txt.noChange
-                      : txt.changeCount(changes),
-                  style: material.Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
-            for (final leg in journey.legs)
-              _LegRow(
-                leg: leg,
-                catalog: catalog,
-                onStop: onStop,
-                onLine: onLine,
+      clipBehavior: Clip.antiAlias,
+      shape: shown
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(
+                color: material.Theme.of(context).colorScheme.primary,
+                width: 2,
               ),
-          ],
+            )
+          : null,
+      child: InkWell(
+        onTap: onShow,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    txt.minutes(spanMinutes(journey.arr - journey.dep)),
+                    style: material.Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(width: 8),
+                  Text('${clockTime(journey.dep)} - ${clockTime(journey.arr)}'),
+                  const Spacer(),
+                  Text(
+                    journey.rides == 0
+                        ? txt.wholeWalk
+                        : changes <= 0
+                        ? txt.noChange
+                        : txt.changeCount(changes),
+                    style: material.Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+              for (final leg in journey.legs)
+                _LegRow(
+                  leg: leg,
+                  catalog: catalog,
+                  onStop: onStop,
+                  onLine: onLine,
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -451,12 +491,12 @@ class _LegRow extends StatelessWidget {
               SizedBox(
                 width: 92,
                 child: Text(
-                  txt.walkLeg(_mins(leg.arr - leg.dep)),
+                  txt.walkLeg(spanMinutes(leg.arr - leg.dep)),
                   style: small,
                 ),
               )
             else ...[
-              SizedBox(width: 44, child: Text(_clock(leg.dep))),
+              SizedBox(width: 44, child: Text(clockTime(leg.dep))),
               // Inside a row that opens the stop, so the badge takes its own
               // taps
               InkWell(
@@ -482,12 +522,4 @@ class _LegRow extends StatelessWidget {
       ),
     );
   }
-}
-
-int _mins(int seconds) => seconds < 60 ? 1 : (seconds / 60).round();
-
-String _clock(int t) {
-  final at = DateTime.fromMillisecondsSinceEpoch(t * 1000);
-  return '${at.hour.toString().padLeft(2, '0')}:'
-      '${at.minute.toString().padLeft(2, '0')}';
 }

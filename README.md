@@ -397,6 +397,15 @@ python3 -m commuterlviv admin invite                 # a registration link, prin
 python3 -m commuterlviv serve
 ```
 
+A vehicle's arrivals do not stop at the end of its trip. The trips the
+timetable chains after it on the same vehicle (GTFS `block_id`) are predicted
+too: each leaves its first stop at the later of its scheduled time and the
+moment the vehicle can be there plus a 120 s turnaround, and runs to schedule
+from there. Those rows are flagged `planned`, and both clients show them in
+italics with a schedule mark. This is what fills a start stop such as
+Аквапарк (519) for tram 3, where the vehicle about to leave is still reported
+on the trip it just finished.
+
 `GET /api/plan?from=lat,lon&to=lat,lon` answers the door-to-door question:
 walk, ride, maybe change, walk, ranked by arrival, with the whole walk offered
 as one of the options. It is RAPTOR (Delling, Pajor, Werneck 2012) over the
@@ -423,6 +432,14 @@ happily promise you a bus from. A `quiet` ride is held back unless it is the
 only ride on offer, in which case it is returned and flagged: an unreliable bus
 is worth knowing about, an invented one is not.
 
+Every leg also carries `pts`, `[[lat, lon], ...]`, which is where it goes on the
+map: a walk follows the footpath graph (`walk.path`), and a ride is its shape cut
+between the stop it is boarded at and the stop it is left at. Both are simplified
+to 4 m. The clients draw the option you tap - walks dotted, rides solid in the
+route's colour, each leg labelled with its minutes and each ride with its clock
+times at both ends - and wipe it, with the A and B marks, when you leave the
+planner.
+
 The options are ranked by a front over arrival time, number of changes and
 seconds spent walking, so a slower journey with one change fewer survives
 alongside the fastest, and every option that does not beat simply walking the
@@ -442,16 +459,19 @@ meaningless traffic reading.
 The numbers are pooled before they are drawn. A unit belongs to one route's
 shape, so a street ten routes run down carries ten units, each with its own
 number and its own idea of where the kerb is; drawn as they are, that is ten
-near-parallel lines crossing each other. They are pooled on `Shape.corridor` -
-the key the model already pools evidence on, a 120 m box of the city crossed on
-one of eight headings - which turns 25,625 stretches into 5,867 lines, one per
-piece of street per direction of travel, coloured by the weighted mean of the
-units in it. The one split kept is tram against road: a tram on its own track is
-not in the traffic the buses are in, while a trolleybus is on the road with them
-and is pooled with them. The geometry is 55 KB gzipped, fixed for the life of the
-process and cached by ETag; the ratios come separately, in the same order, and
-are built and serialised once every 30 s rather than per request, since the
-clients poll every minute and the numbers move slower than that.
+near-parallel lines crossing each other. They are pooled by where they lie:
+shapes are laid down most-run first, and a 100 m cell of a later shape that runs
+on top of an already drawn piece, within `MATCH` metres and heading the same
+way, adds its unit to that piece instead of drawing its own. Each piece is drawn
+along its shape's own vertices, so it follows the street through a bend rather
+than cutting a chord across it. An earlier version pooled on `Shape.corridor`,
+a 120 m box crossed on one of eight headings, and drew each box as one straight
+line - which is what cut the corners on Зелена and stacked lines along Княгині
+Ольги. The one split kept is tram against road: a tram on its own track is not
+in the traffic the buses are in, while a trolleybus is on the road with them and
+is pooled with them. The geometry is fixed for the life of the process and
+cached by ETag; the ratios come separately, in the same order, and are built and
+serialised once every 30 s rather than per request.
 
 Two hundred metres at either end of every shape are left out entirely. A vehicle
 at a terminus crawls in, parks, and crawls out, and the crawling is rolling time
@@ -468,10 +488,19 @@ new numbers arrive. Both push each line to the right of its own travel, so the
 two directions of a street sit side by side rather than one hiding the other.
 
 `GET /api/search?q=` finds addresses and places by name, which the catalog
-cannot: it is Photon over OpenStreetMap, biased to the city and clamped to it,
-with answers cached for a day so typing costs one request per new prefix.
-`COMMUTERLVIV_PHOTON_URL` points it at a self-hosted instance, and emptying it
-turns the feature off and leaves searching to stop names.
+cannot. It asks two sources. The first is a local index, `data/lviv-search.sqlite`,
+built by osm-mapidx (https://github.com/rhusiev/osm-mapidx) with
+`python -m mapidx.cli build ukraine-latest.osm.pbf --region lviv`; its search
+code is vendored as `commuterlviv/mapidx/`. It forgives typos and Latin
+transliteration, and leads for queries without a digit. The second is Photon
+over OpenStreetMap, biased to the city and clamped to it, which leads when the
+query has a digit, since house numbers are what it is best at. The same name
+within 100 m is kept once. Answers are cached for a day.
+`COMMUTERLVIV_PHOTON_URL` points Photon at a self-hosted instance, and emptying
+it leaves the local index alone; with neither, searching falls back to stop
+names. Stop names themselves are matched in the client by word prefix, in any
+order, with й/и, ї/і and apostrophes folded and one typo allowed in a word of
+four letters or more (`match.dart`, `match.ts`).
 
 The planner needs two caches that are built once and are not in the image:
 

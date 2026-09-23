@@ -62,7 +62,10 @@ export function Timetable({
                         <span className="w-14 text-center text-sm text-slate-500">?</span>
                       )}
                       <span className="flex-1 truncate text-sm text-slate-400">{r?.long}</span>
-                      <span className="tabular-nums text-sm text-slate-100">
+                      <span
+                        className={`tabular-nums text-sm text-slate-100 ${a.planned ? "italic" : ""}`}
+                        title={a.planned ? t.planned : undefined}
+                      >
                         {countdown(a.t, now)}
                       </span>
                     </li>

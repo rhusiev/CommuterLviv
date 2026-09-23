@@ -190,16 +190,29 @@ class Call {
 }
 
 class Arrival {
-  const Arrival({required this.route, required this.veh, required this.t});
+  const Arrival({
+    required this.route,
+    required this.veh,
+    required this.t,
+    this.planned = false,
+  });
 
-  factory Arrival.fromJson(Map<String, dynamic> j) =>
-      Arrival(route: j['route'] as int, veh: j['veh'] as int, t: j['t'] as int);
+  factory Arrival.fromJson(Map<String, dynamic> j) => Arrival(
+    route: j['route'] as int,
+    veh: j['veh'] as int,
+    t: j['t'] as int,
+    planned: j['planned'] as bool? ?? false,
+  );
 
   final int route;
   final int veh;
 
   /// Unix seconds, an instant rather than a countdown.
   final int t;
+
+  /// A vehicle still finishing its previous trip: the time is its timetabled
+  /// departure or when it can turn around, whichever is later
+  final bool planned;
 }
 
 /// One leg of a planned journey. `a` and `b` are catalog stop indexes, or -1
@@ -215,6 +228,7 @@ class Leg {
     this.veh,
     this.live = false,
     this.confidence = Confidence.live,
+    this.pts = const [],
   });
 
   factory Leg.fromJson(Map<String, dynamic> j) => Leg(
@@ -227,6 +241,13 @@ class Leg {
     veh: j['veh'] as int?,
     live: j['live'] as bool? ?? false,
     confidence: confidenceOf(j['confidence']),
+    pts: [
+      for (final p in j['pts'] as List<dynamic>? ?? const [])
+        LatLng(
+          ((p as List<dynamic>)[0] as num).toDouble(),
+          (p[1] as num).toDouble(),
+        ),
+    ],
   );
 
   final String kind;
@@ -238,6 +259,9 @@ class Leg {
   final int? veh;
   final bool live;
   final Confidence confidence;
+
+  /// Where the leg goes on the map: the footpath, or the ridden stretch
+  final List<LatLng> pts;
 
   bool get walking => kind == 'walk';
 }

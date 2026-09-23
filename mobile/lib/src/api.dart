@@ -305,6 +305,16 @@ class Api {
   Future<void> setMapTheme(String id) =>
       _prefs.setString('commuterlviv.theme', id);
 
+  bool get showTraffic => _prefs.getBool('commuterlviv.traffic') ?? false;
+
+  Future<void> setShowTraffic(bool on) =>
+      _prefs.setBool('commuterlviv.traffic', on);
+
+  bool get showLines => _prefs.getBool('commuterlviv.lines') ?? false;
+
+  Future<void> setShowLines(bool on) =>
+      _prefs.setBool('commuterlviv.lines', on);
+
   /// Null means the phone's own, which is what `main` falls back to.
   String? get language => _prefs.getString('commuterlviv.lang');
 

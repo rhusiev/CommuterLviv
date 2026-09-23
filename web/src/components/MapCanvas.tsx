@@ -18,7 +18,8 @@ import type { Pace } from "../lib/traffic";
 import { build, colour, R, type Sprites } from "../lib/sprites";
 import { t } from "../lib/i18n";
 import { ink, styleUrl, type Theme } from "../lib/theme";
-import type { Catalog, Place, Shapes } from "../lib/types";
+import { clock, mins } from "../lib/eta";
+import type { Catalog, Journey, Place, Shapes } from "../lib/types";
 import { MOVING_FLAG, STALE_FLAG } from "../lib/wire";
 
 /** The vehicle/stop overlay is a 2D canvas drawn from MapLibre's own `render`
@@ -57,7 +58,11 @@ type Props = {
   /** A click sets a journey end instead of choosing a stop */
   picking: boolean;
   onPickPoint: (lat: number, lon: number) => void;
+  /** A long press or right click, to save the spot */
+  onHoldPoint: (lat: number, lon: number) => void;
   marks: { lat: number; lon: number; label: string }[];
+  /** The planner option picked: walks dotted, rides solid, each leg timed */
+  journey: Journey | null;
   /** What the account kept, always on the map: stop positions and saved places */
   pinned: number[];
   places: Place[];
@@ -86,7 +91,9 @@ export function MapCanvas({
   fit,
   picking,
   onPickPoint,
+  onHoldPoint,
   marks,
+  journey,
   pinned,
   places,
   shapes,
@@ -109,8 +116,10 @@ export function MapCanvas({
   const held = useRef<MapLibre | null>(null);
   const here = useRef<Fix | null>(null);
   const pickPoint = useRef(onPickPoint);
+  const holdPoint = useRef(onHoldPoint);
   const picks = useRef(picking);
   const pins = useRef(marks);
+  const trip = useRef(journey);
   const kept = useRef(pinned);
   const saved = useRef(places);
   const geometry = useRef(shapes);
@@ -127,8 +136,10 @@ export function MapCanvas({
   chosen.current = vehicle;
   paint.current = ink(theme.dark);
   pickPoint.current = onPickPoint;
+  holdPoint.current = onHoldPoint;
   picks.current = picking;
   pins.current = marks;
+  trip.current = journey;
   kept.current = pinned;
   saved.current = places;
   geometry.current = shapes;
@@ -310,6 +321,39 @@ export function MapCanvas({
         g.fillText(place.name, x + PLACE_R + 8, y);
       }
 
+      const legs = trip.current?.legs.filter((l) => (l.pts?.length ?? 0) > 1) ?? [];
+      g.lineJoin = "round";
+      g.lineCap = "round";
+      for (const leg of legs) {
+        const path = new Path2D();
+        leg.pts!.forEach(([lat, lon], k) =>
+          k === 0 ? path.moveTo(p.x(lon), p.y(lat)) : path.lineTo(p.x(lon), p.y(lat)),
+        );
+        const route = leg.route === undefined ? undefined : catalog.routes[leg.route];
+        if (leg.kind === "walk" || !route) {
+          g.setLineDash([1, 7]);
+          g.strokeStyle = c.stop;
+          g.lineWidth = 4;
+          g.stroke(path);
+          g.setLineDash([]);
+        } else {
+          g.strokeStyle = c.edge;
+          g.lineWidth = 8;
+          g.stroke(path);
+          g.strokeStyle = colour(route.short, route.type);
+          g.lineWidth = 5;
+          g.stroke(path);
+        }
+      }
+      for (const leg of legs) {
+        const pts = leg.pts!;
+        tag(g, c, p, pts[pts.length >> 1]!, t.minutes(mins(leg.arr - leg.dep)), false);
+        if (leg.kind === "ride") {
+          tag(g, c, p, pts[0]!, clock(leg.dep), true);
+          tag(g, c, p, pts[pts.length - 1]!, clock(leg.arr), true);
+        }
+      }
+
       for (const mark of pins.current) {
         const x = p.x(mark.lon);
         const y = p.y(mark.lat);
@@ -404,6 +448,8 @@ export function MapCanvas({
 
       map.on("error", (e) => console.warn("basemap:", e.error?.message ?? e));
       map.on("moveend", () => saveView(viewOf(map!)));
+      // Mobile browsers raise a long press as `contextmenu` too
+      map.on("contextmenu", (e) => holdPoint.current(e.lngLat.lat, e.lngLat.lng));
       map.on("click", (e) => {
         if (picks.current) {
           pickPoint.current(e.lngLat.lat, e.lngLat.lng);
@@ -567,4 +613,30 @@ export function MapCanvas({
       </button>
     </div>
   );
+}
+
+/** A small plate with a time on it, centred on a point of a journey leg */
+function tag(
+  g: CanvasRenderingContext2D,
+  c: ReturnType<typeof ink>,
+  p: ReturnType<typeof screen>,
+  [lat, lon]: [number, number],
+  text: string,
+  bold: boolean,
+) {
+  const x = p.x(lon);
+  const y = p.y(lat);
+  g.font = `${bold ? "bold" : "600"} 11px system-ui, sans-serif`;
+  const w = g.measureText(text).width + 10;
+  g.beginPath();
+  g.roundRect(x - w / 2, y - 9, w, 18, 9);
+  g.fillStyle = c.nub;
+  g.fill();
+  g.lineWidth = 1;
+  g.strokeStyle = c.edge;
+  g.stroke();
+  g.fillStyle = c.edge;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText(text, x, y);
 }

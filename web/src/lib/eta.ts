@@ -20,3 +20,10 @@ export function countdown(at: number, now = Date.now() / 1000): string {
   if (s < 90) return t.oneMinute;
   return t.minutes(Math.round(s / 60));
 }
+
+/** `HH:MM`, local time */
+export const clock = (t: number) =>
+  new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+/** Whole minutes a span takes, never less than one */
+export const mins = (s: number) => Math.max(1, Math.round(s / 60));

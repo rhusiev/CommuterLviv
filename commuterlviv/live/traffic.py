@@ -7,10 +7,13 @@ slower than scheduled, which on a street is traffic. This turns that into a map.
 A unit belongs to one route's shape, so a street ten routes run down carries ten
 units, each with its own number and its own slightly different idea of where the
 kerb is. Drawing those as they are gives ten near-parallel lines crossing each
-other. They are pooled instead, on the key the model itself pools evidence on:
-`Shape.corridor`, a 120 m box of the city crossed on one of eight headings. One
-line comes out per piece of street per direction of travel, coloured by the
-weighted mean of every unit in it.
+other. They are pooled instead, by where they actually lie: shapes are laid down
+most-run first, and a 100 m cell of a later shape that runs on top of an
+already drawn piece - within `MATCH` metres and heading the same way along most
+of its length - adds its unit to that piece rather than drawing its own. One
+line comes out per 100 m of street per direction of travel, coloured by the
+weighted mean of every unit on it, and drawn along its shape's own vertices so
+it follows the street through a bend rather than cutting across it.
 
 The one split kept is tram against road. A tram on its own track is not in the
 traffic the cars and buses are in, so trams are pooled apart; a trolleybus is on
@@ -44,7 +47,11 @@ from . import geometry
 # crossing contributes about one, decaying with the model's fast half-life
 CONFIDENCE = 3.0
 
-SIMPLIFY = 12.0     # m a drawn segment may stray from the street
+SIMPLIFY = 2.0      # m a drawn segment may stray from its shape
+
+MATCH = 18.0        # m between two shapes still taken for the same street
+SAMPLES = 4         # points per cell tested against what is already drawn
+SAME_WAY = 0.7      # cosine of the widest heading gap still the same direction
 
 PERIOD = 30.0       # s one reading is served for; the clients ask every 60
 
@@ -54,57 +61,77 @@ TRAM, ROAD = 0, 1
 
 
 def segments(net, model):
-    """One line per piece of street per direction, with the units it reads.
-
-    The drawn geometry is a run of cells from whichever shape follows the piece
-    of street furthest, so it is a real route's own polyline rather than a
-    synthetic average of several.
-    """
+    """One line per 100 m of street per direction, with the units it reads."""
     kinds = _kinds(net)
     drop = _termini(net, model)
-    pooled = {}
-    for sid in sorted(model.shape_base):
-        base = model.shape_base[sid]
-        shape = net.shapes[sid]
-        cells = model.unit[base:base + shape.cells]
-        for lo, hi in _runs(shape.corridor):
-            here = {u for u in cells[lo:hi + 1].tolist() if u not in drop}
-            if not here:
-                continue
-            key = (int(shape.corridor[lo]), kinds.get(sid, ROAD))
-            group = pooled.get(key)
-            if group is None:
-                pooled[key] = _Group(here, sid, lo, hi)
-            else:
-                group.add(here, sid, lo, hi)
+    runs = {}
+    for sid in net.trip_shape.values():
+        runs[sid] = runs.get(sid, 0) + 1
+    order = sorted(model.shape_base, key=lambda sid: (-runs.get(sid, 0), sid))
+    drawn = {TRAM: _Drawn(), ROAD: _Drawn()}
     lines, units = [], []
-    for key in sorted(pooled):
-        group = pooled[key]
-        shape = net.shapes[group.sid]
+    for sid in order:
+        shape = net.shapes[sid]
+        base = model.shape_base[sid]
+        here = drawn[kinds.get(sid, ROAD)]
         step = shape.length / shape.cells
-        # both ends of the run, so a one-cell piece is still a line
-        at = np.minimum(np.arange(group.lo, group.hi + 2) * step, shape.length)
-        lines.append(geometry.points(geometry.simplify(shape.at(at), SIMPLIFY)))
-        units.append(sorted(group.units))
-    return {"lines": lines, "unit": units}
+        for c, unit in enumerate(model.unit[base:base + shape.cells].tolist()):
+            lo = c * step
+            s = lo + (np.arange(SAMPLES) + 0.5) * step / SAMPLES
+            pts = shape.at(s)
+            way = shape.at(np.minimum(s + 5.0, shape.length)) - \
+                shape.at(np.maximum(s - 5.0, 0.0))
+            way /= np.maximum(np.hypot(way[:, 0], way[:, 1]), 1e-9)[:, None]
+            on = here.under(pts, way)
+            if 2 * len(on) > SAMPLES:
+                if unit not in drop:
+                    units[max(set(on), key=on.count)].add(unit)
+                continue
+            here.lay(pts, way, len(lines))
+            lines.append(_cut(shape, lo, lo + step))
+            units.append(set() if unit in drop else {unit})
+    kept = [i for i, u in enumerate(units) if u]
+    return {"lines": [geometry.points(geometry.simplify(lines[i], SIMPLIFY))
+                      for i in kept],
+            "unit": [sorted(units[i]) for i in kept]}
 
 
-class _Group:
-    """The units on one piece of street, and the run of cells to draw it as.
+class _Drawn:
+    """Points of the lines laid so far, hashed on a `MATCH`-sized grid, each
+    with its heading and the line it belongs to."""
 
-    The run kept is the longest offered, so the line follows the street as far
-    as any one route does rather than stopping where the first one turned off.
-    """
+    __slots__ = ("grid",)
 
-    __slots__ = ("hi", "lo", "sid", "units")
+    def __init__(self):
+        self.grid = {}
 
-    def __init__(self, units, sid, lo, hi):
-        self.units, self.sid, self.lo, self.hi = set(units), sid, lo, hi
+    def lay(self, pts, way, line):
+        for (x, y), w in zip(pts.tolist(), way.tolist()):
+            key = (int(x // MATCH), int(y // MATCH))
+            self.grid.setdefault(key, []).append((x, y, *w, line))
 
-    def add(self, units, sid, lo, hi):
-        self.units |= units
-        if hi - lo > self.hi - self.lo:
-            self.sid, self.lo, self.hi = sid, lo, hi
+    def under(self, pts, way):
+        """For each point with a drawn one close by and heading the same way,
+        the line that one belongs to."""
+        out = []
+        for (x, y), (wx, wy) in zip(pts.tolist(), way.tolist()):
+            gx, gy = int(x // MATCH), int(y // MATCH)
+            best, near = None, MATCH * MATCH
+            for i in (gx - 1, gx, gx + 1):
+                for j in (gy - 1, gy, gy + 1):
+                    for px, py, hx, hy, line in self.grid.get((i, j), ()):
+                        d = (px - x) ** 2 + (py - y) ** 2
+                        if d < near and hx * wx + hy * wy > SAME_WAY:
+                            best, near = line, d
+            if best is not None:
+                out.append(best)
+        return out
+
+
+def _cut(shape, lo, hi):
+    """The shape between two distances along it, with every vertex between."""
+    inner = (shape.cum > lo) & (shape.cum < hi)
+    return np.concatenate([shape.at([lo]), shape.xy[inner], shape.at([hi])])
 
 
 def _kinds(net):
@@ -142,14 +169,6 @@ def _termini(net, model, reach=TERMINUS):
         out.update(cells[:edge + 1].tolist())
         out.update(cells[shape.cells - edge - 1:].tolist())
     return out
-
-
-def _runs(unit):
-    """(start, end) cell of each run of equal values, end inclusive."""
-    edges = np.flatnonzero(np.diff(unit)) + 1
-    starts = np.concatenate(([0], edges))
-    ends = np.concatenate((edges - 1, [len(unit) - 1]))
-    return zip(starts.tolist(), ends.tolist())
 
 
 class Pool:

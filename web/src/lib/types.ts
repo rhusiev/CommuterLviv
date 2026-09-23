@@ -39,7 +39,9 @@ export type Sets = {
 
 export type Me = { username: string; sets: Sets };
 
-export type Arrival = { route: number; veh: number; t: number };
+/** `planned`: the vehicle is still finishing its previous trip, so `t` is its
+ * timetabled departure or its turnaround, whichever is later */
+export type Arrival = { route: number; veh: number; t: number; planned?: boolean };
 
 export type Arrivals = { t: number; stops: Record<string, Arrival[]> };
 
@@ -63,6 +65,8 @@ export type Leg = {
   veh?: number | null;
   live?: boolean;
   confidence?: Confidence;
+  /** `[lat, lon]` along the footpath or the ridden stretch */
+  pts?: [number, number][];
 };
 
 /** The journey's confidence is the weakest of its rides */

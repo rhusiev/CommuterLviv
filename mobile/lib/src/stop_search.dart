@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'api.dart';
+import 'match.dart';
 import 'models.dart';
 import 'sheets.dart' show askName;
 import 'strings.dart';
@@ -89,6 +90,7 @@ class _Results extends StatefulWidget {
 }
 
 class _ResultsState extends State<_Results> {
+  late final _names = [for (final s in widget.catalog.stops) words(s.name)];
   List<Found> _found = const [];
   bool _busy = false;
   bool _failed = false;
@@ -154,13 +156,20 @@ class _ResultsState extends State<_Results> {
 
   @override
   Widget build(BuildContext context) {
-    final needle = widget.query.toLowerCase();
-    if (needle.isEmpty) return const SizedBox.shrink();
+    final query = words(widget.query);
+    if (query.isEmpty) return const SizedBox.shrink();
     final catalog = widget.catalog;
-    final stops = [
-      for (var i = 0; i < catalog.stops.length; i++)
-        if (catalog.stops[i].name.toLowerCase().contains(needle)) i,
+    final scored = [
+      for (var i = 0; i < _names.length; i++)
+        if (score(query, _names[i]) case final s when s > 0) (s, i),
     ];
+    // Shorter names first among equals: "Ринок" before "Ринок Шувар"
+    scored.sort(
+      (a, b) => a.$1 != b.$1
+          ? b.$1 - a.$1
+          : catalog.stops[a.$2].name.length - catalog.stops[b.$2].name.length,
+    );
+    final stops = [for (final (_, i) in scored) i];
     final rows = <Object>[
       if (stops.isNotEmpty) txt.foundStops,
       ...stops,

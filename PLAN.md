@@ -31,6 +31,10 @@ outside house numbers. The proxy:
 - rate-limits per session, and can be pointed at a self-hosted Photon later by
   one setting, since the public instance asks that heavy users run their own
 
+Since then: a local osm-mapidx index (`data/lviv-search.sqlite`) answers
+alongside Photon and forgives typos, and stop names are matched by word prefix
+with one typo allowed.
+
 Results merge into the existing list under a heading, stops first. Every row
 gets a save-as-favourite action, which is item 1's write.
 

@@ -36,6 +36,7 @@ Future<void> pump(WidgetTester tester) async {
           onForget: (_) {},
           onPlace: (_, _) {},
           onClose: () {},
+          onShow: (_) {},
         ),
       ),
     ),
@@ -54,6 +55,30 @@ void main() {
     await tester.tap(find.text(txt.now));
     await tester.pumpAndSettle();
     expect(find.byType(TimePickerDialog), findsOneWidget);
+  });
+
+  test('a leg reads the line it is drawn along', () {
+    final leg = Leg.fromJson({
+      'kind': 'walk',
+      'dep': 0,
+      'arr': 60,
+      'a': -1,
+      'b': 3,
+      'pts': [
+        [49.8, 24.0],
+        [49.81, 24.01],
+      ],
+    });
+    expect(leg.pts.map((p) => (p.latitude, p.longitude)), [
+      (49.8, 24.0),
+      (49.81, 24.01),
+    ]);
+  });
+
+  test('an arrival says whether it waits on the timetable', () {
+    final at = {'route': 1, 'veh': 2, 't': 3};
+    expect(Arrival.fromJson(at).planned, isFalse);
+    expect(Arrival.fromJson({...at, 'planned': true}).planned, isTrue);
   });
 
   test('each ride says what it rests on', () {

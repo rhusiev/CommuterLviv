@@ -158,10 +158,14 @@ class Walk:
         found.sort()
         return found
 
-    def reach(self, sources, limit_s):
+    def reach(self, sources, limit_s, prev=None, goal=None):
         """Seconds of walking from the nearest source to every node within
-        `limit_s`. `sources` are `(node, seconds already spent)`."""
+        `limit_s`. `sources` are `(node, seconds already spent)`; a `prev`
+        dict is filled with each node's predecessor on its shortest walk. With
+        `goal`, node -> seconds still to walk from it, the search stops once
+        no unsettled node can finish sooner than a goal already reached."""
         best = {}
+        done = math.inf
         queue = []
         for node, spent in sources:
             if spent <= limit_s and (node not in best or spent < best[node]):
@@ -169,16 +173,40 @@ class Walk:
                 heapq.heappush(queue, (spent, node))
         while queue:
             t, i = heapq.heappop(queue)
+            if t >= done:
+                break
             if t > best.get(i, math.inf):
                 continue
+            if goal is not None and i in goal:
+                done = min(done, t + goal[i])
             lo, hi = self.start[i], self.start[i + 1]
             for k in range(lo, hi):
                 j = int(self.to[k])
                 nxt = t + float(self.cost[k]) / SPEED
                 if nxt <= limit_s and nxt < best.get(j, math.inf):
                     best[j] = nxt
+                    if prev is not None:
+                        prev[j] = i
                     heapq.heappush(queue, (nxt, j))
         return best
+
+    def path(self, a, b, limit_s):
+        """The footpath from `a` to `b` (both (lat, lon)) as (lat, lon) points,
+        or just the two ends when no walk within `limit_s` joins them."""
+        prev = {}
+        goal = {i: d / SPEED for d, i in self.near(*b)}
+        best = self.reach([(i, d / SPEED) for d, i in self.near(*a)],
+                          limit_s, prev, goal)
+        ends = [(best[i] + t, i) for i, t in goal.items() if i in best]
+        if not ends:
+            return [a, b]
+        node = min(ends)[1]
+        nodes = [node]
+        while node in prev:
+            node = prev[node]
+            nodes.append(node)
+        return [a, *((float(self.lat[i]), float(self.lon[i]))
+                     for i in reversed(nodes)), b]
 
 
 def load(path=CACHE):

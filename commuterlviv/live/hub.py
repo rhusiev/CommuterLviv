@@ -27,8 +27,14 @@ MAX_PER_USER = 8        # sockets one account may hold open at once
 def due(arrivals, stops):
     """What is coming to these stops; shared with `/api/arrivals`."""
     return {"t": arrivals.t, "stops": {
-        str(i): [{"route": int(r["route"]), "veh": int(r["veh"]),
-                  "t": int(r["t"])} for r in arrivals.at(i)] for i in stops}}
+        str(i): [_row(r) for r in arrivals.at(i)] for i in stops}}
+
+
+def _row(r):
+    out = {"route": int(r["route"]), "veh": int(r["veh"]), "t": int(r["t"])}
+    if r["planned"]:
+        out["planned"] = True
+    return out
 
 
 class Client:
