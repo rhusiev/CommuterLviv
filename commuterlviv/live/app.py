@@ -392,9 +392,16 @@ async def journey(request, session):
     # second-long searches is a denial of service with a longer fuse
     if app.planning.locked():
         return error("the planner is busy; try that again", 503)
-    async with app.planning:
-        found = await asyncio.to_thread(app.planner.search, origin, dest,
-                                        app.svc.live.arrivals, at)
+    try:
+        async with app.planning:
+            found = await asyncio.to_thread(app.planner.search, origin, dest,
+                                            app.svc.live.arrivals, at)
+    except Exception as exc:
+        # answered as JSON on purpose: an unhandled exception leaves Starlette
+        # with a plain-text 500, which every client reads as a JSON.parse
+        # failure rather than as what went wrong
+        log("plan failed:", repr(exc)[:200])
+        return error("could not plan that journey", 500)
     return JSONResponse(found)
 
 

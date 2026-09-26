@@ -345,14 +345,28 @@ export function MapCanvas({
           g.stroke(path);
         }
       }
+      // Journey tags, placed so they never cover each other: a ride's clocks
+      // claim their stops first, and a leg's minutes tag steps aside
+      const tags: { x: number; y: number; text: string; bold: boolean }[] = [];
+      for (const leg of legs) {
+        if (leg.kind !== "ride") continue;
+        const pts = leg.pts!;
+        const s = pts[0]!;
+        const e = pts[pts.length - 1]!;
+        tags.push({ x: p.x(s[1]), y: p.y(s[0]), text: clock(leg.dep), bold: true });
+        tags.push({ x: p.x(e[1]), y: p.y(e[0]), text: clock(leg.arr), bold: true });
+      }
       for (const leg of legs) {
         const pts = leg.pts!;
-        tag(g, c, p, pts[pts.length >> 1]!, t.minutes(mins(leg.arr - leg.dep)), false);
-        if (leg.kind === "ride") {
-          tag(g, c, p, pts[0]!, clock(leg.dep), true);
-          tag(g, c, p, pts[pts.length - 1]!, clock(leg.arr), true);
-        }
+        const m = pts[pts.length >> 1]!;
+        tags.push({
+          x: p.x(m[1]),
+          y: p.y(m[0]),
+          text: t.minutes(mins(leg.arr - leg.dep)),
+          bold: false,
+        });
       }
+      placeTags(g, c, tags);
 
       for (const mark of pins.current) {
         const x = p.x(mark.lon);
@@ -615,19 +629,39 @@ export function MapCanvas({
   );
 }
 
-/** A small plate with a time on it, centred on a point of a journey leg */
-function tag(
+/** Journey tags, each stepped aside until it clears the ones already drawn */
+function placeTags(
   g: CanvasRenderingContext2D,
   c: ReturnType<typeof ink>,
-  p: ReturnType<typeof screen>,
-  [lat, lon]: [number, number],
-  text: string,
-  bold: boolean,
+  tags: { x: number; y: number; text: string; bold: boolean }[],
 ) {
-  const x = p.x(lon);
-  const y = p.y(lat);
-  g.font = `${bold ? "bold" : "600"} 11px system-ui, sans-serif`;
-  const w = g.measureText(text).width + 10;
+  const drawn: { x0: number; y0: number; x1: number; y1: number }[] = [];
+  for (const tag of tags) {
+    g.font = `${tag.bold ? "bold" : "600"} 11px system-ui, sans-serif`;
+    const w = g.measureText(tag.text).width + 10;
+    for (const dy of [0, -22, 22, -44, 44]) {
+      const x0 = tag.x - w / 2;
+      const y0 = tag.y - 9 + dy;
+      const clear = drawn.every(
+        (r) => x0 + w < r.x0 - 2 || x0 > r.x1 + 2 || y0 + 18 < r.y0 - 2 || y0 > r.y1 + 2,
+      );
+      if (!clear) continue;
+      drawn.push({ x0, y0, x1: x0 + w, y1: y0 + 18 });
+      plate(g, c, tag.x, tag.y + dy, w, tag.text);
+      break;
+    }
+  }
+}
+
+/** A small plate with a time on it, centred where put */
+function plate(
+  g: CanvasRenderingContext2D,
+  c: ReturnType<typeof ink>,
+  x: number,
+  y: number,
+  w: number,
+  text: string,
+) {
   g.beginPath();
   g.roundRect(x - w / 2, y - 9, w, 18, 9);
   g.fillStyle = c.nub;

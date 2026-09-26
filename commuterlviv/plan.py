@@ -243,6 +243,12 @@ class Transfers:
             return cls(z["node"], z["to"], z["cost"], z["start"])
 
     def near(self, i, limit):
+        # A table built against an older stop list is shorter than the
+        # timetable; `load` refuses that combination, so reaching here means a
+        # caller bug rather than a stale file - but a journey search must never
+        # turn it into a 500, only into a missing walk.
+        if i < 0 or i + 1 >= len(self.start):
+            return
         lo, hi = self.start[i], self.start[i + 1]
         for k in range(lo, hi):
             t = float(self.cost[k])
@@ -551,7 +557,14 @@ def load(net=None):
         tt = Timetable(net)
         with open(cache, "wb") as fh:
             pickle.dump(tt, fh, protocol=5)
-    return tt, footpaths.load(), Transfers.load()
+    transfers = Transfers.load()
+    if len(transfers.start) - 1 != len(tt.stops) or \
+            len(transfers.node) != len(tt.stops):
+        raise FileNotFoundError(
+            f"{TRANSFERS} lists {len(transfers.start) - 1} stops against "
+            f"{len(tt.stops)} in the timetable - run `python -m commuterlviv "
+            "plan --build` once to walk between every pair of stops")
+    return tt, footpaths.load(), transfers
 
 
 def main(argv):

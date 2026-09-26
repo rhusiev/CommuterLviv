@@ -30,6 +30,21 @@ class JourneyLayer extends StatelessWidget {
       for (final leg in journey.legs)
         if (leg.pts.length > 1) leg,
     ];
+    // Ride clocks first, so a short walk into a stop keeps both readings: its
+    // minutes join the clock in one stack instead of printing over it.
+    final tags = <_Tag>[
+      for (final leg in legs)
+        if (!leg.walking) ...[
+          _Tag(leg.pts.first, clockTime(leg.dep), true),
+          _Tag(leg.pts.last, clockTime(leg.arr), true),
+        ],
+      for (final leg in legs)
+        _Tag(
+          leg.pts[leg.pts.length ~/ 2],
+          txt.minutes(spanMinutes(leg.arr - leg.dep)),
+          false,
+        ),
+    ];
     return Stack(
       children: [
         PolylineLayer(
@@ -51,21 +66,7 @@ class JourneyLayer extends StatelessWidget {
                     ),
           ],
         ),
-        MarkerLayer(
-          markers: [
-            for (final leg in legs) ...[
-              _label(
-                leg.pts[leg.pts.length ~/ 2],
-                txt.minutes(spanMinutes(leg.arr - leg.dep)),
-                ink,
-              ),
-              if (!leg.walking) ...[
-                _label(leg.pts.first, clockTime(leg.dep), ink, bold: true),
-                _label(leg.pts.last, clockTime(leg.arr), ink, bold: true),
-              ],
-            ],
-          ],
-        ),
+        MarkerLayer(markers: [for (final c in _clusters(tags)) _stack(c, ink)]),
       ],
     );
   }
@@ -78,28 +79,66 @@ class JourneyLayer extends StatelessWidget {
   }
 }
 
-Marker _label(LatLng at, String text, Palette ink, {bool bold = false}) =>
-    Marker(
-      point: at,
+/// One pill before placing: where it wants to sit, what it says, how loudly.
+class _Tag {
+  const _Tag(this.point, this.text, this.bold);
+
+  final LatLng point;
+  final String text;
+  final bool bold;
+}
+
+/// Tags sharing one spot, as one marker: pills that would print over each
+/// other are one stack instead. A pill is ~60x22, so 25 m merges what shares a
+/// stop at every zoom while leaving apart what the map can separate.
+List<List<_Tag>> _clusters(List<_Tag> tags) {
+  const near = Distance();
+  final out = <List<_Tag>>[];
+  for (final tag in tags) {
+    var placed = false;
+    for (final c in out) {
+      if (near(c.first.point, tag.point) < 25) {
+        c.add(tag);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) out.add([tag]);
+  }
+  return out;
+}
+
+Marker _stack(List<_Tag> tags, Palette ink) => Marker(
+      point: tags.first.point,
       width: 64,
-      height: 22,
+      height: 22.0 * tags.length + 2.0 * (tags.length - 1),
       child: Center(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: ink.nub,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: ink.edge),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            child: Text(
-              text,
-              style: TextStyle(
-                color: ink.edge,
-                fontSize: 11,
-                fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < tags.length; i++) ...[
+              if (i > 0) const SizedBox(height: 2),
+              _pill(tags[i], ink),
+            ],
+          ],
+        ),
+      ),
+    );
+
+Widget _pill(_Tag tag, Palette ink) => DecoratedBox(
+      decoration: BoxDecoration(
+        color: ink.nub,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: ink.edge),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        child: Text(
+          tag.text,
+          style: TextStyle(
+            color: ink.edge,
+            fontSize: 11,
+            fontWeight: tag.bold ? FontWeight.bold : FontWeight.normal,
           ),
         ),
       ),

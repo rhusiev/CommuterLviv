@@ -109,3 +109,39 @@ class Planner:
             inner = shape.xy[(shape.cum > d0) & (shape.cum < d1)]
             return np.vstack([shape.at(d0), inner, shape.at(d1)])
         return network.to_xy(*np.array([a, b]).T)
+
+
+def _make(net, log):
+    """The two files, built where they are missing or stale. Minutes, and
+    blocking: `arrange` runs it in a thread.
+
+    The transfer table is numbered against the stop list it was built with, so
+    a rebuilt network (a new feed, a changed override) silently shortens or
+    lengthens the timetable it is read against. Length is the whole check: the
+    table carries one row per stop and nothing else keys it."""
+    if not footpaths.CACHE.exists():
+        log("planner: asking Overpass for the city's footpaths, once")
+        footpaths.save()
+    tt = plan.Timetable(net)
+    try:
+        transfers = plan.Transfers.load()
+        fresh = len(transfers.start) - 1 == len(tt.stops) and \
+            len(transfers.node) == len(tt.stops)
+    except FileNotFoundError:
+        fresh = False
+    if not fresh:
+        log("planner: walking between every pair of stops, once")
+        plan.build_transfers(tt, footpaths.load())
+
+
+async def arrange(state, net, cat, log):
+    """Build what is missing in a thread, then install the planner on the app
+    state. A failure here disables one endpoint and never the service."""
+    try:
+        await asyncio.to_thread(_make, net, log)
+    except Exception as exc:
+        log("planner: giving up on this start -", repr(exc)[:200])
+        return
+    state.planner = Planner.maybe(net, cat, log)
+    if state.planner:
+        log("planner: ready")
