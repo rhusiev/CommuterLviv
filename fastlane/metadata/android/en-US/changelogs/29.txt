@@ -1,0 +1,2 @@
+- Journeys plan again after 0.10.0 left the planner with a stale stop table
+- The journey's time tags no longer print over each other at shared stops
