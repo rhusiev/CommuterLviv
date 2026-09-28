@@ -60,7 +60,7 @@ class Planner:
         def path(leg):
             key = (leg.kind, leg.route, leg.a, leg.b)
             if key not in paths:
-                paths[key] = self._path(leg, origin, dest)
+                paths[key] = self._path(leg, origin, dest, arrivals)
             return paths[key]
 
         return {"t": now, "options": [self._wire(j, path) for j in found]}
@@ -68,6 +68,7 @@ class Planner:
     def _wire(self, j, path):
         return {"dep": int(j.dep), "arr": int(j.arr), "rides": j.rides,
                 "live": j.live, "confidence": j.confidence,
+                "backup": j.backup,
                 "legs": [self._leg(x, path) for x in j.legs]}
 
     def _leg(self, leg, path):
@@ -88,13 +89,13 @@ class Planner:
         s = self.tt.net.stops[self.tt.stops[i]]
         return s["lat"], s["lon"]
 
-    def _path(self, leg, origin, dest):
+    def _path(self, leg, origin, dest, arrivals):
         """Where the leg goes: the footpath walked, or the stretch of the
         route's line between boarding and alighting."""
         return geometry.points(geometry.simplify(
-            self._line(leg, origin, dest), DETAIL))
+            self._line(leg, origin, dest, arrivals), DETAIL))
 
-    def _line(self, leg, origin, dest):
+    def _line(self, leg, origin, dest, arrivals):
         a, b = self._where(leg.a, origin), self._where(leg.b, dest)
         if leg.kind == "walk":
             limit = (leg.arr - leg.dep) * 1.5 + 60.0
@@ -108,6 +109,46 @@ class Planner:
             shape = self.tt.net.shapes[sid]
             inner = shape.xy[(shape.cum > d0) & (shape.cum < d1)]
             return np.vstack([shape.at(d0), inner, shape.at(d1)])
+        # A tracked vehicle keeps its wire id across the trips it runs next,
+        # so one ride can span two patterns and no single shape covers it:
+        # draw each stretch on its own shape, hopping straight only between
+        # shapes (a layover at a terminus, usually the same place twice).
+        seq = self._live_seq(leg, arrivals)
+        if seq is not None:
+            return np.vstack([self._piece(leg.route, u, v)
+                              for u, v in zip(seq, seq[1:])])
+        return network.to_xy(*np.array([a, b]).T)
+
+    def _live_seq(self, leg, arrivals):
+        """The vehicle's timetable-stop indexes in arrival order, cut to this
+        ride; None when the ride is not a tracked vehicle's to draw."""
+        if leg.veh is None or arrivals is None:
+            return None
+        seq = []
+        for r in arrivals.of(int(leg.veh)):
+            i = self.tt.stop_i.get(self.cat.stops[int(r["stop"])])
+            if i is not None:
+                seq.append(i)
+        try:
+            i0 = seq.index(leg.a)
+            i1 = seq.index(leg.b, i0 + 1)
+        except ValueError:
+            return None
+        return seq[i0:i1 + 1]
+
+    def _piece(self, route, u, v):
+        """The shape between two timetable stops, or straight across when no
+        pattern runs one to the other."""
+        at, to = self.tt.stops[u], self.tt.stops[v]
+        for sid, ids, dist in self.rides.get(route, {}).values():
+            if at not in ids or to not in ids[ids.index(at) + 1:]:
+                continue
+            i = ids.index(at)
+            d0, d1 = dist[i], dist[ids.index(to, i + 1)]
+            shape = self.tt.net.shapes[sid]
+            inner = shape.xy[(shape.cum > d0) & (shape.cum < d1)]
+            return np.vstack([shape.at(d0), inner, shape.at(d1)])
+        a, b = self._where(u, None), self._where(v, None)
         return network.to_xy(*np.array([a, b]).T)
 
 

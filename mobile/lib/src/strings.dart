@@ -7,6 +7,8 @@ import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/foundation.dart' show ValueNotifier;
 
+import 'models.dart' show Prefer;
+
 enum Lang { uk, en }
 
 class Strings {
@@ -94,12 +96,14 @@ class Strings {
     required this.noJourney,
     required this.toDoor,
     required this.noChange,
+    required this.prefer,
     required this.livePart,
     required this.schedulePart,
     required this.wholeWalk,
     required this.planHint,
     required this.walkLeg,
     required this.changeCount,
+    required this.backupCount,
     required this.minutes,
     required this.unreachable,
   });
@@ -191,12 +195,14 @@ class Strings {
   final String noJourney;
   final String toDoor;
   final String noChange;
+  final String Function(Prefer p) prefer;
   final String livePart;
   final String schedulePart;
   final String wholeWalk;
   final String planHint;
   final String Function(int minutes) walkLeg;
   final String Function(int changes) changeCount;
+  final String Function(int backups) backupCount;
   final String Function(int minutes) minutes;
   final String Function(String server) unreachable;
 }
@@ -281,12 +287,14 @@ const _en = Strings(
   noJourney: 'no way to get there was found',
   toDoor: 'to the door',
   noChange: 'no changes',
+  prefer: _enPrefer,
   livePart: 'tracked',
   schedulePart: 'timetable',
   wholeWalk: 'walk the whole way',
   planHint: 'Tap the map to set where you are and where you are going.',
   walkLeg: _enWalkLeg,
   changeCount: _enChangeCount,
+  backupCount: _enBackupCount,
   stopsAhead: 'Stops ahead',
   vehicleGone: 'This one is no longer being tracked',
   now: 'now',
@@ -298,6 +306,14 @@ const _en = Strings(
 String _enUpdateSet(String name) => 'Update “$name”';
 String _enWalkLeg(int m) => 'walk $m min';
 String _enChangeCount(int n) => n == 1 ? '1 change' : '$n changes';
+String _enBackupCount(int n) => n == 1 ? '1 backup' : '$n backups';
+
+String _enPrefer(Prefer p) => switch (p) {
+  Prefer.fastest => 'Fastest',
+  Prefer.walk => 'Less walking',
+  Prefer.changes => 'Fewer changes',
+  Prefer.reliable => 'Most backups',
+};
 String _enMinutes(int m) => '$m min';
 String _enUnreachable(String server) => 'could not reach $server';
 
@@ -381,12 +397,14 @@ const _uk = Strings(
   noJourney: 'шляху не знайдено',
   toDoor: 'до місця',
   noChange: 'без пересадок',
+  prefer: _ukPrefer,
   livePart: 'за відстеженням',
   schedulePart: 'за розкладом',
   wholeWalk: 'пішки весь шлях',
   planHint: 'Торкніться мапи, щоб вказати, де ви є і куди прямуєте.',
   walkLeg: _ukWalkLeg,
   changeCount: _ukChangeCount,
+  backupCount: _ukBackupCount,
   stopsAhead: 'Наступні зупинки',
   vehicleGone: 'Цей транспорт більше не відстежується',
   now: 'зараз',
@@ -398,6 +416,14 @@ const _uk = Strings(
 String _ukUpdateSet(String name) => 'Оновити «$name»';
 String _ukWalkLeg(int m) => 'пішки $m хв';
 String _ukChangeCount(int n) => n == 1 ? '1 пересадка' : 'пересадок: $n';
+String _ukBackupCount(int n) => n == 1 ? '1 запасний' : 'запасних: $n';
+
+String _ukPrefer(Prefer p) => switch (p) {
+  Prefer.fastest => 'Швидше',
+  Prefer.walk => 'Менше пішки',
+  Prefer.changes => 'Менше пересадок',
+  Prefer.reliable => 'Більше запасних',
+};
 String _ukMinutes(int m) => '$m хв';
 String _ukUnreachable(String server) => 'не вдалося зʼєднатися з $server';
 

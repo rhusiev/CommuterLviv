@@ -18,7 +18,7 @@ import type { Pace } from "../lib/traffic";
 import { build, colour, R, type Sprites } from "../lib/sprites";
 import { t } from "../lib/i18n";
 import { ink, styleUrl, type Theme } from "../lib/theme";
-import { clock, mins } from "../lib/eta";
+import { clock } from "../lib/eta";
 import type { Catalog, Journey, Place, Shapes } from "../lib/types";
 import { MOVING_FLAG, STALE_FLAG } from "../lib/wire";
 
@@ -345,30 +345,7 @@ export function MapCanvas({
           g.stroke(path);
         }
       }
-      // Journey tags, placed so they never cover each other: a ride's clocks
-      // claim their stops first, and a leg's minutes tag steps aside
-      const tags: { x: number; y: number; text: string; bold: boolean }[] = [];
-      for (const leg of legs) {
-        if (leg.kind !== "ride") continue;
-        const pts = leg.pts!;
-        const s = pts[0]!;
-        const e = pts[pts.length - 1]!;
-        tags.push({ x: p.x(s[1]), y: p.y(s[0]), text: clock(leg.dep), bold: true });
-        tags.push({ x: p.x(e[1]), y: p.y(e[0]), text: clock(leg.arr), bold: true });
-      }
-      for (const leg of legs) {
-        const pts = leg.pts!;
-        const m = pts[pts.length >> 1]!;
-        tags.push({
-          x: p.x(m[1]),
-          y: p.y(m[0]),
-          text: t.minutes(mins(leg.arr - leg.dep)),
-          bold: false,
-        });
-      }
-      placeTags(g, c, tags);
-
-      for (const mark of pins.current) {
+      if (trip.current === null) for (const mark of pins.current) {
         const x = p.x(mark.lon);
         const y = p.y(mark.lat);
         g.beginPath();
@@ -427,6 +404,17 @@ export function MapCanvas({
         }
         g.globalAlpha = 1;
       }
+
+      // Timestamps only, one pill per stop; durations stay in the planner's
+      // list. The pills name the ends while the journey is drawn, so the A/B
+      // marks rest until it is cleared.
+      const tags: { x: number; y: number; text: string }[] =
+        journeyTags(legs).map((tag) => ({
+          x: p.x(tag.lon),
+          y: p.y(tag.lat),
+          text: tag.text,
+        }));
+      placeTags(g, c, tags);
 
       // Vehicles move between camera changes, so keep asking for frames
       m.triggerRepaint();
@@ -629,15 +617,53 @@ export function MapCanvas({
   );
 }
 
-/** Journey tags, each stepped aside until it clears the ones already drawn */
+/** One pill per stop of the picked journey: getting off and getting on share
+ * a pill reading off → on. Stops within 25 m are one stop, at every zoom. */
+function journeyTags(legs: Journey["legs"]): { lat: number; lon: number; text: string }[] {
+  type Group = { lat: number; lon: number; off: number[]; on: number[] };
+  const groups: Group[] = [];
+  const at = (lat: number, lon: number): Group => {
+    for (const g of groups) {
+      if (Math.abs(lat - g.lat) * 111320 < 25 && Math.abs(lon - g.lon) * 71770 < 25) return g;
+    }
+    const g: Group = { lat, lon, off: [], on: [] };
+    groups.push(g);
+    return g;
+  };
+  for (const leg of legs) {
+    const pts = leg.pts!;
+    const s = pts[0]!;
+    const e = pts[pts.length - 1]!;
+    at(s[0], s[1]).on.push(leg.dep);
+    at(e[0], e[1]).off.push(leg.arr);
+  }
+  const out: { lat: number; lon: number; text: string }[] = [];
+  for (const g of groups) {
+    const off = Math.max(...g.off);
+    const on = Math.min(...g.on);
+    if (g.off.length && g.on.length && off !== on) {
+      out.push({ lat: g.lat, lon: g.lon, text: `${clock(off)} → ${clock(on)}` });
+    } else {
+      out.push({ lat: g.lat, lon: g.lon, text: clock(g.off.length ? off : on) });
+    }
+    for (const extra of [...g.off.slice(0, -1), ...g.on.slice(1)]) {
+      out.push({ lat: g.lat, lon: g.lon, text: clock(extra) });
+    }
+  }
+  return out;
+}
+
+/** Journey tags, each stepped aside until it clears the ones already drawn.
+ * A pill that had to move keeps a leader line to its stop, so stepping aside
+ * on zoom-out never reads as teleporting somewhere else. */
 function placeTags(
   g: CanvasRenderingContext2D,
   c: ReturnType<typeof ink>,
-  tags: { x: number; y: number; text: string; bold: boolean }[],
+  tags: { x: number; y: number; text: string }[],
 ) {
   const drawn: { x0: number; y0: number; x1: number; y1: number }[] = [];
   for (const tag of tags) {
-    g.font = `${tag.bold ? "bold" : "600"} 11px system-ui, sans-serif`;
+    g.font = "bold 11px system-ui, sans-serif";
     const w = g.measureText(tag.text).width + 10;
     for (const dy of [0, -22, 22, -44, 44]) {
       const x0 = tag.x - w / 2;
@@ -647,6 +673,16 @@ function placeTags(
       );
       if (!clear) continue;
       drawn.push({ x0, y0, x1: x0 + w, y1: y0 + 18 });
+      if (dy !== 0) {
+        g.globalAlpha = 0.7;
+        g.strokeStyle = c.edge;
+        g.lineWidth = 1;
+        g.beginPath();
+        g.moveTo(tag.x, tag.y + dy - Math.sign(dy) * 9);
+        g.lineTo(tag.x, tag.y);
+        g.stroke();
+        g.globalAlpha = 1;
+      }
       plate(g, c, tag.x, tag.y + dy, w, tag.text);
       break;
     }

@@ -1,5 +1,5 @@
 /// The journey picked in the planner, drawn where it goes: walks dotted, rides
-/// solid in the route's colour, each leg labelled with how long it takes.
+/// solid in the route's colour, one pill of times per stop.
 library;
 
 import 'package:flutter/material.dart';
@@ -9,7 +9,6 @@ import 'package:latlong2/latlong.dart';
 import 'eta.dart';
 import 'map_theme.dart';
 import 'models.dart';
-import 'strings.dart';
 
 class JourneyLayer extends StatelessWidget {
   const JourneyLayer({
@@ -30,20 +29,18 @@ class JourneyLayer extends StatelessWidget {
       for (final leg in journey.legs)
         if (leg.pts.length > 1) leg,
     ];
-    // Ride clocks first, so a short walk into a stop keeps both readings: its
-    // minutes join the clock in one stack instead of printing over it.
+    // Timestamps only, one pill per stop; durations stay in the planner's
+    // list. A third and further time on one spot joins the stack.
+    final groups = <_Group>[];
+    for (final leg in legs) {
+      _at(groups, leg.pts.first).on.add(leg.dep);
+      _at(groups, leg.pts.last).off.add(leg.arr);
+    }
     final tags = <_Tag>[
-      for (final leg in legs)
-        if (!leg.walking) ...[
-          _Tag(leg.pts.first, clockTime(leg.dep), true),
-          _Tag(leg.pts.last, clockTime(leg.arr), true),
-        ],
-      for (final leg in legs)
-        _Tag(
-          leg.pts[leg.pts.length ~/ 2],
-          txt.minutes(spanMinutes(leg.arr - leg.dep)),
-          false,
-        ),
+      for (final g in groups) ...[
+        _Tag(g.point, g.text, true),
+        for (final extra in g.extras) _Tag(g.point, clockTime(extra), true),
+      ],
     ];
     return Stack(
       children: [
@@ -79,6 +76,45 @@ class JourneyLayer extends StatelessWidget {
   }
 }
 
+/// One stop's worth of times: every alighting and boarding within 25 m, which
+/// is one stop at every zoom. [text] reads off → on for a change, or the one
+/// time when there is only it; [extras] holds a third and further time, which
+/// the stack draws as its own pill on the same spot.
+class _Group {
+  _Group(this.point);
+
+  final LatLng point;
+  final List<int> off = [];
+  final List<int> on = [];
+
+  String get text {
+    if (off.isNotEmpty && on.isNotEmpty && off.last != on.first) {
+      return '${clockTime(off.last)} → ${clockTime(on.first)}';
+    }
+    return clockTime(off.isNotEmpty ? off.last : on.first);
+  }
+
+  Iterable<int> get extras sync* {
+    for (var i = 0; i + 1 < off.length; i++) {
+      yield off[i];
+    }
+    for (var i = 1; i < on.length; i++) {
+      yield on[i];
+    }
+  }
+}
+
+/// The group [at] belongs to, opening one when it stands alone.
+_Group _at(List<_Group> groups, LatLng at) {
+  const near = Distance();
+  for (final g in groups) {
+    if (near(g.point, at) < 25) return g;
+  }
+  final opened = _Group(at);
+  groups.add(opened);
+  return opened;
+}
+
 /// One pill before placing: where it wants to sit, what it says, how loudly.
 class _Tag {
   const _Tag(this.point, this.text, this.bold);
@@ -109,37 +145,37 @@ List<List<_Tag>> _clusters(List<_Tag> tags) {
 }
 
 Marker _stack(List<_Tag> tags, Palette ink) => Marker(
-      point: tags.first.point,
-      width: 64,
-      height: 22.0 * tags.length + 2.0 * (tags.length - 1),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (var i = 0; i < tags.length; i++) ...[
-              if (i > 0) const SizedBox(height: 2),
-              _pill(tags[i], ink),
-            ],
-          ],
-        ),
-      ),
-    );
+  point: tags.first.point,
+  width: 64,
+  height: 22.0 * tags.length + 2.0 * (tags.length - 1),
+  child: Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < tags.length; i++) ...[
+          if (i > 0) const SizedBox(height: 2),
+          _pill(tags[i], ink),
+        ],
+      ],
+    ),
+  ),
+);
 
 Widget _pill(_Tag tag, Palette ink) => DecoratedBox(
-      decoration: BoxDecoration(
-        color: ink.nub,
-        borderRadius: BorderRadius.circular(11),
-        border: Border.all(color: ink.edge),
+  decoration: BoxDecoration(
+    color: ink.nub,
+    borderRadius: BorderRadius.circular(11),
+    border: Border.all(color: ink.edge),
+  ),
+  child: Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    child: Text(
+      tag.text,
+      style: TextStyle(
+        color: ink.edge,
+        fontSize: 11,
+        fontWeight: tag.bold ? FontWeight.bold : FontWeight.normal,
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        child: Text(
-          tag.text,
-          style: TextStyle(
-            color: ink.edge,
-            fontSize: 11,
-            fontWeight: tag.bold ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-      ),
-    );
+    ),
+  ),
+);

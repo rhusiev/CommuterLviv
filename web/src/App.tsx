@@ -190,10 +190,20 @@ export function App() {
     setFocus({ lat: s.lat, lon: s.lon });
   };
 
+  /** While a journey is shown, only its rides are on the map */
+  const journeyRoutes = useMemo(() => {
+    if (tab !== "plan" || !journey) return null;
+    const out = new Set<number>();
+    for (const leg of journey.legs) {
+      if (leg.route !== undefined) out.add(leg.route);
+    }
+    return [...out].sort((a, b) => a - b);
+  }, [tab, journey]);
+
   /** The socket's own filter: while one route is open it is the only one sent */
   const indexes = useMemo(
-    () => (tab === "route" && route !== null ? [route] : chosen),
-    [tab, route, chosen],
+    () => journeyRoutes ?? (tab === "route" && route !== null ? [route] : chosen),
+    [journeyRoutes, tab, route, chosen],
   );
 
   const lines = useMemo(() => {

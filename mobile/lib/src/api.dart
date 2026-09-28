@@ -321,6 +321,17 @@ class Api {
   Future<void> setLanguage(String code) =>
       _prefs.setString('commuterlviv.lang', code);
 
+  Prefer get prefer {
+    final held = _prefs.getString('commuterlviv.prefer');
+    return Prefer.values.firstWhere(
+      (p) => p.name == held,
+      orElse: () => Prefer.fastest,
+    );
+  }
+
+  Future<void> setPrefer(Prefer p) =>
+      _prefs.setString('commuterlviv.prefer', p.name);
+
   /// Pinned stops, by feed id, kept server-side so phone and browser agree.
   Future<List<String>> pins() async {
     final j = await _call('GET', '/api/pins') as Map<String, dynamic>;

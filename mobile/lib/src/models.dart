@@ -287,6 +287,7 @@ class Journey {
     required this.live,
     required this.confidence,
     required this.legs,
+    this.backup = 0,
   });
 
   factory Journey.fromJson(Map<String, dynamic> j) => Journey(
@@ -295,6 +296,7 @@ class Journey {
     rides: j['rides'] as int,
     live: j['live'] as bool,
     confidence: confidenceOf(j['confidence']),
+    backup: j['backup'] as int? ?? 0,
     legs: [
       for (final l in j['legs'] as List)
         Leg.fromJson(l as Map<String, dynamic>),
@@ -309,7 +311,47 @@ class Journey {
 
   /// The weakest ground any ride in it stands on.
   final Confidence confidence;
+
+  /// Distinct routes repeating the weakest ride within half an hour of
+  /// boarding it; 0 on a pure walk, or against an older service.
+  final int backup;
   final List<Leg> legs;
+
+  int get walking =>
+      legs.where((l) => l.walking).fold(0, (s, l) => s + l.arr - l.dep);
+}
+
+/// What the options are sorted by. The whole walk goes last wherever changes
+/// or backups are asked for, since it has neither to speak of.
+enum Prefer {
+  fastest,
+  walk,
+  changes,
+  reliable;
+
+  List<num> _score(Journey j) {
+    num ride(num v) => j.rides == 0 ? double.infinity : v;
+    return switch (this) {
+      fastest => [j.arr, j.rides, j.walking],
+      walk => [j.walking, j.arr, j.rides],
+      changes => [ride(j.rides), j.arr, j.walking],
+      reliable => [ride(-j.backup), j.arr, j.rides],
+    };
+  }
+
+  List<Journey> ranked(List<Journey> options) {
+    final scored = [for (final j in options) (_score(j), j)];
+    // List.sort is not stable, so ties fall back to the server's order
+    final order = {for (final (i, j) in options.indexed) j: i};
+    scored.sort((a, b) {
+      for (final (n, x) in a.$1.indexed) {
+        final c = x.compareTo(b.$1[n]);
+        if (c != 0) return c;
+      }
+      return order[a.$2]!.compareTo(order[b.$2]!);
+    });
+    return [for (final (_, j) in scored) j];
+  }
 }
 
 /// One row of the place search: an address or a point of interest in the city.

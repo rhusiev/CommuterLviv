@@ -79,6 +79,8 @@ class _JourneyPanelState extends State<JourneyPanel> {
   /// Unix seconds to leave at; null is now, which is what the server assumes.
   int? _at;
 
+  late Prefer _prefer = widget.api.prefer;
+
   @override
   void didUpdateWidget(JourneyPanel old) {
     super.didUpdateWidget(old);
@@ -141,6 +143,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
   @override
   Widget build(BuildContext context) {
     final ready = widget.from != null && widget.to != null;
+    final ranked = _prefer.ranked(_options ?? const []);
     return Material(
       elevation: 8,
       color: panel,
@@ -220,6 +223,25 @@ class _JourneyPanelState extends State<JourneyPanel> {
                   ),
                 ),
               ),
+            if (_options != null && _options!.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final p in Prefer.values)
+                      ChoiceChip(
+                        label: Text(txt.prefer(p)),
+                        selected: p == _prefer,
+                        onSelected: (_) {
+                          setState(() => _prefer = p);
+                          widget.api.setPrefer(p);
+                        },
+                      ),
+                  ],
+                ),
+              ),
             if (_options != null)
               Flexible(
                 child: _options!.isEmpty
@@ -229,14 +251,12 @@ class _JourneyPanelState extends State<JourneyPanel> {
                       )
                     : ListView.builder(
                         shrinkWrap: true,
-                        itemCount: _options!.length,
+                        itemCount: ranked.length,
                         itemBuilder: (_, i) => _Option(
-                          journey: _options![i],
-                          shown: _options![i] == _shown,
+                          journey: ranked[i],
+                          shown: ranked[i] == _shown,
                           onShow: () => setState(
-                            () => _show(
-                              _options![i] == _shown ? null : _options![i],
-                            ),
+                            () => _show(ranked[i] == _shown ? null : ranked[i]),
                           ),
                           catalog: widget.catalog,
                           onStop: widget.onStop,
@@ -443,6 +463,14 @@ class _Option extends StatelessWidget {
                         : txt.changeCount(changes),
                     style: material.Theme.of(context).textTheme.bodySmall,
                   ),
+                  if (journey.rides > 0 && journey.backup > 0) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      '· ${txt.backupCount(journey.backup)}',
+                      style: material.Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: Colors.greenAccent),
+                    ),
+                  ],
                 ],
               ),
               for (final leg in journey.legs)

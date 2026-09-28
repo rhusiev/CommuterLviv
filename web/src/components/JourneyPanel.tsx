@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { clock, mins } from "../lib/eta";
 import { t } from "../lib/i18n";
 import { dropped, saved } from "../lib/places";
+import { heldPrefer, holdPrefer, PREFERS, ranked, type Prefer } from "../lib/prefer";
 import { RouteBadge } from "./RouteBadge";
 import type { Catalog, Confidence, Journey, Leg, Place } from "../lib/types";
 
@@ -67,6 +68,7 @@ export function JourneyPanel({
   const [failed, setFailed] = useState<string | null>(null);
   /** Unix seconds, or null for now - which is what the service assumes */
   const [at, setAt] = useState<number | null>(null);
+  const [prefer, setPrefer] = useState<Prefer>(heldPrefer);
 
   const save = (point: Point, name: string) =>
     onPlaces(saved(places, name, point.lat, point.lon));
@@ -158,7 +160,24 @@ export function JourneyPanel({
         <p className="text-sm text-slate-500">{t.noJourney}</p>
       )}
 
-      {options?.map((j, i) => (
+      {options !== null && options.length > 1 && (
+        <div className="flex flex-wrap gap-1">
+          {PREFERS.map((p) => (
+            <button
+              key={p}
+              onClick={() => {
+                setPrefer(p);
+                holdPrefer(p);
+              }}
+              className={`btn-quiet px-2 py-0.5 text-xs ${p === prefer ? "text-accent ring-1 ring-accent" : ""}`}
+            >
+              {t.prefer[p]}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {options && ranked(options, prefer).map((j, i) => (
         <Option
           key={i}
           journey={j}
@@ -307,6 +326,11 @@ function Option({
             : changes === 0
               ? t.noChange
               : t.changeCount(changes)}
+          {journey.rides > 0 && journey.backup > 0 && (
+            <span title={t.backupHint} className="text-emerald-400">
+              {" · "}{t.backupCount(journey.backup)}
+            </span>
+          )}
         </span>
       </div>
       <ol className="mt-1.5 space-y-1">

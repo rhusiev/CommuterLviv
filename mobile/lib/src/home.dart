@@ -171,7 +171,16 @@ class _HomeScreenState extends State<HomeScreen> {
     _watch();
   }
 
-  Set<int> get _shown => _onRoute && _route != null ? {_route!} : _routes;
+  /// What the socket sends: while a journey is shown, only its rides.
+  Set<int> get _shown {
+    if (_planning && _journey != null) {
+      return {
+        for (final leg in _journey!.legs)
+          if (leg.route != null) leg.route!,
+      };
+    }
+    return _onRoute && _route != null ? {_route!} : _routes;
+  }
 
   List<int> get _lines {
     if (_onRoute && _route != null) return [_route!];
@@ -669,12 +678,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   }),
                   onSave: _savePlace,
                   onForget: _forgetPlace,
-                  onClose: () => setState(() {
-                    _planning = false;
-                    _picking = null;
-                    _journey = null;
-                  }),
-                  onShow: (journey) => setState(() => _journey = journey),
+                  onClose: () {
+                    setState(() {
+                      _planning = false;
+                      _picking = null;
+                      _journey = null;
+                    });
+                    _push();
+                  },
+                  onShow: (journey) {
+                    setState(() => _journey = journey);
+                    _push();
+                  },
                 ),
               ),
             ),

@@ -432,18 +432,33 @@ happily promise you a bus from. A `quiet` ride is held back unless it is the
 only ride on offer, in which case it is returned and flagged: an unreliable bus
 is worth knowing about, an invented one is not.
 
+Every journey also carries a `backup`: how many other routes repeat its
+weakest ride within half an hour of boarding it, tracked vehicles included and
+quiet routes excluded. Missing the bus stings less when another way stands
+behind it, so a journey every leg of which has one outranks a fragile one.
+
 Every leg also carries `pts`, `[[lat, lon], ...]`, which is where it goes on the
 map: a walk follows the footpath graph (`walk.path`), and a ride is its shape cut
 between the stop it is boarded at and the stop it is left at. Both are simplified
 to 4 m. The clients draw the option you tap - walks dotted, rides solid in the
-route's colour, each leg labelled with its minutes and each ride with its clock
-times at both ends - and wipe it, with the A and B marks, when you leave the
+route's colour, one pill of times per stop where getting off and getting on
+share the reading - and wipe it, with the A and B marks, when you leave the
 planner.
 
-The options are ranked by a front over arrival time, number of changes and
-seconds spent walking, so a slower journey with one change fewer survives
-alongside the fastest, and every option that does not beat simply walking the
-way is dropped. `&at=<unix seconds>` plans a trip that starts later instead of
+The options are ranked by a front over arrival time, backup routes, number of
+changes and seconds spent walking, so a slower journey every leg of which has
+another way behind it survives alongside the fastest hanging on one vehicle,
+and every option that does not beat simply walking the
+way is dropped. One RAPTOR pass keeps only the earliest arrival at each stop,
+so a ride from the door loses to a slightly faster one behind a 12-minute walk
+and never reaches the front. The search therefore runs again with every walk
+capped at 10 and at 5 minutes (`WALK_CAPS`); the walking reaches are shared,
+so each extra pass costs only its rounds.
+
+The server's order is the fastest first. Both clients re-sort the same options
+by a preset - fastest, less walking, fewer changes, most backups - picked with
+chips over the list and remembered on the device; the whole walk goes last
+under the last two. `&at=<unix seconds>` plans a trip that starts later instead of
 now. A later departure still rides the vehicles being tracked - only their
 arrivals that lie ahead of it are kept - so nothing is thrown away at some
 cutoff; past the model's 45 minute horizon there are none left and the timetable

@@ -39,10 +39,20 @@ CHANGE = 60.0   # s of slack per change, over and above the walk
 
 ROUNDS = 3      # rides per journey; a fourth round costs as much as the first three
 
+# Each walk capped to this many seconds in an extra pass, since one pass keeps
+# only the earliest arrival per stop and so loses a ride from the door to a
+# slightly faster one behind a long walk. The walking reaches are shared, so a
+# pass is only the RAPTOR rounds.
+WALK_CAPS = (600.0, 300.0)
+
 # a route the schedule wanted QUIET_TRIPS times inside QUIET_WINDOW seconds,
 # with nothing tracked on it since, is taken to not be running
 QUIET_WINDOW = 3600.0
 QUIET_TRIPS = 2
+
+# s after boarding within which another way of riding the same leg still
+# counts as a backup: missing the bus stings less when the next one is soon
+BACKUP_WINDOW = 1800.0
 
 # weakest first, so `min` over this order is the weakest ground a journey stands on
 CONFIDENCE = ("quiet", "schedule", "live")
@@ -68,6 +78,9 @@ class Leg:
 @dataclass(frozen=True, slots=True)
 class Journey:
     legs: tuple[Leg, ...]
+    # Distinct routes repeating the weakest ride within BACKUP_WINDOW, for the
+    # ranking to prefer. Set by `_rank`, not by the search.
+    backup: int = 0
 
     @property
     def dep(self):
@@ -325,7 +338,7 @@ def _at_stops(seen, node, limit):
 
 
 def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
-             catalog=None, rounds=ROUNDS, keep=8, assess=True):
+              catalog=None, rounds=ROUNDS, keep=8, assess=True, robust=True):
     """Ranked journeys from `origin` to `dest` (both (lat, lon)) leaving at
     `now`, which may be in the future: the vehicles being tracked are still
     used, for as far ahead as their predictions reach.
@@ -333,6 +346,10 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
     `assess` off leaves every scheduled route believed. Silence only means a
     route is not running when the departure is close enough that the vehicles
     on the road now are the ones that would carry it.
+
+    `robust` off ranks exactly as arrival, rides and walking say; on, a
+    journey whose every ride has another way behind it outranks one hanging
+    on a single vehicle.
     """
     walked = _walk_through(walk, origin, dest)
     limit = walked if walked is not None else TRANSFER_CAP
@@ -351,13 +368,27 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
     sod, midnight = _seconds_since_midnight(now)
     trust = (route_confidence(tt, live, sod)
              if assess and arrivals is not None else {})
+    found = []
+    for cap in (limit, *(c for c in WALK_CAPS if c < limit)):
+        found += _raptor(tt, transfers, access, egress, cap, now, rounds,
+                         live, at_stop_live, covered, sod, midnight, trust)
+    found.extend(_only_walking(walked, now))
+    return _rank(found, keep, walked, tt, live, trust, now, midnight, sod,
+                 robust)
+
+
+def _raptor(tt, transfers, access, egress, cap, now, rounds, live,
+            at_stop_live, covered, sod, midnight, trust):
+    """The earliest arrival for each number of rides, each walk the search
+    takes capped at `cap` seconds."""
     best = {}                      # stop -> earliest arrival, any round
     board = {}                     # (round, stop) -> the leg that got there
     round_best = [dict() for _ in range(rounds + 1)]
     for i, t in access.items():
-        best[i] = round_best[0][i] = now + t
-        board[(0, i)] = Leg("walk", now, now + t, -1, i)
-    touched = set(access)
+        if t <= cap:
+            best[i] = round_best[0][i] = now + t
+            board[(0, i)] = Leg("walk", now, now + t, -1, i)
+    touched = set(round_best[0])
 
     for k in range(1, rounds + 1):
         marked = set()
@@ -367,7 +398,7 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
                   round_best, best, board, marked, trust)
         for i in list(marked):
             here = round_best[k][i]
-            for j, t in transfers.near(i, min(limit, TRANSFER_CAP)):
+            for j, t in transfers.near(i, min(cap, TRANSFER_CAP)):
                 arrive = here + t
                 if arrive < min(best.get(j, math.inf),
                                 round_best[k].get(j, math.inf)):
@@ -383,13 +414,13 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
         arrive, tail = None, None
         for i, t in egress.items():
             got = round_best[k].get(i)
-            if got is not None and (arrive is None or got + t < arrive):
+            if got is not None and t <= cap and \
+                    (arrive is None or got + t < arrive):
                 arrive, tail = got + t, Leg("walk", got, got + t, i, -1)
         if arrive is not None:
             legs = _unwind(board, k, tail.a) + [tail]
             found.append(Journey(_fold(legs)))
-    found.extend(_only_walking(walked, now))
-    return _rank(found, keep, walked)
+    return found
 
 
 def _routes_touching(tt, at_stop_live, stops):
@@ -502,21 +533,72 @@ def _only_walking(walked, now):
 
 
 def _score(j):
-    return j.arr, j.rides, j.walking
+    return j.arr, -j.backup, j.rides, j.walking
 
 
-def _rank(found, keep, walked=None):
+def _backup(tt, trips, trust, now, midnight, sod, journey):
+    """Distinct routes riding the journey's weakest leg again within the
+    window after it was boarded - the chosen departure itself not counted, so
+    a last bus of the day scores 0 and there is no pretending it has a backup.
+
+    Both the timetable (through the same midnight arithmetic the search uses)
+    and the tracked vehicles count, but a route nothing has been seen on does
+    not: a backup on a line the city is not running is not one.
+    """
+    backs = []
+    for leg in journey.legs:
+        if leg.kind != "ride":
+            continue
+        seen = set()
+        for p, k in tt.at_stop[leg.a]:
+            pat = tt.patterns[p]
+            if pat.route in seen or \
+                    not np.any(pat.stops[k + 1:] == leg.b):
+                continue
+            got = pat.after(k, sod + (leg.dep - now))
+            if got is None:
+                continue
+            when = midnight + got[1] + float(pat.times[got[0], k])
+            if when <= leg.dep or when - leg.dep > BACKUP_WINDOW:
+                continue
+            if trust.get(pat.route) == "quiet":
+                continue
+            seen.add(pat.route)
+        for trip in trips:
+            if trip.route in seen:
+                continue
+            at = np.flatnonzero((trip.stops == leg.a) &
+                                (trip.times > leg.dep))
+            if len(at) == 0 or \
+                    not np.any(trip.stops[at[0] + 1:] == leg.b):
+                continue
+            if trust.get(trip.route) == "quiet":
+                continue
+            seen.add(trip.route)
+        backs.append(len(seen))
+    return min(backs, default=0)
+
+
+def _rank(found, keep, walked=None, tt=None, trips=(), trust=None, now=0.0,
+          midnight=0.0, sod=0.0, robust=True):
     """Soonest first, keeping every journey no other one beats outright.
 
-    Beaten means another is at least as good on arrival, on changes and on
-    seconds spent walking - so a slower ride with one change fewer survives,
-    which is the whole point of offering more than the fastest. Anything not
-    faster than walking the way is dropped, the pure walk itself excepted.
+    Beaten means another is at least as good on arrival, on changes, on
+    seconds spent walking - and, when `robust`, on backups: a slower journey
+    every leg of which has another way behind it survives alongside the
+    fastest hanging on one vehicle, which is the whole point of offering more
+    than the fastest. Anything not faster than walking the way is dropped, the
+    pure walk itself excepted.
 
     A journey riding a route nothing has been seen on is held back unless it is
     the only way of riding at all: better to be told to walk than to be sent to
     wait for a bus the city is not running.
     """
+    trust = trust or {}
+    if robust and tt is not None:
+        found = [dataclasses.replace(
+            j, backup=_backup(tt, trips, trust, now, midnight, sod, j))
+            for j in found]
     ceiling = math.inf if walked is None else walked
     found.sort(key=_score)
     out = []

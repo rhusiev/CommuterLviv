@@ -69,13 +69,15 @@ export type Leg = {
   pts?: [number, number][];
 };
 
-/** The journey's confidence is the weakest of its rides */
+/** The journey's confidence is the weakest of its rides; `backup` is how many
+ * other routes repeat its weakest ride within half an hour of boarding */
 export type Journey = {
   dep: number;
   arr: number;
   rides: number;
   live: boolean;
   confidence: Confidence;
+  backup: number;
   legs: Leg[];
 };
 
