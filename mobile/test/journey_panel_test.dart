@@ -49,7 +49,7 @@ void main() {
   ) async {
     await pump(tester);
 
-    expect(find.text(txt.departAt), findsOneWidget);
+    expect(find.byTooltip(txt.departAt), findsOneWidget);
     expect(find.text(txt.now), findsOneWidget);
 
     await tester.tap(find.text(txt.now));

@@ -2,6 +2,7 @@ import { countdown, nextPerRoute } from "../lib/eta";
 import { RouteBadge } from "./RouteBadge";
 import type { Arrival, Catalog } from "../lib/types";
 import { t } from "../lib/i18n";
+import { Icon } from "./Icon";
 
 /** The route list is complete; the times only cover the routes on the map,
  * because only those are being predicted for. */
@@ -46,19 +47,7 @@ export function StopCard({
               : "bg-raised/70 text-slate-400 hover:text-slate-200"
           }`}
         >
-          <svg
-            viewBox="0 0 24 24"
-            className="size-5"
-            fill={pinned ? "currentColor" : "none"}
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-            aria-hidden
-          >
-            <path d="M9.5 3h5l-.5 6.5 3 2.5v1.5H7V12l3-2.5z" />
-            <path d="M12 13.5V21" />
-          </svg>
+          <Icon name="pin" filled={pinned} />
         </button>
         <button onClick={onClose} className="px-1 text-slate-500 hover:text-slate-200">
           ✕

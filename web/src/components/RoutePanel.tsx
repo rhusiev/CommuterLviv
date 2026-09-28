@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { Catalog, RouteSet } from "../lib/types";
 import { t } from "../lib/i18n";
 import { RouteBadge } from "./RouteBadge";
+import { Icon } from "./Icon";
 
 /** Which routes are tracked, and the saved sets of them - nothing else. What
  * the map draws lives in the layers panel, and the account in its own menu.
@@ -68,9 +69,9 @@ export function RoutePanel(p: Props) {
               <button
                 title={t.saveSet}
                 onClick={guard(() => p.onUpdate(s))}
-                className="rounded-control px-2 py-1.5 text-xs text-slate-500 transition-colors hover:bg-raised/70 hover:text-slate-200"
+                className="rounded-control px-2 py-1.5 text-slate-500 transition-colors hover:bg-raised/70 hover:text-slate-200"
               >
-                {t.save}
+                <Icon name="check" className="size-4" />
               </button>
               <button
                 title={t.deleteSet}
@@ -99,8 +100,8 @@ export function RoutePanel(p: Props) {
             placeholder={t.newSet}
             className="field min-w-0 flex-1 py-1.5"
           />
-          <button className="btn-quiet px-3 py-0">
-            {t.add}
+          <button className="btn-quiet px-2 py-0" title={t.add}>
+            <Icon name="plus" className="size-4" />
           </button>
         </form>
         {error && <p className="mt-1 text-xs text-rose-400">{error}</p>}
@@ -112,8 +113,8 @@ export function RoutePanel(p: Props) {
             {t.routes}
             <span className="ml-2 normal-case text-slate-600">{t.on(p.picked.size)}</span>
           </h2>
-          <button onClick={p.onClear} className="text-xs text-slate-500 hover:text-slate-300">
-            {t.clear}
+          <button onClick={p.onClear} title={t.clear} className="text-slate-500 hover:text-slate-300">
+            <Icon name="clear" className="size-4" />
           </button>
         </div>
         <input

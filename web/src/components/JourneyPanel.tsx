@@ -4,7 +4,7 @@ import { clock, mins } from "../lib/eta";
 import { t } from "../lib/i18n";
 import { dropped, saved } from "../lib/places";
 import { heldPrefer, holdPrefer, PREFERS, ranked, type Prefer } from "../lib/prefer";
-import { Icon } from "./Icon";
+import { Icon, type IconName } from "./Icon";
 import { RouteBadge } from "./RouteBadge";
 import type { Catalog, Confidence, Journey, Leg, Place } from "../lib/types";
 
@@ -96,6 +96,7 @@ export function JourneyPanel({
     <div className="flex h-full flex-col gap-2 overflow-y-auto">
       <Field
         label={t.from}
+        icon="origin"
         point={from}
         picking={picking === "from"}
         onPick={() => onPick(picking === "from" ? null : "from")}
@@ -107,6 +108,7 @@ export function JourneyPanel({
       />
       <Field
         label={t.to}
+        icon="destination"
         point={to}
         picking={picking === "to"}
         onPick={() => onPick(picking === "to" ? null : "to")}
@@ -118,9 +120,7 @@ export function JourneyPanel({
       />
 
       <div className="flex items-center gap-2">
-        <span className="w-12 shrink-0 text-xs uppercase tracking-wide text-slate-500">
-          {t.leaveAt}
-        </span>
+        <Label text={t.leaveAt} icon="clock" />
         <input
           type="datetime-local"
           value={at === null ? "" : onClock(at)}
@@ -154,9 +154,10 @@ export function JourneyPanel({
         />
         <button
           onClick={onSwap}
-          className="btn-quiet"
+          title={t.swap}
+          className="btn-quiet px-2"
         >
-          {t.swap}
+          <Icon name="swap" />
         </button>
       </div>
 
@@ -214,8 +215,18 @@ function Order({ prefer, onPrefer }: { prefer: Prefer; onPrefer: (p: Prefer) => 
   );
 }
 
+/** An icon standing for a row's name, which it keeps as a tooltip */
+function Label({ text, icon }: { text: string; icon: IconName }) {
+  return (
+    <span title={text} className="flex w-6 shrink-0 justify-center text-slate-500">
+      <Icon name={icon} />
+    </span>
+  );
+}
+
 function Field({
   label,
+  icon,
   point,
   picking,
   onPick,
@@ -226,6 +237,7 @@ function Field({
   onForget,
 }: {
   label: string;
+  icon: IconName;
   point: Point | null;
   picking: boolean;
   onPick: () => void;
@@ -241,7 +253,7 @@ function Field({
   const saved = point && places.find((p) => same(point, p));
   return (
     <div className="relative flex items-center gap-2">
-      <span className="w-12 shrink-0 text-xs uppercase tracking-wide text-slate-500">{label}</span>
+      <Label text={label} icon={icon} />
       <button
         onClick={onPick}
         className={`min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-sm ${
@@ -252,9 +264,10 @@ function Field({
       </button>
       <button
         onClick={onHere}
-        className="btn-quiet shrink-0 px-2 text-xs"
+        title={t.useHere}
+        className="btn-quiet shrink-0 px-2"
       >
-        {t.useHere}
+        <Icon name="locate" className="size-4" />
       </button>
       <button
         onClick={() => setOpen(!open)}
@@ -279,9 +292,10 @@ function Field({
               </button>
               <button
                 onClick={() => onForget(p)}
-                className="px-2 text-xs text-slate-500 hover:text-rose-300"
+                title={t.forget}
+                className="px-2 text-slate-500 hover:text-rose-300"
               >
-                {t.forget}
+                <Icon name="trash" className="size-4" />
               </button>
             </div>
           ))}
@@ -302,8 +316,8 @@ function Field({
                 placeholder={t.namePlace}
                 className="field min-w-0 flex-1 py-1"
               />
-              <button className="btn-quiet px-3 py-0" title={t.savePlace}>
-                {t.add}
+              <button className="btn-quiet px-2 py-0" title={t.savePlace}>
+                <Icon name="plus" className="size-4" />
               </button>
             </form>
           )}
@@ -361,8 +375,9 @@ function Option({
           <li key={i} className="flex items-baseline gap-2 text-sm">
             {leg.kind === "walk" ? (
               <>
-                <span className="w-14 shrink-0 text-xs text-slate-500">
-                  {t.walkLeg(mins(leg.arr - leg.dep))}
+                <span title={t.walkLeg(mins(leg.arr - leg.dep))} className="flex w-14 shrink-0 items-center gap-0.5 text-xs text-slate-500">
+                  <Icon name="walk" className="size-3.5" />
+                  {t.minutes(mins(leg.arr - leg.dep))}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-slate-400">
                   {leg.b < 0

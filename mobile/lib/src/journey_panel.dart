@@ -180,6 +180,9 @@ class _JourneyPanelState extends State<JourneyPanel> {
             for (final end in End.values)
               _End(
                 label: end == End.from ? txt.from : txt.to,
+                icon: end == End.from
+                    ? Icons.trip_origin
+                    : Icons.place_outlined,
                 at: end == End.from ? widget.from : widget.to,
                 picking: widget.picking == end,
                 onPick: () => widget.onPick(widget.picking == end ? null : end),
@@ -191,9 +194,8 @@ class _JourneyPanelState extends State<JourneyPanel> {
               ),
             Row(
               children: [
-                SizedBox(width: 56, child: Text(txt.departAt)),
+                _Label(text: txt.departAt, icon: Icons.schedule),
                 InputChip(
-                  avatar: const Icon(Icons.schedule, size: 18),
                   label: Text(_at == null ? txt.now : clockTime(_at!)),
                   onPressed: _pickTime,
                   onDeleted: _at == null
@@ -274,9 +276,24 @@ class _JourneyPanelState extends State<JourneyPanel> {
   }
 }
 
+/// An icon standing for a row's name, which it keeps as a tooltip.
+class _Label extends StatelessWidget {
+  const _Label({required this.text, required this.icon});
+
+  final String text;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 40,
+    child: Tooltip(message: text, child: Icon(icon, size: 20)),
+  );
+}
+
 class _End extends StatelessWidget {
   const _End({
     required this.label,
+    required this.icon,
     required this.at,
     required this.picking,
     required this.onPick,
@@ -288,6 +305,7 @@ class _End extends StatelessWidget {
   });
 
   final String label;
+  final IconData icon;
   final LatLng? at;
   final bool picking;
   final VoidCallback onPick;
@@ -371,7 +389,7 @@ class _End extends StatelessWidget {
                   '${at!.longitude.toStringAsFixed(4)}');
     return Row(
       children: [
-        SizedBox(width: 56, child: Text(label)),
+        _Label(text: label, icon: icon),
         Expanded(
           child: OutlinedButton(
             onPressed: onPick,
@@ -517,9 +535,21 @@ class _LegRow extends StatelessWidget {
             if (leg.walking)
               SizedBox(
                 width: 92,
-                child: Text(
-                  txt.walkLeg(spanMinutes(leg.arr - leg.dep)),
-                  style: small,
+                child: Tooltip(
+                  message: txt.walkLeg(spanMinutes(leg.arr - leg.dep)),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.directions_walk,
+                        size: 16,
+                        color: small?.color,
+                      ),
+                      Text(
+                        txt.minutes(spanMinutes(leg.arr - leg.dep)),
+                        style: small,
+                      ),
+                    ],
+                  ),
                 ),
               )
             else ...[

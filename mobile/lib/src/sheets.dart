@@ -478,14 +478,15 @@ class _RouteSheetState extends State<RouteSheet> {
           const SizedBox(height: 16),
           Row(
             children: [
-              TextButton(
+              IconButton(
                 onPressed: widget.picked.isEmpty
                     ? null
                     : () {
                         widget.onClear();
                         setState(() {});
                       },
-                child: Text(txt.clear),
+                icon: const Icon(Icons.clear_all),
+                tooltip: txt.clear,
               ),
               const Spacer(),
               if (changed) ...[
