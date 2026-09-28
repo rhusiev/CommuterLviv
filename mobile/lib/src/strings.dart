@@ -211,9 +211,9 @@ class Strings {
 
 const _en = Strings(
   signIn: 'Sign in',
-  tagline: 'where the buses actually are',
+  tagline: 'Where the buses actually are',
   inviteCode: 'Invite code',
-  inviteHint: 'the last part of the link you were sent',
+  inviteHint: 'The last part of the link you were sent',
   username: 'Username',
   password: 'Password',
   stayIn: 'Stay signed in',
@@ -242,7 +242,7 @@ const _en = Strings(
   nameSet: 'Name this set',
   rename: 'Rename',
   delete: 'Delete',
-  holdForLine: 'hold a route to see its line',
+  holdForLine: 'Hold a route to see its line',
   places: 'Saved places',
   savePlace: 'Save this place',
   namePlace: 'Name this place',
@@ -250,15 +250,15 @@ const _en = Strings(
   saved: 'Saved',
   pinnedStops: 'Pinned stops',
   nothingSaved: 'Nothing saved yet',
-  showOnMap: 'tap a row to show it on the map',
-  holdToManage: 'hold one to rename or remove it',
+  showOnMap: 'Tap a row to show it on the map',
+  holdToManage: 'Hold one to rename or remove it',
   foundStops: 'Stops',
   foundPlaces: 'Places',
-  noSearch: 'place search is unavailable',
+  noSearch: 'Place search is unavailable',
   traffic: 'Traffic',
   departAt: 'Leave at',
   preferBy: 'Order',
-  quietPart: 'nothing seen running',
+  quietPart: 'Nothing seen running',
   forget: 'Forget',
   saveHere: 'Save',
   cancel: 'Cancel',
@@ -268,12 +268,12 @@ const _en = Strings(
   pin: 'Pin',
   unpin: 'Unpin',
   callsHere: 'Calls here',
-  nothingDueWatched: 'nothing due on the routes you are watching',
-  nothingDue: 'nothing due',
+  nothingDueWatched: 'Nothing due on the routes you are watching',
+  nothingDue: 'Nothing due',
   pickARoute: 'Pick a route to see it moving',
   pinAStop: 'Pin a stop and its times show up here',
   language: 'Language',
-  noBasemap: 'the basemap would not load',
+  noBasemap: 'The basemap would not load',
   faceNorth: 'Face north',
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
@@ -282,32 +282,32 @@ const _en = Strings(
   plan: 'Journey',
   from: 'From',
   to: 'To',
-  tapMap: 'tap the map',
-  useHere: 'where I am',
-  swap: 'swap',
+  tapMap: 'Tap the map',
+  useHere: 'Where I am',
+  swap: 'Swap',
   findRoute: 'Find a way',
-  searching: 'looking for a way',
-  noJourney: 'no way to get there was found',
-  toDoor: 'to the door',
-  noChange: 'no changes',
+  searching: 'Looking for a way',
+  noJourney: 'No way to get there was found',
+  toDoor: 'To the door',
+  noChange: 'No changes',
   prefer: _enPrefer,
-  livePart: 'tracked',
-  schedulePart: 'timetable',
-  wholeWalk: 'walk the whole way',
+  livePart: 'Tracked',
+  schedulePart: 'Timetable',
+  wholeWalk: 'Walk the whole way',
   planHint: 'Tap the map to set where you are and where you are going.',
   walkLeg: _enWalkLeg,
   changeCount: _enChangeCount,
   backupCount: _enBackupCount,
   stopsAhead: 'Stops ahead',
   vehicleGone: 'This one is no longer being tracked',
-  now: 'now',
+  now: 'Now',
   oneMinute: '1 min',
   minutes: _enMinutes,
   unreachable: _enUnreachable,
 );
 
 String _enUpdateSet(String name) => 'Update “$name”';
-String _enWalkLeg(int m) => 'walk $m min';
+String _enWalkLeg(int m) => 'Walk $m min';
 String _enChangeCount(int n) => n == 1 ? '1 change' : '$n changes';
 String _enBackupCount(int n) => n == 1 ? '1 backup' : '$n backups';
 
@@ -318,13 +318,13 @@ String _enPrefer(Prefer p) => switch (p) {
   Prefer.reliable => 'Most backups',
 };
 String _enMinutes(int m) => '$m min';
-String _enUnreachable(String server) => 'could not reach $server';
+String _enUnreachable(String server) => 'Could not reach $server';
 
 const _uk = Strings(
   signIn: 'Увійти',
-  tagline: 'де насправді їде транспорт',
+  tagline: 'Де насправді їде транспорт',
   inviteCode: 'Код запрошення',
-  inviteHint: 'остання частина надісланого посилання',
+  inviteHint: 'Остання частина надісланого посилання',
   username: 'Імʼя',
   password: 'Пароль',
   stayIn: 'Не виходити',
@@ -353,7 +353,7 @@ const _uk = Strings(
   nameSet: 'Назва набору',
   rename: 'Перейменувати',
   delete: 'Видалити',
-  holdForLine: 'утримуйте маршрут, щоб побачити лінію',
+  holdForLine: 'Утримуйте маршрут, щоб побачити лінію',
   places: 'Збережені місця',
   savePlace: 'Зберегти це місце',
   namePlace: 'Назва місця',
@@ -361,15 +361,15 @@ const _uk = Strings(
   saved: 'Збережене',
   pinnedStops: 'Закріплені зупинки',
   nothingSaved: 'Поки нічого не збережено',
-  showOnMap: 'торкніться рядка, щоб показати на мапі',
-  holdToManage: 'утримуйте, щоб перейменувати або видалити',
+  showOnMap: 'Торкніться рядка, щоб показати на мапі',
+  holdToManage: 'Утримуйте, щоб перейменувати або видалити',
   foundStops: 'Зупинки',
   foundPlaces: 'Місця',
-  noSearch: 'пошук місць недоступний',
+  noSearch: 'Пошук місць недоступний',
   traffic: 'Затори',
   departAt: 'Виїзд о',
   preferBy: 'Порядок',
-  quietPart: 'рейсів не видно',
+  quietPart: 'Рейсів не видно',
   forget: 'Забути',
   saveHere: 'Зберегти',
   cancel: 'Скасувати',
@@ -379,12 +379,12 @@ const _uk = Strings(
   pin: 'Закріпити',
   unpin: 'Відкріпити',
   callsHere: 'Тут зупиняються',
-  nothingDueWatched: 'на обраних маршрутах нічого не їде',
-  nothingDue: 'нічого не їде',
+  nothingDueWatched: 'На обраних маршрутах нічого не їде',
+  nothingDue: 'Нічого не їде',
   pickARoute: 'Оберіть маршрут, щоб побачити рух',
   pinAStop: 'Закріпіть зупинку - і час буде тут',
   language: 'Мова',
-  noBasemap: 'не вдалося завантажити мапу',
+  noBasemap: 'Не вдалося завантажити мапу',
   faceNorth: 'На північ',
   zoomIn: 'Наблизити',
   zoomOut: 'Віддалити',
@@ -393,34 +393,34 @@ const _uk = Strings(
   plan: 'Маршрут',
   from: 'Звідки',
   to: 'Куди',
-  tapMap: 'торкніться мапи',
-  useHere: 'де я',
-  swap: 'поміняти',
+  tapMap: 'Торкніться мапи',
+  useHere: 'Де я',
+  swap: 'Поміняти',
   findRoute: 'Знайти шлях',
-  searching: 'шукаємо шлях',
-  noJourney: 'шляху не знайдено',
-  toDoor: 'до місця',
-  noChange: 'без пересадок',
+  searching: 'Шукаємо шлях',
+  noJourney: 'Шляху не знайдено',
+  toDoor: 'До місця',
+  noChange: 'Без пересадок',
   prefer: _ukPrefer,
-  livePart: 'за відстеженням',
-  schedulePart: 'за розкладом',
-  wholeWalk: 'пішки весь шлях',
+  livePart: 'За відстеженням',
+  schedulePart: 'За розкладом',
+  wholeWalk: 'Пішки весь шлях',
   planHint: 'Торкніться мапи, щоб вказати, де ви є і куди прямуєте.',
   walkLeg: _ukWalkLeg,
   changeCount: _ukChangeCount,
   backupCount: _ukBackupCount,
   stopsAhead: 'Наступні зупинки',
   vehicleGone: 'Цей транспорт більше не відстежується',
-  now: 'зараз',
+  now: 'Зараз',
   oneMinute: '1 хв',
   minutes: _ukMinutes,
   unreachable: _ukUnreachable,
 );
 
 String _ukUpdateSet(String name) => 'Оновити «$name»';
-String _ukWalkLeg(int m) => 'пішки $m хв';
-String _ukChangeCount(int n) => n == 1 ? '1 пересадка' : 'пересадок: $n';
-String _ukBackupCount(int n) => n == 1 ? '1 запасний' : 'запасних: $n';
+String _ukWalkLeg(int m) => 'Пішки $m хв';
+String _ukChangeCount(int n) => n == 1 ? '1 пересадка' : 'Пересадок: $n';
+String _ukBackupCount(int n) => n == 1 ? '1 запасний' : 'Запасних: $n';
 
 String _ukPrefer(Prefer p) => switch (p) {
   Prefer.fastest => 'Швидше',
@@ -429,7 +429,7 @@ String _ukPrefer(Prefer p) => switch (p) {
   Prefer.reliable => 'Більше запасних',
 };
 String _ukMinutes(int m) => '$m хв';
-String _ukUnreachable(String server) => 'не вдалося зʼєднатися з $server';
+String _ukUnreachable(String server) => 'Не вдалося зʼєднатися з $server';
 
 /// Set from `main` before anything is drawn, and again from the picker.
 Lang lang = Lang.uk;

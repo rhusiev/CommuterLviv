@@ -151,7 +151,7 @@ class Api {
     if (res.statusCode >= 400) {
       final message = data is Map && data['error'] is String
           ? data['error'] as String
-          : 'the server said ${res.statusCode}';
+          : 'The server said ${res.statusCode}';
       throw ApiError(message, res.statusCode);
     }
     return data;
@@ -238,18 +238,18 @@ class Api {
   }
 
   Future<Catalog> catalog() async => Catalog.fromJson(
-    await _held('/api/catalog', _catalogKey, what: 'the catalog'),
+    await _held('/api/catalog', _catalogKey, what: 'The catalog'),
   );
 
   /// Half a megabyte of route geometry, so asked for only when a line is drawn.
   Future<Shapes> shapes() async => Shapes.fromJson(
-    await _held('/api/shapes', _shapesKey, what: 'the route lines'),
+    await _held('/api/shapes', _shapesKey, what: 'The route lines'),
   );
 
   /// Which stretch of street each traffic number belongs to; unchanging, so
   /// held on disk like the shapes and read once per run.
   Future<Streets> streets() async => Streets.fromJson(
-    await _held('/api/traffic/streets', _streetsKey, what: 'the streets'),
+    await _held('/api/traffic/streets', _streetsKey, what: 'The streets'),
   );
 
   Future<Traffic> traffic() async => Traffic.fromJson(

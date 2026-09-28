@@ -113,17 +113,17 @@ async def body(request):
     # checked before reading: buffering first would already cost the memory
     declared = request.headers.get("content-length", "")
     if declared.isdigit() and (len(declared) > 9 or int(declared) > MAX_BODY):
-        return None, error("request too large", 413)
+        return None, error("Request too large", 413)
     raw = b""
     async for chunk in request.stream():
         raw += chunk
         if len(raw) > MAX_BODY:
-            return None, error("request too large", 413)
+            return None, error("Request too large", 413)
     try:
         data = json.loads(raw or b"{}")
     except json.JSONDecodeError:
-        return None, error("expected JSON")
-    return (data, None) if isinstance(data, dict) else (None, error("expected an object"))
+        return None, error("Expected JSON")
+    return (data, None) if isinstance(data, dict) else (None, error("Expected an object"))
 
 
 async def resolve(request):
@@ -166,19 +166,19 @@ def protected(handler, unsafe=True):
         app = request.app.state
         g = app.guard
         if not g.api.take(g.ip(request)):
-            return error("slow down", 429)
+            return error("Slow down", 429)
         session, issue = await resolve(request)
         if issue == "theft":
-            resp = error("this session was ended for safety; sign in again", 401)
+            resp = error("This session was ended for safety; sign in again", 401)
             g.clear(resp)
             return resp
         if session is None:
-            return error("sign in", 401)
+            return error("Sign in", 401)
         if unsafe and request.method not in ("GET", "HEAD"):
             if not g.origin_ok(request):
-                return error("bad origin", 403)
+                return error("Bad origin", 403)
             if not g.csrf_ok(request, session):
-                return error("bad csrf token", 403)
+                return error("Bad csrf token", 403)
         resp = await handler(request, session)
         apply_issue(resp, g, issue, app.settings)
         return resp
@@ -195,9 +195,9 @@ async def register(request):
     app = request.app.state
     g, st = app.guard, app.settings
     if not g.origin_ok(request):
-        return error("bad origin", 403)
+        return error("Bad origin", 403)
     if not g.auth_ip.take(g.ip(request)):
-        return error("too many attempts", 429,
+        return error("Too many attempts", 429,
                      retry=round(g.auth_ip.retry_after(g.ip(request))))
     data, bad = await body(request)
     if bad:
@@ -217,20 +217,20 @@ async def login(request):
     app = request.app.state
     g = app.guard
     if not g.origin_ok(request):
-        return error("bad origin", 403)
+        return error("Bad origin", 403)
     ip = g.ip(request)
     data, bad = await body(request)
     if bad:
         return bad
     name = security.clean_username(data.get("username")) or "?"
     if not g.auth_ip.take(ip) or not g.auth_user.take((ip, name)):
-        return error("too many attempts", 429,
+        return error("Too many attempts", 429,
                      retry=round(g.auth_ip.retry_after(ip)))
     uid = await auth.login(app.pool, app.hasher, data.get("username"),
                            data.get("password"))
     if uid is None:
         await auth.event(app.pool, "login_failed", None, ip, name)
-        return error("wrong username or password", 401)
+        return error("Wrong username or password", 401)
     await auth.event(app.pool, "login", uid, ip)
     return await _sign_in(request, uid, bool(data.get("remember")))
 
@@ -336,7 +336,7 @@ async def vehicle(request, session):
     app = request.app.state
     want = request.query_params.get("veh", "")
     if not want.isdigit() or len(want) > 9:
-        return error("veh must be a number")
+        return error("Veh must be a number")
     arr = app.svc.live.arrivals
     rows = arr.of(int(want))
     return JSONResponse({"t": arr.t, "veh": int(want), "stops": [
@@ -380,18 +380,18 @@ async def journey(request, session):
     tracked vehicle or from the timetable."""
     app = request.app.state
     if app.planner is None:
-        return error("this service has no journey planner", status=503)
+        return error("This service has no journey planner", status=503)
     origin = _point(request.query_params.get("from"))
     dest = _point(request.query_params.get("to"))
     if origin is None or dest is None:
-        return error("from and to must each be lat,lon inside Lviv")
+        return error("From and to must each be lat,lon inside Lviv")
     at, why = _departure(request.query_params.get("at"))
     if why:
         return error(why)
     # refused rather than queued when every worker is busy: a queue of
     # second-long searches is a denial of service with a longer fuse
     if app.planning.locked():
-        return error("the planner is busy; try that again", 503)
+        return error("The planner is busy; try that again", 503)
     try:
         async with app.planning:
             found = await asyncio.to_thread(app.planner.search, origin, dest,
@@ -401,7 +401,7 @@ async def journey(request, session):
         # with a plain-text 500, which every client reads as a JSON.parse
         # failure rather than as what went wrong
         log("plan failed:", repr(exc)[:200])
-        return error("could not plan that journey", 500)
+        return error("Could not plan that journey", 500)
     return JSONResponse(found)
 
 
@@ -410,17 +410,17 @@ async def places_near(request, session):
     per caller, because each one leaves this machine."""
     app = request.app.state
     if app.geocoder is None:
-        return error("this service has no place search", status=503)
+        return error("This service has no place search", status=503)
     q = (request.query_params.get("q") or "").strip()
     if len(q) < 2:
         return JSONResponse({"places": []})
     if not app.guard.search.take(session["user_id"]):
-        return error("slow down", 429)
+        return error("Slow down", 429)
     try:
         found = await asyncio.to_thread(app.geocoder.find, q[:120])
     except Exception as exc:
         log("geocode:", repr(exc)[:200])
-        return error("place search is unavailable", status=502)
+        return error("Place search is unavailable", status=502)
     return JSONResponse({"places": found})
 
 
@@ -478,7 +478,7 @@ async def one_set(request, session):
     uid, sid = session["user_id"], request.path_params["sid"]
     if request.method == "DELETE":
         return (JSONResponse({"ok": True}) if await prefs.delete(app.pool, sid, uid)
-                else error("no such set", 404))
+                else error("No such set", 404))
     data, bad = await body(request)
     if bad:
         return bad
@@ -500,9 +500,9 @@ async def active(request, session):
     try:
         sid = uuidlib.UUID(sid) if sid else None
     except (ValueError, AttributeError, TypeError):
-        return error("no such set", 404)
+        return error("No such set", 404)
     if not await prefs.activate(app.pool, session["user_id"], sid):
-        return error("no such set", 404)
+        return error("No such set", 404)
     return JSONResponse({"ok": True})
 
 
@@ -521,7 +521,7 @@ async def status(request, session):
     """Engine health and socket counts; operators only
     (`python -m commuterlviv admin operator <name>` grants it)."""
     if not session["operator"]:
-        return error("not found", 404)
+        return error("Not found", 404)
     app = request.app.state
     return JSONResponse({**app.svc.health(), **app.hub.stats()})
 
