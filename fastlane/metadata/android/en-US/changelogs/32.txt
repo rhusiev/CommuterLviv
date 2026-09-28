@@ -1,0 +1,3 @@
+- Under fewer changes and most backups, a ride from near the door now beats one a few minutes earlier behind a long walk
+- The route set buttons no longer run off the screen
+- All text starts with a capital letter
