@@ -1,0 +1,4 @@
+- Journeys on a line with a tracked vehicle no longer lose the scheduled runs after it, nor stops past the 45-minute forecast
+- Pick the journey order from a sort icon
+- Tapping a journey's stop or route first selects the journey; once selected, they open their own views
+- Icons in place of words across the planner, the route sets and pinned stops
