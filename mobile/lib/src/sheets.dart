@@ -488,17 +488,24 @@ class _RouteSheetState extends State<RouteSheet> {
                 icon: const Icon(Icons.clear_all),
                 tooltip: txt.clear,
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               if (changed) ...[
-                FilledButton.tonal(
-                  onPressed: () => _update(active),
-                  child: Text(txt.updateSet(active.name)),
+                Expanded(
+                  child: FilledButton.tonal(
+                    onPressed: () => _update(active),
+                    child: Text(
+                      txt.updateSet(active.name),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 8),
               ],
-              FilledButton.tonal(
-                onPressed: widget.picked.isEmpty ? null : _save,
-                child: Text(txt.saveAsSet),
+              Expanded(
+                child: FilledButton.tonal(
+                  onPressed: widget.picked.isEmpty ? null : _save,
+                  child: Text(txt.saveAsSet, overflow: TextOverflow.ellipsis),
+                ),
               ),
             ],
           ),
