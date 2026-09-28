@@ -4,6 +4,7 @@ import { clock, mins } from "../lib/eta";
 import { t } from "../lib/i18n";
 import { dropped, saved } from "../lib/places";
 import { heldPrefer, holdPrefer, PREFERS, ranked, type Prefer } from "../lib/prefer";
+import { Icon } from "./Icon";
 import { RouteBadge } from "./RouteBadge";
 import type { Catalog, Confidence, Journey, Leg, Place } from "../lib/types";
 
@@ -136,27 +137,6 @@ export function JourneyPanel({
         </button>
       </div>
 
-      <div className="flex items-center gap-2">
-        <span className="w-12 shrink-0 text-xs uppercase tracking-wide text-slate-500">
-          {t.preferBy}
-        </span>
-        <select
-          value={prefer}
-          onChange={(e) => {
-            const p = e.target.value as Prefer;
-            setPrefer(p);
-            holdPrefer(p);
-          }}
-          className="field min-w-0 flex-1 py-1.5"
-        >
-          {PREFERS.map((p) => (
-            <option key={p} value={p}>
-              {t.prefer[p]}
-            </option>
-          ))}
-        </select>
-      </div>
-
       <div className="flex gap-2">
         <button
           onClick={() => void search()}
@@ -165,6 +145,13 @@ export function JourneyPanel({
         >
           {busy ? t.searching : t.findRoute}
         </button>
+        <Order
+          prefer={prefer}
+          onPrefer={(p) => {
+            setPrefer(p);
+            holdPrefer(p);
+          }}
+        />
         <button
           onClick={onSwap}
           className="btn-quiet"
@@ -192,6 +179,37 @@ export function JourneyPanel({
           onLine={onLine}
         />
       ))}
+    </div>
+  );
+}
+
+function Order({ prefer, onPrefer }: { prefer: Prefer; onPrefer: (p: Prefer) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        title={`${t.preferBy}: ${t.prefer[prefer]}`}
+        className={`btn-quiet h-full px-2 ${open ? "text-accent" : ""}`}
+      >
+        <Icon name="sort" />
+      </button>
+      {open && (
+        <div className="panel absolute right-0 top-full z-30 mt-1 w-48 p-1 text-sm">
+          {PREFERS.map((p) => (
+            <button
+              key={p}
+              onClick={() => {
+                onPrefer(p);
+                setOpen(false);
+              }}
+              className={`w-full rounded-md px-2 py-1 text-left hover:bg-raised ${p === prefer ? "text-accent" : ""}`}
+            >
+              {t.prefer[p]}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

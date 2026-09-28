@@ -203,22 +203,18 @@ class _JourneyPanelState extends State<JourneyPanel> {
                           _forget();
                         }),
                 ),
-              ],
-            ),
-            Row(
-              children: [
-                SizedBox(width: 56, child: Text(txt.preferBy)),
-                DropdownButton<Prefer>(
-                  value: _prefer,
-                  underline: const SizedBox.shrink(),
-                  onChanged: (p) {
-                    if (p == null) return;
+                const Spacer(),
+                PopupMenuButton<Prefer>(
+                  icon: const Icon(Icons.sort),
+                  tooltip: '${txt.preferBy}: ${txt.prefer(_prefer)}',
+                  initialValue: _prefer,
+                  onSelected: (p) {
                     setState(() => _prefer = p);
                     widget.api.setPrefer(p);
                   },
-                  items: [
+                  itemBuilder: (_) => [
                     for (final p in Prefer.values)
-                      DropdownMenuItem(value: p, child: Text(txt.prefer(p))),
+                      PopupMenuItem(value: p, child: Text(txt.prefer(p))),
                   ],
                 ),
               ],

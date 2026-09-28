@@ -465,7 +465,7 @@ so each extra pass costs only its rounds.
 
 The server's order is the fastest first. Both clients re-sort the same options
 by a preset - fastest, less walking, fewer changes, most backups - picked from
-a dropdown under the departure time and remembered on the device; the whole walk goes last
+a sort icon beside the search and remembered on the device; the whole walk goes last
 under the last two. `&at=<unix seconds>` plans a trip that starts later instead of
 now. A later departure still rides the vehicles being tracked - only their
 arrivals that lie ahead of it are kept - so nothing is thrown away at some
