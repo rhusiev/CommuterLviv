@@ -1,0 +1,2 @@
+- Sort the journey options by fastest, less walking, fewer changes or most backups
+- A direct ride from near the door is no longer hidden by a slightly faster one behind a long walk
