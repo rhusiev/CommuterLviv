@@ -392,7 +392,7 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
     if not access or not egress:
         return _only_walking(walked, now)
 
-    live, covered = ([], set()) if arrivals is None else \
+    live, covered = ([], {}) if arrivals is None else \
         live_trips(tt, arrivals, catalog, now)
     at_stop_live = [[] for _ in tt.stops]
     for p, trip in enumerate(live):

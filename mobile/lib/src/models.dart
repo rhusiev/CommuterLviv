@@ -331,11 +331,14 @@ enum Prefer {
 
   List<num> _score(Journey j) {
     num ride(num v) => j.rides == 0 ? double.infinity : v;
+    // A minute on foot counts as two, so a ride from the door beats a slightly
+    // earlier one behind a long walk
+    final effort = j.arr + j.walking;
     return switch (this) {
       fastest => [j.arr, j.rides, j.walking],
       walk => [j.walking, j.arr, j.rides],
-      changes => [ride(j.rides), j.arr, j.walking],
-      reliable => [ride(-j.backup), j.arr, j.rides],
+      changes => [ride(j.rides), effort],
+      reliable => [ride(-j.backup), effort, j.rides],
     };
   }
 
