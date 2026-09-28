@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Icon } from "./components/Icon";
 import { MapCanvas } from "./components/MapCanvas";
 import { RoutePanel } from "./components/RoutePanel";
 import { SignIn } from "./components/SignIn";
@@ -378,15 +379,7 @@ export function App() {
             panel ? "text-accent" : "text-slate-300 hover:text-slate-100"
           }`}
         >
-          <svg
-            viewBox="0 0 24 24"
-            className="size-5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
-          </svg>
+          <Icon name="menu" />
         </button>
         <div className="pointer-events-auto min-w-0 flex-1 sm:max-w-sm">
           <StopSearch
@@ -419,17 +412,7 @@ export function App() {
             aria-label={t.account}
             className={`fab ${account ? "text-accent" : "text-slate-300 hover:text-slate-100"}`}
           >
-            <svg
-              viewBox="0 0 24 24"
-              className="size-5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <circle cx="12" cy="8" r="3.5" />
-              <path d="M5 20c1.2-3.4 4-5 7-5s5.8 1.6 7 5" />
-            </svg>
+            <Icon name="account" />
           </button>
           {account && (
             <>
@@ -468,17 +451,7 @@ export function App() {
               : "text-slate-300 hover:text-slate-100"
           }`}
         >
-          <svg
-            viewBox="0 0 24 24"
-            className="size-5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          >
-            <path d="M12 3 3 8l9 5 9-5-9-5Z" />
-            <path d="m3 13 9 5 9-5" />
-          </svg>
+          <Icon name="layers" />
         </button>
         {layers && (
           <>

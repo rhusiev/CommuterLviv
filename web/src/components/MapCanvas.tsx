@@ -21,6 +21,7 @@ import { ink, styleUrl, type Theme } from "../lib/theme";
 import { clock } from "../lib/eta";
 import type { Catalog, Journey, Place, Shapes } from "../lib/types";
 import { MOVING_FLAG, STALE_FLAG } from "../lib/wire";
+import { Icon } from "./Icon";
 
 /** The vehicle/stop overlay is a 2D canvas drawn from MapLibre's own `render`
  * event, so the two agree within a frame; drawing on a separate animation frame
@@ -607,11 +608,7 @@ export function MapCanvas({
               : "text-slate-300 hover:text-slate-100"
         }`}
       >
-        <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="12" r="4" />
-          <circle cx="12" cy="12" r="8.5" strokeDasharray="3 3" />
-          <path d="M12 1v3M12 20v3M1 12h3M20 12h3" strokeLinecap="round" />
-        </svg>
+        <Icon name="follow" />
       </button>
     </div>
   );
