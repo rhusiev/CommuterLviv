@@ -205,6 +205,24 @@ class _JourneyPanelState extends State<JourneyPanel> {
                 ),
               ],
             ),
+            Row(
+              children: [
+                SizedBox(width: 56, child: Text(txt.preferBy)),
+                DropdownButton<Prefer>(
+                  value: _prefer,
+                  underline: const SizedBox.shrink(),
+                  onChanged: (p) {
+                    if (p == null) return;
+                    setState(() => _prefer = p);
+                    widget.api.setPrefer(p);
+                  },
+                  items: [
+                    for (final p in Prefer.values)
+                      DropdownMenuItem(value: p, child: Text(txt.prefer(p))),
+                  ],
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
@@ -221,25 +239,6 @@ class _JourneyPanelState extends State<JourneyPanel> {
                   style: TextStyle(
                     color: material.Theme.of(context).colorScheme.error,
                   ),
-                ),
-              ),
-            if (_options != null && _options!.length > 1)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (final p in Prefer.values)
-                      ChoiceChip(
-                        label: Text(txt.prefer(p)),
-                        selected: p == _prefer,
-                        onSelected: (_) {
-                          setState(() => _prefer = p);
-                          widget.api.setPrefer(p);
-                        },
-                      ),
-                  ],
                 ),
               ),
             if (_options != null)
@@ -416,7 +415,8 @@ class _Option extends StatelessWidget {
 
   final Journey journey;
 
-  /// Whether this is the option drawn on the map; a tap toggles it
+  /// Whether this is the option drawn on the map; a tap toggles it. Its stops
+  /// and lines take taps of their own only once it is
   final bool shown;
   final VoidCallback onShow;
   final Catalog catalog;
@@ -474,11 +474,14 @@ class _Option extends StatelessWidget {
                 ],
               ),
               for (final leg in journey.legs)
-                _LegRow(
-                  leg: leg,
-                  catalog: catalog,
-                  onStop: onStop,
-                  onLine: onLine,
+                IgnorePointer(
+                  ignoring: !shown,
+                  child: _LegRow(
+                    leg: leg,
+                    catalog: catalog,
+                    onStop: onStop,
+                    onLine: onLine,
+                  ),
                 ),
             ],
           ),

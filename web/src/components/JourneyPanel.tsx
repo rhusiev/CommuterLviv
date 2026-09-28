@@ -136,6 +136,27 @@ export function JourneyPanel({
         </button>
       </div>
 
+      <div className="flex items-center gap-2">
+        <span className="w-12 shrink-0 text-xs uppercase tracking-wide text-slate-500">
+          {t.preferBy}
+        </span>
+        <select
+          value={prefer}
+          onChange={(e) => {
+            const p = e.target.value as Prefer;
+            setPrefer(p);
+            holdPrefer(p);
+          }}
+          className="field min-w-0 flex-1 py-1.5"
+        >
+          {PREFERS.map((p) => (
+            <option key={p} value={p}>
+              {t.prefer[p]}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="flex gap-2">
         <button
           onClick={() => void search()}
@@ -158,23 +179,6 @@ export function JourneyPanel({
       )}
       {options !== null && options.length === 0 && (
         <p className="text-sm text-slate-500">{t.noJourney}</p>
-      )}
-
-      {options !== null && options.length > 1 && (
-        <div className="flex flex-wrap gap-1">
-          {PREFERS.map((p) => (
-            <button
-              key={p}
-              onClick={() => {
-                setPrefer(p);
-                holdPrefer(p);
-              }}
-              className={`btn-quiet px-2 py-0.5 text-xs ${p === prefer ? "text-accent ring-1 ring-accent" : ""}`}
-            >
-              {t.prefer[p]}
-            </button>
-          ))}
-        </div>
       )}
 
       {options && ranked(options, prefer).map((j, i) => (
@@ -300,7 +304,8 @@ function Option({
   onLine,
 }: {
   journey: Journey;
-  /** Drawn on the map; a click anywhere on the card, links too, draws it */
+  /** Drawn on the map. Until then a click anywhere on the card draws it, and
+   *  its stops and lines are not yet links */
   shown: boolean;
   onShow: () => void;
   catalog: Catalog;
@@ -333,7 +338,7 @@ function Option({
           )}
         </span>
       </div>
-      <ol className="mt-1.5 space-y-1">
+      <ol className={`mt-1.5 space-y-1 ${shown ? "" : "pointer-events-none"}`}>
         {journey.legs.map((leg, i) => (
           <li key={i} className="flex items-baseline gap-2 text-sm">
             {leg.kind === "walk" ? (

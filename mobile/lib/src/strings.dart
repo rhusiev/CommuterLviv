@@ -60,6 +60,7 @@ class Strings {
     required this.noSearch,
     required this.traffic,
     required this.departAt,
+    required this.preferBy,
     required this.quietPart,
     required this.forget,
     required this.saveHere,
@@ -157,6 +158,7 @@ class Strings {
   final String noSearch;
   final String traffic;
   final String departAt;
+  final String preferBy;
 
   /// The timetable on a line nothing has been seen running on.
   final String quietPart;
@@ -255,6 +257,7 @@ const _en = Strings(
   noSearch: 'place search is unavailable',
   traffic: 'Traffic',
   departAt: 'Leave at',
+  preferBy: 'Order',
   quietPart: 'nothing seen running',
   forget: 'Forget',
   saveHere: 'Save',
@@ -365,6 +368,7 @@ const _uk = Strings(
   noSearch: 'пошук місць недоступний',
   traffic: 'Затори',
   departAt: 'Виїзд о',
+  preferBy: 'Порядок',
   quietPart: 'рейсів не видно',
   forget: 'Забути',
   saveHere: 'Зберегти',

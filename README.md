@@ -423,6 +423,13 @@ somebody deciding whether to run for a bus deserves to know which of the two
 they are reading. How much accuracy is lost at the far end of that horizon is
 still unmeasured - it needs the VPS recording.
 
+A tracked vehicle stands in for the scheduled trips on its route at each stop
+up to the last time it calls there, so the timetable is only suppressed that
+far. Later scheduled departures stay, since no vehicle is tracked on them yet.
+A vehicle whose predictions run into the horizon is carried on to the end of its
+line at the timetable's running times (`_run_on`), or a rider boarding it now
+could not be taken past the 45th minute.
+
 Every ride also carries a `confidence`, which is what the schedule is worth on
 that route right now. `live` is a vehicle being tracked. `schedule` is the
 timetable on a route that is running. `quiet` is the timetable on a route the
@@ -443,7 +450,8 @@ between the stop it is boarded at and the stop it is left at. Both are simplifie
 to 4 m. The clients draw the option you tap - walks dotted, rides solid in the
 route's colour, one pill of times per stop where getting off and getting on
 share the reading - and wipe it, with the A and B marks, when you leave the
-planner.
+planner. The first tap on an option only picks it; its stops and routes open
+their own views once it is picked.
 
 The options are ranked by a front over arrival time, backup routes, number of
 changes and seconds spent walking, so a slower journey every leg of which has
@@ -456,8 +464,8 @@ capped at 10 and at 5 minutes (`WALK_CAPS`); the walking reaches are shared,
 so each extra pass costs only its rounds.
 
 The server's order is the fastest first. Both clients re-sort the same options
-by a preset - fastest, less walking, fewer changes, most backups - picked with
-chips over the list and remembered on the device; the whole walk goes last
+by a preset - fastest, less walking, fewer changes, most backups - picked from
+a dropdown under the departure time and remembered on the device; the whole walk goes last
 under the last two. `&at=<unix seconds>` plans a trip that starts later instead of
 now. A later departure still rides the vehicles being tracked - only their
 arrivals that lie ahead of it are kept - so nothing is thrown away at some
