@@ -9,12 +9,23 @@ export type Theme = {
 };
 
 export const THEMES: Theme[] = [
-  { id: "shadow", name: "Shadow", dark: true },
-  { id: "eclipse", name: "Eclipse", dark: true },
-  { id: "graybeard", name: "Graybeard", dark: false },
-  { id: "neutrino", name: "Neutrino", dark: false },
+  { id: "colorful-dark", name: "Colorful dark", dark: true },
+  { id: "natural-dark", name: "Natural dark", dark: true },
+  { id: "muted-dark", name: "Muted dark", dark: true },
+  { id: "gray-dark", name: "Gray dark", dark: true },
   { id: "colorful", name: "Colorful", dark: false },
+  { id: "natural", name: "Natural", dark: false },
+  { id: "muted", name: "Muted", dark: false },
+  { id: "gray", name: "Gray", dark: false },
 ];
+
+/** What VersaTiles renamed the styles a browser may still have saved to */
+const RENAMED: Record<string, string> = {
+  shadow: "gray-dark",
+  eclipse: "colorful-dark",
+  graybeard: "gray",
+  neutrino: "muted",
+};
 
 const KEY = "commuterlviv.theme";
 
@@ -30,7 +41,8 @@ export const styleUrl = (t: Theme) => `${tiles}/assets/styles/${t.id}/style.json
 
 export const loadTheme = (): Theme => {
   try {
-    return THEMES.find((t) => t.id === localStorage.getItem(KEY)) ?? THEMES[0]!;
+    const id = localStorage.getItem(KEY) ?? "";
+    return THEMES.find((t) => t.id === (RENAMED[id] ?? id)) ?? THEMES[0]!;
   } catch {
     return THEMES[0]!;
   }

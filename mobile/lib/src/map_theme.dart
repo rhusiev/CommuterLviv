@@ -23,15 +23,31 @@ const _public = 'https://tiles.versatiles.org';
 void setTileOrigin(String? origin) => _tiles = origin ?? _public;
 
 const mapThemes = [
-  MapTheme('shadow', 'Shadow', dark: true),
-  MapTheme('eclipse', 'Eclipse', dark: true),
-  MapTheme('graybeard', 'Graybeard', dark: false),
-  MapTheme('neutrino', 'Neutrino', dark: false),
+  MapTheme('colorful-dark', 'Colorful dark', dark: true),
+  MapTheme('natural-dark', 'Natural dark', dark: true),
+  MapTheme('muted-dark', 'Muted dark', dark: true),
+  MapTheme('gray-dark', 'Gray dark', dark: true),
   MapTheme('colorful', 'Colorful', dark: false),
+  MapTheme('natural', 'Natural', dark: false),
+  MapTheme('muted', 'Muted', dark: false),
+  MapTheme('gray', 'Gray', dark: false),
 ];
 
-MapTheme themeById(String? id) =>
-    mapThemes.firstWhere((t) => t.id == id, orElse: () => mapThemes.first);
+/// What VersaTiles renamed the styles a phone may still have saved to.
+const _renamed = {
+  'shadow': 'gray-dark',
+  'eclipse': 'colorful-dark',
+  'graybeard': 'gray',
+  'neutrino': 'muted',
+};
+
+MapTheme themeById(String? id) {
+  final want = _renamed[id] ?? id;
+  return mapThemes.firstWhere(
+    (t) => t.id == want,
+    orElse: () => mapThemes.first,
+  );
+}
 
 class Palette {
   const Palette({
