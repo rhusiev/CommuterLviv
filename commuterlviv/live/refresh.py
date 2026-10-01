@@ -1,16 +1,17 @@
 """The city kept current while it is served.
 
-Every night at `CHECK_AT` the static feed is fetched again, and every
-`WALK_EVERY` the footpaths are. Whatever changed is rebuilt beside the running
-service, in threads, and swapped in at once: nobody waits on a rebuild, and a
-failed one leaves the old city serving, to be tried again the next night.
+Every night at `CHECK_AT` the static feed is fetched again, every `WALK_EVERY`
+the footpaths are, and every `geocode.INDEX_EVERY` the place index is. Whatever
+changed is rebuilt beside the running service, in threads, and swapped in at
+once: nobody waits on a rebuild, and a failed one leaves the old city serving,
+to be tried again the next night.
 """
 import asyncio
 import datetime
 import json
 
 from .. import gtfs, network, plan, snapshot, walk as footpaths
-from . import geometry, journeys, state, traffic
+from . import geocode, geometry, journeys, state, traffic
 
 CHECK_AT = datetime.time(3, 30)     # local: after the last tram, before the first
 WALK_EVERY = 30 * 86400.0           # s between footpath refetches
@@ -53,6 +54,9 @@ async def nightly(s, log):
 
 async def check(s, log):
     """Fetches what is due, and renews the city if any of it changed."""
+    if s.settings.places_url and \
+            await asyncio.to_thread(geocode.index_age) > geocode.INDEX_EVERY:
+        await places(s, log)
     paths = s.settings.build_planner and footpaths.CACHE.exists() and \
         await asyncio.to_thread(footpaths.age) > WALK_EVERY
     if paths:
@@ -78,6 +82,15 @@ async def check(s, log):
         s.source = source
     elif paths:
         await replan(s, s.svc.live, log)
+
+
+async def places(s, log):
+    """The place index, which search reads per query and so needs no swap."""
+    try:
+        await asyncio.to_thread(geocode.renew_index, s.settings.places_url)
+        log("refresh: the place index is renewed")
+    except Exception as exc:
+        log("refresh: keeping the place index held -", repr(exc)[:200])
 
 
 async def renew(s, log):

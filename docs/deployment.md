@@ -78,8 +78,12 @@ points here, hand Caddy the domain and it gets a certificate itself:
 
 ```sh
 echo 'COMMUTERLVIV_SITE_ADDRESS=commuterlviv.r1a.nl' >> .env
-docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+echo 'COMPOSE_FILE=docker-compose.yml:docker-compose.tls.yml' >> .env
+docker compose up -d
 ```
+
+Compose reads `COMPOSE_FILE` from `.env` itself, so every later command - an
+update, `logs`, `exec` - keeps the overlay with no `-f` to forget.
 
 **Behind a proxy that is already running**, publish nothing at all. This
 overlay drops the host port and puts the web container on the proxy's own
@@ -88,7 +92,8 @@ door to the outside:
 
 ```sh
 echo 'CADDY_NETWORK=caddy' >> .env      # the existing network's name
-docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+echo 'COMPOSE_FILE=docker-compose.yml:docker-compose.proxy.yml' >> .env
+docker compose up -d
 ```
 
 ```caddy
@@ -149,6 +154,7 @@ look.
 | `download.versatiles.org`, `tiles.versatiles.org`, `github.com` | the tiles container | once on the first start, then every 30 days | `COMMUTERLVIV_SELF_TILES=false`, and every client asks `tiles.versatiles.org` per tile instead |
 | `overpass-api.de` | the service | once per volume, then every 30 days at night | `COMMUTERLVIV_BUILD_PLANNER=false` and copy `data/walk.npz` in |
 | `s3.amazonaws.com` (Terrarium elevation tiles) | the service | 120 tiles with every Overpass fetch | copy a `data/walk.npz` that has heights in; unreachable, the service walks on the level and asks again next boot |
+| `github.com` (osm-mapidx's `index` release) | the service | once on the first start, then every 30 days at night, about 95 MB | `COMMUTERLVIV_PLACES_URL` empty, and copy `data/lviv-search.sqlite` in or search without it |
 | `photon.komoot.io` | the service | per address search, cached for a day | `COMMUTERLVIV_PHOTON_URL` to a self-hosted Photon, or empty |
 
 ## Moving a recording in

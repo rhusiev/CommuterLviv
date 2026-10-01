@@ -436,7 +436,7 @@ async def places_near(request, session):
     """Addresses and places by name, from OpenStreetMap. One search at a time
     per caller, because each one leaves this machine."""
     app = request.app.state
-    if app.geocoder is None:
+    if not app.geocoder.ready():
         return error("This service has no place search", status=503)
     q = (request.query_params.get("q") or "").strip()
     if len(q) < 2:
@@ -642,7 +642,7 @@ def build(st=None, net=None):
         refresh.install(s, refresh.served(loaded, s.svc.live))
         s.planner = journeys.Planner.maybe(loaded, cat, log)
         s.preparing = False
-        s.geocoder = geocode.Geocoder.maybe(st.photon_url)
+        s.geocoder = geocode.Geocoder(st.photon_url)
         s.hub = hub.Hub(s.svc.live)
         s.planning = asyncio.Semaphore(PLAN_WORKERS)
         s.tasks = [*await s.svc.start(s.hub), asyncio.create_task(sweeper(s.pool))]
@@ -652,6 +652,8 @@ def build(st=None, net=None):
         # a network handed in is the caller's to keep
         if net is None:
             s.tasks.append(asyncio.create_task(refresh.nightly(s, log)))
+            if st.places_url and not geocode.INDEX.exists():
+                s.tasks.append(asyncio.create_task(refresh.places(s, log)))
         log(f"serving {st.variant} on {len(cat.routes)} routes, "
             f"{len(cat.stops)} stops")
         try:

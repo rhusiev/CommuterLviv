@@ -1,6 +1,7 @@
 # Behind a reverse proxy that is already running on this machine:
 #
-#   docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+#   echo 'COMPOSE_FILE=docker-compose.yml:docker-compose.proxy.yml' >> .env
+#   docker compose up -d
 #
 # Nothing is published to the host. The web container joins the proxy's own
 # docker network instead, and the proxy reaches it by container name:

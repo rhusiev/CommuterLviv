@@ -1,9 +1,10 @@
 """Names of places, from OpenStreetMap: a local index first, then Photon.
 
-The local index is osm-mapidx's (`data/lviv-search.sqlite`, built by that
-project). It survives typos and knows each place's surroundings, so "аптека
-сихів" and "форум львв" both find what was meant, and it answers without
-leaving the machine. It has no house numbers.
+The local index is osm-mapidx's (`data/lviv-search.sqlite`). That project
+rebuilds it from OpenStreetMap monthly and publishes it, and `renew_index`
+downloads it at that pace. It survives typos and knows each place's
+surroundings, so "аптека сихів" and "форум львв" both find what was meant, and
+it answers without leaving the machine. It has no house numbers.
 
 Photon (https://photon.komoot.io) fills that in. It is used rather than
 Nominatim because it indexes every named object in OSM and answers a prefix,
@@ -13,6 +14,7 @@ away: point COMMUTERLVIV_PHOTON_URL at it.
 
 Either source alone is enough to search; with neither the endpoint answers 503.
 """
+import os
 import threading
 import time
 import urllib.parse
@@ -23,6 +25,7 @@ from .. import __version__, gtfs, walk
 from ..mapidx import search as mapidx
 
 INDEX = gtfs.DATA / "lviv-search.sqlite"
+INDEX_EVERY = 30 * 86400.0      # s between index refetches
 
 # the city's box, also what the footpath graph covers
 SOUTH, NORTH, WEST, EAST = 49.7, 50.05, 23.8, 24.25
@@ -62,7 +65,7 @@ class Geocoder:
     def __init__(self, url, lang=LANG, index=INDEX):
         self.url = url.rstrip("/")
         self.lang = lang
-        self.index = index if index.exists() else None
+        self.index = index
         self.session = requests.Session()
         self.session.headers["user-agent"] = AGENT
         self.lock = threading.Lock()
@@ -84,10 +87,10 @@ class Geocoder:
             self.cache[key] = (now, found)
         return found
 
-    @classmethod
-    def maybe(cls, url):
-        """A geocoder, or None when there is nothing to search with."""
-        return cls(url) if url or INDEX.exists() else None
+    def ready(self):
+        """Whether there is anything to search with; the index may still be
+        on its way."""
+        return bool(self.url) or self.index.exists()
 
     def _merge(self, q):
         """Both sources, one list. A digit means a house address, which only
@@ -97,7 +100,7 @@ class Geocoder:
         try:
             remote = self._ask(q) if self.url else []
         except requests.RequestException:
-            if self.index is None:
+            if not self.index.exists():
                 raise
             remote = []
         first, then = (remote, local) if any(c.isdigit() for c in q) \
@@ -109,7 +112,7 @@ class Geocoder:
         return out[:LIMIT]
 
     def _local(self, q):
-        if self.index is None:
+        if not self.index.exists():
             return []
         hits = mapidx.search(str(self.index), q, limit=WIDE, origin=CENTRE)
         return [{"name": h["name"], "where": ", ".join(h["address"][NEAR:NEAR + 2]),
@@ -130,6 +133,28 @@ class Geocoder:
             if place is not None:
                 out.append(place)
         return out
+
+
+def index_age(path=INDEX):
+    return time.time() - path.stat().st_mtime if path.exists() else float("inf")
+
+
+def renew_index(url, path=INDEX):
+    """Downloads the index beside the one held and swaps it in once it answers.
+    Searches open the file per query, so one in flight keeps reading the old."""
+    fresh = path.with_name("lviv-search.next.sqlite")
+    try:
+        with requests.get(url, stream=True, timeout=60,
+                          headers={"user-agent": AGENT}) as r:
+            r.raise_for_status()
+            with open(fresh, "wb") as f:
+                for chunk in r.iter_content(1 << 20):
+                    f.write(chunk)
+        if not mapidx.search(str(fresh), "львів", limit=1):
+            raise ValueError("the downloaded index does not find Lviv")
+        os.replace(fresh, path)
+    finally:
+        fresh.unlink(missing_ok=True)
 
 
 def _same(a, b):
