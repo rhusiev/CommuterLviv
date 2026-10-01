@@ -1,10 +1,10 @@
 # Findings
 
-Behaviour of things this repository does not control - the Android Gradle
-plugin, Flutter's Gradle plugin, fdroidserver, fdroiddata's CI and GitHub
-Actions - that cost time to work out and is not written down where you would
-look for it. Each entry says what was observed, why it happens, and what the
-code does about it.
+Behaviour of things this repository does not control - the Android build
+tools, fdroidserver and its CI, GitHub Actions, the city's feeds, browsers,
+SQLite and the tile server - that cost time to work out and is not written down
+where you would look for it. Each entry says what was observed, why it happens,
+and what the code does about it.
 
 ## AGP re-serialises the merged manifest for every split after the first
 
@@ -229,3 +229,56 @@ whole metres.
 bridge or a cutting into a slope that the footpath does not climb. Past a rise
 of 30% over the run (`STEEPEST`) the model is more likely wrong than the hill,
 so steeper edges are walked as if at 30%.
+
+## VersaTiles renamed its styles and the old URLs answer 301
+
+**Observed.** `https://tiles.versatiles.org/assets/styles/shadow/style.json`
+answers `301`, and so do `eclipse`, `graybeard` and `neutrino`. `curl -fs`
+without `-L` takes the redirect's HTML body as the style.
+
+**Why.** versatiles-style v6 renamed them: `eclipse` is `colorful-dark`,
+`shadow` is `gray-dark`, `graybeard` is `gray`, `neutrino` is `muted`. The
+release (`styles.tar.gz` on github.com/versatiles-org/versatiles-style) still
+carries the old names as copies, but the server redirects. v6 also adds
+`natural`, `natural-dark`, `muted-dark`, `toner` and `toner-dark`. Only the
+`colorful`, `natural` and `muted` families colour parks and forests green;
+`gray` and `gray-dark` - the old `graybeard` and `shadow` - are grey throughout.
+
+**What the code does.** The clients offer the colorful, natural, muted and gray
+families, light and dark, and read a saved old name as its successor
+(`RENAMED` in `web/src/lib/theme.ts`, `_renamed` in `map_theme.dart`).
+`deploy/tiles.sh` fetches the new names with busybox `wget`, which follows
+redirects, and checks each file is not empty.
+
+## The recording had no index on time
+
+**Observed.** The service's warm-up took 24.6 s on the server's 35 GB
+`feed.db` to replay two hours, and `SELECT max(veh_ts) FROM veh` alone took
+minutes on a spinning disk.
+
+**Why.** `veh` is a `WITHOUT ROWID` table keyed on `(veh_id, veh_ts)`. The key
+orders rows by vehicle first, so neither `max(veh_ts)` nor `veh_ts >= ?` can use
+it, and SQLite reads the whole table for both.
+
+**What the code does.** `collect.SCHEMA` creates `veh_ts` on `veh(veh_ts)`. The
+collector runs the schema on its first write, so an existing recording gets the
+index the first time a new collector opens it.
+
+## A conditional `fetch` skips the browser's HTTP cache, an unconditional one does not
+
+**Observed.** The catalog was served with `max-age=86400`. A browser holding the
+catalog in local storage always saw a new one after a feed change, but a
+browser with empty local storage could be handed the previous day's catalog
+from its HTTP cache - and then the socket's `hello` named another catalog, and
+the page reloaded into the same cached answer.
+
+**Why.** The Fetch standard turns a request's cache mode from `default` to
+`no-store` when the page sets `If-None-Match` (or another conditional header)
+itself, so `held()` in `web/src/lib/api.ts` reaches the server whenever it has
+a tag to send. Without a tag the request is ordinary, and `max-age` lets the
+browser answer it without asking.
+
+**What the code does.** The catalog, shapes and streets are served
+`Cache-Control: private, no-cache` with their ETag (`_held` in
+`commuterlviv/live/app.py`), so every request revalidates and a 304 still costs
+no body.

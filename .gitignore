@@ -33,3 +33,9 @@ deploy/*.env
 # Per-release APKs that `deploy/release-apk.sh` builds for the GitHub
 # release; never commit the binaries
 release/
+
+# Working notes for and from coding agents
+PLAN.md
+HANDOFF.md
+CLAUDE.md
+.claude/
