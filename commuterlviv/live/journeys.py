@@ -210,7 +210,10 @@ async def arrange(state, net, cat, log):
     it runs, `state.preparing` says the planner is on its way."""
     state.preparing = True
     try:
-        state.planner = await asyncio.to_thread(ready, net, cat, log)
+        planner = await asyncio.to_thread(ready, net, cat, log)
+        # a renew that landed meanwhile installed a planner for the newer city
+        if cat is state.svc.live.cat:
+            state.planner = planner
     except Exception as exc:
         log("planner: giving up on this start -", repr(exc)[:200])
     finally:

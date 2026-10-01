@@ -122,8 +122,6 @@ class Live extends ChangeNotifier {
       _ws = ws;
       _backoff = const Duration(milliseconds: 500);
       connection = Connection.live;
-      _send({'type': 'routes', 'routes': _routes});
-      if (_stops.isNotEmpty) _send({'type': 'stops', 'stops': _stops});
       notifyListeners();
       _sub = ws.stream.listen(
         _message,
@@ -168,9 +166,16 @@ class Live extends ChangeNotifier {
     }
     if (msg is! Map) return;
     if (msg['type'] == 'hello') {
+      // The filters are indexes into the held catalog, so they wait for the
+      // hello to say the service still numbers by it
       final held = _api.catalogTag;
       final now = msg['catalog'];
-      if (now is String && held != null && now != held) onRenewed();
+      if (now is String && held != null && now != held) {
+        onRenewed();
+        return;
+      }
+      _send({'type': 'routes', 'routes': _routes});
+      if (_stops.isNotEmpty) _send({'type': 'stops', 'stops': _stops});
       return;
     }
     if (msg['type'] != 'arrivals') return;

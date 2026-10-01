@@ -867,13 +867,16 @@ def load(net=None):
     net = net or network.load()
     cache = DATA / "timetable.pkl"
     tt = None
-    if cache.exists() and cache.stat().st_mtime >= Path(network.CACHE).stat().st_mtime:
+    if cache.exists():
         with open(cache, "rb") as fh:
             tt = pickle.load(fh)
-    if getattr(tt, "version", 0) != Timetable.VERSION:
+    if (getattr(tt, "version", 0) != Timetable.VERSION
+            or getattr(tt.net, "source", None) != net.source):
         tt = Timetable(net)
-        with open(cache, "wb") as fh:
+        tmp = cache.with_suffix(".tmp")
+        with open(tmp, "wb") as fh:
             pickle.dump(tt, fh, protocol=5)
+        tmp.replace(cache)
     walk, transfers = footpaths.load(), Transfers.load()
     if why := transfers.stale(tt, walk):
         raise FileNotFoundError(

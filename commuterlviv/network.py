@@ -91,12 +91,13 @@ class Shape:
 
 
 class Net:
-    # bump when a field is added or its meaning changes: `fresh` compares only
-    # mtimes, so an older cache would otherwise load with fields missing
+    # bump when a field is added or its meaning changes: the cache is keyed by
+    # the feed alone, so an older one would otherwise load with fields missing
     VERSION = 3
 
     def __init__(self):
         self.version = self.VERSION
+        self.source = ""            # `source()` of what it was built from
         self.shapes = {}
         self.stops = {}
         self.routes = {}
@@ -227,16 +228,6 @@ def build():
     return net
 
 
-def fresh():
-    """Whether the cache is at least as new as both the feed and the overrides."""
-    if not os.path.exists(CACHE) or not os.path.exists(gtfs.ZIP):
-        return False
-    newest = max(os.path.getmtime(gtfs.ZIP),
-                 os.path.getmtime(overrides.PATH)
-                 if os.path.exists(overrides.PATH) else 0.0)
-    return os.path.getmtime(CACHE) >= newest
-
-
 def source():
     """A digest of what the network is built from: the feed and the overrides."""
     h = hashlib.blake2b(digest_size=16)
@@ -261,12 +252,15 @@ def load(rebuild=False, geom=DEFAULT):
 
 def _load(rebuild):
     gtfs.static_zip()   # so a feed that changed overnight invalidates the cache
-    if not rebuild and fresh():
+    src = source()
+    if not rebuild and os.path.exists(CACHE):
         with open(CACHE, "rb") as f:
             net = pickle.load(f)
-        if getattr(net, "version", 0) == Net.VERSION:
+        if (getattr(net, "version", 0) == Net.VERSION
+                and getattr(net, "source", None) == src):
             return net
     net = build()
+    net.source = src
     tmp = CACHE + ".tmp"
     with open(tmp, "wb") as f:
         pickle.dump(net, f, pickle.HIGHEST_PROTOCOL)

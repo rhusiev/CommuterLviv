@@ -281,37 +281,33 @@ async def password(request, session):
     return resp
 
 
+def _held(request, body, tag):
+    """A large body changing only with the feed. Revalidated on every use
+    rather than kept for a while, so a renewed city is never read from a
+    cache; the usual answer is a bodiless 304."""
+    if request.headers.get("if-none-match") == tag:
+        return Response(status_code=304, headers={"ETag": tag})
+    return Response(body, media_type="application/json",
+                    headers={"ETag": tag, "Cache-Control": "private, no-cache"})
+
+
 async def catalog(request, session):
-    """Routes and stops: large, changing only with the feed, cached by the
-    client against the ETag."""
+    """Routes and stops."""
     cat = request.app.state.svc.live.cat
-    if request.headers.get("if-none-match") == cat.tag:
-        return Response(status_code=304, headers={"ETag": cat.tag})
-    return Response(cat.body, media_type="application/json",
-                    headers={"ETag": cat.tag,
-                             "Cache-Control": "private, max-age=86400"})
+    return _held(request, cat.body, cat.tag)
 
 
 async def shapes(request, session):
     """Where every route physically goes, and which way; a separate request from
     the catalog because only some views need this half megabyte."""
     app = request.app.state
-    if request.headers.get("if-none-match") == app.shapes_tag:
-        return Response(status_code=304, headers={"ETag": app.shapes_tag})
-    return Response(app.shapes_json, media_type="application/json",
-                    headers={"ETag": app.shapes_tag,
-                             "Cache-Control": "private, max-age=86400"})
+    return _held(request, app.shapes_json, app.shapes_tag)
 
 
 async def traffic_streets(request, session):
-    """Which piece of street each traffic number belongs to; changing only
-    with the feed, so it is cached like the shapes."""
+    """Which piece of street each traffic number belongs to."""
     app = request.app.state
-    if request.headers.get("if-none-match") == app.traffic_tag:
-        return Response(status_code=304, headers={"ETag": app.traffic_tag})
-    return Response(app.traffic_json, media_type="application/json",
-                    headers={"ETag": app.traffic_tag,
-                             "Cache-Control": "private, max-age=86400"})
+    return _held(request, app.traffic_json, app.traffic_tag)
 
 
 async def traffic_now(request, session):
@@ -420,10 +416,13 @@ async def journey(request, session):
     # second-long searches is a denial of service with a longer fuse
     if app.planning.locked():
         return error("The planner is busy; try that again", 503)
+    planner, live = app.planner, app.svc.live
+    if planner.cat is not live.cat:
+        return error("The city is being renewed; try again in a moment", 503)
     try:
         async with app.planning:
-            found = await asyncio.to_thread(app.planner.search, origin, dest,
-                                            app.svc.live.arrivals, at, speed)
+            found = await asyncio.to_thread(planner.search, origin, dest,
+                                            live.arrivals, at, speed)
     except Exception as exc:
         # answered as JSON on purpose: an unhandled exception leaves Starlette
         # with a plain-text 500, which every client reads as a JSON.parse
@@ -638,7 +637,7 @@ def build(st=None, net=None):
         await db.migrate(s.pool, log)
         loaded = net if net is not None else network.load()
         s.source = network.source()
-        s.svc = service.Service(st, loaded, log=log)
+        s.svc = service.Service(st, loaded, log=log, persist=net is None)
         cat = s.svc.live.cat
         refresh.install(s, refresh.served(loaded, s.svc.live))
         s.planner = journeys.Planner.maybe(loaded, cat, log)
@@ -661,6 +660,8 @@ def build(st=None, net=None):
             for t in s.tasks:
                 t.cancel()
             await asyncio.gather(*s.tasks, return_exceptions=True)
+            if s.svc.persist:
+                await s.svc.save()
             await s.pool.close()
 
     # gzip only ever sees complete HTTP responses; the websocket's packed bytes

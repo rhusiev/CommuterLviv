@@ -103,8 +103,6 @@ export class Live {
     ws.onopen = () => {
       this.backoff = 500;
       this.connection = "live";
-      this.send({ type: "routes", routes: this.routes });
-      if (this.stops.length) this.send({ type: "stops", stops: this.stops });
       this.changed();
     };
     ws.onmessage = (e) => {
@@ -132,8 +130,15 @@ export class Live {
       return;
     }
     if (msg.type === "hello") {
+      // the filters are indexes into the held catalog, so they wait for the
+      // hello to say the service still numbers by it
       const held = catalogTag();
-      if (msg.catalog && held && msg.catalog !== held) this.renewed();
+      if (msg.catalog && held && msg.catalog !== held) {
+        this.renewed();
+        return;
+      }
+      this.send({ type: "routes", routes: this.routes });
+      if (this.stops.length) this.send({ type: "stops", stops: this.stops });
     } else if (msg.type === "arrivals") {
       this.arrivals = msg.stops;
       this.arrivalsAt = msg.t;

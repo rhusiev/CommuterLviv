@@ -147,6 +147,8 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       catalog = await widget.api.catalog();
     } on Exception {
+      // The socket is held unsubscribed until then, so this must not give up
+      if (mounted) Timer(const Duration(seconds: 5), _renew);
       return;
     }
     final old = _catalog;

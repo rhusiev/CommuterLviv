@@ -12,6 +12,7 @@ BASE = "https://track.ua-gis.com/gtfs/lviv"
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 ZIP = DATA / "static.zip"
+PREV = DATA / "static.prev.zip"     # the feed a new one replaced, until it is kept
 MAX_AGE = 24 * 3600
 
 LAT_M = 111320.0
@@ -27,8 +28,9 @@ def static_zip():
 def refetch():
     """Downloads the feed now; whether it differs from the one held.
 
-    An unchanged feed keeps its bytes and only gets its mtime bumped, so callers
-    caching derived work can tell a new feed from a re-download by mtime alone.
+    An unchanged feed keeps its bytes and only gets its mtime bumped, which
+    `static_zip` reads as its age. A changed one keeps the one it replaced as
+    `PREV`, for `restore`.
     """
     DATA.mkdir(parents=True, exist_ok=True)
     res = requests.get(f"{BASE}/static.zip", timeout=180)
@@ -48,8 +50,18 @@ def refetch():
         raise ValueError(f"the feed came without {', '.join(sorted(missing))}")
     tmp = DATA / "static.zip.tmp"
     tmp.write_bytes(body)
+    if ZIP.exists():
+        ZIP.replace(PREV)
     tmp.replace(ZIP)
     return True
+
+
+def restore():
+    """Back onto the feed the last `refetch` replaced, when the new one was
+    refused, so a restart does not serve it. Stamped fresh, or the next start
+    would take it for stale and fetch the refused one past the checks."""
+    PREV.replace(ZIP)
+    os.utime(ZIP)
 
 
 def table(name, optional=False):

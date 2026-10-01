@@ -9,7 +9,7 @@ import asyncio
 import datetime
 import json
 
-from .. import gtfs, network, plan, walk as footpaths
+from .. import gtfs, network, plan, snapshot, walk as footpaths
 from . import geometry, journeys, state, traffic
 
 CHECK_AT = datetime.time(3, 30)     # local: after the last tram, before the first
@@ -62,13 +62,19 @@ async def check(s, log):
         except Exception as exc:
             log("refresh: keeping the footpaths held -", repr(exc)[:200])
             paths = False
+    fetched = False
     try:
-        await asyncio.to_thread(gtfs.refetch)
+        fetched = await asyncio.to_thread(gtfs.refetch)
     except Exception as exc:
         log("refresh: keeping the feed held -", repr(exc)[:200])
     source = await asyncio.to_thread(network.source)
     if source != s.source:
-        await renew(s, log)
+        try:
+            await renew(s, log)
+        except Exception:
+            if fetched:
+                await asyncio.to_thread(gtfs.restore)
+            raise
         s.source = source
     elif paths:
         await replan(s, s.svc.live, log)
@@ -84,15 +90,20 @@ async def renew(s, log):
                          f"{len(old.net.routes)}")
     live = await asyncio.to_thread(state.Live, net, s.settings.cfg,
                                    epoch=s.settings.epoch)
-    await asyncio.to_thread(s.svc.warm, live)
     items = await asyncio.to_thread(served, net, live)
     planner = await asyncio.to_thread(journeys.ready, net, live.cat, log,
                                       s.settings.build_planner)
+    # last before the swap, so the old model has learned all it will
+    since = None
+    if snapshot.supported(old.model):
+        async with s.svc.lock:
+            held = await asyncio.to_thread(snapshot.export, old.model)
+        since = await asyncio.to_thread(snapshot.restore, live.model, held)
+    await asyncio.to_thread(s.svc.warm, live, since=since)
     async with s.svc.lock:
         await asyncio.to_thread(s.svc.swap, live)
         install(s, items)
         s.planner = planner
-    s.hub.publish(epoch=True)
     await s.hub.renew(live)
     log(f"refresh: now serving {len(live.cat.routes)} routes, "
         f"{len(live.cat.stops)} stops")
