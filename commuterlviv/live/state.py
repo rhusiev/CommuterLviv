@@ -8,31 +8,46 @@ the tracks with no model consulted, and arrivals every epoch, which is when the
 model updates. Both are frozen and replaced wholesale, so readers never see
 half-updated state and need no lock.
 """
+import datetime
+import functools
+import hashlib
+import json
 import math
 import time
 from dataclasses import dataclass, field
 
 import numpy as np
 
-from .. import network, replay, track
+from .. import model as pace, network, replay, track
 
 VEH = np.dtype([("id", "u2"), ("route", "u2"), ("lat", "f8"), ("lon", "f8"),
                 ("heading", "u2"), ("flags", "u1"), ("run", "u2")])
-ETA = np.dtype([("stop", "u2"), ("route", "u2"), ("veh", "u2"), ("t", "i4")])
+# `planned`: the vehicle has yet to start this trip, so the time is anchored on
+# the timetable's departure from its first stop rather than on where it is
+ETA = np.dtype([("stop", "u2"), ("route", "u2"), ("veh", "u2"), ("t", "i4"),
+                ("planned", "u1")])
 
 FRESH = 30.0             # s since the last fix within which a marker is solid
 MAX_WIRE = 65535         # vehicle ids are 16-bit on the wire
 HEAD_SPAN = 25.0         # m either side of the vehicle the arrow averages over
 SURE = 1.0               # sigmas the speed must clear "stopped" by to be motion
 DAMP = 0.7               # of the dead reckoned distance the map draws
+TURN = 120.0             # s at least between reaching a terminus and leaving it
+DAY = 86400.0
 
 STALE, MOVING = 1, 2     # the flag bits, mirrored in `web/src/lib/wire.ts`
 
 
+def etag(body):
+    """A weak ETag that changes whenever the body does."""
+    return f'W/"{hashlib.blake2b(body, digest_size=8).hexdigest()}"'
+
+
 class Catalog:
-    """The parts of the network that do not change while the service runs;
-    sent to a client once, then referred to by index so routes and stops are
-    two bytes each on the wire rather than their feed ids."""
+    """The parts of the network that do not change while it is served; sent
+    to a client once, then referred to by index so routes and stops are two
+    bytes each on the wire rather than their feed ids. A new feed is a new
+    catalog, and `tag` tells a client holding the old one."""
 
     def __init__(self, net):
         self.routes = sorted(net.routes, key=lambda r: (
@@ -53,8 +68,16 @@ class Catalog:
         self.lon = np.array([net.stops[s]["lon"] for s in self.stops])
         self.net = net
 
+    @functools.cached_property
+    def body(self):
+        return json.dumps(self.describe()).encode()
+
+    @functools.cached_property
+    def tag(self):
+        return etag(self.body)
+
     def describe(self):
-        """The catalog as the web app receives it; static for the process."""
+        """The catalog as the clients receive it."""
         net = self.net
         return {
             "routes": [{"id": r, "short": net.routes[r]["short"],
@@ -181,24 +204,65 @@ class Live:
 
     def _arrivals(self, now):
         rows = []
+        running = {tr.trip for tr in self.tracks.values()}
         for veh, tr in self.tracks.items():
-            got = replay.etas(self.model, tr, veh, now, self.offset)
-            if got is None:
-                continue
-            i, _, dt, k = got
             ri = self.cat.route_i.get(self.net.trip_route.get(tr.trip))
-            if ri is None:
+            if ri is None or tr.ts is None or tr.s is None or now - tr.ts > replay.STALE:
                 continue
             w = self._wire(veh)
-            stops = tr.stops
-            for j, at in zip(i + k, np.rint(now + dt[k]).astype("i8")):
-                si = self.cat.stop_i.get(stops[j])
-                if si is not None:
-                    rows.append((si, ri, w, at))
+            got = replay.etas(self.model, tr, veh, now, self.offset)
+            if got is None:
+                ends = now
+            else:
+                i, _, dt, k = got
+                self._rows(rows, tr.stops, i + k, now + dt[k], ri, w, 0)
+                ends = now + float(dt[-1])
+            self._next_trips(rows, tr.trip, ends, now, ri, w, running)
         eta = np.array(rows, dtype=ETA) if rows else np.zeros(0, ETA)
         eta = eta[np.lexsort((eta["t"], eta["stop"]))]
         start = np.searchsorted(eta["stop"], np.arange(len(self.cat.stops) + 1))
         return Arrivals(now, eta, start.astype(np.int64))
+
+    def _rows(self, rows, stops, idx, at, ri, w, planned):
+        for j, t in zip(idx, np.rint(at).astype("i8")):
+            si = self.cat.stop_i.get(stops[j])
+            if si is not None:
+                rows.append((si, ri, w, t, planned))
+
+    def _next_trips(self, rows, trip, ends, now, ri, w, running):
+        """The trips this vehicle runs after the one it is on, within the
+        horizon.
+
+        The feed keeps a vehicle on its finished trip for as long as it stands
+        at the terminus, and names the next one only as it pulls up to the first
+        stop - so without this, the first stops of a line show nothing until the
+        vehicle is already there. Each next trip leaves when the timetable says,
+        or `TURN` after the vehicle gets in if it is running late, and the model
+        times it from there. A trip another vehicle is already on is left to it.
+        """
+        horizon = now + replay.HORIZON
+        while (trip := self.net.trip_next.get(trip)) is not None:
+            if trip in running:
+                return
+            stops, dist, sched = self.net.trip_stops[trip]
+            leave = max(self._clock(sched[0], now), ends + TURN)
+            if leave > horizon:
+                return
+            sid = self.net.trip_shape[trip]
+            at = leave + self.model.time_between(sid, dist[0], dist)
+            keep = np.flatnonzero(at <= horizon)
+            self._rows(rows, stops, keep, at[keep], ri, w, 1)
+            ends = float(at[-1])
+
+    @staticmethod
+    def _clock(sched, now):
+        """A timetable time - seconds past a service day's midnight, possibly
+        over 24 h - as the unix instant nearest `now`."""
+        local = datetime.datetime.fromtimestamp(now, pace.TZ)
+        midnight = local.replace(hour=0, minute=0, second=0,
+                                 microsecond=0).timestamp()
+        return min((midnight + k * DAY + sched for k in (-1, 0, 1)),
+                   key=lambda t: abs(t - now))
 
     def _wire(self, veh):
         w = self.wire.get(veh)

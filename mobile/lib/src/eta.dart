@@ -10,3 +10,13 @@ String countdown(int t, {DateTime? now}) {
   if (s < 90) return txt.oneMinute;
   return txt.minutes((s / 60).round());
 }
+
+/// Whole minutes a span takes, never less than one.
+int spanMinutes(int seconds) => seconds < 60 ? 1 : (seconds / 60).round();
+
+/// `HH:MM`, local time.
+String clockTime(int t) {
+  final at = DateTime.fromMillisecondsSinceEpoch(t * 1000);
+  return '${at.hour.toString().padLeft(2, '0')}:'
+      '${at.minute.toString().padLeft(2, '0')}';
+}

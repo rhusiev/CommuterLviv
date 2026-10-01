@@ -24,10 +24,13 @@ const defaultBase = String.fromEnvironment(
 );
 
 class ApiError implements Exception {
-  ApiError(this.message, this.status);
+  ApiError(this.message, this.status, {this.preparing = false});
 
   final String message;
   final int status;
+
+  /// The planner is on its way, not missing.
+  final bool preparing;
 
   bool get unauthorised => status == 401;
 
@@ -151,8 +154,12 @@ class Api {
     if (res.statusCode >= 400) {
       final message = data is Map && data['error'] is String
           ? data['error'] as String
-          : 'the server said ${res.statusCode}';
-      throw ApiError(message, res.statusCode);
+          : 'The server said ${res.statusCode}';
+      throw ApiError(
+        message,
+        res.statusCode,
+        preparing: data is Map && data['preparing'] == true,
+      );
     }
     return data;
   }
@@ -222,13 +229,19 @@ class Api {
     ];
   }
 
-  /// Door to door, ranked by arrival. Near a second on the server, so ask once
-  /// per search. [at] is unix seconds, up to a day ahead; null is now.
-  Future<List<Journey>> plan(LatLng from, LatLng to, {int? at}) async {
+  /// Door to door, ranked by arrival. Half a second on the server, so ask once
+  /// per search. [at] is unix seconds, up to 30 days ahead; null is now.
+  /// [speed] is how fast you walk on the level, in km/h.
+  Future<List<Journey>> plan(
+    LatLng from,
+    LatLng to, {
+    int? at,
+    required double speed,
+  }) async {
     final answer = await _call(
       'GET',
       '/api/plan?from=${from.latitude},${from.longitude}'
-          '&to=${to.latitude},${to.longitude}'
+          '&to=${to.latitude},${to.longitude}&speed=$speed'
           '${at == null ? '' : '&at=$at'}',
     ) as Map<String, dynamic>;
     return [
@@ -237,19 +250,22 @@ class Api {
     ];
   }
 
+  /// The ETag of the catalog held, which names the city it describes.
+  String? get catalogTag => _prefs.getString('$_catalogKey.tag');
+
   Future<Catalog> catalog() async => Catalog.fromJson(
-    await _held('/api/catalog', _catalogKey, what: 'the catalog'),
+    await _held('/api/catalog', _catalogKey, what: 'The catalog'),
   );
 
   /// Half a megabyte of route geometry, so asked for only when a line is drawn.
   Future<Shapes> shapes() async => Shapes.fromJson(
-    await _held('/api/shapes', _shapesKey, what: 'the route lines'),
+    await _held('/api/shapes', _shapesKey, what: 'The route lines'),
   );
 
   /// Which stretch of street each traffic number belongs to; unchanging, so
   /// held on disk like the shapes and read once per run.
   Future<Streets> streets() async => Streets.fromJson(
-    await _held('/api/traffic/streets', _streetsKey, what: 'the streets'),
+    await _held('/api/traffic/streets', _streetsKey, what: 'The streets'),
   );
 
   Future<Traffic> traffic() async => Traffic.fromJson(
@@ -300,16 +316,55 @@ class Api {
     return jsonDecode(text) as Map<String, dynamic>;
   }
 
-  String? get mapTheme => _prefs.getString('commuterlviv.theme');
+  /// The setting kept under `commuterlviv.[name]`, or [fallback] where none
+  /// is or it is not a [T] that passes [ok].
+  T _setting<T>(String name, T fallback, [bool Function(T)? ok]) =>
+      switch (_prefs.get('commuterlviv.$name')) {
+        final T v when ok?.call(v) ?? true => v,
+        _ => fallback,
+      };
 
-  Future<void> setMapTheme(String id) =>
-      _prefs.setString('commuterlviv.theme', id);
+  Future<void> _keep(String name, Object value) {
+    final key = 'commuterlviv.$name';
+    return switch (value) {
+      final bool v => _prefs.setBool(key, v),
+      final double v => _prefs.setDouble(key, v),
+      final String v => _prefs.setString(key, v),
+      _ => throw ArgumentError.value(value, name),
+    };
+  }
+
+  String? get mapTheme => _setting<String?>('theme', null);
+
+  Future<void> setMapTheme(String id) => _keep('theme', id);
+
+  bool get showTraffic => _setting('traffic', false);
+
+  Future<void> setShowTraffic(bool on) => _keep('traffic', on);
+
+  bool get showLines => _setting('lines', false);
+
+  Future<void> setShowLines(bool on) => _keep('lines', on);
 
   /// Null means the phone's own, which is what `main` falls back to.
-  String? get language => _prefs.getString('commuterlviv.lang');
+  String? get language => _setting<String?>('lang', null);
 
-  Future<void> setLanguage(String code) =>
-      _prefs.setString('commuterlviv.lang', code);
+  Future<void> setLanguage(String code) => _keep('lang', code);
+
+  Prefer get prefer =>
+      Prefer.values.asNameMap()[_setting<String?>('prefer', null)] ??
+      Prefer.fastest;
+
+  Future<void> setPrefer(Prefer p) => _keep('prefer', p.name);
+
+  /// The walking speed a search starts from, in km/h.
+  double get walkSpeed => _setting(
+    'walk',
+    walkKmh.usual,
+    (v) => v >= walkKmh.min && v <= walkKmh.max,
+  );
+
+  Future<void> setWalkSpeed(double kmh) => _keep('walk', kmh);
 
   /// Pinned stops, by feed id, kept server-side so phone and browser agree.
   Future<List<String>> pins() async {

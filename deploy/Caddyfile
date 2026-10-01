@@ -32,26 +32,15 @@
 		}
 	}
 
-	# The basemap, when it is served from here rather than from
-	# tiles.versatiles.org - see docker-compose.tiles.yml. Same origin as the
+	# The basemap, from the tiles container - see deploy/tiles.sh. Same origin as the
 	# app on purpose: no CORS to get wrong, and no third party learning every
 	# visitor's address from their tile requests. `handle_path` strips the
 	# prefix, so the container sees the paths it would serve at its own root.
-	# The tiles behind it change only when the extract is re-cut, and the URLs
-	# are content-addressed by z/x/y, so a long cache is safe
+	# The tiles behind it change only when the extract is re-cut, monthly, so a
+	# week of staleness after that is the price of a long cache
 	handle_path /tiles/* {
 		reverse_proxy tiles:8080
 		header Cache-Control "public, max-age=604800"
-	}
-
-	# The phone app itself, for a phone that cannot reach F-Droid: whatever
-	# `deploy/release-apk.sh` last put in `deploy/apk/`, listed so the versioned
-	# file and `commuterlviv.apk` are both visible. Android refuses a download
-	# served as text, hence the type
-	handle /download/* {
-		root * /srv
-		header /download/*.apk Content-Type application/vnd.android.package-archive
-		file_server browse
 	}
 
 	handle {

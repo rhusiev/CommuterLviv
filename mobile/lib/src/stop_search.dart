@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'api.dart';
+import 'match.dart';
 import 'models.dart';
 import 'sheets.dart' show askName;
 import 'strings.dart';
@@ -31,18 +32,26 @@ class StopHit extends Hit {
 }
 
 class PlaceHit extends Hit {
-  const PlaceHit(this.at);
+  const PlaceHit(this.at, this.name);
 
   final LatLng at;
+  final String name;
 }
 
 class StopSearch extends SearchDelegate<Hit?> {
-  StopSearch({required this.api, required this.catalog, required this.onSave})
-    : super(searchFieldLabel: txt.findStop);
+  StopSearch({
+    required this.api,
+    required this.catalog,
+    required this.onSave,
+    this.idle,
+  }) : super(searchFieldLabel: txt.findStop);
 
   final Api api;
   final Catalog catalog;
   final void Function(String name, LatLng at) onSave;
+
+  /// What an empty query shows, given a way to close the search with nothing
+  final Widget Function(BuildContext context, VoidCallback done)? idle;
 
   @override
   List<Widget> buildActions(BuildContext context) => [
@@ -60,13 +69,16 @@ class StopSearch extends SearchDelegate<Hit?> {
   Widget buildResults(BuildContext context) => buildSuggestions(context);
 
   @override
-  Widget buildSuggestions(BuildContext context) => _Results(
-    api: api,
-    catalog: catalog,
-    query: query.trim(),
-    onPick: (hit) => close(context, hit),
-    onSave: onSave,
-  );
+  Widget buildSuggestions(BuildContext context) =>
+      query.trim().isEmpty && idle != null
+      ? idle!(context, () => close(context, null))
+      : _Results(
+          api: api,
+          catalog: catalog,
+          query: query.trim(),
+          onPick: (hit) => close(context, hit),
+          onSave: onSave,
+        );
 }
 
 class _Results extends StatefulWidget {
@@ -89,6 +101,7 @@ class _Results extends StatefulWidget {
 }
 
 class _ResultsState extends State<_Results> {
+  late final _names = [for (final s in widget.catalog.stops) words(s.name)];
   List<Found> _found = const [];
   bool _busy = false;
   bool _failed = false;
@@ -154,13 +167,20 @@ class _ResultsState extends State<_Results> {
 
   @override
   Widget build(BuildContext context) {
-    final needle = widget.query.toLowerCase();
-    if (needle.isEmpty) return const SizedBox.shrink();
+    final query = words(widget.query);
+    if (query.isEmpty) return const SizedBox.shrink();
     final catalog = widget.catalog;
-    final stops = [
-      for (var i = 0; i < catalog.stops.length; i++)
-        if (catalog.stops[i].name.toLowerCase().contains(needle)) i,
+    final scored = [
+      for (var i = 0; i < _names.length; i++)
+        if (score(query, _names[i]) case final s when s > 0) (s, i),
     ];
+    // Shorter names first among equals: "Ринок" before "Ринок Шувар"
+    scored.sort(
+      (a, b) => a.$1 != b.$1
+          ? b.$1 - a.$1
+          : catalog.stops[a.$2].name.length - catalog.stops[b.$2].name.length,
+    );
+    final stops = [for (final (_, i) in scored) i];
     final rows = <Object>[
       if (stops.isNotEmpty) txt.foundStops,
       ...stops,
@@ -208,7 +228,7 @@ class _ResultsState extends State<_Results> {
                 icon: Icons.place_outlined,
                 title: p.name,
                 under: p.where,
-                onTap: () => widget.onPick(PlaceHit(p.at)),
+                onTap: () => widget.onPick(PlaceHit(p.at, p.name)),
                 onSave: () => _save(p.name, p.at),
               );
             },

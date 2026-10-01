@@ -27,6 +27,7 @@ import 'theme.dart';
 import 'times_tab.dart';
 import 'vehicle_card.dart';
 import 'vehicle_layer.dart' show badgeRadius, stopsZoom;
+import 'walk_speed.dart';
 import 'strings.dart';
 
 /// How far a tap may land from a stop and still count.
@@ -60,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// The route outlives its tab, so leaving and coming back keeps it.
   int? _route;
   bool _onRoute = false;
-  bool _allLines = false;
+  late bool _allLines = widget.api.showLines;
   Shapes? _shapes;
   List<int> _drawn = const [];
   List<int> _pins = const [];
@@ -68,12 +69,16 @@ class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
 
   /// Only while it is on does anything ask the server how the streets run.
-  bool _traffic = false;
+  late bool _traffic = widget.api.showTraffic;
 
   bool _planning = false;
+
+  /// The planner option drawn on the map, only while planning
+  Journey? _journey;
   LatLng? _from;
   LatLng? _to;
   End? _picking;
+  bool _folded = false;
 
   /// Which end is waiting on a fix that has been asked for but not arrived.
   End? _wantHere;
@@ -88,6 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _load();
     _loadStyle();
+    if (_allLines) unawaited(_geometry());
     _here.addListener(_fixArrived);
   }
 
@@ -105,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final catalog = await widget.api.catalog();
       final sets = await widget.api.sets();
       final active = sets.sets.where((s) => s.id == sets.active).firstOrNull;
-      final live = Live(widget.api)..open();
+      final live = Live(widget.api, onRenewed: _renew)..open();
       if (!mounted) {
         live.dispose();
         return;
@@ -132,6 +138,44 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() => _error = txt.unreachable(widget.api.base));
       }
     }
+  }
+
+  /// The service moved to a new feed. Every index held is carried over to the
+  /// new catalog by its feed id; what was drawn from the old one is dropped.
+  Future<void> _renew() async {
+    final Catalog catalog;
+    try {
+      catalog = await widget.api.catalog();
+    } on Exception {
+      // The socket is held unsubscribed until then, so this must not give up
+      if (mounted) Timer(const Duration(seconds: 5), _renew);
+      return;
+    }
+    final old = _catalog;
+    if (!mounted || old == null) return;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    final routes = catalog.routesAt([
+      for (final i in _routes) old.routes[i].id,
+    ]).toList();
+    final route = _route == null
+        ? null
+        : catalog.routesAt([old.routes[_route!].id]).firstOrNull;
+    setState(() {
+      _catalog = catalog;
+      _routes
+        ..clear()
+        ..addAll(routes);
+      _pins = catalog.stopsAt([for (final i in _pins) old.stops[i].id]);
+      _route = route;
+      _onRoute &= route != null;
+      _stop = null;
+      _journey = null;
+      _shapes = null;
+    });
+    _push();
+    if (_allLines || _onRoute) unawaited(_geometry());
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(txt.renewed)));
   }
 
   /// Sends this device's pre-server pins up once. The old key is dropped only
@@ -167,7 +211,16 @@ class _HomeScreenState extends State<HomeScreen> {
     _watch();
   }
 
-  Set<int> get _shown => _onRoute && _route != null ? {_route!} : _routes;
+  /// What the socket sends: while a journey is shown, only its rides.
+  Set<int> get _shown {
+    if (_planning && _journey != null) {
+      return {
+        for (final leg in _journey!.legs)
+          if (leg.route != null) leg.route!,
+      };
+    }
+    return _onRoute && _route != null ? {_route!} : _routes;
+  }
 
   List<int> get _lines {
     if (_onRoute && _route != null) return [_route!];
@@ -195,7 +248,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _savePlace(String name, LatLng at) =>
       _places([..._withoutPlace(name), Place(name: name, at: at)]);
 
-  Future<void> _forgetPlace(String name) => _places(_withoutPlace(name));
+  Future<void> _nameSpot(LatLng at) async {
+    final name = await askName(context, txt.namePlace, action: txt.saveHere);
+    if (name != null && name.isNotEmpty) await _savePlace(name, at);
+  }
 
   Future<void> _places(List<Place> next) async {
     final sets = _sets;
@@ -222,6 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _onRoute = true;
       _tab = 0;
       _planning = false;
+      _journey = null;
     });
     _push();
     _geometry().then((_) {
@@ -502,10 +559,14 @@ class _HomeScreenState extends State<HomeScreen> {
       lines: _allLines,
       onLines: (on) {
         setState(() => _allLines = on);
+        unawaited(widget.api.setShowLines(on));
         if (on) unawaited(_geometry());
       },
       traffic: _traffic,
-      onTraffic: (on) => setState(() => _traffic = on),
+      onTraffic: (on) {
+        setState(() => _traffic = on);
+        unawaited(widget.api.setShowTraffic(on));
+      },
       theme: _theme,
       onTheme: _setTheme,
     ),
@@ -516,6 +577,7 @@ class _HomeScreenState extends State<HomeScreen> {
     context,
     (sheet) => AccountSheet(
       server: widget.api.base,
+      speed: widget.api.walkSpeed,
       onSaved: () {
         Navigator.pop(sheet);
         _openSaved();
@@ -523,6 +585,13 @@ class _HomeScreenState extends State<HomeScreen> {
       onLanguage: () {
         Navigator.pop(sheet);
         showFloatingSheet<void>(context, (_) => LanguageSheet(api: widget.api));
+      },
+      onSpeed: () {
+        Navigator.pop(sheet);
+        showFloatingSheet<void>(
+          context,
+          (_) => WalkSpeedSheet(api: widget.api),
+        );
       },
       onServer: () async {
         Navigator.pop(sheet);
@@ -596,15 +665,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 here: _here,
                 empty: _routes.isEmpty,
                 marks: [
-                  if (_from != null) (at: _from!, label: 'A'),
-                  if (_to != null) (at: _to!, label: 'B'),
+                  if (_planning && _from != null) (at: _from!, label: 'A'),
+                  if (_planning && _to != null) (at: _to!, label: 'B'),
                 ],
+                journey: _planning ? _journey : null,
                 pins: _pins,
                 places: _sets?.places ?? const [],
                 shapes: _shapes,
                 lines: _lines,
                 arrowed: _onRoute ? _route : null,
                 onTap: _tap,
+                onHold: _nameSpot,
               ),
               TimesTab(
                 catalog: catalog,
@@ -622,7 +693,10 @@ class _HomeScreenState extends State<HomeScreen> {
           if (_planning && _tab == 0)
             Positioned(
               left: floatingGap,
-              right: floatingGap,
+              // Folded, clear of the map's buttons
+              right: _folded || _picking != null
+                  ? floatingGap * 2 + kMinInteractiveDimension
+                  : floatingGap,
               bottom: floatingBottom(context),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
@@ -635,6 +709,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   to: _to,
                   picking: _picking,
                   onPick: (which) => setState(() => _picking = which),
+                  folded: _folded,
+                  onFold: (folded) => setState(() => _folded = folded),
                   onSwap: () => setState(() {
                     final was = _from;
                     _from = _to;
@@ -652,11 +728,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     }
                   }),
                   onSave: _savePlace,
-                  onForget: _forgetPlace,
-                  onClose: () => setState(() {
-                    _planning = false;
-                    _picking = null;
-                  }),
+                  onShow: (journey) {
+                    setState(() => _journey = journey);
+                    _push();
+                  },
                 ),
               ),
             ),
@@ -700,7 +775,11 @@ class _HomeScreenState extends State<HomeScreen> {
       _tab = i == 1 ? 1 : 0;
       _planning = i == 2;
       _onRoute = i == 3;
-      if (!_planning) _picking = null;
+      if (!_planning) {
+        _picking = null;
+        _folded = false;
+        _journey = null;
+      }
     });
     _push();
   }
@@ -866,6 +945,16 @@ class _Tabs extends StatelessWidget {
       (Icons.directions_outlined, txt.plan),
       if (route != null) (Icons.timeline_outlined, txt.routeLine),
     ];
+    // Four labelled tabs are wider than a phone, so then only the picked one
+    // keeps its label
+    final compact = tabs.length > 3;
+    Widget tab(int i, IconData icon, String label, {bool bare = false}) => _Tab(
+      icon: icon,
+      label: label,
+      bare: bare,
+      on: i == selected,
+      onTap: () => onPick(i),
+    );
     return Floating(
       elevation: 4,
       clipBehavior: Clip.antiAlias,
@@ -880,15 +969,11 @@ class _Tabs extends StatelessWidget {
             // rather than a button
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (final (i, tab) in tabs.indexed)
-                Expanded(
-                  child: _Tab(
-                    icon: tab.$1,
-                    label: tab.$2,
-                    on: i == selected,
-                    onTap: () => onPick(i),
-                  ),
-                ),
+              for (final (i, (icon, label)) in tabs.indexed)
+                if (compact)
+                  tab(i, icon, label, bare: i != selected)
+                else
+                  Expanded(child: tab(i, icon, label)),
             ],
           ),
         ),
@@ -903,46 +988,55 @@ class _Tab extends StatelessWidget {
     required this.label,
     required this.on,
     required this.onTap,
+    this.bare = false,
   });
 
   final IconData icon;
   final String label;
+
+  /// Shows the label only as a tooltip.
+  final bool bare;
   final bool on;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: on ? accent.withValues(alpha: 0.15) : null,
-          borderRadius: BorderRadius.circular(tabBarHeight),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 20, color: on ? accent : Colors.white70),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                // One weight either way: a heavier label is wider and would
-                // shift the other tabs
-                style: TextStyle(
-                  color: on ? accent : Colors.white70,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+  Widget build(BuildContext context) {
+    final tab = InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: on ? accent.withValues(alpha: 0.15) : null,
+            borderRadius: BorderRadius.circular(tabBarHeight),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 20, color: on ? accent : Colors.white70),
+                if (!bare) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    // One weight either way: a heavier label is wider and would
+                    // shift the other tabs
+                    style: TextStyle(
+                      color: on ? accent : Colors.white70,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+    return bare ? Tooltip(message: label, child: tab) : tab;
+  }
 }
 
 /// A hairline along the top edge, red while the socket is away.

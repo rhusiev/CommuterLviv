@@ -1,6 +1,7 @@
 """Route geometry and linear referencing: everything downstream works in metres
 along the trip's shape rather than in lat/lon."""
 import copy
+import hashlib
 import os
 import pickle
 from dataclasses import dataclass
@@ -90,12 +91,13 @@ class Shape:
 
 
 class Net:
-    # bump when a field is added or its meaning changes: `fresh` compares only
-    # mtimes, so an older cache would otherwise load with fields missing
-    VERSION = 2
+    # bump when a field is added or its meaning changes: the cache is keyed by
+    # the feed alone, so an older one would otherwise load with fields missing
+    VERSION = 3
 
     def __init__(self):
         self.version = self.VERSION
+        self.source = ""            # `source()` of what it was built from
         self.shapes = {}
         self.stops = {}
         self.routes = {}
@@ -104,6 +106,7 @@ class Net:
         self.trip_dir = {}          # trip_id -> 0 or 1, the feed's direction_id
         self.trip_stops = {}        # trip_id -> (stop_ids, dist[], sched_sec[])
         self.pattern_of = {}        # trip_id -> pattern key
+        self.trip_next = {}         # trip_id -> the block's next trip, same vehicle
 
 
 def candidates(shape, p, slack=250.0, cap=10):
@@ -186,7 +189,10 @@ def build():
             "short": r["route_short_name"], "long": r["route_long_name"],
             "type": gtfs.vehicle_type(r["route_short_name"])}
 
+    blocks = {}
     for t in gtfs.table("trips.txt"):
+        if t.get("block_id"):
+            blocks.setdefault(t["block_id"], []).append(t["trip_id"])
         net.trip_shape[t["trip_id"]] = t["shape_id"]
         net.trip_route[t["trip_id"]] = t["route_id"]
         net.trip_dir[t["trip_id"]] = int(t["direction_id"] or 0)
@@ -215,17 +221,21 @@ def build():
         net.pattern_of[trip] = key
         net.trip_stops[trip] = (ids, solved[key], np.array(when, dtype=float))
     extra.report()
+    for trips in blocks.values():
+        trips = sorted((t for t in trips if t in net.trip_stops),
+                       key=lambda t: net.trip_stops[t][2][0])
+        net.trip_next.update(zip(trips, trips[1:]))
     return net
 
 
-def fresh():
-    """Whether the cache is at least as new as both the feed and the overrides."""
-    if not os.path.exists(CACHE) or not os.path.exists(gtfs.ZIP):
-        return False
-    newest = max(os.path.getmtime(gtfs.ZIP),
-                 os.path.getmtime(overrides.PATH)
-                 if os.path.exists(overrides.PATH) else 0.0)
-    return os.path.getmtime(CACHE) >= newest
+def source():
+    """A digest of what the network is built from: the feed and the overrides."""
+    h = hashlib.blake2b(digest_size=16)
+    for path in (gtfs.ZIP, overrides.PATH):
+        if os.path.exists(path):
+            with open(path, "rb") as f:
+                h.update(f.read())
+    return h.hexdigest()
 
 
 def regrid(net, geom):
@@ -242,12 +252,15 @@ def load(rebuild=False, geom=DEFAULT):
 
 def _load(rebuild):
     gtfs.static_zip()   # so a feed that changed overnight invalidates the cache
-    if not rebuild and fresh():
+    src = source()
+    if not rebuild and os.path.exists(CACHE):
         with open(CACHE, "rb") as f:
             net = pickle.load(f)
-        if getattr(net, "version", 0) == Net.VERSION:
+        if (getattr(net, "version", 0) == Net.VERSION
+                and getattr(net, "source", None) == src):
             return net
     net = build()
+    net.source = src
     tmp = CACHE + ".tmp"
     with open(tmp, "wb") as f:
         pickle.dump(net, f, pickle.HIGHEST_PROTOCOL)

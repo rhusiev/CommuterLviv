@@ -9,6 +9,7 @@ import asyncio
 import contextlib
 import ipaddress
 import json
+import math
 import time
 import uuid as uuidlib
 
@@ -20,8 +21,8 @@ from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
 
 from .. import __version__, network
-from . import (auth, db, geocode, geometry, hub, journeys, prefs, security,
-               service, settings, state, traffic)
+from . import (auth, db, geocode, hub, journeys, prefs, refresh, security,
+               service, settings)
 
 SESSION_COOKIE = "lp_sess"
 CSRF_COOKIE = "lp_csrf"
@@ -113,17 +114,17 @@ async def body(request):
     # checked before reading: buffering first would already cost the memory
     declared = request.headers.get("content-length", "")
     if declared.isdigit() and (len(declared) > 9 or int(declared) > MAX_BODY):
-        return None, error("request too large", 413)
+        return None, error("Request too large", 413)
     raw = b""
     async for chunk in request.stream():
         raw += chunk
         if len(raw) > MAX_BODY:
-            return None, error("request too large", 413)
+            return None, error("Request too large", 413)
     try:
         data = json.loads(raw or b"{}")
     except json.JSONDecodeError:
-        return None, error("expected JSON")
-    return (data, None) if isinstance(data, dict) else (None, error("expected an object"))
+        return None, error("Expected JSON")
+    return (data, None) if isinstance(data, dict) else (None, error("Expected an object"))
 
 
 async def resolve(request):
@@ -166,19 +167,19 @@ def protected(handler, unsafe=True):
         app = request.app.state
         g = app.guard
         if not g.api.take(g.ip(request)):
-            return error("slow down", 429)
+            return error("Slow down", 429)
         session, issue = await resolve(request)
         if issue == "theft":
-            resp = error("this session was ended for safety; sign in again", 401)
+            resp = error("This session was ended for safety; sign in again", 401)
             g.clear(resp)
             return resp
         if session is None:
-            return error("sign in", 401)
+            return error("Sign in", 401)
         if unsafe and request.method not in ("GET", "HEAD"):
             if not g.origin_ok(request):
-                return error("bad origin", 403)
+                return error("Bad origin", 403)
             if not g.csrf_ok(request, session):
-                return error("bad csrf token", 403)
+                return error("Bad csrf token", 403)
         resp = await handler(request, session)
         apply_issue(resp, g, issue, app.settings)
         return resp
@@ -195,9 +196,9 @@ async def register(request):
     app = request.app.state
     g, st = app.guard, app.settings
     if not g.origin_ok(request):
-        return error("bad origin", 403)
+        return error("Bad origin", 403)
     if not g.auth_ip.take(g.ip(request)):
-        return error("too many attempts", 429,
+        return error("Too many attempts", 429,
                      retry=round(g.auth_ip.retry_after(g.ip(request))))
     data, bad = await body(request)
     if bad:
@@ -217,20 +218,20 @@ async def login(request):
     app = request.app.state
     g = app.guard
     if not g.origin_ok(request):
-        return error("bad origin", 403)
+        return error("Bad origin", 403)
     ip = g.ip(request)
     data, bad = await body(request)
     if bad:
         return bad
     name = security.clean_username(data.get("username")) or "?"
     if not g.auth_ip.take(ip) or not g.auth_user.take((ip, name)):
-        return error("too many attempts", 429,
+        return error("Too many attempts", 429,
                      retry=round(g.auth_ip.retry_after(ip)))
     uid = await auth.login(app.pool, app.hasher, data.get("username"),
                            data.get("password"))
     if uid is None:
         await auth.event(app.pool, "login_failed", None, ip, name)
-        return error("wrong username or password", 401)
+        return error("Wrong username or password", 401)
     await auth.event(app.pool, "login", uid, ip)
     return await _sign_in(request, uid, bool(data.get("remember")))
 
@@ -280,36 +281,33 @@ async def password(request, session):
     return resp
 
 
+def _held(request, body, tag):
+    """A large body changing only with the feed. Revalidated on every use
+    rather than kept for a while, so a renewed city is never read from a
+    cache; the usual answer is a bodiless 304."""
+    if request.headers.get("if-none-match") == tag:
+        return Response(status_code=304, headers={"ETag": tag})
+    return Response(body, media_type="application/json",
+                    headers={"ETag": tag, "Cache-Control": "private, no-cache"})
+
+
 async def catalog(request, session):
-    """Routes and stops: large, unchanging, cached by the client against the ETag."""
-    app = request.app.state
-    if request.headers.get("if-none-match") == app.catalog_tag:
-        return Response(status_code=304, headers={"ETag": app.catalog_tag})
-    return Response(app.catalog_json, media_type="application/json",
-                    headers={"ETag": app.catalog_tag,
-                             "Cache-Control": "private, max-age=86400"})
+    """Routes and stops."""
+    cat = request.app.state.svc.live.cat
+    return _held(request, cat.body, cat.tag)
 
 
 async def shapes(request, session):
     """Where every route physically goes, and which way; a separate request from
     the catalog because only some views need this half megabyte."""
     app = request.app.state
-    if request.headers.get("if-none-match") == app.shapes_tag:
-        return Response(status_code=304, headers={"ETag": app.shapes_tag})
-    return Response(app.shapes_json, media_type="application/json",
-                    headers={"ETag": app.shapes_tag,
-                             "Cache-Control": "private, max-age=86400"})
+    return _held(request, app.shapes_json, app.shapes_tag)
 
 
 async def traffic_streets(request, session):
-    """Which piece of street each traffic number belongs to; fixed for the life
-    of the service, so it is cached like the shapes."""
+    """Which piece of street each traffic number belongs to."""
     app = request.app.state
-    if request.headers.get("if-none-match") == app.traffic_tag:
-        return Response(status_code=304, headers={"ETag": app.traffic_tag})
-    return Response(app.traffic_json, media_type="application/json",
-                    headers={"ETag": app.traffic_tag,
-                             "Cache-Control": "private, max-age=86400"})
+    return _held(request, app.traffic_json, app.traffic_tag)
 
 
 async def traffic_now(request, session):
@@ -336,11 +334,12 @@ async def vehicle(request, session):
     app = request.app.state
     want = request.query_params.get("veh", "")
     if not want.isdigit() or len(want) > 9:
-        return error("veh must be a number")
+        return error("Veh must be a number")
     arr = app.svc.live.arrivals
     rows = arr.of(int(want))
     return JSONResponse({"t": arr.t, "veh": int(want), "stops": [
-        {"stop": int(r["stop"]), "route": int(r["route"]), "t": int(r["t"])}
+        {"stop": int(r["stop"]), "route": int(r["route"]), "t": int(r["t"]),
+         **({"planned": True} if r["planned"] else {})}
         for r in rows]})
 
 
@@ -359,9 +358,12 @@ def _point(raw):
     return lat, lon
 
 
+PLAN_AHEAD_DAYS = 30
+
+
 def _departure(raw):
-    """(unix seconds or None, complaint). A day ahead is as far as the schedule
-    is worth reading, and the past cannot be planned for."""
+    """(unix seconds or None, complaint). The past cannot be planned for, and
+    past a month the city has usually changed its timetable."""
     if not raw:
         return None, None
     try:
@@ -369,9 +371,26 @@ def _departure(raw):
     except ValueError:
         return None, "at must be a unix time in seconds"
     now = time.time()
-    if at < now - 3600 or at > now + 86400:
-        return None, "at must be within the next day"
+    if at < now - 3600 or at > now + PLAN_AHEAD_DAYS * 86400:
+        return None, f"at must be within the next {PLAN_AHEAD_DAYS} days"
     return at, None
+
+
+WALK_KMH = (0.5, 8.0)   # walking speeds a search takes, on the level
+
+
+def _speed(raw):
+    """(km/h or None, complaint)."""
+    if not raw:
+        return None, None
+    try:
+        kmh = float(raw)
+    except ValueError:
+        kmh = math.nan
+    lo, hi = WALK_KMH
+    if not lo <= kmh <= hi:
+        return None, f"speed must be between {lo:g} and {hi:g} km/h"
+    return kmh, None
 
 
 async def journey(request, session):
@@ -379,21 +398,37 @@ async def journey(request, session):
     tracked vehicle or from the timetable."""
     app = request.app.state
     if app.planner is None:
-        return error("this service has no journey planner", status=503)
+        if app.preparing:
+            return error("The journey planner is getting ready; try again in "
+                         "a few minutes", 503, preparing=True)
+        return error("This service has no journey planner", status=503)
     origin = _point(request.query_params.get("from"))
     dest = _point(request.query_params.get("to"))
     if origin is None or dest is None:
-        return error("from and to must each be lat,lon inside Lviv")
+        return error("From and to must each be lat,lon inside Lviv")
     at, why = _departure(request.query_params.get("at"))
+    if why:
+        return error(why)
+    speed, why = _speed(request.query_params.get("speed"))
     if why:
         return error(why)
     # refused rather than queued when every worker is busy: a queue of
     # second-long searches is a denial of service with a longer fuse
     if app.planning.locked():
-        return error("the planner is busy; try that again", 503)
-    async with app.planning:
-        found = await asyncio.to_thread(app.planner.search, origin, dest,
-                                        app.svc.live.arrivals, at)
+        return error("The planner is busy; try that again", 503)
+    planner, live = app.planner, app.svc.live
+    if planner.cat is not live.cat:
+        return error("The city is being renewed; try again in a moment", 503)
+    try:
+        async with app.planning:
+            found = await asyncio.to_thread(planner.search, origin, dest,
+                                            live.arrivals, at, speed)
+    except Exception as exc:
+        # answered as JSON on purpose: an unhandled exception leaves Starlette
+        # with a plain-text 500, which every client reads as a JSON.parse
+        # failure rather than as what went wrong
+        log("plan failed:", repr(exc)[:200])
+        return error("Could not plan that journey", 500)
     return JSONResponse(found)
 
 
@@ -402,17 +437,17 @@ async def places_near(request, session):
     per caller, because each one leaves this machine."""
     app = request.app.state
     if app.geocoder is None:
-        return error("this service has no place search", status=503)
+        return error("This service has no place search", status=503)
     q = (request.query_params.get("q") or "").strip()
     if len(q) < 2:
         return JSONResponse({"places": []})
     if not app.guard.search.take(session["user_id"]):
-        return error("slow down", 429)
+        return error("Slow down", 429)
     try:
         found = await asyncio.to_thread(app.geocoder.find, q[:120])
     except Exception as exc:
         log("geocode:", repr(exc)[:200])
-        return error("place search is unavailable", status=502)
+        return error("Place search is unavailable", status=502)
     return JSONResponse({"places": found})
 
 
@@ -470,7 +505,7 @@ async def one_set(request, session):
     uid, sid = session["user_id"], request.path_params["sid"]
     if request.method == "DELETE":
         return (JSONResponse({"ok": True}) if await prefs.delete(app.pool, sid, uid)
-                else error("no such set", 404))
+                else error("No such set", 404))
     data, bad = await body(request)
     if bad:
         return bad
@@ -492,9 +527,9 @@ async def active(request, session):
     try:
         sid = uuidlib.UUID(sid) if sid else None
     except (ValueError, AttributeError, TypeError):
-        return error("no such set", 404)
+        return error("No such set", 404)
     if not await prefs.activate(app.pool, session["user_id"], sid):
-        return error("no such set", 404)
+        return error("No such set", 404)
     return JSONResponse({"ok": True})
 
 
@@ -513,7 +548,7 @@ async def status(request, session):
     """Engine health and socket counts; operators only
     (`python -m commuterlviv admin operator <name>` grants it)."""
     if not session["operator"]:
-        return error("not found", 404)
+        return error("Not found", 404)
     app = request.app.state
     return JSONResponse({**app.svc.health(), **app.hub.stats()})
 
@@ -601,28 +636,22 @@ def build(st=None, net=None):
         s.pool = await db.connect(st.database_url)
         await db.migrate(s.pool, log)
         loaded = net if net is not None else network.load()
-        cat = state.Catalog(loaded)
-        s.catalog_json = json.dumps(cat.describe()).encode()
-        s.catalog_tag = f'W/"{len(s.catalog_json):x}-{len(cat.stops):x}"'
-        # seconds of projection and thinning, once, rather than per client
-        s.shapes_json = json.dumps(
-            geometry.describe(loaded, cat.routes)).encode()
-        s.shapes_tag = f'W/"{len(s.shapes_json):x}-{len(cat.routes):x}"'
-        s.svc = service.Service(st, loaded, cat, log)
-        streets = traffic.segments(loaded, s.svc.live.model)
-        s.traffic_units = streets.pop("unit")
-        s.traffic_json = json.dumps(streets).encode()
-        s.traffic_tag = f'W/"{len(s.traffic_json):x}-{len(s.traffic_units):x}"'
-        s.traffic_cache = traffic.Cache(s.svc.live.model, s.traffic_units)
+        s.source = network.source()
+        s.svc = service.Service(st, loaded, log=log, persist=net is None)
+        cat = s.svc.live.cat
+        refresh.install(s, refresh.served(loaded, s.svc.live))
         s.planner = journeys.Planner.maybe(loaded, cat, log)
-        s.geocoder = (geocode.Geocoder(st.photon_url) if st.photon_url
-                      else None)
+        s.preparing = False
+        s.geocoder = geocode.Geocoder.maybe(st.photon_url)
         s.hub = hub.Hub(s.svc.live)
         s.planning = asyncio.Semaphore(PLAN_WORKERS)
         s.tasks = [*await s.svc.start(s.hub), asyncio.create_task(sweeper(s.pool))]
         if s.planner is None and st.build_planner:
             s.tasks.append(asyncio.create_task(
                 journeys.arrange(s, loaded, cat, log)))
+        # a network handed in is the caller's to keep
+        if net is None:
+            s.tasks.append(asyncio.create_task(refresh.nightly(s, log)))
         log(f"serving {st.variant} on {len(cat.routes)} routes, "
             f"{len(cat.stops)} stops")
         try:
@@ -631,6 +660,8 @@ def build(st=None, net=None):
             for t in s.tasks:
                 t.cancel()
             await asyncio.gather(*s.tasks, return_exceptions=True)
+            if s.svc.persist:
+                await s.svc.save()
             await s.pool.close()
 
     # gzip only ever sees complete HTTP responses; the websocket's packed bytes

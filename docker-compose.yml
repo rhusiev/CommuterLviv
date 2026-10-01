@@ -1,6 +1,6 @@
-# Production. Four containers: Postgres, the service, the collector that feeds
-# it, and Caddy in front serving the built UI. `docker compose up -d` is the
-# whole deployment; see the guide in README.md.
+# Production. Five containers: Postgres, the service, the collector that feeds
+# it, the basemap, and Caddy in front serving the built UI. `docker compose up -d` is the
+# whole deployment; see docs/deployment.md.
 
 # Named, because the checkout is worktree-style and the directory this runs from
 # is called `main`. Volumes are named after the project.
@@ -43,6 +43,8 @@ services:
       COMMUTERLVIV_TRUST_PROXY: "true"
       COMMUTERLVIV_BUILD_PLANNER: ${COMMUTERLVIV_BUILD_PLANNER:-true}
       COMMUTERLVIV_PHOTON_URL: ${COMMUTERLVIV_PHOTON_URL-https://photon.komoot.io}
+      # Tells the clients, over /api/health, to take the basemap from /tiles
+      COMMUTERLVIV_SELF_TILES: ${COMMUTERLVIV_SELF_TILES:-true}
     volumes:
       - service_data:/app/data
     networks:
@@ -66,10 +68,6 @@ services:
     image: commuterlviv-service:${VERSION:-latest}
     container_name: commuterlviv_collector
     restart: unless-stopped
-    # Off unless asked for: `docker compose --profile collect up -d`. Only one
-    # machine should be recording, or the two recordings have to be merged
-    # afterwards and neither is a superset of the other
-    profiles: ["collect"]
     command: ["python", "-m", "commuterlviv", "collect", "--keep-days", "30", "--min-free-gb", "3"]
     volumes:
       - service_data:/app/data
@@ -94,11 +92,6 @@ services:
       # Caddy is the outermost thing; docker-compose.proxy.yml overrides it with
       # the header when something else is further out. See deploy/Caddyfile
       COMMUTERLVIV_CLIENT_IP: "{remote_host}"
-    # The release APK, served at /download/. A bind mount and not a volume: a
-    # new build has to be visible without rebuilding the image, and the file is
-    # too big to want in git
-    volumes:
-      - ./deploy/apk:/srv/download:ro
     # Loopback by default: whatever terminates TLS on this machine is what the
     # world talks to. docker-compose.tls.yml is the other way round.
     ports:
@@ -108,9 +101,27 @@ services:
     depends_on:
       - service
 
+  # The basemap, cut for Lviv and refreshed monthly by deploy/tiles.sh, so the
+  # clients never ask tiles.versatiles.org for anything. No published port:
+  # Caddy reaches it by name and strips the /tiles prefix
+  tiles:
+    image: versatiles/versatiles
+    container_name: commuterlviv_tiles
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/setup/tiles.sh"]
+    environment:
+      COMMUTERLVIV_ORIGINS: ${COMMUTERLVIV_ORIGINS}
+      COMMUTERLVIV_WEB_BASE: ${COMMUTERLVIV_WEB_BASE:-}
+    volumes:
+      - ./deploy/tiles.sh:/setup/tiles.sh:ro
+      - ${COMMUTERLVIV_TILES:-tiles_data}:/tiles
+    networks:
+      - internal_backend
+
 networks:
   internal_backend:
 
 volumes:
   postgres_data:
   service_data:
+  tiles_data:

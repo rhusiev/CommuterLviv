@@ -23,22 +23,45 @@ MSG_ABUSE = 500         # messages refused before the socket is closed
 
 MAX_PER_USER = 8        # sockets one account may hold open at once
 
+RENEWED = 1012          # "service restart": the city changed under the socket
+
 
 def due(arrivals, stops):
     """What is coming to these stops; shared with `/api/arrivals`."""
     return {"t": arrivals.t, "stops": {
-        str(i): [{"route": int(r["route"]), "veh": int(r["veh"]),
-                  "t": int(r["t"])} for r in arrivals.at(i)] for i in stops}}
+        str(i): [_row(r) for r in arrivals.at(i)] for i in stops}}
+
+
+def _row(r):
+    out = {"route": int(r["route"]), "veh": int(r["veh"]), "t": int(r["t"])}
+    if r["planned"]:
+        out["planned"] = True
+    return out
+
+
+def _mask(cat, want):
+    mask = np.zeros(len(cat.routes), bool)
+    for i in (want or [])[:len(mask)]:
+        if isinstance(i, int) and 0 <= i < len(mask):
+            mask[i] = True
+    return mask
+
+
+def _watch(cat, want):
+    n = len(cat.stops)
+    return [i for i in (want or [])[:MAX_STOPS]
+            if isinstance(i, int) and 0 <= i < n]
 
 
 class Client:
-    __slots__ = ("ws", "user_id", "routes", "stops", "last", "frames", "bytes",
-                 "wake", "tokens", "at", "refused")
+    __slots__ = ("ws", "user_id", "live", "routes", "stops", "last", "frames",
+                 "bytes", "wake", "tokens", "at", "refused")
 
-    def __init__(self, ws, user_id, nroutes):
+    def __init__(self, ws, user_id, live):
         self.ws = ws
         self.user_id = user_id
-        self.routes = np.zeros(nroutes, bool)
+        self.live = live        # the city its indexes refer to, for its lifetime
+        self.routes = np.zeros(len(live.cat.routes), bool)
         self.stops = []
         self.last = None        # what this client is known to hold; None asks
         self.frames = self.bytes = 0        # for a snapshot
@@ -77,19 +100,31 @@ class Hub:
         for client in self.clients:
             client.wake.set()
 
+    async def renew(self, live):
+        """Onto a new city. Every socket is closed as a restart, and its client
+        reconnects to a hello naming a catalog it does not hold. A pusher woken
+        before its close lands sees the city moved and closes instead of sending
+        the new city's indexes to a client holding the old."""
+        self.live = live
+        self.publish(epoch=True)
+        await asyncio.gather(*(c.ws.close(code=RENEWED) for c in self.clients),
+                             return_exceptions=True)
+
     async def serve(self, ws, user_id):
         """One connection, until it goes away."""
         if sum(c.user_id == user_id for c in self.clients) >= MAX_PER_USER:
             await ws.close(code=1013)
             return
-        client = Client(ws, user_id, len(self.live.cat.routes))
+        live = self.live
+        client = Client(ws, user_id, live)
         self.clients.add(client)
         try:
             await ws.send_text(json.dumps({
-                "type": "hello", "variant": self.live.variant,
-                "epoch": self.live.epoch_s,
-                "routes": len(self.live.cat.routes),
-                "stops": len(self.live.cat.stops)}))
+                "type": "hello", "variant": live.variant,
+                "epoch": live.epoch_s,
+                "routes": len(live.cat.routes),
+                "stops": len(live.cat.stops),
+                "catalog": live.cat.tag}))
             # whichever half stops first ends the connection, so a dead pusher
             # cannot leave a socket that reads fine and never updates
             tasks = [asyncio.create_task(self._read(client)),
@@ -124,27 +159,15 @@ class Hub:
                 continue
             kind = msg.get("type")
             if kind == "routes":
-                client.routes = self._mask(msg.get("routes"))
+                client.routes = _mask(client.live.cat, msg.get("routes"))
                 client.last = None
                 client.wake.set()
             elif kind == "stops":
-                client.stops = self._watch(msg.get("stops"))
+                client.stops = _watch(client.live.cat, msg.get("stops"))
                 await self._send_arrivals(client)
             elif kind == "ping":
                 await client.ws.send_text(json.dumps({"type": "pong",
                                                       "t": time.time()}))
-
-    def _mask(self, want):
-        mask = np.zeros(len(self.live.cat.routes), bool)
-        for i in (want or [])[:len(mask)]:
-            if isinstance(i, int) and 0 <= i < len(mask):
-                mask[i] = True
-        return mask
-
-    def _watch(self, want):
-        n = len(self.live.cat.stops)
-        return [i for i in (want or [])[:MAX_STOPS]
-                if isinstance(i, int) and 0 <= i < n]
 
     async def _push(self, client):
         seen, seen_epoch = -1, self.epoch_seq
@@ -159,6 +182,9 @@ class Hub:
             # cleared before reading the state, so a publish landing in between
             # leaves the event set and is not missed
             client.wake.clear()
+            if client.live is not self.live:
+                await client.ws.close(code=RENEWED)
+                return
             seen = self.seq
             await self._send_positions(client)
             if self.epoch_seq != seen_epoch:
@@ -167,7 +193,7 @@ class Hub:
                     await self._send_arrivals(client)
 
     async def _send_positions(self, client):
-        pos = self.live.positions
+        pos = client.live.positions
         rows = wire.inbox(pos.by_route(client.routes))
         if client.last is None:
             frame = wire.encode(rows, pos.t, wire.SNAPSHOT)
@@ -182,7 +208,7 @@ class Hub:
         client.bytes += len(frame)
 
     async def _send_arrivals(self, client):
-        arr = self.live.arrivals
+        arr = client.live.arrivals
         await client.ws.send_text(json.dumps(
             {"type": "arrivals", **due(arr, client.stops)}))
 

@@ -3,6 +3,7 @@ import { countdown, nextPerRoute } from "../lib/eta";
 import type { Arrival, Catalog } from "../lib/types";
 import { t } from "../lib/i18n";
 import { RouteBadge } from "./RouteBadge";
+import { Icon } from "./Icon";
 
 /** The clock ticks locally between epochs: the predictions change once a
  * minute, but a countdown that only moves once a minute looks broken. */
@@ -41,9 +42,10 @@ export function Timetable({
               <h3 className="truncate font-medium text-slate-100">{s.name}</h3>
               <button
                 onClick={() => onUnpin(i)}
-                className="text-xs text-slate-600 hover:text-rose-300"
+                title={t.unpin}
+                className="text-accent hover:text-rose-300"
               >
-                {t.unpin}
+                <Icon name="pin" filled className="size-4" />
               </button>
             </div>
             {due.length === 0 ? (
@@ -62,7 +64,10 @@ export function Timetable({
                         <span className="w-14 text-center text-sm text-slate-500">?</span>
                       )}
                       <span className="flex-1 truncate text-sm text-slate-400">{r?.long}</span>
-                      <span className="tabular-nums text-sm text-slate-100">
+                      <span
+                        className={`tabular-nums text-sm text-slate-100 ${a.planned ? "italic" : ""}`}
+                        title={a.planned ? t.planned : undefined}
+                      >
                         {countdown(a.t, now)}
                       </span>
                     </li>

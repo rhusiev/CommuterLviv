@@ -13,8 +13,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:latlong2/latlong.dart';
 
-const _channel = MethodChannel('ua.lviv.commuterlviv/here');
-const _fixes = EventChannel('ua.lviv.commuterlviv/here/fixes');
+const _channel = MethodChannel('nl.r1a.commuterlviv/here');
+const _fixes = EventChannel('nl.r1a.commuterlviv/here/fixes');
 
 enum Locating {
   off,

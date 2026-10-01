@@ -28,7 +28,16 @@ class Due extends StatelessWidget {
       children: [
         RouteBadge(route: route, fontSize: 10),
         const SizedBox(width: 6),
-        Text(countdown(arrival.t)),
+        if (arrival.planned) ...[
+          const Icon(Icons.schedule, size: 14),
+          const SizedBox(width: 2),
+        ],
+        Text(
+          countdown(arrival.t),
+          style: arrival.planned
+              ? const TextStyle(fontStyle: FontStyle.italic)
+              : null,
+        ),
       ],
     );
     // ActionChip rather than a Chip in an InkWell: the wrapper's ink paints a

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { metres } from "../lib/geo";
+import { score, words } from "../lib/match";
 import type { Catalog, Found } from "../lib/types";
 import { t } from "../lib/i18n";
 
@@ -23,9 +24,12 @@ type Props = {
   onGo: (stop: number) => void;
   onPlace: (place: Found) => void;
   onSave: (name: string, lat: number, lon: number) => void;
+  /** Set when the search stands in for a field: it opens focused, offers
+   *  `idle` until something is typed, and asks to be dismissed when done */
+  inline?: { placeholder: string; idle: ReactNode; onDismiss: () => void };
 };
 
-export function StopSearch({ catalog, onGo, onPlace, onSave }: Props) {
+export function StopSearch({ catalog, onGo, onPlace, onSave, inline }: Props) {
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const [near, setNear] = useState<{ stop: number; away: number }[] | null>(null);
@@ -34,22 +38,19 @@ export function StopSearch({ catalog, onGo, onPlace, onSave }: Props) {
   const [why, setWhy] = useState("");
   const box = useRef<HTMLDivElement>(null);
 
+  const names = useMemo(() => catalog.stops.map((s) => words(s.name)), [catalog]);
   const hits = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (q.length < 2) return [];
-    const out: number[] = [];
-    // Prefix hits first, and the scan stops early rather than sorting a
-    // thousand stops on every keystroke
-    const rest: number[] = [];
-    for (let i = 0; i < catalog.stops.length; i++) {
-      const name = catalog.stops[i]!.name.toLowerCase();
-      const at = name.indexOf(q);
-      if (at === 0) out.push(i);
-      else if (at > 0 && rest.length < LIMIT) rest.push(i);
-      if (out.length >= LIMIT) break;
-    }
-    return [...out, ...rest].slice(0, LIMIT);
-  }, [catalog, query]);
+    const q = words(query);
+    if (q.join("").length < 2) return [];
+    const scored: [number, number][] = [];
+    names.forEach((name, i) => {
+      const s = score(q, name);
+      if (s > 0) scored.push([s, i]);
+    });
+    // Shorter names first among equals: "Ринок" before "Ринок Шувар"
+    scored.sort(([a, i], [b, j]) => b - a || catalog.stops[i]!.name.length - catalog.stops[j]!.name.length);
+    return scored.slice(0, LIMIT).map(([, i]) => i);
+  }, [catalog, names, query]);
 
   useEffect(() => {
     const q = query.trim();
@@ -107,12 +108,16 @@ export function StopSearch({ catalog, onGo, onPlace, onSave }: Props) {
     );
   };
 
+  const dismiss = useRef(inline?.onDismiss);
+  dismiss.current = inline?.onDismiss;
+
   useEffect(() => {
     const away = (e: PointerEvent) => {
       if (box.current?.contains(e.target as Node)) return;
       setQuery("");
       setNear(null);
       setWhy("");
+      dismiss.current?.();
     };
     document.addEventListener("pointerdown", away);
     return () => document.removeEventListener("pointerdown", away);
@@ -128,6 +133,7 @@ export function StopSearch({ catalog, onGo, onPlace, onSave }: Props) {
     setNear(null);
     setFound([]);
     setWhy("");
+    inline?.onDismiss();
   };
 
   const go = (row: Row | undefined) => {
@@ -154,17 +160,23 @@ export function StopSearch({ catalog, onGo, onPlace, onSave }: Props) {
           else return;
           e.preventDefault();
         }}
-        placeholder={t.findStop}
-        className="field-bar py-2.5 pr-8"
+        placeholder={inline?.placeholder ?? t.findStop}
+        autoFocus={inline !== undefined}
+        className={inline ? "field w-full py-1.5" : "field-bar py-2.5 pr-8"}
       />
-      <button
-        onClick={locate}
-        disabled={locating}
-        title={t.nearMe}
-        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-1 text-sm text-slate-500 hover:text-accent disabled:text-slate-600"
-      >
-        ◎
-      </button>
+      {!inline && (
+        <button
+          onClick={locate}
+          disabled={locating}
+          title={t.nearMe}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-1 text-sm text-slate-500 hover:text-accent disabled:text-slate-600"
+        >
+          ◎
+        </button>
+      )}
+      {inline && query.trim() === "" && (
+        <div className="panel absolute inset-x-0 top-full z-30 mt-1 p-1 text-sm">{inline.idle}</div>
+      )}
       {why !== "" && rows.length === 0 && (
         <p className="panel absolute inset-x-0 top-full z-30 mt-2 px-3 py-2 text-xs text-slate-400">
           {why}

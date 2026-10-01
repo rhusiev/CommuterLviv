@@ -1,0 +1,224 @@
+# The build recipe for F-Droid.
+#
+# This file does not live here in the end: it is copied to
+# `metadata/nl.r1a.commuterlviv.yml` in a fork of the `fdroiddata` repository and
+# sent as a merge request. It is kept here so the recipe and the app it builds
+# change together.
+#
+# One rule keeps it working: each release needs an annotated tag named
+# `v<version>` on the commit carrying that version, because `UpdateCheckMode:
+# Tags` looks for one and the build below names it as its commit. The recipe
+# also expects the three per-ABI APKs to be on the matching GitHub release
+# under the `binary:` URLs below, because `Builds:` rebuilds from source and
+# `apksigcopier` only accepts a release whose signed bytes match. Both come
+# from `.github/workflows/release.yml` when a new version is merged into
+# `main`; no tag is ever pushed by hand.
+#
+# The licence is MIT and the file is `LICENSE` at the root, where F-Droid looks. There is no proprietary dependency to strip: the
+# app pulls no Google Play services, no Firebase and no map vendor SDK, which is
+# why it is a Flutter app talking to `dart:io` sockets rather than an Expo one,
+# and why `MainActivity.kt` writes its own location channel over AOSP's
+# `LocationManager`. `android/app/build.gradle.kts` already signs a release only
+# if `key.properties` is there, so F-Droid's keyless build produces the unsigned
+# APK it then signs itself, and it drops the Google-signed dependency blob that
+# F-Droid rejects.
+
+Categories:
+  - Navigation
+  - Internet
+License: MIT
+AuthorName: rad1an
+WebSite: https://commuterlviv.r1a.nl
+SourceCode: https://github.com/rhusiev/CommuterLviv
+IssueTracker: https://github.com/rhusiev/CommuterLviv/issues
+
+AutoName: CommuterLviv
+
+# Both are required of a new app, and both are the same text as
+# `fastlane/metadata/android/en-US/`, which F-Droid reads out of the repository
+# and which is where the wording is edited. That directory is at the root and
+# not beside the app it describes, because `insert_localized_app_metadata` in
+# fdroidserver globs `build/<applicationId>/fastlane/metadata/android/<locale>`
+# and nothing deeper: under `mobile/` it is simply never found. Kept in step by
+# hand: there is one listing, not two
+Summary: Where the trams and buses of Lviv actually are, and when yours arrives
+
+Description: |-
+  A live map of Lviv's trams, trolleybuses and buses, and an honest answer to
+  "how long until mine gets here".
+
+  The app is a client. It talks to commuterlviv.r1a.nl by default, and to any other
+  server you or someone you trust runs if you give the sign-in screen a different
+  address. It does nothing on its own. There is no account here that is not an
+  account there, and there is no analytics, advertising or tracking of any kind.
+
+  What it shows:
+
+  * Every vehicle on the routes you pick, moving on the map in real time
+  * An arrow only when the vehicle is actually moving. A bus standing at a light gets no arrow rather than a guessed one
+  * The next arrivals at any stop, predicted from how traffic is running today rather than from the printed timetable
+  * Stops you pin, with their times on one screen
+  * Saved places and pinned stops marked on the map wherever you are looking - the places named, the pins ringed
+  * A journey planner, door to door, leaving now or at a time you pick, saying for each ride whether the time came from a tracked vehicle, from the timetable, or from a timetable on a line nothing has been seen running on
+  * Saved sets of routes and saved places, kept on the server, so the phone and the browser show the same thing
+  * A traffic view, colouring the streets the trams and buses can see by how far behind the timetable they are running, one line per street per direction rather than one per route, with trams on their own track kept apart from the road
+  * Nothing coloured where too few have passed to say, or at the ends of a line, where standing at a terminus is not traffic
+  * Five map styles, dark and light
+
+  The map is OpenStreetMap data rendered on the device from VersaTiles' free
+  vector tiles. No key, no account, no map vendor.
+
+  Permissions: internet, and location. Nothing is asked of the system until you
+  press the button that centres the map on you, so the app can be installed and
+  used by somebody who never grants location at all. The fix is kept on the phone
+  and is never reported to the server as your position. The two things that do
+  leave are the ones you ask for: a journey planned from where you are sends that
+  one point so the server can plan it, and a place you save is saved on the server
+  so the browser has it too.
+
+RepoType: git
+Repo: https://github.com/rhusiev/CommuterLviv.git
+
+Builds:
+  # One APK per ABI rather than one carrying all three, so a phone downloads
+  # about a third. The blocks differ only in `--target-platform`, `output` and
+  # `versionCode`. `--split-per-abi` makes Flutter's Gradle plugin override the
+  # version code as `<abi> * 1000 + <pubspec code>`, with arm 1, arm64 2 and
+  # x86_64 4 (`ABI_VERSION` in `FlutterPluginConstants.kt`), and F-Droid rejects
+  # an APK whose code differs from its block, so these are those numbers. arm64
+  # must outrank arm: a 64-bit phone can run both and gets the higher one
+  - versionName: 0.13.0
+    versionCode: 1035
+    commit: v0.13.0
+    subdir: mobile
+    # The srclib is F-Droid's own pinned checkout of the Flutter SDK, so there
+    # is no tarball to download and no hash to keep in step with one
+    srclibs:
+      - flutter@3.47.2
+    prebuild:
+      # Both this build and the GHA release workflow move their checkout
+      # to `/tmp/build/nl.r1a.commuterlviv` before building (rather than
+      # symlinking it), so Flutter's Gradle plugin bakes that real
+      # absolute path into `libapp.so`. A symlink would resolve to
+      # `/home/vagrant/build/nl.r1a.commuterlviv` here and to a different
+      # path on the GHA runner, and the baked-in strings would not
+      # match. `/tmp` is chosen because both sides need a world-writable
+      # root: `/srv` is root-owned, this build runs as `vagrant` with sudo
+      # removed before the recipe runs, and the GHA runner is unprivileged
+      # too. The pub cache is deliberately not pinned here, and this build's
+      # `%vagrant%/.pub-cache` verifies against the workflow's
+      # `/tmp/pubcache`: that path used to reach the pre-strip build-id of
+      # `libdartjni.so`, and `android/build.gradle.kts` now drops the
+      # build-id note outright, so it no longer reaches anything.
+      # The `mv` round-trip restores the original directory name and
+      # location, which is what fdroidserver expects when its own
+      # bookkeeping looks for it.
+      # `$PWD` at phase start is the phase's working dir for every command
+      # in the phase, so this avoids both absolute paths and the "cd ..;
+      # mv nl.r1a.commuterlviv" dance, which broke once prebuild ran from
+      # the app dir's own subdir: `..` there is the app dir, not its parent
+      - appdir=$(cd .. && pwd)
+      - mkdir -p /tmp/build
+      - mv $appdir /tmp/build/nl.r1a.commuterlviv
+      - cd /tmp/build/nl.r1a.commuterlviv/mobile
+      - git config --global --add safe.directory $$flutter$$
+      - $$flutter$$/bin/flutter config --no-analytics
+      - mv /tmp/build/nl.r1a.commuterlviv $appdir
+    # `subdir` is the Flutter project, not the Gradle module inside it: it is
+    # both the working directory for the commands below and what `output` is
+    # relative to, and `flutter build` has to run from the Flutter project
+    # `--enforce-lockfile` resolves to exactly what `mobile/pubspec.lock` pins
+    # and fails if it cannot, rather than quietly taking a newer package than
+    # the one this release was tested and built against
+    build:
+      - appdir=$(cd .. && pwd)
+      - mv $appdir /tmp/build/nl.r1a.commuterlviv
+      - cd /tmp/build/nl.r1a.commuterlviv/mobile
+      - $$flutter$$/bin/flutter pub get --enforce-lockfile
+      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-arm
+      - mv /tmp/build/nl.r1a.commuterlviv $appdir
+    output: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+    binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-armeabi-v7a.apk
+    ndk: r27c
+
+  - versionName: 0.13.0
+    versionCode: 2035
+    commit: v0.13.0
+    subdir: mobile
+    srclibs:
+      - flutter@3.47.2
+    prebuild:
+      - appdir=$(cd .. && pwd)
+      - mkdir -p /tmp/build
+      - mv $appdir /tmp/build/nl.r1a.commuterlviv
+      - cd /tmp/build/nl.r1a.commuterlviv/mobile
+      - git config --global --add safe.directory $$flutter$$
+      - $$flutter$$/bin/flutter config --no-analytics
+      - mv /tmp/build/nl.r1a.commuterlviv $appdir
+    build:
+      - appdir=$(cd .. && pwd)
+      - mv $appdir /tmp/build/nl.r1a.commuterlviv
+      - cd /tmp/build/nl.r1a.commuterlviv/mobile
+      - $$flutter$$/bin/flutter pub get --enforce-lockfile
+      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-arm64
+      - mv /tmp/build/nl.r1a.commuterlviv $appdir
+    output: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+    binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-arm64-v8a.apk
+    ndk: r27c
+
+  - versionName: 0.13.0
+    versionCode: 4035
+    commit: v0.13.0
+    subdir: mobile
+    srclibs:
+      - flutter@3.47.2
+    prebuild:
+      - appdir=$(cd .. && pwd)
+      - mkdir -p /tmp/build
+      - mv $appdir /tmp/build/nl.r1a.commuterlviv
+      - cd /tmp/build/nl.r1a.commuterlviv/mobile
+      - git config --global --add safe.directory $$flutter$$
+      - $$flutter$$/bin/flutter config --no-analytics
+      - mv /tmp/build/nl.r1a.commuterlviv $appdir
+    build:
+      - appdir=$(cd .. && pwd)
+      - mv $appdir /tmp/build/nl.r1a.commuterlviv
+      - cd /tmp/build/nl.r1a.commuterlviv/mobile
+      - $$flutter$$/bin/flutter pub get --enforce-lockfile
+      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-x64
+      - mv /tmp/build/nl.r1a.commuterlviv $appdir
+    output: build/app/outputs/flutter-apk/app-x86_64-release.apk
+    binary: https://github.com/rhusiev/CommuterLviv/releases/download/v%v/commuterlviv-%v-x86_64.apk
+    ndk: r27c
+
+# The version the app reports and the version F-Droid publishes are the same
+# number, taken from `mobile/pubspec.yaml`.
+#
+# `UpdateCheckData` is what says so, and without it nothing updates: told only
+# `Tags`, `check_tags` reads the version out of the Gradle files, and a Flutter
+# project's say `versionCode = flutter.versionCode` rather than a number, so it
+# finds nothing on any tag and fails with "Couldn't find any version
+# information". The four fields are the file and regex for the code, then the
+# file and regex for the name, each path from the root of the repository. The
+# regexes are unanchored because `checkupdates` matches without `re.MULTILINE`,
+# so a `^` here would only ever match the start of the whole file.
+# `VercodeOperation` turns that code into the three per-ABI ones, one block
+# each, and `CurrentVersionCode` is the highest of them
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+VercodeOperation:
+  - 1000 + %c
+  - 2000 + %c
+  - 4000 + %c
+UpdateCheckData: mobile/pubspec.yaml|version:\s[0-9.]+\+(\d+)|mobile/pubspec.yaml|version:\s([0-9.]+)\+
+CurrentVersion: 0.13.0
+CurrentVersionCode: 4035
+
+# The maintainer ships per-ABI APKs at the same URL on each GitHub release:
+# fdroidserver downloads the matching one, rebuilds the unsigned APK from the
+# `Builds:` above, copies the signature from the downloaded one with
+# `apksigcopier`, and only publishes the downloaded APK if the unzipped content
+# matches bit-for-bit (the `diff -r` step in `verify_apks`). The signing key
+# fingerprint pins it: the maintainer's certificate SHA-256, lowercased hex
+# without separators, as `apksigner verify --print-certs` reports
+AllowedAPKSigningKeys: 22e0d82c02f7a01805f121b40648bb4f6a2954b847e97089d3f73142ade31c32

@@ -44,7 +44,7 @@ boots, but then the host's `gfxstream` GLES2 decoder takes a SIGILL the moment
 Flutter draws its first frame, so start the app asking for software rendering:
 
 ```sh
-adb shell am start -n ua.lviv.commuterlviv/.MainActivity \
+adb shell am start -n nl.r1a.commuterlviv/.MainActivity \
   --ez enable-software-rendering true --ez enable-impeller false
 ```
 
@@ -81,11 +81,11 @@ $ANDROID_HOME/build-tools/*/apksigner verify --print-certs -v <apk>
 that is not signed. Signing is v2-only, because `minSdk` is past 24 - there is
 no `META-INF/*.RSA` in the APK and its absence is not a problem.
 
-`../deploy/release-apk.sh` is the same build plus the one step that makes it
-reachable: it copies the result into `deploy/apk/`, which the web container
-mounts, so the newest build is always at `<site>/download/commuterlviv.apk` -
-`http://10.8.0.2:8080/download/` over the VPN. The versioned name is kept
-beside the stable one. Nothing there is in git.
+`../deploy/release-apk.sh` builds the same three per-ABI APKs into
+`release/<version>/` and prints where they are. The F-Droid recipe's
+`binary:` URLs point at those same files on the GitHub release page, so
+F-Droid downloads them back, rebuilds each one from source, and refuses
+to publish unless the bytes match.
 
 The version lives in `pubspec.yaml` and is the whole project's: the service and
 the web app carry the same number, `check.sh` fails if they disagree, and
@@ -99,13 +99,13 @@ F-Droid does not take an APK. It takes a recipe, clones the source itself,
 builds it on its own machines and signs the result with its own key, so the
 whole submission is one YAML file plus a public repository to point it at.
 
-Ours is `fdroid/ua.lviv.commuterlviv.yml`, kept here so the recipe and the app
+Ours is `fdroid/nl.r1a.commuterlviv.yml`, kept here so the recipe and the app
 it builds change together. It passes `fdroid lint`, it points at
 `github.com/rhusiev/CommuterLviv`, and the tag it builds exists. Nothing is
 blocking the submission.
 
-One thing has to keep happening: **every release needs an annotated tag
-`v<version>`**, because `UpdateCheckMode: Tags` finds new releases by looking
+One thing has to keep happening: **every release needs an annotated tag**
+`v<version>`, because `UpdateCheckMode: Tags` finds new releases by looking
 for one and `commit:` names it. Cutting 0.5.1 means
 
 ```sh
@@ -113,18 +113,18 @@ git tag -a v0.5.1 -m "CommuterLviv 0.5.1"
 git push origin v0.5.1
 ```
 
-and bumping `versionName`, `versionCode`, `commit`, `CurrentVersion` and
-`CurrentVersionCode` in the recipe - `check.sh` fails if any of them drifts from
-`pubspec.yaml`. `AutoUpdateMode: Version` means F-Droid then does the rest by
-itself and no second merge request is needed.
+and bumping `versionName`, the three `versionCode`s (one per ABI), `commit`,
+`CurrentVersion` and `CurrentVersionCode` in the recipe - `check.sh` fails if
+any of them drifts from `pubspec.yaml`. `AutoUpdateMode: Version` means F-Droid
+then does the rest by itself and no second merge request is needed.
 
 The submission itself:
 
 ```sh
 # fork https://gitlab.com/fdroid/fdroiddata, then
-cp mobile/fdroid/ua.lviv.commuterlviv.yml <fdroiddata>/metadata/
-cd <fdroiddata> && fdroid readmeta && fdroid lint ua.lviv.commuterlviv
-fdroid build -v -l ua.lviv.commuterlviv   # optional, needs their buildserver
+cp mobile/fdroid/nl.r1a.commuterlviv.yml <fdroiddata>/metadata/
+cd <fdroiddata> && fdroid readmeta && fdroid lint nl.r1a.commuterlviv
+fdroid build -v -l nl.r1a.commuterlviv   # optional, needs their buildserver
 ```
 
 and a merge request against `fdroiddata`. The reviewer builds it, compares the
@@ -133,25 +133,32 @@ result against nothing (there is no upstream APK to reproduce), and merges.
 The build is already shaped for it, and each piece is there for a reason worth
 not undoing:
 
-* `android/app/build.gradle.kts` creates a signing config only if
-  `key.properties` exists, so their keyless build makes the unsigned APK they
-  then sign. It also sets `dependenciesInfo.includeInApk = false`, which strips
-  the Google-signed blob Gradle otherwise embeds and F-Droid rejects.
-* `srclibs: [flutter@3.47.2]` is F-Droid's own pinned Flutter checkout, exposed
-  to the recipe as `$$flutter$$`. It replaced a `sudo:` block that downloaded
-  the SDK tarball and checked a hash by hand - one fewer thing to keep in step
-  with the version above it.
-* `subdir: mobile` is the Flutter project, not the Gradle module inside it: it
-  is where the `build:` commands run and what `output:` is relative to, and
-  `flutter build` has to run from the Flutter project.
+* `android/app/build.gradle.kts` creates a signing config only if `key.properties` exists, so their keyless build makes the unsigned APK they then sign. It also sets `dependenciesInfo.includeInApk = false`, which strips the Google-signed blob Gradle otherwise embeds and F-Droid rejects.
+* `srclibs: [flutter@3.47.2]` is F-Droid's own pinned Flutter checkout, exposed to the recipe as `$$flutter$$`. It replaced a `sudo:` block that downloaded the SDK tarball and checked a hash by hand - one fewer thing to keep in step with the version above it.
+* `subdir: mobile` is the Flutter project, not the Gradle module inside it: it is where the `build:` commands run and what `output:` is relative to, and `flutter build` has to run from the Flutter project.
+* The recipe has three `Builds:` blocks, not one, and `--split-per-abi` builds each: arm, arm64 and x86_64 on their own, so a phone downloads roughly a third. Flutter's Gradle plugin codes an APK as `<abi> * 1000 + <pubspec code>` (`ABI_VERSION` in `FlutterPluginConstants.kt`), so the three blocks carry 1023, 2023 and 4023 for build 23; F-Droid rejects any APK whose code differs from the block it sits in, and `VercodeOperation` rewrites them from the single code `UpdateCheckData` finds in `pubspec.yaml`. arm64 must outrank arm because a 64-bit phone can run both and gets the higher one.
 * No dependency pulls Play services (see "Where the phone is" below).
-* The listing - text, screenshots, changelogs - lives in
-  `fastlane/metadata/android/en-US/` at the root of the repository, not here
-  beside the app, because F-Droid looks for it only at the root of the checkout.
-  `Summary` and `Description` in the recipe repeat the text because fdroiddata
-  requires both fields; they are kept in step by hand.
-* A screenshot is read from the commit the build names, so it has to be in the
-  tree the release tag points at, not merely on the branch.
+* The listing - text, screenshots, changelogs - lives in `fastlane/metadata/android/en-US/` at the root of the repository, not here beside the app, because F-Droid looks for it only at the root of the checkout. `Summary` and `Description` in the recipe repeat the text because fdroiddata requires both fields; they are kept in step by hand.
+* A screenshot is read from the commit the build names, so it has to be in the tree the release tag points at, not merely on the branch.
+* `prebuild:` and `build:` move the checkout to `/tmp/build/nl.r1a.commuterlviv` and back again, and `.github/workflows/release.yml` moves its own there too, so Flutter's Gradle plugin bakes the same absolute path into `libapp.so` on both sides. A symlink is not enough - the plugin resolves it - and `/tmp` is the one place both an F-Droid build (which drops sudo) and a GitHub runner can write. `PUB_CACHE=/tmp/pubcache` is pinned for the same reason: the pub cache path reaches the pre-strip debug info of `libdartjni.so`. Without all of it the two builds share a lockfile, a toolchain and a signing key and still disagree on the `dart_plugin_registrant.dart` path baked into the .so, and F-Droid's `diff -r` fails on it.
+* Each block builds its one ABI with `--target-platform`, and the release workflow runs `flutter build` once per ABI for the same reason. AGP packages the merged manifest of a build's *first* split verbatim and re-serialises it for the rest, which inserts a blank line before a comment and shifts every line number in the packaged `AndroidManifest.xml`. One run emitting all three splits therefore produces one manifest F-Droid can reproduce and two it cannot. See [`../FINDINGS.md`](../FINDINGS.md).
+
+## Cutting a release
+
+Two paths build the same three APKs, both into `mobile/build/app/outputs/flutter-apk/app-<abi>-release.apk`:
+
+* **Tag and push.** `.github/workflows/release.yml` runs on any `v*` tag, builds the per-ABI APKs at `/tmp/build/nl.r1a.commuterlviv/mobile`, signs them with the secrets below, and creates a GitHub release named after the tag with the three APKs attached. Once the workflow runs, F-Droid's recipe downloads them back from those same URLs and rebuilds from source to confirm the bytes match.
+* **Locally.** `../deploy/release-apk.sh` does the same thing by hand into `release/<version>/`, prints the file paths, and asks for a tag and a manual release. Use it when you want to inspect a build before publishing, or when the GHA runner is unreachable.
+
+Either way the F-Droid recipe names the same tag (`commit: v<version>`) and the same three URLs (`binary: .../commuterlviv-<version>-<abi>.apk`), and verifies them.
+
+The four secrets the workflow reads are at
+`https://github.com/rhusiev/CommuterLviv/settings/secrets/actions`:
+
+* `ANDROID_KEYSTORE_B64` - `base64 mobile/android/commuterlviv-release.jks | tr -d '\n'`. The .jks itself is gitignored, and a base64 string is the simplest way to put binary in a secret field
+* `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` - the three remaining fields of `key.properties`. The workflow writes `key.properties` from them before the build
+
+The workflow fails the step that checks signatures (`Verify signatures and rename for release`) if the APK is not signed by `22e0d82c02f7a01805f121b40648bb4f6a2954b847e97089d3f73142ade31c32`, the same SHA-256 `AllowedAPKSigningKeys:` pins in the recipe, so a wrong keystore is caught before the release ships.
 
 ## What the server needs
 
@@ -168,29 +175,30 @@ refused and the map stays empty while everything else works.
 
 ## How it is put together
 
-| file | what it is |
-| --- | --- |
-| `lib/src/wire.dart` | the 10-byte frame decoder, a port of `commuterlviv/live/wire.py` |
-| `lib/src/api.dart` | cookies, the CSRF token and the `Origin` header - the browser part |
-| `lib/src/live.dart` | the socket, the vehicles, and where each one is right now |
-| `lib/src/vehicle_layer.dart` | one `CustomPaint` for the whole city |
-| `lib/src/home.dart` | the state both tabs share, and nothing that draws |
-| `lib/src/map_tab.dart` | the basemap, the vehicles and the attribution |
-| `lib/src/times_tab.dart` | the pinned stops and what is due at each |
-| `lib/src/stop_card.dart` | one stop, from the bottom of the map |
-| `lib/src/stop_search.dart` | stops by name, and places from the service |
-| `lib/src/saved.dart` | the saved places and the pinned stops, in one list |
-| `lib/src/traffic.dart` | how fast the streets are running, while that is on |
-| `lib/src/sheets.dart` | the route sheet, the basemap sheet, and the dialogs each of them shares |
-| `lib/src/due.dart` | one route's countdown chip, drawn in three places |
-| `lib/src/server_dialog.dart` | which server to talk to, asked from two places |
-| `lib/src/map_theme.dart` | the five basemap styles and the colours drawn over them |
-| `lib/src/map_controls.dart` | zoom, and the compass that shows up off north |
-| `lib/src/eta.dart` | an arrival's absolute time, said as a countdown |
-| `lib/src/journey_panel.dart` | two points, and the ways between them |
-| `lib/src/map_tiles.dart` | where the basemap is kept between runs |
-| `lib/src/theme.dart` | every colour and radius the app uses, once |
-| `lib/src/strings.dart` | Ukrainian and English, and the switch between them |
+| file                         | what it is                                                              |
+|------------------------------|-------------------------------------------------------------------------|
+| `lib/src/wire.dart`          | the 10-byte frame decoder, a port of `commuterlviv/live/wire.py`        |
+| `lib/src/api.dart`           | cookies, the CSRF token and the `Origin` header - the browser part      |
+| `lib/src/live.dart`          | the socket, the vehicles, and where each one is right now               |
+| `lib/src/vehicle_layer.dart` | one `CustomPaint` for the whole city                                    |
+| `lib/src/home.dart`          | the state both tabs share, and nothing that draws                       |
+| `lib/src/map_tab.dart`       | the basemap, the vehicles and the attribution                           |
+| `lib/src/times_tab.dart`     | the pinned stops and what is due at each                                |
+| `lib/src/stop_card.dart`     | one stop, from the bottom of the map                                    |
+| `lib/src/stop_search.dart`   | stops by name, and places from the service                              |
+| `lib/src/saved.dart`         | the saved places and the pinned stops, in one list                      |
+| `lib/src/traffic.dart`       | how fast the streets are running, while that is on                      |
+| `lib/src/sheets.dart`        | the route sheet, the basemap sheet, and the dialogs each of them shares |
+| `lib/src/due.dart`           | one route's countdown chip, drawn in three places                       |
+| `lib/src/server_dialog.dart` | which server to talk to, asked from two places                          |
+| `lib/src/map_theme.dart`     | the five basemap styles and the colours drawn over them                 |
+| `lib/src/map_controls.dart`  | zoom, and the compass that shows up off north                           |
+| `lib/src/eta.dart`           | an arrival's absolute time, said as a countdown                         |
+| `lib/src/journey_panel.dart` | two points, and the ways between them                                   |
+| `lib/src/walk_speed.dart`    | how fast you walk, per search and as the usual                          |
+| `lib/src/map_tiles.dart`     | where the basemap is kept between runs                                  |
+| `lib/src/theme.dart`         | every colour and radius the app uses, once                              |
+| `lib/src/strings.dart`       | Ukrainian and English, and the switch between them                      |
 
 Ten things are worth knowing before changing any of it.
 
@@ -213,11 +221,19 @@ whether any vehicle went away.
 Laying out text is far dearer than drawing text already laid out, and doing it
 per vehicle per frame is the one thing that would not fit in a frame.
 
+**Everything held is numbered against one catalog.** Routes and stops travel as
+catalog indexes, and the service moves to a new catalog when the feed changes,
+mostly at night. It then closes every socket with 1012, and the `hello` that
+opens the next one carries the new catalog's ETag. `Live` compares it with the
+one the app holds (`Api.catalogTag`) and calls `onRenewed`. `_renew` in
+`home.dart` fetches the catalog, maps the selected routes, the pins and the open
+route over by feed id, drops the drawn journey and the route lines, closes any
+open sheet and shows a snackbar. The badge cache and the street lines are kept
+per catalog for the same reason.
+
 **The basemap style carries an id that the app puts there.** `vector_map_tiles`
-renders each tile to a PNG and caches it on disk under `'${theme.id}-v${theme
-.version}'`, and every VersaTiles style parses to a theme whose id is `default`.
-So `_loadStyle` rebuilds the `Style` with `theme: read.theme.copyWith(id:
-theme.id)`. Without that, picking a second style changes the overlay colours and
+renders each tile to a PNG and caches it on disk under `'${theme.id}-v${theme .version}'`, and every VersaTiles style parses to a theme whose id is `default`.
+So `_loadStyle` rebuilds the `Style` with `theme: read.theme.copyWith(id: theme.id)`. Without that, picking a second style changes the overlay colours and
 nothing else: the map keeps showing the first style's pictures, read back from
 disk, across restarts.
 
@@ -281,20 +297,40 @@ are committed: a build from source must not need a rasteriser.
 ## Planning a journey
 
 The directions button in the app bar opens `journey_panel.dart` over the map.
-Both ends are set by tapping the map, or by the locate button beside either
-field; while an end is being picked, a tap is that point and not the nearest
-stop, because a door rarely is one. A chip beside the two fields says when to
-leave, `Now` until a time is picked, and passes it as `at=<unix seconds>`; a
-time already past today is meant for tomorrow, which is as far ahead as the
-server plans.
+Tapping either end opens the same search as the top bar (`stop_search.dart`):
+typing finds stops, addresses and shops, and before anything is typed it offers
+where I am, choosing on the map, and the saved places. The locate button beside
+each field is where I am in one tap. While an end is being picked on the map
+the panel folds to a strip saying so, and a tap is that point and not the
+nearest stop, because a door rarely is one. The arrow in the panel's corner
+folds it to a strip too, showing the picked option's length and routes, so the
+option can be read on the map; tapping the strip opens the panel again. The
+planner is left through the bottom tabs. Two chips beside the two fields say
+when to leave: the day, `Today` until another is picked in the next 30 days, and
+the time, `Now` until one is picked. They are passed as `at=<unix seconds>`. A
+time already past on today is meant for tomorrow. Below them a stepper sets
+how fast this search walks on the level, 0.5 to 8 km/h in halves, passed as
+`speed=`. It starts from the usual speed, kept on the device under
+`commuterlviv.walk` and set from `Walking speed` in the account menu; stepping
+it in the panel changes that search only. The server already slows walks
+uphill and speeds them down gentle slopes.
 
-`GET /api/plan` answers with options ranked by arrival, and each ride leg says
-what it rests on: a tracked vehicle, the timetable, or the timetable on a line
-nothing has been seen running on, which is the last one drawn in the error
-colour. Past the model's 45-minute horizon every ride is the schedule's guess,
-and it says so rather than looking equally certain. A walk between two rides is
-its own row with its own duration, because that is how it arrives. A server
-without the planner caches answers 503; the panel shows the message.
+`GET /api/plan` answers with options ranked by arrival. A ride on a tracked
+vehicle says nothing more; one resting on the timetable says so, and one on a
+line nothing has been seen running on says that in the error colour. Tapping
+either word explains what it means. The option's backup count opens a dialog
+that, under each ride's stop, puts the planned way first and then the ride's
+backups - the other ways to the door from that stop, each with its routes,
+where it changes and when it gets there, at most half an hour after the option
+does - and tapping one opens the line it leaves on. Four show at first, picked
+by the sort preset and then by each other one (`Prefer.shortlist`), with the
+rest behind a button; a route the option itself rides further along is
+outlined, and a way that is also one of the listed options says `Option N`, N
+being where it sits in the list as sorted now. Past the model's 45-minute
+horizon every ride is the schedule's guess, and it says so rather than looking
+equally certain. A walk between two rides is its own row with its own duration,
+because that is how it arrives. A server without the planner caches answers
+503; the panel shows the message.
 
 ## What is saved
 
@@ -329,8 +365,8 @@ The locate button is a hand-written platform channel, not a package. The obvious
 package, `geolocator`, pulls `com.google.android.gms:play-services-location`,
 and F-Droid does not take builds with a proprietary SDK in them; so each
 platform has its own half, answering the same two channels -
-`ua.lviv.commuterlviv/here` for `start` and `stop`,
-`ua.lviv.commuterlviv/here/fixes` for a `{lat, lon, accuracy}` map per fix - so
+`nl.r1a.commuterlviv/here` for `start` and `stop`,
+`nl.r1a.commuterlviv/here/fixes` for a `{lat, lon, accuracy}` map per fix - so
 that `here.dart` has one code path.
 
 `MainActivity.kt` is the Android half, over `android.location.LocationManager`,

@@ -70,9 +70,9 @@ Color? trafficColour(double? ratio) {
 const _crs = Epsg3857();
 
 /// Held across openings of the view, and across a rebuild of the layer: where
-/// the stretches land in the map's own plane. The server they came from is kept
-/// with them, since another one measures other stretches.
-({String base, List<List<Offset>> lines})? _held;
+/// the stretches land in the map's own plane. The server and the catalog they
+/// came from are kept with them, since another city has other stretches.
+({(String, String?) city, List<List<Offset>> lines})? _held;
 
 List<List<Offset>> _project(Streets streets) => [
   for (final line in streets.lines)
@@ -153,11 +153,9 @@ class _TrafficLayerState extends State<TrafficLayer> {
 
   Future<void> _load() async {
     try {
-      if (_held?.base != widget.api.base) {
-        _held = (
-          base: widget.api.base,
-          lines: _project(await widget.api.streets()),
-        );
+      final city = (widget.api.base, widget.api.catalogTag);
+      if (_held?.city != city) {
+        _held = (city: city, lines: _project(await widget.api.streets()));
       }
     } on Exception {
       // Nothing to colour, so the view is simply the map it sits on

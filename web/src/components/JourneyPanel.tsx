@@ -1,23 +1,43 @@
-import { useState } from "react";
-import { api } from "../lib/api";
+import { useEffect, useRef, useState } from "react";
+import { api, ApiError } from "../lib/api";
+import { clock, mins } from "../lib/eta";
 import { t } from "../lib/i18n";
-import { dropped, saved } from "../lib/places";
+import { saved } from "../lib/places";
+import {
+  heldPrefer,
+  holdPrefer,
+  PREFERS,
+  ranked,
+  type Prefer,
+} from "../lib/prefer";
+import { heldSpeed } from "../lib/walking";
+import { Backups } from "./Backups";
+import { Icon, type IconName } from "./Icon";
 import { RouteBadge } from "./RouteBadge";
+import { Speed } from "./Speed";
+import { StopSearch } from "./StopSearch";
 import type { Catalog, Confidence, Journey, Leg, Place } from "../lib/types";
 
 export type Point = { lat: number; lon: number };
 
-const clock = (t: number) =>
-  new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+type End = "from" | "to";
 
-const mins = (s: number) => Math.max(1, Math.round(s / 60));
-
-/** What the leg rests on, and how loudly to say so */
-const RESTS: Record<Confidence, { word: string; tone: string; hint?: string }> = {
-  live: { word: t.livePart, tone: "text-emerald-400" },
-  schedule: { word: t.schedulePart, tone: "text-slate-500" },
-  quiet: { word: t.quietPart, tone: "text-amber-400", hint: t.quietHint },
+/** What a ride not on a tracked vehicle rests on, how loudly to say so, and why
+ *  it matters */
+const RESTS: Record<
+  Exclude<Confidence, "live">,
+  { word: string; tone: string; why: string }
+> = {
+  schedule: {
+    word: t.schedulePart,
+    tone: "text-slate-500",
+    why: t.scheduleWhy,
+  },
+  quiet: { word: t.quietPart, tone: "text-amber-400", why: t.quietWhy },
 };
+
+/** As far ahead as the server plans */
+const AHEAD_S = 30 * 86400;
 
 /** What `<input type="datetime-local">` wants: local wall clock, no zone */
 const onClock = (at: number) => {
@@ -28,6 +48,8 @@ const onClock = (at: number) => {
 /** The same place: 1e-4 degrees is about 11 m */
 const same = (a: Point, b: Place) =>
   Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lon - b.lon) < 1e-4;
+
+const key = (p: Point) => `${p.lat},${p.lon}`;
 
 export function JourneyPanel({
   catalog,
@@ -42,78 +64,163 @@ export function JourneyPanel({
   onLine,
   places,
   onPlaces,
+  onShow,
+  folded,
+  onFold,
 }: {
   catalog: Catalog;
   from: Point | null;
   to: Point | null;
-  picking: "from" | "to" | null;
-  onPick: (which: "from" | "to" | null) => void;
+  /** The end waiting on a click on the map; the panel folds out of its way */
+  picking: End | null;
+  onPick: (which: End | null) => void;
   onSwap: () => void;
-  onHere: (which: "from" | "to") => void;
+  onHere: (which: End) => void;
   onStop: (i: number) => void;
-  onPoint: (which: "from" | "to", at: Point) => void;
+  onPoint: (which: End, at: Point) => void;
   onLine: (i: number) => void;
   places: Place[];
   onPlaces: (next: Place[]) => void;
+  /** The option picked to be drawn on the map, or null once none is */
+  onShow: (j: Journey | null) => void;
+  /** Folded down to a strip, the map and the option on it in view */
+  folded: boolean;
+  onFold: (folded: boolean) => void;
 }) {
   const [options, setOptions] = useState<Journey[] | null>(null);
+  const [shown, setShown] = useState<Journey | null>(null);
+  const show = (j: Journey | null) => {
+    setShown(j);
+    onShow(j);
+  };
+  // Leaving the planner takes its journey off the map
+  useEffect(() => () => onShow(null), [onShow]);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   /** Unix seconds, or null for now - which is what the service assumes */
   const [at, setAt] = useState<number | null>(null);
-
-  const save = (point: Point, name: string) =>
-    onPlaces(saved(places, name, point.lat, point.lon));
-
-  const forget = (place: Place) => onPlaces(dropped(places, place.name));
+  const [prefer, setPrefer] = useState<Prefer>(heldPrefer);
+  /** km/h, starting at the one kept as the default */
+  const [speed, setSpeed] = useState(heldSpeed);
+  /** What the points picked by name were called, so they keep reading so */
+  const names = useRef(new Map<string, string>());
 
   const search = async () => {
     if (!from || !to) return;
     setBusy(true);
     setFailed(null);
+    show(null);
     try {
-      const got = await api.plan([from.lat, from.lon], [to.lat, to.lon], at);
+      const got = await api.plan(
+        [from.lat, from.lon],
+        [to.lat, to.lon],
+        at,
+        speed,
+      );
       setOptions(got.options);
     } catch (err) {
-      setFailed(err instanceof Error ? err.message : t.failed);
+      setFailed(
+        err instanceof ApiError && err.preparing
+          ? t.plannerPreparing
+          : err instanceof Error
+            ? err.message
+            : t.failed,
+      );
       setOptions(null);
     } finally {
       setBusy(false);
     }
   };
 
+  if (picking)
+    return (
+      <div className="flex items-center gap-2 text-sm">
+        <Label text={END[picking].label} icon={END[picking].icon} />
+        <span className="flex-1">
+          {END[picking].label}: {t.tapMap}
+        </span>
+        <button onClick={() => onPick(null)} className="btn-quiet px-2">
+          <Icon name="clear" className="size-4" />
+        </button>
+      </div>
+    );
+
+  if (folded)
+    return (
+      <button
+        onClick={() => onFold(false)}
+        title={t.showPanel}
+        className="flex w-full items-center gap-2 text-left"
+      >
+        {shown ? (
+          <>
+            <span className="font-medium text-slate-100">
+              {t.minutes(mins(shown.arr - shown.dep))}
+            </span>
+            <span className="flex min-w-0 flex-1 gap-1 overflow-hidden">
+              {shown.legs.map(
+                (leg, i) =>
+                  leg.route !== undefined &&
+                  catalog.routes[leg.route] && (
+                    <RouteBadge
+                      key={i}
+                      route={catalog.routes[leg.route]!}
+                      className="px-1.5 text-xs"
+                    />
+                  ),
+              )}
+            </span>
+          </>
+        ) : (
+          <span className="flex-1 font-medium">{t.plan}</span>
+        )}
+        <Icon name="up" className="size-4 text-slate-400" />
+      </button>
+    );
+
+  const order = options ? ranked(options, prefer) : [];
+  /** Where the plan's `i`-th option is listed, counting from 1 */
+  const place = (i: number) => order.indexOf(options![i]!) + 1;
+
+  const field = (which: End, point: Point | null) => (
+    <Field
+      end={which}
+      point={point}
+      name={point && names.current.get(key(point))}
+      catalog={catalog}
+      onPick={() => onPick(which)}
+      onHere={() => onHere(which)}
+      places={places}
+      onPlace={(p, name) => {
+        if (name) names.current.set(key(p), name);
+        onPoint(which, p);
+      }}
+      onSave={(name, p) => onPlaces(saved(places, name, p.lat, p.lon))}
+    />
+  );
+
   return (
     <div className="flex h-full flex-col gap-2 overflow-y-auto">
-      <Field
-        label={t.from}
-        point={from}
-        picking={picking === "from"}
-        onPick={() => onPick(picking === "from" ? null : "from")}
-        onHere={() => onHere("from")}
-        places={places}
-        onPlace={(p) => onPoint("from", p)}
-        onSave={from && ((name: string) => save(from, name))}
-        onForget={forget}
-      />
-      <Field
-        label={t.to}
-        point={to}
-        picking={picking === "to"}
-        onPick={() => onPick(picking === "to" ? null : "to")}
-        onHere={() => onHere("to")}
-        places={places}
-        onPlace={(p) => onPoint("to", p)}
-        onSave={to && ((name: string) => save(to, name))}
-        onForget={forget}
-      />
+      <div className="flex items-center">
+        <span className="flex-1 font-medium">{t.plan}</span>
+        <button
+          onClick={() => onFold(true)}
+          title={t.hidePanel}
+          className="btn-quiet px-2"
+        >
+          <Icon name="down" className="size-4" />
+        </button>
+      </div>
+      {field("from", from)}
+      {field("to", to)}
 
       <div className="flex items-center gap-2">
-        <span className="w-12 shrink-0 text-xs uppercase tracking-wide text-slate-500">
-          {t.leaveAt}
-        </span>
+        <Label text={t.leaveAt} icon="clock" />
         <input
           type="datetime-local"
           value={at === null ? "" : onClock(at)}
+          min={onClock(Date.now() / 1000)}
+          max={onClock(Date.now() / 1000 + AHEAD_S)}
           onChange={(e) =>
             setAt(e.target.value === "" ? null : Math.round(new Date(e.target.value).getTime() / 1000))
           }
@@ -127,6 +234,11 @@ export function JourneyPanel({
         </button>
       </div>
 
+      <div className="flex items-center gap-2">
+        <Label text={t.walkSpeed} icon="walk" />
+        <Speed kmh={speed} onKmh={setSpeed} />
+      </div>
+
       <div className="flex gap-2">
         <button
           onClick={() => void search()}
@@ -135,11 +247,19 @@ export function JourneyPanel({
         >
           {busy ? t.searching : t.findRoute}
         </button>
+        <Order
+          prefer={prefer}
+          onPrefer={(p) => {
+            setPrefer(p);
+            holdPrefer(p);
+          }}
+        />
         <button
           onClick={onSwap}
-          className="btn-quiet"
+          title={t.swap}
+          className="btn-quiet px-2"
         >
-          {t.swap}
+          <Icon name="swap" />
         </button>
       </div>
 
@@ -151,126 +271,222 @@ export function JourneyPanel({
         <p className="text-sm text-slate-500">{t.noJourney}</p>
       )}
 
-      {options?.map((j, i) => (
-        <Option key={i} journey={j} catalog={catalog} onStop={onStop} onLine={onLine} />
-      ))}
+      {options &&
+        order.map((j, i) => (
+          <Option
+            key={i}
+            journey={j}
+            shown={j === shown}
+            onShow={() => show(j)}
+            prefer={prefer}
+            place={place}
+            catalog={catalog}
+            onStop={onStop}
+            onLine={onLine}
+          />
+        ))}
     </div>
   );
 }
 
-function Field({
-  label,
-  point,
-  picking,
-  onPick,
-  onHere,
-  places,
-  onPlace,
-  onSave,
-  onForget,
+const END: Record<End, { label: string; icon: IconName }> = {
+  from: { label: t.from, icon: "origin" },
+  to: { label: t.to, icon: "destination" },
+};
+
+function Order({
+  prefer,
+  onPrefer,
 }: {
-  label: string;
-  point: Point | null;
-  picking: boolean;
-  onPick: () => void;
-  onHere: () => void;
-  places: Place[];
-  onPlace: (at: Point) => void;
-  /** Null until this end has a point */
-  onSave: ((name: string) => void) | null;
-  onForget: (place: Place) => void;
+  prefer: Prefer;
+  onPrefer: (p: Prefer) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const saved = point && places.find((p) => same(point, p));
   return (
-    <div className="relative flex items-center gap-2">
-      <span className="w-12 shrink-0 text-xs uppercase tracking-wide text-slate-500">{label}</span>
-      <button
-        onClick={onPick}
-        className={`min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-sm ${
-          picking ? "bg-accent/25 text-accent" : "bg-raised/70 hover:bg-raised"
-        }`}
-      >
-        {saved ? saved.name : point ? `${point.lat.toFixed(4)}, ${point.lon.toFixed(4)}` : t.tapMap}
-      </button>
-      <button
-        onClick={onHere}
-        className="btn-quiet shrink-0 px-2 text-xs"
-      >
-        {t.useHere}
-      </button>
+    <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        title={t.places}
-        className={`btn-quiet shrink-0 px-2 text-xs ${saved ? "text-accent" : ""}`}
+        title={`${t.preferBy}: ${t.prefer[prefer]}`}
+        className={`btn-quiet h-full px-2 ${open ? "text-accent" : ""}`}
       >
-        {saved ? "★" : "☆"}
+        <Icon name="sort" />
       </button>
       {open && (
-        <div className="panel absolute right-0 top-full z-30 mt-1 w-56 p-1 text-sm">
-          {places.length === 0 && <p className="px-2 py-1 text-xs text-slate-500">{t.noPlaces}</p>}
-          {places.map((p) => (
-            <div key={p.name} className="flex items-center gap-1">
-              <button
-                onClick={() => {
-                  onPlace(p);
-                  setOpen(false);
-                }}
-                className="min-w-0 flex-1 truncate rounded-md px-2 py-1 text-left hover:bg-raised"
-              >
-                {p.name}
-              </button>
-              <button
-                onClick={() => onForget(p)}
-                className="px-2 text-xs text-slate-500 hover:text-rose-300"
-              >
-                {t.forget}
-              </button>
-            </div>
-          ))}
-          {onSave && !saved && (
-            <form
-              className="mt-1 flex gap-1"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!name.trim()) return;
-                onSave(name.trim());
-                setName("");
+        <div className="panel absolute right-0 top-full z-30 mt-1 w-48 p-1 text-sm">
+          {PREFERS.map((p) => (
+            <button
+              key={p}
+              onClick={() => {
+                onPrefer(p);
                 setOpen(false);
               }}
+              className={`w-full rounded-md px-2 py-1 text-left hover:bg-raised ${p === prefer ? "text-accent" : ""}`}
             >
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t.namePlace}
-                className="field min-w-0 flex-1 py-1"
-              />
-              <button className="btn-quiet px-3 py-0" title={t.savePlace}>
-                {t.add}
-              </button>
-            </form>
-          )}
+              {t.prefer[p]}
+            </button>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
+/** An icon standing for a row's name, which it keeps as a tooltip */
+function Label({ text, icon }: { text: string; icon: IconName }) {
+  return (
+    <span title={text} className="flex w-6 shrink-0 justify-center text-slate-500">
+      <Icon name={icon} />
+    </span>
+  );
+}
+
+/** One end: a search that, before anything is typed, offers where I am, the
+ *  map and the saved places */
+function Field({
+  end,
+  point,
+  name,
+  catalog,
+  onPick,
+  onHere,
+  places,
+  onPlace,
+  onSave,
+}: {
+  end: End;
+  point: Point | null;
+  /** What it was called when picked by name */
+  name: string | null | undefined;
+  catalog: Catalog;
+  onPick: () => void;
+  onHere: () => void;
+  places: Place[];
+  onPlace: (at: Point, name?: string) => void;
+  onSave: (name: string, at: Point) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const known = point && places.find((p) => same(point, p));
+  const then = (act: () => void) => () => {
+    setOpen(false);
+    act();
+  };
+  const row =
+    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-raised";
+  return (
+    <div className="flex items-center gap-2">
+      <Label text={END[end].label} icon={END[end].icon} />
+      <div className="relative min-w-0 flex-1">
+        {open ? (
+          <StopSearch
+            catalog={catalog}
+            onGo={(i) => {
+              const s = catalog.stops[i]!;
+              onPlace({ lat: s.lat, lon: s.lon }, s.name);
+            }}
+            onPlace={(p) => onPlace({ lat: p.lat, lon: p.lon }, p.name)}
+            onSave={(n, lat, lon) => onSave(n, { lat, lon })}
+            inline={{
+              placeholder: END[end].label,
+              onDismiss: () => setOpen(false),
+              idle: (
+                <>
+                  <button onClick={then(onHere)} className={row}>
+                    <Icon name="locate" className="size-4" />
+                    {t.useHere}
+                  </button>
+                  <button onClick={then(onPick)} className={row}>
+                    <Icon name="map" className="size-4" />
+                    {t.chooseOnMap}
+                  </button>
+                  {point && !known && (
+                    <button
+                      onClick={then(() => {
+                        const n = prompt(t.namePlace)?.trim();
+                        if (n) onSave(n, point);
+                      })}
+                      className={row}
+                    >
+                      <span className="w-4 text-center">☆</span>
+                      {t.savePlace}
+                    </button>
+                  )}
+                  <p className="px-2 pb-0.5 pt-1.5 text-xs uppercase tracking-wide text-slate-500">
+                    {t.places}
+                  </p>
+                  {places.length === 0 && (
+                    <p className="px-2 py-1 text-xs text-slate-500">
+                      {t.noPlaces}
+                    </p>
+                  )}
+                  {places.map((p) => (
+                    <button
+                      key={p.name}
+                      onClick={then(() => onPlace({ lat: p.lat, lon: p.lon }))}
+                      className={row}
+                    >
+                      <span className="w-4 text-center text-accent">★</span>
+                      <span className="truncate">{p.name}</span>
+                    </button>
+                  ))}
+                </>
+              ),
+            }}
+          />
+        ) : (
+          <button
+            onClick={() => setOpen(true)}
+            className="flex w-full min-w-0 items-center gap-2 rounded-md bg-raised/70 px-2 py-1.5 text-left text-sm hover:bg-raised"
+          >
+            <Icon name="search" className="size-4 shrink-0 text-slate-500" />
+            <span className="truncate">
+              {known?.name ??
+                name ??
+                (point
+                  ? `${point.lat.toFixed(4)}, ${point.lon.toFixed(4)}`
+                  : t.findStop)}
+            </span>
+          </button>
+        )}
+      </div>
+      <button
+        onClick={onHere}
+        title={t.useHere}
+        className="btn-quiet shrink-0 px-2"
+      >
+        <Icon name="locate" className="size-4" />
+      </button>
+    </div>
+  );
+}
+
 function Option({
   journey,
+  shown,
+  onShow,
+  prefer,
+  place,
   catalog,
   onStop,
   onLine,
 }: {
   journey: Journey;
+  /** Drawn on the map. Until then a click anywhere on the card draws it, and
+   *  its stops and lines are not yet links */
+  shown: boolean;
+  onShow: () => void;
+  prefer: Prefer;
+  place: (option: number) => number;
   catalog: Catalog;
   onStop: (i: number) => void;
   onLine: (i: number) => void;
 }) {
   const changes = Math.max(0, journey.rides - 1);
+  const [backups, setBackups] = useState(false);
   return (
-    <div className="inset-panel p-2">
+    <div
+      onClick={onShow}
+      className={`inset-panel cursor-pointer p-2 ${shown ? "ring-2 ring-accent" : ""}`}
+    >
       <div className="flex items-baseline gap-2">
         <span className="font-medium text-slate-100">
           {t.minutes(mins(journey.arr - journey.dep))}
@@ -284,15 +500,41 @@ function Option({
             : changes === 0
               ? t.noChange
               : t.changeCount(changes)}
+          {journey.rides > 0 && journey.backup > 0 && (
+            <>
+              {" · "}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setBackups(true);
+                }}
+                title={t.backupHint}
+                className="text-emerald-400 underline decoration-dotted underline-offset-2"
+              >
+                {t.backupCount(journey.backup)}
+              </button>
+            </>
+          )}
         </span>
       </div>
-      <ol className="mt-1.5 space-y-1">
+      {backups && (
+        <Backups
+          journey={journey}
+          prefer={prefer}
+          place={place}
+          catalog={catalog}
+          onLine={onLine}
+          onClose={() => setBackups(false)}
+        />
+      )}
+      <ol className={`mt-1.5 space-y-1 ${shown ? "" : "pointer-events-none"}`}>
         {journey.legs.map((leg, i) => (
           <li key={i} className="flex items-baseline gap-2 text-sm">
             {leg.kind === "walk" ? (
               <>
-                <span className="w-14 shrink-0 text-xs text-slate-500">
-                  {t.walkLeg(mins(leg.arr - leg.dep))}
+                <span title={t.walkLeg(mins(leg.arr - leg.dep))} className="flex w-14 shrink-0 items-center gap-0.5 text-xs text-slate-500">
+                  <Icon name="walk" className="size-3.5" />
+                  {t.minutes(mins(leg.arr - leg.dep))}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-slate-400">
                   {leg.b < 0
@@ -325,26 +567,46 @@ function Ride({
   onStop: (i: number) => void;
   onLine: (i: number) => void;
 }) {
+  const [why, setWhy] = useState(false);
   const route = leg.route === undefined ? undefined : catalog.routes[leg.route];
   // An older service says only whether a vehicle was seen
-  const rests = RESTS[leg.confidence ?? (leg.live ? "live" : "schedule")];
+  const confidence = leg.confidence ?? (leg.live ? "live" : "schedule");
+  const rests = confidence === "live" ? null : RESTS[confidence];
   return (
-    <>
-      <span className="w-14 shrink-0 text-xs tabular-nums text-slate-400">{clock(leg.dep)}</span>
-      {route && (
-        <button onClick={() => onLine(leg.route!)} title={t.showLine} className="shrink-0">
-          <RouteBadge route={route} className="px-1.5 text-xs" />
+    <div className="min-w-0 flex-1">
+      <div className="flex items-baseline gap-2">
+        <span className="w-14 shrink-0 text-xs tabular-nums text-slate-400">
+          {clock(leg.dep)}
+        </span>
+        {route && (
+          <button
+            onClick={() => onLine(leg.route!)}
+            title={t.showLine}
+            className="shrink-0"
+          >
+            <RouteBadge route={route} className="px-1.5 text-xs" />
+          </button>
+        )}
+        <button
+          onClick={() => leg.b >= 0 && onStop(leg.b)}
+          className="min-w-0 flex-1 truncate text-left text-slate-200 hover:underline"
+        >
+          {catalog.stops[leg.b]?.name ?? ""}
         </button>
+        {rests && (
+          <button
+            onClick={() => setWhy(!why)}
+            title={rests.why}
+            className={`flex shrink-0 items-center gap-0.5 self-center text-xs ${rests.tone}`}
+          >
+            {rests.word}
+            <Icon name="info" className="size-3.5" />
+          </button>
+        )}
+      </div>
+      {rests && why && (
+        <p className="ml-16 mt-1 text-xs text-slate-400">{rests.why}</p>
       )}
-      <button
-        onClick={() => leg.b >= 0 && onStop(leg.b)}
-        className="min-w-0 flex-1 truncate text-left text-slate-200 hover:underline"
-      >
-        {catalog.stops[leg.b]?.name ?? ""}
-      </button>
-      <span title={rests.hint} className={`shrink-0 text-xs ${rests.tone}`}>
-        {rests.word}
-      </span>
-    </>
+    </div>
   );
 }

@@ -1,12 +1,17 @@
-"""Names of places, from OpenStreetMap, through Photon.
+"""Names of places, from OpenStreetMap: a local index first, then Photon.
 
-Photon (https://photon.komoot.io) is used rather than Nominatim because it
-indexes every named object in OSM and answers a prefix, which is what a search
-box needs: "vul. Ho" finds the street, and "Forum" finds the shopping centre.
-Nominatim answers whole addresses well and little else.
+The local index is osm-mapidx's (`data/lviv-search.sqlite`, built by that
+project). It survives typos and knows each place's surroundings, so "аптека
+сихів" and "форум львв" both find what was meant, and it answers without
+leaving the machine. It has no house numbers.
 
-The public instance asks that anyone leaning on it run their own, which is one
-setting away: point COMMUTERLVIV_PHOTON_URL at it.
+Photon (https://photon.komoot.io) fills that in. It is used rather than
+Nominatim because it indexes every named object in OSM and answers a prefix,
+which is what a search box needs: "vul. Ho" finds the street. The public
+instance asks that anyone leaning on it run their own, which is one setting
+away: point COMMUTERLVIV_PHOTON_URL at it.
+
+Either source alone is enough to search; with neither the endpoint answers 503.
 """
 import threading
 import time
@@ -14,7 +19,10 @@ import urllib.parse
 
 import requests
 
-from .. import __version__
+from .. import __version__, gtfs, walk
+from ..mapidx import search as mapidx
+
+INDEX = gtfs.DATA / "lviv-search.sqlite"
 
 # the city's box, also what the footpath graph covers
 SOUTH, NORTH, WEST, EAST = 49.7, 50.05, 23.8, 24.25
@@ -24,6 +32,14 @@ TTL = 86400.0
 ENTRIES = 2000          # a day of queries from a city-sized audience
 LIMIT = 8
 TIMEOUT = 4.0
+
+# m apart two hits of the same name are one place said twice
+SAME_PLACE = 100.0
+# the index covers the whole oblast and ranks by name before distance, so
+# enough hits are asked for that the city's survive the clamp
+WIDE = 300
+# mapidx addresses open with the nearest settlements; the street and district follow
+NEAR = 3
 
 # Photon indexes names in the local language under "default"; it translates
 # only into the handful it was built with, and Ukrainian is not one of them
@@ -37,15 +53,16 @@ def inside(lat, lon):
 
 
 class Geocoder:
-    """A Photon instance, with an answer cache in front of it.
+    """The local index and a Photon instance, with an answer cache in front.
 
     The cache is what keeps typing cheap: a search box asks once per keystroke,
     and every prefix of a word anyone has typed today is already an answer.
     """
 
-    def __init__(self, url, lang=LANG):
+    def __init__(self, url, lang=LANG, index=INDEX):
         self.url = url.rstrip("/")
         self.lang = lang
+        self.index = index if index.exists() else None
         self.session = requests.Session()
         self.session.headers["user-agent"] = AGENT
         self.lock = threading.Lock()
@@ -60,12 +77,44 @@ class Geocoder:
             hit = self.cache.get(key)
             if hit and now - hit[0] < TTL:
                 return hit[1]
-        found = self._ask(key)
+        found = self._merge(key)
         with self.lock:
             if len(self.cache) >= ENTRIES:
                 self.cache.clear()
             self.cache[key] = (now, found)
         return found
+
+    @classmethod
+    def maybe(cls, url):
+        """A geocoder, or None when there is nothing to search with."""
+        return cls(url) if url or INDEX.exists() else None
+
+    def _merge(self, q):
+        """Both sources, one list. A digit means a house address, which only
+        Photon knows, so it leads; otherwise the local index does. Photon
+        failing is fatal only when it was the one source."""
+        local = self._local(q)
+        try:
+            remote = self._ask(q) if self.url else []
+        except requests.RequestException:
+            if self.index is None:
+                raise
+            remote = []
+        first, then = (remote, local) if any(c.isdigit() for c in q) \
+            else (local, remote)
+        out = []
+        for p in first + then:
+            if not any(_same(p, o) for o in out):
+                out.append(p)
+        return out[:LIMIT]
+
+    def _local(self, q):
+        if self.index is None:
+            return []
+        hits = mapidx.search(str(self.index), q, limit=WIDE, origin=CENTRE)
+        return [{"name": h["name"], "where": ", ".join(h["address"][NEAR:NEAR + 2]),
+                 "lat": h["lat"], "lon": h["lon"], "kind": None}
+                for h in hits if inside(h["lat"], h["lon"])][:LIMIT]
 
     def _ask(self, q):
         query = urllib.parse.urlencode({
@@ -81,6 +130,11 @@ class Geocoder:
             if place is not None:
                 out.append(place)
         return out
+
+
+def _same(a, b):
+    return a["name"] == b["name"] and \
+        walk.metres(a["lat"], a["lon"], b["lat"], b["lon"]) < SAME_PLACE
 
 
 def _place(f):

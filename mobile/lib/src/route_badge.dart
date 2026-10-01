@@ -66,26 +66,35 @@ class _Mode extends CustomPainter {
   bool shouldRepaint(_Mode old) => old.type != type || old.colour != colour;
 }
 
-/// [muted] draws the shape without the route's colour.
+/// [muted] draws the shape without the route's colour, [outline] the colour as
+/// the frame and the ink with the inside left clear.
 class RouteBadge extends StatelessWidget {
   const RouteBadge({
     super.key,
     required this.route,
     this.muted = false,
+    this.outline = false,
     this.fontSize = 12,
   });
 
   final TransitRoute route;
   final bool muted;
+  final bool outline;
   final double fontSize;
 
   @override
   Widget build(BuildContext context) {
-    final ink = muted ? Theme.of(context).colorScheme.onSurfaceVariant : plate;
+    final colour = routeColour(route.short, route.type);
+    final ink = muted
+        ? Theme.of(context).colorScheme.onSurfaceVariant
+        : outline
+        ? colour
+        : plate;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: muted ? null : routeColour(route.short, route.type),
+        color: muted || outline ? null : colour,
+        border: outline ? Border.all(color: colour, width: 1.5) : null,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(

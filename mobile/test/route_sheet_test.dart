@@ -23,23 +23,25 @@ void main() {
       stopIndex: const {},
     );
     var opened = -1;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: RouteSheet(
-          api: api,
-          catalog: catalog,
-          sets: null,
-          picked: <int>{},
-          onToggle: (_) {},
-          onClear: () {},
-          onActivated: (_, _) {},
-          onSets: (_) {},
-          onRoute: (i) => opened = i,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RouteSheet(
+            api: api,
+            catalog: catalog,
+            sets: null,
+            picked: <int>{},
+            onToggle: (_) {},
+            onClear: () {},
+            onActivated: (_, _) {},
+            onSets: (_) {},
+            onRoute: (i) => opened = i,
+          ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('48'));
+    await tester.longPress(find.widgetWithText(FilterChip, '48'));
     await tester.pumpAndSettle();
     expect(opened, 0);
   });

@@ -17,13 +17,15 @@ import type {
  * session cookie is first-party either way. */
 export const BASE = import.meta.env.VITE_API_URL ?? "";
 
-type Failure = { error?: string; retry?: number };
+type Failure = { error?: string; retry?: number; preparing?: boolean };
 
 export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
     readonly retry?: number,
+    /** The planner is on its way, not missing */
+    readonly preparing = false,
   ) {
     super(message);
   }
@@ -52,7 +54,8 @@ async function call<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
   const text = await res.text();
   const data = (text ? JSON.parse(text) : null) as (T & Failure) | null;
-  if (!res.ok) throw new ApiError(data?.error ?? res.statusText, res.status, data?.retry);
+  if (!res.ok)
+    throw new ApiError(data?.error ?? res.statusText, res.status, data?.retry, data?.preparing);
   return data as T;
 }
 
@@ -104,16 +107,25 @@ export const api = {
   vehicle: (veh: number): Promise<{ t: number; veh: number; stops: Call[] }> =>
     call(`/api/vehicle?veh=${veh}`),
   /** `at` in unix seconds leaves at that time instead of now; a future one has
-   * no vehicles to see, so every leg comes back on the timetable */
-  plan: (from: [number, number], to: [number, number], at?: number | null): Promise<Plan> =>
+   * no vehicles to see, so every leg comes back on the timetable. `speed` is
+   * how fast you walk on the level, in km/h */
+  plan: (
+    from: [number, number],
+    to: [number, number],
+    at: number | null,
+    speed: number,
+  ): Promise<Plan> =>
     call(
-      `/api/plan?from=${from[0]},${from[1]}&to=${to[0]},${to[1]}` +
+      `/api/plan?from=${from[0]},${from[1]}&to=${to[0]},${to[1]}&speed=${speed}` +
         (at ? `&at=${Math.round(at)}` : ""),
     ),
   search: (q: string, signal?: AbortSignal): Promise<{ places: Found[] }> =>
     call(`/api/search?q=${encodeURIComponent(q)}`, { signal }),
   traffic: (): Promise<Traffic> => call("/api/traffic"),
 };
+
+/** The ETag of what each `held` key last answered with */
+const tags = new Map<string, string>();
 
 /** Cached in local storage against the service's ETag: the usual request comes
  * back 304 with no body. */
@@ -124,11 +136,15 @@ async function held<T>(path: string, key: string): Promise<T> {
     credentials: "include",
     headers: had ? { "If-None-Match": had.tag } : {},
   });
-  if (res.status === 304 && had) return had.data;
+  if (res.status === 304 && had) {
+    tags.set(key, had.tag);
+    return had.data;
+  }
   if (!res.ok) throw new ApiError(`${path} ${res.status}`, res.status);
   const data = (await res.json()) as T;
   const tag = res.headers.get("ETag");
   if (tag) {
+    tags.set(key, tag);
     try {
       localStorage.setItem(key, JSON.stringify({ tag, data }));
     } catch {
@@ -138,7 +154,12 @@ async function held<T>(path: string, key: string): Promise<T> {
   return data;
 }
 
-export const catalog = () => held<Catalog>("/api/catalog", "commuterlviv.catalog");
+const CATALOG = "commuterlviv.catalog";
+
+export const catalog = () => held<Catalog>("/api/catalog", CATALOG);
+
+/** Which catalog this page holds, once it holds one */
+export const catalogTag = () => tags.get(CATALOG);
 
 /** Half a megabyte, so fetched only once something draws a route line */
 export const shapes = () => held<Shapes>("/api/shapes", "commuterlviv.shapes");

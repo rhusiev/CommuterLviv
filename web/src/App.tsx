@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Icon } from "./components/Icon";
 import { MapCanvas } from "./components/MapCanvas";
 import { RoutePanel } from "./components/RoutePanel";
 import { SignIn } from "./components/SignIn";
@@ -19,13 +20,15 @@ import {
 } from "./lib/api";
 import { useIndex, usePositions } from "./lib/catalog";
 import { saved } from "./lib/places";
-import { loadTheme, saveTheme, type Theme } from "./lib/theme";
+import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from "./lib/theme";
 import { RAMP, useTraffic } from "./lib/traffic";
 import { readUrl, writeUrl, type UrlState } from "./lib/url";
-import { useLive } from "./lib/useLive";
-import type { Catalog, Me, Place, RouteSet, Shapes } from "./lib/types";
+import { takeRenewed, useLive } from "./lib/useLive";
+import type { Catalog, Journey, Me, Place, RouteSet, Shapes } from "./lib/types";
 import { t } from "./lib/i18n";
 
+const LINES_KEY = "commuterlviv.lines";
+const TRAFFIC_KEY = "commuterlviv.traffic";
 const JOIN = /^\/join\/([\w-]+)\/?$/;
 
 /** Pins from before the server kept them, as catalog positions. Read once per
@@ -59,15 +62,19 @@ export function App() {
     opened.route === null && opened.tab === "route" ? "map" : opened.tab,
   );
   const [route, setRoute] = useState<number | null>(null);
-  const [allLines, setAllLines] = useState(false);
+  const [allLines, setAllLines] = useState(() => loadFlag(LINES_KEY));
   const [geo, setGeo] = useState<Shapes | null>(null);
   const [from, setFrom] = useState<Point | null>(null);
   const [to, setTo] = useState<Point | null>(null);
+  const [journey, setJourney] = useState<Journey | null>(null);
   const [picking, setPicking] = useState<"from" | "to" | null>(null);
+  const [folded, setFolded] = useState(false);
   const [panel, setPanel] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const [notice, setNotice] = useState<string | null>(null);
-  const [jams, setJams] = useState(false);
+  /** Not a failure: news worth a line, such as the city changing */
+  const [info, setInfo] = useState<string | null>(null);
+  const [jams, setJams] = useState(() => loadFlag(TRAFFIC_KEY));
   const [layers, setLayers] = useState(false);
   const [account, setAccount] = useState(false);
 
@@ -107,7 +114,10 @@ export function App() {
 
   const loadCatalog = useCallback(() => {
     setNotice(null);
-    void fetchCatalog().then(setCat, failed);
+    void fetchCatalog().then((got) => {
+      setCat(got);
+      if (takeRenewed()) setInfo(t.renewed);
+    }, failed);
   }, [failed]);
 
   useEffect(() => {
@@ -187,10 +197,20 @@ export function App() {
     setFocus({ lat: s.lat, lon: s.lon });
   };
 
+  /** While a journey is shown, only its rides are on the map */
+  const journeyRoutes = useMemo(() => {
+    if (tab !== "plan" || !journey) return null;
+    const out = new Set<number>();
+    for (const leg of journey.legs) {
+      if (leg.route !== undefined) out.add(leg.route);
+    }
+    return [...out].sort((a, b) => a - b);
+  }, [tab, journey]);
+
   /** The socket's own filter: while one route is open it is the only one sent */
   const indexes = useMemo(
-    () => (tab === "route" && route !== null ? [route] : chosen),
-    [tab, route, chosen],
+    () => journeyRoutes ?? (tab === "route" && route !== null ? [route] : chosen),
+    [journeyRoutes, tab, route, chosen],
   );
 
   const lines = useMemo(() => {
@@ -248,10 +268,11 @@ export function App() {
 
   const marks = useMemo(() => {
     const out: { lat: number; lon: number; label: string }[] = [];
+    if (tab !== "plan") return out;
     if (from) out.push({ ...from, label: "A" });
     if (to) out.push({ ...to, label: "B" });
     return out;
-  }, [from, to]);
+  }, [tab, from, to]);
 
   /** Asked separately from the map's own locate button, so a refusal here does
    * not turn the map's dot off */
@@ -340,7 +361,12 @@ export function App() {
           if (picking === "to") setTo({ lat, lon });
           setPicking(null);
         }}
+        onHoldPoint={(lat, lon) => {
+          const name = prompt(t.namePlace)?.trim();
+          if (name) keepPlaces(saved(places, name, lat, lon));
+        }}
         marks={marks}
+        journey={tab === "plan" ? journey : null}
         pinned={pins}
         places={places}
         shapes={geo}
@@ -359,15 +385,7 @@ export function App() {
             panel ? "text-accent" : "text-slate-300 hover:text-slate-100"
           }`}
         >
-          <svg
-            viewBox="0 0 24 24"
-            className="size-5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
-          </svg>
+          <Icon name="menu" />
         </button>
         <div className="pointer-events-auto min-w-0 flex-1 sm:max-w-sm">
           <StopSearch
@@ -400,17 +418,7 @@ export function App() {
             aria-label={t.account}
             className={`fab ${account ? "text-accent" : "text-slate-300 hover:text-slate-100"}`}
           >
-            <svg
-              viewBox="0 0 24 24"
-              className="size-5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <circle cx="12" cy="8" r="3.5" />
-              <path d="M5 20c1.2-3.4 4-5 7-5s5.8 1.6 7 5" />
-            </svg>
+            <Icon name="account" />
           </button>
           {account && (
             <>
@@ -449,17 +457,7 @@ export function App() {
               : "text-slate-300 hover:text-slate-100"
           }`}
         >
-          <svg
-            viewBox="0 0 24 24"
-            className="size-5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          >
-            <path d="M12 3 3 8l9 5 9-5-9-5Z" />
-            <path d="m3 13 9 5 9-5" />
-          </svg>
+          <Icon name="layers" />
         </button>
         {layers && (
           <>
@@ -472,9 +470,15 @@ export function App() {
             <div className="panel absolute right-0 top-12 w-52 p-2">
               <LayersPanel
                 lines={allLines}
-                onLines={setAllLines}
+                onLines={(on) => {
+                  setAllLines(on);
+                  saveFlag(LINES_KEY, on);
+                }}
                 traffic={jams}
-                onTraffic={setJams}
+                onTraffic={(on) => {
+                  setJams(on);
+                  saveFlag(TRAFFIC_KEY, on);
+                }}
                 theme={theme}
                 onTheme={(next) => {
                   setTheme(next);
@@ -505,12 +509,18 @@ export function App() {
         </div>
       )}
 
-      {notice !== null && (
-        <p className="panel absolute left-1/2 top-19 z-40 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-2 px-3 py-2 text-sm text-rose-200">
-          {notice}
+      {(notice ?? info) !== null && (
+        <p
+          className={`panel absolute left-1/2 top-19 z-40 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-2 px-3 py-2 text-sm ${notice !== null ? "text-rose-200" : "text-sky-200"}`}
+        >
+          {notice ?? info}
           <button
-            onClick={() => setNotice(null)}
-            className="text-rose-400 hover:text-rose-200"
+            onClick={() => (notice !== null ? setNotice(null) : setInfo(null))}
+            className={
+              notice !== null
+                ? "text-rose-400 hover:text-rose-200"
+                : "text-sky-400 hover:text-sky-200"
+            }
           >
             ✕
           </button>
@@ -518,7 +528,11 @@ export function App() {
       )}
 
       {tab === "plan" && (
-        <aside className="panel absolute right-3 top-19 bottom-20 z-20 w-96 max-w-[calc(100vw-1.5rem)] overflow-y-auto p-3">
+        <aside
+          className={`panel absolute right-3 top-19 z-20 w-96 max-w-[calc(100vw-1.5rem)] overflow-y-auto p-3 ${
+            folded || picking ? "" : "bottom-20"
+          }`}
+        >
           <JourneyPanel
             catalog={cat}
             from={from}
@@ -530,6 +544,9 @@ export function App() {
               setTo(from);
             }}
             onHere={useHere}
+            onShow={setJourney}
+            folded={folded}
+            onFold={setFolded}
             onLine={openRoute}
             places={places}
             onPlaces={keepPlaces}

@@ -39,7 +39,9 @@ export type Sets = {
 
 export type Me = { username: string; sets: Sets };
 
-export type Arrival = { route: number; veh: number; t: number };
+/** `planned`: the vehicle is still finishing its previous trip, so `t` is its
+ * timetabled departure or its turnaround, whichever is later */
+export type Arrival = { route: number; veh: number; t: number; planned?: boolean };
 
 export type Arrivals = { t: number; stops: Record<string, Arrival[]> };
 
@@ -63,15 +65,34 @@ export type Leg = {
   veh?: number | null;
   live?: boolean;
   confidence?: Confidence;
+  /** `[lat, lon]` along the footpath or the ridden stretch */
+  pts?: [number, number][];
+  /** Other ways to the door from where the ride boards, soonest first */
+  backups?: Backup[];
 };
 
-/** The journey's confidence is the weakest of its rides */
+/** Another way to the door from where a ride boards: the rides it takes, the
+ * first leaving from there, when it reaches the door and the seconds it walks.
+ * A ride `planned` is on a vehicle the journey rides too, further along.
+ * `option` is the place in the plan's options of the one riding exactly these
+ * rides, or -1; an older service leaves it out */
+export type Backup = {
+  rides: { route: number; dep: number; arr: number; a: number; b: number; live: boolean; planned: boolean }[];
+  arr: number;
+  walk: number;
+  option?: number;
+};
+
+/** The journey's confidence is the weakest of its rides; `backup` is how many
+ * other ways to the door its weakest ride has, as in `Leg.backups`, leaving
+ * out those riding the journey's own vehicles */
 export type Journey = {
   dep: number;
   arr: number;
   rides: number;
   live: boolean;
   confidence: Confidence;
+  backup: number;
   legs: Leg[];
 };
 

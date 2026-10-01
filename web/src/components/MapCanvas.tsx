@@ -18,8 +18,10 @@ import type { Pace } from "../lib/traffic";
 import { build, colour, R, type Sprites } from "../lib/sprites";
 import { t } from "../lib/i18n";
 import { ink, styleUrl, type Theme } from "../lib/theme";
-import type { Catalog, Place, Shapes } from "../lib/types";
+import { clock } from "../lib/eta";
+import type { Catalog, Journey, Place, Shapes } from "../lib/types";
 import { MOVING_FLAG, STALE_FLAG } from "../lib/wire";
+import { Icon } from "./Icon";
 
 /** The vehicle/stop overlay is a 2D canvas drawn from MapLibre's own `render`
  * event, so the two agree within a frame; drawing on a separate animation frame
@@ -57,7 +59,11 @@ type Props = {
   /** A click sets a journey end instead of choosing a stop */
   picking: boolean;
   onPickPoint: (lat: number, lon: number) => void;
+  /** A long press or right click, to save the spot */
+  onHoldPoint: (lat: number, lon: number) => void;
   marks: { lat: number; lon: number; label: string }[];
+  /** The planner option picked: walks dotted, rides solid, each leg timed */
+  journey: Journey | null;
   /** What the account kept, always on the map: stop positions and saved places */
   pinned: number[];
   places: Place[];
@@ -86,7 +92,9 @@ export function MapCanvas({
   fit,
   picking,
   onPickPoint,
+  onHoldPoint,
   marks,
+  journey,
   pinned,
   places,
   shapes,
@@ -109,8 +117,10 @@ export function MapCanvas({
   const held = useRef<MapLibre | null>(null);
   const here = useRef<Fix | null>(null);
   const pickPoint = useRef(onPickPoint);
+  const holdPoint = useRef(onHoldPoint);
   const picks = useRef(picking);
   const pins = useRef(marks);
+  const trip = useRef(journey);
   const kept = useRef(pinned);
   const saved = useRef(places);
   const geometry = useRef(shapes);
@@ -127,8 +137,10 @@ export function MapCanvas({
   chosen.current = vehicle;
   paint.current = ink(theme.dark);
   pickPoint.current = onPickPoint;
+  holdPoint.current = onHoldPoint;
   picks.current = picking;
   pins.current = marks;
+  trip.current = journey;
   kept.current = pinned;
   saved.current = places;
   geometry.current = shapes;
@@ -310,7 +322,31 @@ export function MapCanvas({
         g.fillText(place.name, x + PLACE_R + 8, y);
       }
 
-      for (const mark of pins.current) {
+      const legs = trip.current?.legs.filter((l) => (l.pts?.length ?? 0) > 1) ?? [];
+      g.lineJoin = "round";
+      g.lineCap = "round";
+      for (const leg of legs) {
+        const path = new Path2D();
+        leg.pts!.forEach(([lat, lon], k) =>
+          k === 0 ? path.moveTo(p.x(lon), p.y(lat)) : path.lineTo(p.x(lon), p.y(lat)),
+        );
+        const route = leg.route === undefined ? undefined : catalog.routes[leg.route];
+        if (leg.kind === "walk" || !route) {
+          g.setLineDash([1, 7]);
+          g.strokeStyle = c.stop;
+          g.lineWidth = 4;
+          g.stroke(path);
+          g.setLineDash([]);
+        } else {
+          g.strokeStyle = c.edge;
+          g.lineWidth = 8;
+          g.stroke(path);
+          g.strokeStyle = colour(route.short, route.type);
+          g.lineWidth = 5;
+          g.stroke(path);
+        }
+      }
+      if (trip.current === null) for (const mark of pins.current) {
         const x = p.x(mark.lon);
         const y = p.y(mark.lat);
         g.beginPath();
@@ -370,6 +406,17 @@ export function MapCanvas({
         g.globalAlpha = 1;
       }
 
+      // Timestamps only, one pill per stop; durations stay in the planner's
+      // list. The pills name the ends while the journey is drawn, so the A/B
+      // marks rest until it is cleared.
+      const tags: { x: number; y: number; text: string }[] =
+        journeyTags(legs).map((tag) => ({
+          x: p.x(tag.lon),
+          y: p.y(tag.lat),
+          text: tag.text,
+        }));
+      placeTags(g, c, tags);
+
       // Vehicles move between camera changes, so keep asking for frames
       m.triggerRepaint();
     };
@@ -404,6 +451,8 @@ export function MapCanvas({
 
       map.on("error", (e) => console.warn("basemap:", e.error?.message ?? e));
       map.on("moveend", () => saveView(viewOf(map!)));
+      // Mobile browsers raise a long press as `contextmenu` too
+      map.on("contextmenu", (e) => holdPoint.current(e.lngLat.lat, e.lngLat.lng));
       map.on("click", (e) => {
         if (picks.current) {
           pickPoint.current(e.lngLat.lat, e.lngLat.lng);
@@ -559,12 +608,102 @@ export function MapCanvas({
               : "text-slate-300 hover:text-slate-100"
         }`}
       >
-        <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="12" r="4" />
-          <circle cx="12" cy="12" r="8.5" strokeDasharray="3 3" />
-          <path d="M12 1v3M12 20v3M1 12h3M20 12h3" strokeLinecap="round" />
-        </svg>
+        <Icon name="follow" />
       </button>
     </div>
   );
+}
+
+/** One pill per stop of the picked journey: getting off and getting on share
+ * a pill reading off → on. Stops within 25 m are one stop, at every zoom. */
+function journeyTags(legs: Journey["legs"]): { lat: number; lon: number; text: string }[] {
+  type Group = { lat: number; lon: number; off: number[]; on: number[] };
+  const groups: Group[] = [];
+  const at = (lat: number, lon: number): Group => {
+    for (const g of groups) {
+      if (Math.abs(lat - g.lat) * 111320 < 25 && Math.abs(lon - g.lon) * 71770 < 25) return g;
+    }
+    const g: Group = { lat, lon, off: [], on: [] };
+    groups.push(g);
+    return g;
+  };
+  for (const leg of legs) {
+    const pts = leg.pts!;
+    const s = pts[0]!;
+    const e = pts[pts.length - 1]!;
+    at(s[0], s[1]).on.push(leg.dep);
+    at(e[0], e[1]).off.push(leg.arr);
+  }
+  const out: { lat: number; lon: number; text: string }[] = [];
+  for (const g of groups) {
+    const off = Math.max(...g.off);
+    const on = Math.min(...g.on);
+    if (g.off.length && g.on.length && off !== on) {
+      out.push({ lat: g.lat, lon: g.lon, text: `${clock(off)} → ${clock(on)}` });
+    } else {
+      out.push({ lat: g.lat, lon: g.lon, text: clock(g.off.length ? off : on) });
+    }
+    for (const extra of [...g.off.slice(0, -1), ...g.on.slice(1)]) {
+      out.push({ lat: g.lat, lon: g.lon, text: clock(extra) });
+    }
+  }
+  return out;
+}
+
+/** Journey tags, each stepped aside until it clears the ones already drawn.
+ * A pill that had to move keeps a leader line to its stop, so stepping aside
+ * on zoom-out never reads as teleporting somewhere else. */
+function placeTags(
+  g: CanvasRenderingContext2D,
+  c: ReturnType<typeof ink>,
+  tags: { x: number; y: number; text: string }[],
+) {
+  const drawn: { x0: number; y0: number; x1: number; y1: number }[] = [];
+  for (const tag of tags) {
+    g.font = "bold 11px system-ui, sans-serif";
+    const w = g.measureText(tag.text).width + 10;
+    for (const dy of [0, -22, 22, -44, 44]) {
+      const x0 = tag.x - w / 2;
+      const y0 = tag.y - 9 + dy;
+      const clear = drawn.every(
+        (r) => x0 + w < r.x0 - 2 || x0 > r.x1 + 2 || y0 + 18 < r.y0 - 2 || y0 > r.y1 + 2,
+      );
+      if (!clear) continue;
+      drawn.push({ x0, y0, x1: x0 + w, y1: y0 + 18 });
+      if (dy !== 0) {
+        g.globalAlpha = 0.7;
+        g.strokeStyle = c.edge;
+        g.lineWidth = 1;
+        g.beginPath();
+        g.moveTo(tag.x, tag.y + dy - Math.sign(dy) * 9);
+        g.lineTo(tag.x, tag.y);
+        g.stroke();
+        g.globalAlpha = 1;
+      }
+      plate(g, c, tag.x, tag.y + dy, w, tag.text);
+      break;
+    }
+  }
+}
+
+/** A small plate with a time on it, centred where put */
+function plate(
+  g: CanvasRenderingContext2D,
+  c: ReturnType<typeof ink>,
+  x: number,
+  y: number,
+  w: number,
+  text: string,
+) {
+  g.beginPath();
+  g.roundRect(x - w / 2, y - 9, w, 18, 9);
+  g.fillStyle = c.nub;
+  g.fill();
+  g.lineWidth = 1;
+  g.strokeStyle = c.edge;
+  g.stroke();
+  g.fillStyle = c.edge;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText(text, x, y);
 }

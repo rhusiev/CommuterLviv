@@ -33,23 +33,28 @@ want = re.search(r'__version__ = "([^"]+)"',
                  (root / "commuterlviv/__init__.py").read_text()).group(1)
 pub = re.search(r"^version: (\S+)\+(\d+)$",
                 (root / "mobile/pubspec.yaml").read_text(), re.M)
-recipe = (root / "mobile/fdroid/ua.lviv.commuterlviv.yml").read_text()
+recipe = (root / "mobile/fdroid/nl.r1a.commuterlviv.yml").read_text()
 found = {
     "web/package.json": json.loads((root / "web/package.json").read_text())["version"],
     "mobile/pubspec.yaml": pub.group(1),
-    "fdroid versionName": re.search(r"versionName: (\S+)", recipe).group(1),
+    **{f"fdroid versionName #{i}": v for i, v in
+       enumerate(re.findall(r"versionName: (\S+)", recipe))},
+    **{f"fdroid tag #{i}": v for i, v in
+       enumerate(re.findall(r"commit: v(\S+)", recipe))},
     "fdroid CurrentVersion": re.search(r"CurrentVersion: (\S+)", recipe).group(1),
-    "fdroid tag": re.search(r"commit: v(\S+)", recipe).group(1),
 }
 bad = {k: v for k, v in found.items() if v != want}
-codes = {re.search(r"versionCode: (\d+)", recipe).group(1),
-         re.search(r"CurrentVersionCode: (\d+)", recipe).group(1), pub.group(2)}
-if bad or len(codes) != 1:
+# One build per ABI, coded as Flutter's --split-per-abi codes them
+code = int(pub.group(2))
+codes_ok = (sorted(map(int, re.findall(r"^ +versionCode: (\d+)", recipe, re.M)))
+            == [1000 + code, 2000 + code, 4000 + code]
+            and int(re.search(r"CurrentVersionCode: (\d+)", recipe).group(1)) == 4000 + code)
+if bad or not codes_ok:
     print(f"commuterlviv/__init__.py says {want}")
     for k, v in bad.items():
         print(f"  {k} says {v}")
-    if len(codes) != 1:
-        print(f"  the Android version codes disagree: {sorted(codes)}")
+    if not codes_ok:
+        print(f"  the fdroid version codes are not 1000/2000/4000 + {code}")
     sys.exit(1)
 print(f"{want}, build {pub.group(2)}")
 EOF

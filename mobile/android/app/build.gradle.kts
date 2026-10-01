@@ -16,7 +16,7 @@ val keyProperties = Properties().apply {
 }
 
 android {
-    namespace = "ua.lviv.commuterlviv"
+    namespace = "nl.r1a.commuterlviv"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -26,7 +26,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "ua.lviv.commuterlviv"
+        applicationId = "nl.r1a.commuterlviv"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

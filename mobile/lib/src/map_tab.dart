@@ -11,6 +11,7 @@ import 'package:vector_map_tiles/vector_map_tiles.dart';
 
 import 'api.dart';
 import 'here.dart';
+import 'journey_layer.dart';
 import 'live.dart';
 import 'map_controls.dart';
 import 'map_theme.dart';
@@ -38,12 +39,14 @@ class MapTab extends StatelessWidget {
     required this.here,
     required this.empty,
     required this.marks,
+    required this.journey,
     required this.pins,
     required this.places,
     required this.shapes,
     required this.lines,
     required this.arrowed,
     required this.onTap,
+    required this.onHold,
   });
 
   final Api api;
@@ -67,6 +70,7 @@ class MapTab extends StatelessWidget {
 
   /// The ends of a journey being planned, lettered rather than coloured.
   final List<({LatLng at, String label})> marks;
+  final Journey? journey;
 
   /// What the account kept, always on the map: pinned stops ringed, saved places
   /// as named dots.
@@ -78,6 +82,7 @@ class MapTab extends StatelessWidget {
   final List<int> lines;
   final int? arrowed;
   final void Function(LatLng point) onTap;
+  final void Function(LatLng point) onHold;
 
   @override
   Widget build(BuildContext context) {
@@ -93,6 +98,7 @@ class MapTab extends StatelessWidget {
             minZoom: minZoom,
             maxZoom: maxZoom,
             onTap: (_, point) => onTap(point),
+            onLongPress: (_, point) => onHold(point),
             interactionOptions: mapInteraction,
           ),
           children: [
@@ -127,7 +133,10 @@ class MapTab extends StatelessWidget {
               pins: pins,
               places: places,
             ),
-            if (marks.isNotEmpty)
+            if (journey case final journey?)
+              JourneyLayer(journey: journey, catalog: catalog, theme: theme),
+            // The journey's own pills name its ends while it is drawn.
+            if (journey == null && marks.isNotEmpty)
               MarkerLayer(
                 markers: [
                   for (final mark in marks)
@@ -158,6 +167,9 @@ class MapTab extends StatelessWidget {
             const _Attribution(),
           ],
         ),
+        // Android's own swipes (home, back) start in these strips; left to the
+        // map, a swipe up to leave the app also drags it
+        ..._gestureStrips(MediaQuery.systemGestureInsetsOf(context)),
         Positioned(
           right: floatingGap,
           bottom: floatingBottom(context),
@@ -177,6 +189,23 @@ class MapTab extends StatelessWidget {
     );
   }
 }
+
+Iterable<Widget> _gestureStrips(EdgeInsets inset) => [
+  if (inset.bottom > 0)
+    Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: inset.bottom,
+      child: _absorb,
+    ),
+  if (inset.left > 0)
+    Positioned(left: 0, top: 0, bottom: 0, width: inset.left, child: _absorb),
+  if (inset.right > 0)
+    Positioned(right: 0, top: 0, bottom: 0, width: inset.right, child: _absorb),
+];
+
+const _absorb = AbsorbPointer(child: SizedBox.expand());
 
 /// Map attribution. OpenStreetMap's ODbL guidelines allow the credit to sit
 /// one tap inside an icon on a small screen, provided the icon is always

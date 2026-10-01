@@ -1,0 +1,3 @@
+- Eight map styles, light and dark, with green parks and more detail
+- The map is served by the app's own server
+- Routes and stops switch to a new timetable without a stale moment

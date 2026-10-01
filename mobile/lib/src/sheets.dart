@@ -3,6 +3,7 @@
 library;
 
 import 'dart:async' show unawaited;
+import 'dart:math' show max;
 
 import 'package:flutter/material.dart' hide Theme;
 import 'package:flutter/material.dart' as material show Theme;
@@ -204,15 +205,21 @@ class AccountSheet extends StatelessWidget {
   const AccountSheet({
     super.key,
     required this.server,
+    required this.speed,
     required this.onSaved,
     required this.onLanguage,
+    required this.onSpeed,
     required this.onServer,
     required this.onOut,
   });
 
   final String server;
+
+  /// The usual walking speed, km/h.
+  final double speed;
   final VoidCallback onSaved;
   final VoidCallback onLanguage;
+  final VoidCallback onSpeed;
   final VoidCallback onServer;
   final VoidCallback onOut;
 
@@ -233,6 +240,12 @@ class AccountSheet extends StatelessWidget {
             title: Text(txt.language),
             trailing: Text(lang == Lang.uk ? 'Українська' : 'English'),
             onTap: onLanguage,
+          ),
+          ListTile(
+            leading: const Icon(Icons.directions_walk),
+            title: Text(txt.walkSpeed),
+            trailing: Text(txt.kmh(speed)),
+            onTap: onSpeed,
           ),
           ListTile(
             leading: const Icon(Icons.dns_outlined),
@@ -329,6 +342,10 @@ class RouteSheet extends StatefulWidget {
 }
 
 class _RouteSheetState extends State<RouteSheet> {
+  /// The narrowest a route chip may be, and the space between two.
+  static const _cell = 76.0;
+  static const _gap = 6.0;
+
   String _filter = '';
 
   /// The sheet is its own route, built once, so later `sets` never reach it.
@@ -443,32 +460,51 @@ class _RouteSheetState extends State<RouteSheet> {
             ),
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: [
-              for (final i in shown)
-                GestureDetector(
-                  onLongPress: () {
-                    Navigator.pop(context);
-                    widget.onRoute(i);
-                  },
-                  child: FilterChip(
-                    label: RouteBadge(
-                      route: catalog.routes[i],
-                      muted: !widget.picked.contains(i),
+          LayoutBuilder(
+            builder: (context, box) {
+              // Equal cells, as many as fit, so the grid has straight edges
+              // whatever a route is called
+              final cols = max(
+                1,
+                ((box.maxWidth + _gap) / (_cell + _gap)).floor(),
+              );
+              final width = (box.maxWidth - _gap * (cols - 1)) / cols;
+              return Wrap(
+                spacing: _gap,
+                runSpacing: 4,
+                children: [
+                  for (final i in shown)
+                    SizedBox(
+                      width: width,
+                      child: GestureDetector(
+                        onLongPress: () {
+                          Navigator.pop(context);
+                          widget.onRoute(i);
+                        },
+                        child: FilterChip(
+                          label: Center(
+                            child: RouteBadge(
+                              route: catalog.routes[i],
+                              muted: !widget.picked.contains(i),
+                            ),
+                          ),
+                          // No tooltip: a chip's own tooltip fires on long press
+                          // and wins the gesture arena, so the line would never
+                          // open
+                          showCheckmark: false,
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          labelPadding: EdgeInsets.zero,
+                          selected: widget.picked.contains(i),
+                          onSelected: (_) {
+                            widget.onToggle(i);
+                            setState(() {});
+                          },
+                        ),
+                      ),
                     ),
-                    // No tooltip: a chip's own tooltip fires on long press and
-                    // wins the gesture arena, so the line would never open
-                    showCheckmark: false,
-                    selected: widget.picked.contains(i),
-                    onSelected: (_) {
-                      widget.onToggle(i);
-                      setState(() {});
-                    },
-                  ),
-                ),
-            ],
+                ],
+              );
+            },
           ),
           const SizedBox(height: 6),
           Text(
@@ -478,26 +514,34 @@ class _RouteSheetState extends State<RouteSheet> {
           const SizedBox(height: 16),
           Row(
             children: [
-              TextButton(
+              IconButton(
                 onPressed: widget.picked.isEmpty
                     ? null
                     : () {
                         widget.onClear();
                         setState(() {});
                       },
-                child: Text(txt.clear),
+                icon: const Icon(Icons.clear_all),
+                tooltip: txt.clear,
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               if (changed) ...[
-                FilledButton.tonal(
-                  onPressed: () => _update(active),
-                  child: Text(txt.updateSet(active.name)),
+                Expanded(
+                  child: FilledButton.tonal(
+                    onPressed: () => _update(active),
+                    child: Text(
+                      txt.updateSet(active.name),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 8),
               ],
-              FilledButton.tonal(
-                onPressed: widget.picked.isEmpty ? null : _save,
-                child: Text(txt.saveAsSet),
+              Expanded(
+                child: FilledButton.tonal(
+                  onPressed: widget.picked.isEmpty ? null : _save,
+                  child: Text(txt.saveAsSet, overflow: TextOverflow.ellipsis),
+                ),
               ),
             ],
           ),

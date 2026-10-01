@@ -10,18 +10,20 @@ import asyncio
 import sqlite3
 import time
 
-from .. import collect, replay
+from .. import collect, replay, snapshot
 from .state import Live
 
-WARM_HOURS = 2.0         # of recorded history replayed at boot, if it is fresh
+WARM_HOURS = 2.0         # of recorded history replayed at most, if it is fresh
 WARM_MAX_AGE = 900.0     # s: older than this and the recording is not "now"
+SAVE_EVERY = 600.0       # s between snapshots of the model
 
 
 class Service:
-    def __init__(self, settings, net, catalog=None, log=print):
+    def __init__(self, settings, net, catalog=None, log=print, persist=True):
         self.set = settings
         self.log = log
         self.live = Live(net, settings.cfg, catalog, epoch=settings.epoch)
+        self.persist = persist and snapshot.supported(self.live.model)
         self.lock = asyncio.Lock()
         self.hub = None          # set by the app, which owns the connections
         self.errors = 0
@@ -30,14 +32,22 @@ class Service:
 
     async def start(self, hub):
         self.hub = hub
-        await asyncio.to_thread(self.warm)
-        return [asyncio.create_task(self.poll_loop()),
-                asyncio.create_task(self.epoch_loop())]
+        since = None
+        if self.persist:
+            since = await asyncio.to_thread(snapshot.load, self.live.model)
+            self.log("no model snapshot; learning from scratch" if since is None
+                     else f"model snapshot from {time.time() - since:.0f}s ago")
+        await asyncio.to_thread(self.warm, since=since)
+        tasks = [self.poll_loop(), self.epoch_loop()]
+        if self.persist:
+            tasks.append(self.save_loop())
+        return [asyncio.create_task(t) for t in tasks]
 
-    def warm(self, db=None):
-        """Prime the model by replaying the recording, when there is a fresh
-        one; a cold model knows only the timetable."""
-        db = db or replay.DB
+    def warm(self, live=None, db=None, since=None):
+        """Catch the model up on the recording made since `since`, the time its
+        state was taken, by at most `WARM_HOURS`; a cold model knows only the
+        timetable."""
+        live, db = live or self.live, db or replay.DB
         try:
             con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
             last = con.execute("SELECT max(veh_ts) FROM veh").fetchone()[0]
@@ -49,15 +59,40 @@ class Service:
             self.log("recording is stale; starting the model cold")
             return False
         t0 = time.time()
+        t_from = max(last - WARM_HOURS * 3600, since or 0.0)
         try:
-            replay.run(self.live.net, t_from=last - WARM_HOURS * 3600, t_to=last,
-                       db=db, model=self.live.model, epoch=self.set.epoch)
+            replay.run(live.net, t_from=t_from, t_to=last,
+                       db=db, model=live.model, epoch=self.set.epoch)
         except replay.NoData as exc:
             self.log("nothing to warm from:", str(exc)[:120])
             return False
-        self.log(f"warmed the model on {WARM_HOURS:.0f}h of recording "
-                 f"in {time.time() - t0:.1f}s")
+        self.log(f"warmed the model on {(last - t_from) / 60:.0f} min of "
+                 f"recording in {time.time() - t0:.1f}s")
         return True
+
+    async def save_loop(self):
+        while True:
+            await asyncio.sleep(SAVE_EVERY)
+            try:
+                await self.save()
+            except Exception as exc:
+                self.log("model snapshot failed", repr(exc)[:200])
+
+    async def save(self):
+        async with self.lock:
+            data = await asyncio.to_thread(snapshot.export, self.live.model)
+        await asyncio.to_thread(snapshot.save, data)
+
+    def swap(self, live):
+        """Onto a new city, primed with a poll and an epoch so it is not
+        published empty. Runs in a worker thread, holding the lock."""
+        self.live = live
+        self._seen.clear()
+        try:
+            self.poll_once()
+            live.epoch()
+        except Exception as exc:
+            self.log("first poll of the new city failed", repr(exc)[:200])
 
     async def poll_loop(self):
         fails = 0

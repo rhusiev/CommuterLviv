@@ -7,6 +7,8 @@ import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/foundation.dart' show ValueNotifier;
 
+import 'models.dart' show Prefer;
+
 enum Lang { uk, en }
 
 class Strings {
@@ -58,6 +60,7 @@ class Strings {
     required this.noSearch,
     required this.traffic,
     required this.departAt,
+    required this.preferBy,
     required this.quietPart,
     required this.forget,
     required this.saveHere,
@@ -79,6 +82,8 @@ class Strings {
     required this.zoomOut,
     required this.whereAmI,
     required this.noLocation,
+    required this.renewed,
+    required this.plannerPreparing,
     required this.stopsAhead,
     required this.vehicleGone,
     required this.now,
@@ -94,13 +99,35 @@ class Strings {
     required this.noJourney,
     required this.toDoor,
     required this.noChange,
-    required this.livePart,
+    required this.prefer,
     required this.schedulePart,
+    required this.chooseOnMap,
+    required this.hidePanel,
+    required this.showPanel,
+    required this.leaveOn,
+    required this.walkSpeed,
+    required this.walkSpeedHint,
+    required this.slower,
+    required this.faster,
+    required this.alsoOptionHint,
+    required this.today,
+    required this.tomorrow,
+    required this.backups,
+    required this.backupsWhy,
+    required this.noBackup,
+    required this.moreBackups,
+    required this.scheduleWhy,
+    required this.quietWhy,
     required this.wholeWalk,
     required this.planHint,
     required this.walkLeg,
     required this.changeCount,
+    required this.changeAt,
+    required this.backupCount,
+    required this.shortDay,
     required this.minutes,
+    required this.kmh,
+    required this.alsoOption,
     required this.unreachable,
   });
 
@@ -153,6 +180,7 @@ class Strings {
   final String noSearch;
   final String traffic;
   final String departAt;
+  final String preferBy;
 
   /// The timetable on a line nothing has been seen running on.
   final String quietPart;
@@ -176,6 +204,10 @@ class Strings {
   final String zoomOut;
   final String whereAmI;
   final String noLocation;
+
+  /// The service moved to new routes and timetables while the app was open.
+  final String renewed;
+  final String plannerPreparing;
   final String stopsAhead;
   final String vehicleGone;
   final String now;
@@ -191,21 +223,43 @@ class Strings {
   final String noJourney;
   final String toDoor;
   final String noChange;
-  final String livePart;
+  final String Function(Prefer p) prefer;
   final String schedulePart;
+  final String chooseOnMap;
+  final String hidePanel;
+  final String showPanel;
+  final String leaveOn;
+  final String walkSpeed;
+  final String walkSpeedHint;
+  final String slower;
+  final String faster;
+  final String alsoOptionHint;
+  final String today;
+  final String tomorrow;
+  final String backups;
+  final String backupsWhy;
+  final String noBackup;
+  final String Function(int more) moreBackups;
+  final String scheduleWhy;
+  final String quietWhy;
   final String wholeWalk;
   final String planHint;
   final String Function(int minutes) walkLeg;
   final String Function(int changes) changeCount;
+  final String Function(String stops) changeAt;
+  final String Function(int backups) backupCount;
+  final String Function(DateTime day) shortDay;
   final String Function(int minutes) minutes;
+  final String Function(double kmh) kmh;
+  final String Function(int option) alsoOption;
   final String Function(String server) unreachable;
 }
 
 const _en = Strings(
   signIn: 'Sign in',
-  tagline: 'where the buses actually are',
+  tagline: 'Where the buses actually are',
   inviteCode: 'Invite code',
-  inviteHint: 'the last part of the link you were sent',
+  inviteHint: 'The last part of the link you were sent',
   username: 'Username',
   password: 'Password',
   stayIn: 'Stay signed in',
@@ -234,7 +288,7 @@ const _en = Strings(
   nameSet: 'Name this set',
   rename: 'Rename',
   delete: 'Delete',
-  holdForLine: 'hold a route to see its line',
+  holdForLine: 'Hold a route to see its line',
   places: 'Saved places',
   savePlace: 'Save this place',
   namePlace: 'Name this place',
@@ -242,14 +296,15 @@ const _en = Strings(
   saved: 'Saved',
   pinnedStops: 'Pinned stops',
   nothingSaved: 'Nothing saved yet',
-  showOnMap: 'tap a row to show it on the map',
-  holdToManage: 'hold one to rename or remove it',
+  showOnMap: 'Tap a row to show it on the map',
+  holdToManage: 'Hold one to rename or remove it',
   foundStops: 'Stops',
   foundPlaces: 'Places',
-  noSearch: 'place search is unavailable',
+  noSearch: 'Place search is unavailable',
   traffic: 'Traffic',
   departAt: 'Leave at',
-  quietPart: 'nothing seen running',
+  preferBy: 'Order',
+  quietPart: 'Nothing seen running',
   forget: 'Forget',
   saveHere: 'Save',
   cancel: 'Cancel',
@@ -259,53 +314,94 @@ const _en = Strings(
   pin: 'Pin',
   unpin: 'Unpin',
   callsHere: 'Calls here',
-  nothingDueWatched: 'nothing due on the routes you are watching',
-  nothingDue: 'nothing due',
+  nothingDueWatched: 'Nothing due on the routes you are watching',
+  nothingDue: 'Nothing due',
   pickARoute: 'Pick a route to see it moving',
   pinAStop: 'Pin a stop and its times show up here',
   language: 'Language',
-  noBasemap: 'the basemap would not load',
+  noBasemap: 'The basemap would not load',
   faceNorth: 'Face north',
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
   whereAmI: 'Where I am',
   noLocation: 'Location is not available',
+  renewed: "The city's routes and timetables were updated",
+  plannerPreparing:
+      'The journey planner is getting ready - try again in a few minutes',
   plan: 'Journey',
   from: 'From',
   to: 'To',
-  tapMap: 'tap the map',
-  useHere: 'where I am',
-  swap: 'swap',
+  tapMap: 'Tap the map',
+  useHere: 'Where I am',
+  swap: 'Swap',
   findRoute: 'Find a way',
-  searching: 'looking for a way',
-  noJourney: 'no way to get there was found',
-  toDoor: 'to the door',
-  noChange: 'no changes',
-  livePart: 'tracked',
-  schedulePart: 'timetable',
-  wholeWalk: 'walk the whole way',
-  planHint: 'Tap the map to set where you are and where you are going.',
+  searching: 'Looking for a way',
+  noJourney: 'No way to get there was found',
+  toDoor: 'To the door',
+  noChange: 'No changes',
+  prefer: _enPrefer,
+  schedulePart: 'Timetable',
+  chooseOnMap: 'Choose on the map',
+  hidePanel: 'Hide, keeping the journey on the map',
+  showPanel: 'Show the journey',
+  leaveOn: 'Leave on',
+  walkSpeed: 'Walking speed',
+  walkSpeedHint: 'On the level: up a hill takes longer, down a gentle one less. Each search starts from this.',
+  slower: 'Slower',
+  faster: 'Faster',
+  alsoOptionHint: 'This way is also among the options',
+  today: 'Today',
+  tomorrow: 'Tomorrow',
+  backups: 'Backups',
+  backupsWhy: 'Under each stop the planned way comes first. If you miss it or it does not come, the ones below leave the same stop later and still reach the door at most half an hour after this journey, some by another route or with a change. The first few are the best by your order, then the best by each other one. An outlined route is a vehicle of the planned way further along, no help if that one does not come.',
+  noBackup: 'None within half an hour',
+  moreBackups: _enMoreBackups,
+  scheduleWhy: 'No vehicle on this route is being tracked for this ride yet, so its time is the city timetable. The bus may come early or late.',
+  quietWhy: 'The timetable has departures on this route, but no vehicle on it has been seen for the last hour. It may not be running at all.',
+  wholeWalk: 'Walk the whole way',
+  planHint: 'Tap From or To to search for a place, pick a saved one or choose it on the map.',
   walkLeg: _enWalkLeg,
   changeCount: _enChangeCount,
+  changeAt: _enChangeAt,
+  backupCount: _enBackupCount,
+  shortDay: _enShortDay,
   stopsAhead: 'Stops ahead',
   vehicleGone: 'This one is no longer being tracked',
-  now: 'now',
+  now: 'Now',
   oneMinute: '1 min',
   minutes: _enMinutes,
+  kmh: _enKmh,
+  alsoOption: _enAlsoOption,
   unreachable: _enUnreachable,
 );
 
 String _enUpdateSet(String name) => 'Update “$name”';
-String _enWalkLeg(int m) => 'walk $m min';
+String _enWalkLeg(int m) => 'Walk $m min';
 String _enChangeCount(int n) => n == 1 ? '1 change' : '$n changes';
+String _enChangeAt(String stops) => 'Change at $stops';
+String _enBackupCount(int n) => n == 1 ? '1 backup' : '$n backups';
+String _enMoreBackups(int n) => '$n more';
+String _enShortDay(DateTime d) =>
+    '${const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d.weekday - 1]} '
+    '${d.day} '
+    '${const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.month - 1]}';
+
+String _enPrefer(Prefer p) => switch (p) {
+  Prefer.fastest => 'Fastest',
+  Prefer.walk => 'Less walking',
+  Prefer.changes => 'Fewer changes',
+  Prefer.reliable => 'Most backups',
+};
 String _enMinutes(int m) => '$m min';
-String _enUnreachable(String server) => 'could not reach $server';
+String _enKmh(double v) => '${v.toStringAsFixed(1)} km/h';
+String _enAlsoOption(int n) => 'Option $n';
+String _enUnreachable(String server) => 'Could not reach $server';
 
 const _uk = Strings(
   signIn: 'Увійти',
-  tagline: 'де насправді їде транспорт',
+  tagline: 'Де насправді їде транспорт',
   inviteCode: 'Код запрошення',
-  inviteHint: 'остання частина надісланого посилання',
+  inviteHint: 'Остання частина надісланого посилання',
   username: 'Імʼя',
   password: 'Пароль',
   stayIn: 'Не виходити',
@@ -334,7 +430,7 @@ const _uk = Strings(
   nameSet: 'Назва набору',
   rename: 'Перейменувати',
   delete: 'Видалити',
-  holdForLine: 'утримуйте маршрут, щоб побачити лінію',
+  holdForLine: 'Утримуйте маршрут, щоб побачити лінію',
   places: 'Збережені місця',
   savePlace: 'Зберегти це місце',
   namePlace: 'Назва місця',
@@ -342,14 +438,15 @@ const _uk = Strings(
   saved: 'Збережене',
   pinnedStops: 'Закріплені зупинки',
   nothingSaved: 'Поки нічого не збережено',
-  showOnMap: 'торкніться рядка, щоб показати на мапі',
-  holdToManage: 'утримуйте, щоб перейменувати або видалити',
+  showOnMap: 'Торкніться рядка, щоб показати на мапі',
+  holdToManage: 'Утримуйте, щоб перейменувати або видалити',
   foundStops: 'Зупинки',
   foundPlaces: 'Місця',
-  noSearch: 'пошук місць недоступний',
+  noSearch: 'Пошук місць недоступний',
   traffic: 'Затори',
   departAt: 'Виїзд о',
-  quietPart: 'рейсів не видно',
+  preferBy: 'Порядок',
+  quietPart: 'Рейсів не видно',
   forget: 'Забути',
   saveHere: 'Зберегти',
   cancel: 'Скасувати',
@@ -359,47 +456,89 @@ const _uk = Strings(
   pin: 'Закріпити',
   unpin: 'Відкріпити',
   callsHere: 'Тут зупиняються',
-  nothingDueWatched: 'на обраних маршрутах нічого не їде',
-  nothingDue: 'нічого не їде',
+  nothingDueWatched: 'На обраних маршрутах нічого не їде',
+  nothingDue: 'Нічого не їде',
   pickARoute: 'Оберіть маршрут, щоб побачити рух',
   pinAStop: 'Закріпіть зупинку - і час буде тут',
   language: 'Мова',
-  noBasemap: 'не вдалося завантажити мапу',
+  noBasemap: 'Не вдалося завантажити мапу',
   faceNorth: 'На північ',
   zoomIn: 'Наблизити',
   zoomOut: 'Віддалити',
   whereAmI: 'Де я',
   noLocation: 'Місцеперебування недоступне',
+  renewed: 'Маршрути й розклади міста оновилися',
+  plannerPreparing:
+      'Планувальник поїздок готується - спробуйте за кілька хвилин',
   plan: 'Маршрут',
   from: 'Звідки',
   to: 'Куди',
-  tapMap: 'торкніться мапи',
-  useHere: 'де я',
-  swap: 'поміняти',
+  tapMap: 'Торкніться мапи',
+  useHere: 'Де я',
+  swap: 'Поміняти',
   findRoute: 'Знайти шлях',
-  searching: 'шукаємо шлях',
-  noJourney: 'шляху не знайдено',
-  toDoor: 'до місця',
-  noChange: 'без пересадок',
-  livePart: 'за відстеженням',
-  schedulePart: 'за розкладом',
-  wholeWalk: 'пішки весь шлях',
-  planHint: 'Торкніться мапи, щоб вказати, де ви є і куди прямуєте.',
+  searching: 'Шукаємо шлях',
+  noJourney: 'Шляху не знайдено',
+  toDoor: 'До місця',
+  noChange: 'Без пересадок',
+  prefer: _ukPrefer,
+  schedulePart: 'За розкладом',
+  chooseOnMap: 'Вибрати на мапі',
+  hidePanel: 'Сховати, лишивши маршрут на мапі',
+  showPanel: 'Показати маршрут',
+  leaveOn: 'Виїзд',
+  walkSpeed: 'Швидкість ходьби',
+  walkSpeedHint: 'По рівному: під гору довше, з пологої гори швидше. Кожен пошук починається з неї.',
+  slower: 'Повільніше',
+  faster: 'Швидше',
+  alsoOptionHint: 'Цей шлях є і серед варіантів',
+  today: 'Сьогодні',
+  tomorrow: 'Завтра',
+  backups: 'Запасні',
+  backupsWhy: 'Під кожною зупинкою спершу запланований шлях. Якщо ви його пропустите чи транспорт не прийде, рейси під ним відходять пізніше з тієї ж зупинки й доправлять до мети щонайбільше на пів години пізніше за цю поїздку, деякі іншим маршрутом чи з пересадкою. Перші кілька - найкращі за вашим порядком, далі найкращі за кожним іншим. Маршрут у рамці - це транспорт запланованого шляху далі по ньому, і він не допоможе, якщо той не прийде.',
+  noBackup: 'Жодного за пів години',
+  moreBackups: _ukMoreBackups,
+  scheduleWhy: 'Для цієї поїздки ще не відстежується жоден транспорт на маршруті, тож час узято з міського розкладу. Транспорт може прийти раніше чи пізніше.',
+  quietWhy: 'За розкладом цей маршрут курсує, але жодного його транспорту не було видно протягом останньої години. Можливо, він зовсім не їздить.',
+  wholeWalk: 'Пішки весь шлях',
+  planHint: 'Торкніться «Звідки» чи «Куди», щоб знайти місце, вибрати збережене або вказати його на мапі.',
   walkLeg: _ukWalkLeg,
   changeCount: _ukChangeCount,
+  changeAt: _ukChangeAt,
+  backupCount: _ukBackupCount,
+  shortDay: _ukShortDay,
   stopsAhead: 'Наступні зупинки',
   vehicleGone: 'Цей транспорт більше не відстежується',
-  now: 'зараз',
+  now: 'Зараз',
   oneMinute: '1 хв',
   minutes: _ukMinutes,
+  kmh: _ukKmh,
+  alsoOption: _ukAlsoOption,
   unreachable: _ukUnreachable,
 );
 
 String _ukUpdateSet(String name) => 'Оновити «$name»';
-String _ukWalkLeg(int m) => 'пішки $m хв';
-String _ukChangeCount(int n) => n == 1 ? '1 пересадка' : 'пересадок: $n';
+String _ukWalkLeg(int m) => 'Пішки $m хв';
+String _ukChangeCount(int n) => n == 1 ? '1 пересадка' : 'Пересадок: $n';
+String _ukChangeAt(String stops) => 'Пересадка: $stops';
+String _ukBackupCount(int n) => n == 1 ? '1 запасний' : 'Запасних: $n';
+String _ukMoreBackups(int n) => 'Ще $n';
+String _ukShortDay(DateTime d) =>
+    '${const ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'][d.weekday - 1]} '
+    '${d.day} '
+    '${const ['січ.', 'лют.', 'бер.', 'квіт.', 'трав.', 'черв.', 'лип.', 'серп.', 'вер.', 'жовт.', 'лист.', 'груд.'][d.month - 1]}';
+
+String _ukPrefer(Prefer p) => switch (p) {
+  Prefer.fastest => 'Швидше',
+  Prefer.walk => 'Менше пішки',
+  Prefer.changes => 'Менше пересадок',
+  Prefer.reliable => 'Більше запасних',
+};
 String _ukMinutes(int m) => '$m хв';
-String _ukUnreachable(String server) => 'не вдалося зʼєднатися з $server';
+String _ukKmh(double v) =>
+    '${v.toStringAsFixed(1).replaceAll('.', ',')} км/год';
+String _ukAlsoOption(int n) => 'Варіант $n';
+String _ukUnreachable(String server) => 'Не вдалося зʼєднатися з $server';
 
 /// Set from `main` before anything is drawn, and again from the picker.
 Lang lang = Lang.uk;
