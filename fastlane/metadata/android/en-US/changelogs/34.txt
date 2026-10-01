@@ -1,0 +1,4 @@
+- Set your walking speed, down to 0.5 km/h; walks account for hills
+- See the backups for each journey
+- Routes and timetables update by themselves when the city changes them, with a notice when they do
+- The planner says when it is still getting ready instead of failing
