@@ -136,3 +136,96 @@ its pages are scattered. On the HDD the evaluation's random reads, and a full
 `SELECT max(veh_ts) FROM veh`, stalled for tens of minutes. Reading the file
 once sequentially (`cat feed.db > /dev/null`) and then `VACUUM INTO` a packed
 copy makes the reads sequential again
+
+## Lviv's GTFS splits the timetable by weekday in `calendar.txt`
+
+The feed has separate services for weekdays, Saturday and Sunday (for example
+service 31 runs weekdays with 8432 trips, service 224 Saturday and Sunday with
+5340), and `calendar_dates.txt` is only a header. The `start_date` is the day
+the feed is published. A planner that ignores `service_id` answers a Thursday
+with weekend trips mixed in
+
+## The Android emulator crashes when the app draws on the GPU
+
+With the host GPU, `qemu-system-x86_64` dies of SIGILL (seen in `coredumpctl`)
+as soon as the Flutter app renders. Starting the app with software rendering
+keeps it alive: `adb shell am start -n nl.r1a.commuterlviv/.MainActivity --ez
+enable-software-rendering true --ez enable-impeller false`
+
+## A backdrop blur holds `position: fixed` children inside it
+
+An element with `backdrop-filter` (Tailwind's `backdrop-blur-*`, part of the
+web's `panel` utility) becomes the containing block for `fixed` descendants,
+the same as a `transform` does. An `inset-0` overlay rendered inside the
+journey panel covered only the panel. The backups dialog is portalled to
+`document.body` for this
+
+## `toLocaleTimeString` picks 12 or 24 hours from the browser's locale
+
+`{ hour: "2-digit", minute: "2-digit" }` alone gives `08:01 AM` in an en-US
+browser, which wraps in a 3rem clock column. The web's `clock` passes
+`hourCycle: "h23"`, so it is always `HH:MM` like the mobile app
+
+## A Material chip takes hits as a whole, not through its label
+
+In a widget test, `longPress(find.text(...))` on a chip's label warns that the
+offset "would not hit test on the specified widget": the chip's render object
+answers the hit itself and never offers it to the label. The gesture still
+lands on the chip, so the test passed with the warning. Aiming at the chip,
+`find.widgetWithText(FilterChip, ...)`, is what the warning asks for
+
+## scipy's Dijkstra keeps zero-weight edges given in a CSR matrix
+
+**Observed.** `scipy.sparse.csgraph.dijkstra` on a `csr_matrix` holding an
+explicit `0.0` edge walks it at no cost, and of two entries for the same edge
+it uses the shorter; it neither drops the zero nor sums the pair. A dense input
+would read a zero as no edge at all.
+
+**Why.** For sparse input the matrix's stored entries are the edges, whatever
+their value; only dense input goes through `csgraph_from_dense`, which treats
+zero as missing.
+
+**What the code does.** `Walk.reach` starts a search from many nodes by hanging
+them off one extra node, with edges as long as the walk already spent reaching
+each. A stop standing right on a node gives an edge of 0 s, which this relies
+on. Sources are still deduplicated first, so nothing depends on the duplicate
+rule.
+
+## A numpy scalar in the profile scan's walking caps makes it half again slower
+
+**Observed.** Once the walk-only time came from a numpy array (`seen[i] + t`
+is an `np.float64`), the profile scan took 740 ms instead of 485 ms on the same
+searches, with identical results.
+
+**Why.** The time becomes the first walking cap, and the scan compares and
+takes `min` of it against plain floats hundreds of thousands of times; every
+such operation with an `np.float64` goes through numpy's scalar machinery.
+
+**What the code does.** `_walk_through` turns the reading into a `float`.
+`_connections` hands the scan its hops as plain lists (`.tolist()`) for the
+same reason: one element at a time, a list and `bisect` beat numpy indexing and
+`searchsorted` several times over.
+
+## Terrarium elevation tiles: the decode, and what zoom 13 really holds
+
+**Observed.** The tiles at
+`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png` are
+256 px PNGs with no key and no rate limit we ran into. Lviv at zoom 13 is 120
+tiles, about 80 s fetched one after another. The heights came out at 222-413 m,
+the market square (Rynok) at 291 m. The median slope over a footpath edge is
+2.3%, and 0.15% of edges are steeper than 30%.
+
+**How a pixel decodes.** Height in metres is `R * 256 + G + B / 256 - 32768`,
+from the red, green and blue bytes. There is no alpha meaning and no scale
+factor per tile.
+
+**What zoom 13 really holds.** A pixel there is about 12 m across at Lviv's
+latitude (49.8°N), but the data under it is SRTM-class, about 30 m. Zooming in
+further only interpolates the same data, so 13 is the coarsest zoom that loses
+nothing. Sampling is bilinear between pixels, or short edges would see steps of
+whole metres.
+
+**Why the slope is clipped.** A 30 m terrain model smears a building, a
+bridge or a cutting into a slope that the footpath does not climb. Past a rise
+of 30% over the run (`STEEPEST`) the model is more likely wrong than the hill,
+so steeper edges are walked as if at 30%.

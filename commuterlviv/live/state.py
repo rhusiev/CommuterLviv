@@ -9,6 +9,9 @@ model updates. Both are frozen and replaced wholesale, so readers never see
 half-updated state and need no lock.
 """
 import datetime
+import functools
+import hashlib
+import json
 import math
 import time
 from dataclasses import dataclass, field
@@ -35,10 +38,16 @@ DAY = 86400.0
 STALE, MOVING = 1, 2     # the flag bits, mirrored in `web/src/lib/wire.ts`
 
 
+def etag(body):
+    """A weak ETag that changes whenever the body does."""
+    return f'W/"{hashlib.blake2b(body, digest_size=8).hexdigest()}"'
+
+
 class Catalog:
-    """The parts of the network that do not change while the service runs;
-    sent to a client once, then referred to by index so routes and stops are
-    two bytes each on the wire rather than their feed ids."""
+    """The parts of the network that do not change while it is served; sent
+    to a client once, then referred to by index so routes and stops are two
+    bytes each on the wire rather than their feed ids. A new feed is a new
+    catalog, and `tag` tells a client holding the old one."""
 
     def __init__(self, net):
         self.routes = sorted(net.routes, key=lambda r: (
@@ -59,8 +68,16 @@ class Catalog:
         self.lon = np.array([net.stops[s]["lon"] for s in self.stops])
         self.net = net
 
+    @functools.cached_property
+    def body(self):
+        return json.dumps(self.describe()).encode()
+
+    @functools.cached_property
+    def tag(self):
+        return etag(self.body)
+
     def describe(self):
-        """The catalog as the web app receives it; static for the process."""
+        """The catalog as the clients receive it."""
         net = self.net
         return {
             "routes": [{"id": r, "short": net.routes[r]["short"],

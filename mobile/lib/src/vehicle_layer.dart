@@ -100,6 +100,12 @@ class _VehicleLayerState extends State<VehicleLayer>
   }
 
   @override
+  void didUpdateWidget(VehicleLayer old) {
+    super.didUpdateWidget(old);
+    if (old.catalog != widget.catalog) _badges.clear();
+  }
+
+  @override
   void dispose() {
     _ticker.dispose();
     _frame.dispose();

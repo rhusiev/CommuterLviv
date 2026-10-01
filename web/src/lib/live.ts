@@ -1,4 +1,4 @@
-import { BASE } from "./api";
+import { BASE, catalogTag } from "./api";
 import type { Arrival } from "./types";
 import { decode, DELTA, SNAPSHOT } from "./wire";
 
@@ -6,8 +6,10 @@ import { decode, DELTA, SNAPSHOT } from "./wire";
  * every 5 s, so this must stay well under that. */
 const EASE = 1200;
 
-/** The one text frame worth reading; everything else on the socket is binary */
-type ArrivalsMessage = { type: string; t: number; stops: Record<string, Arrival[]> };
+/** The text frames worth reading; everything else on the socket is binary */
+type Message =
+  | { type: "hello"; catalog?: string }
+  | { type: "arrivals"; t: number; stops: Record<string, Arrival[]> };
 
 type Vehicle = {
   route: number;
@@ -27,6 +29,10 @@ export type Connection = "connecting" | "live" | "offline";
  * React state: React subscribes only to the connection, the arrivals and the
  * vehicle count, never to a position frame. */
 export class Live {
+  /** `renewed` is called when the service has moved to a catalog other than
+   * the one this page holds: every route and stop index it has is stale */
+  constructor(private readonly renewed: () => void) {}
+
   readonly vehicles = new Map<number, Vehicle>();
   arrivals: Record<string, Arrival[]> = {};
   arrivalsAt = 0;
@@ -119,13 +125,16 @@ export class Live {
   }
 
   private text(raw: string) {
-    let msg: Partial<ArrivalsMessage>;
+    let msg: Message;
     try {
-      msg = JSON.parse(raw) as Partial<ArrivalsMessage>;
+      msg = JSON.parse(raw) as Message;
     } catch {
       return;
     }
-    if (msg.type === "arrivals" && msg.stops !== undefined && msg.t !== undefined) {
+    if (msg.type === "hello") {
+      const held = catalogTag();
+      if (msg.catalog && held && msg.catalog !== held) this.renewed();
+    } else if (msg.type === "arrivals") {
       this.arrivals = msg.stops;
       this.arrivalsAt = msg.t;
       this.changed();

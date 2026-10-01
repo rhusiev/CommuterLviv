@@ -205,15 +205,21 @@ class AccountSheet extends StatelessWidget {
   const AccountSheet({
     super.key,
     required this.server,
+    required this.speed,
     required this.onSaved,
     required this.onLanguage,
+    required this.onSpeed,
     required this.onServer,
     required this.onOut,
   });
 
   final String server;
+
+  /// The usual walking speed, km/h.
+  final double speed;
   final VoidCallback onSaved;
   final VoidCallback onLanguage;
+  final VoidCallback onSpeed;
   final VoidCallback onServer;
   final VoidCallback onOut;
 
@@ -234,6 +240,12 @@ class AccountSheet extends StatelessWidget {
             title: Text(txt.language),
             trailing: Text(lang == Lang.uk ? 'Українська' : 'English'),
             onTap: onLanguage,
+          ),
+          ListTile(
+            leading: const Icon(Icons.directions_walk),
+            title: Text(txt.walkSpeed),
+            trailing: Text(txt.kmh(speed)),
+            onTap: onSpeed,
           ),
           ListTile(
             leading: const Icon(Icons.dns_outlined),

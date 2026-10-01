@@ -23,6 +23,8 @@ MSG_ABUSE = 500         # messages refused before the socket is closed
 
 MAX_PER_USER = 8        # sockets one account may hold open at once
 
+RENEWED = 1012          # "service restart": the city changed under the socket
+
 
 def due(arrivals, stops):
     """What is coming to these stops; shared with `/api/arrivals`."""
@@ -83,6 +85,13 @@ class Hub:
         for client in self.clients:
             client.wake.set()
 
+    async def renew(self, live):
+        """Onto a new city. Every socket is closed as a restart, and its client
+        reconnects to a hello naming a catalog it does not hold."""
+        self.live = live
+        await asyncio.gather(*(c.ws.close(code=RENEWED) for c in self.clients),
+                             return_exceptions=True)
+
     async def serve(self, ws, user_id):
         """One connection, until it goes away."""
         if sum(c.user_id == user_id for c in self.clients) >= MAX_PER_USER:
@@ -95,7 +104,8 @@ class Hub:
                 "type": "hello", "variant": self.live.variant,
                 "epoch": self.live.epoch_s,
                 "routes": len(self.live.cat.routes),
-                "stops": len(self.live.cat.stops)}))
+                "stops": len(self.live.cat.stops),
+                "catalog": self.live.cat.tag}))
             # whichever half stops first ends the connection, so a dead pusher
             # cannot leave a socket that reads fine and never updates
             tasks = [asyncio.create_task(self._read(client)),

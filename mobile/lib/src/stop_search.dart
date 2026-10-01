@@ -32,18 +32,26 @@ class StopHit extends Hit {
 }
 
 class PlaceHit extends Hit {
-  const PlaceHit(this.at);
+  const PlaceHit(this.at, this.name);
 
   final LatLng at;
+  final String name;
 }
 
 class StopSearch extends SearchDelegate<Hit?> {
-  StopSearch({required this.api, required this.catalog, required this.onSave})
-    : super(searchFieldLabel: txt.findStop);
+  StopSearch({
+    required this.api,
+    required this.catalog,
+    required this.onSave,
+    this.idle,
+  }) : super(searchFieldLabel: txt.findStop);
 
   final Api api;
   final Catalog catalog;
   final void Function(String name, LatLng at) onSave;
+
+  /// What an empty query shows, given a way to close the search with nothing
+  final Widget Function(BuildContext context, VoidCallback done)? idle;
 
   @override
   List<Widget> buildActions(BuildContext context) => [
@@ -61,13 +69,16 @@ class StopSearch extends SearchDelegate<Hit?> {
   Widget buildResults(BuildContext context) => buildSuggestions(context);
 
   @override
-  Widget buildSuggestions(BuildContext context) => _Results(
-    api: api,
-    catalog: catalog,
-    query: query.trim(),
-    onPick: (hit) => close(context, hit),
-    onSave: onSave,
-  );
+  Widget buildSuggestions(BuildContext context) =>
+      query.trim().isEmpty && idle != null
+      ? idle!(context, () => close(context, null))
+      : _Results(
+          api: api,
+          catalog: catalog,
+          query: query.trim(),
+          onPick: (hit) => close(context, hit),
+          onSave: onSave,
+        );
 }
 
 class _Results extends StatefulWidget {
@@ -217,7 +228,7 @@ class _ResultsState extends State<_Results> {
                 icon: Icons.place_outlined,
                 title: p.name,
                 under: p.where,
-                onTap: () => widget.onPick(PlaceHit(p.at)),
+                onTap: () => widget.onPick(PlaceHit(p.at, p.name)),
                 onSave: () => _save(p.name, p.at),
               );
             },

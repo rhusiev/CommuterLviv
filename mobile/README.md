@@ -195,6 +195,7 @@ refused and the map stays empty while everything else works.
 | `lib/src/map_controls.dart`  | zoom, and the compass that shows up off north                           |
 | `lib/src/eta.dart`           | an arrival's absolute time, said as a countdown                         |
 | `lib/src/journey_panel.dart` | two points, and the ways between them                                   |
+| `lib/src/walk_speed.dart`    | how fast you walk, per search and as the usual                          |
 | `lib/src/map_tiles.dart`     | where the basemap is kept between runs                                  |
 | `lib/src/theme.dart`         | every colour and radius the app uses, once                              |
 | `lib/src/strings.dart`       | Ukrainian and English, and the switch between them                      |
@@ -219,6 +220,16 @@ whether any vehicle went away.
 **Route badges are laid out once.** A `ui.Paragraph` per route, cached in a map.
 Laying out text is far dearer than drawing text already laid out, and doing it
 per vehicle per frame is the one thing that would not fit in a frame.
+
+**Everything held is numbered against one catalog.** Routes and stops travel as
+catalog indexes, and the service moves to a new catalog when the feed changes,
+mostly at night. It then closes every socket with 1012, and the `hello` that
+opens the next one carries the new catalog's ETag. `Live` compares it with the
+one the app holds (`Api.catalogTag`) and calls `onRenewed`. `_renew` in
+`home.dart` fetches the catalog, maps the selected routes, the pins and the open
+route over by feed id, drops the drawn journey and the route lines, closes any
+open sheet and shows a snackbar. The badge cache and the street lines are kept
+per catalog for the same reason.
 
 **The basemap style carries an id that the app puts there.** `vector_map_tiles`
 renders each tile to a PNG and caches it on disk under `'${theme.id}-v${theme .version}'`, and every VersaTiles style parses to a theme whose id is `default`.
@@ -286,20 +297,40 @@ are committed: a build from source must not need a rasteriser.
 ## Planning a journey
 
 The directions button in the app bar opens `journey_panel.dart` over the map.
-Both ends are set by tapping the map, or by the locate button beside either
-field; while an end is being picked, a tap is that point and not the nearest
-stop, because a door rarely is one. A chip beside the two fields says when to
-leave, `Now` until a time is picked, and passes it as `at=<unix seconds>`; a
-time already past today is meant for tomorrow, which is as far ahead as the
-server plans.
+Tapping either end opens the same search as the top bar (`stop_search.dart`):
+typing finds stops, addresses and shops, and before anything is typed it offers
+where I am, choosing on the map, and the saved places. The locate button beside
+each field is where I am in one tap. While an end is being picked on the map
+the panel folds to a strip saying so, and a tap is that point and not the
+nearest stop, because a door rarely is one. The arrow in the panel's corner
+folds it to a strip too, showing the picked option's length and routes, so the
+option can be read on the map; tapping the strip opens the panel again. The
+planner is left through the bottom tabs. Two chips beside the two fields say
+when to leave: the day, `Today` until another is picked in the next 30 days, and
+the time, `Now` until one is picked. They are passed as `at=<unix seconds>`. A
+time already past on today is meant for tomorrow. Below them a stepper sets
+how fast this search walks on the level, 0.5 to 8 km/h in halves, passed as
+`speed=`. It starts from the usual speed, kept on the device under
+`commuterlviv.walk` and set from `Walking speed` in the account menu; stepping
+it in the panel changes that search only. The server already slows walks
+uphill and speeds them down gentle slopes.
 
-`GET /api/plan` answers with options ranked by arrival, and each ride leg says
-what it rests on: a tracked vehicle, the timetable, or the timetable on a line
-nothing has been seen running on, which is the last one drawn in the error
-colour. Past the model's 45-minute horizon every ride is the schedule's guess,
-and it says so rather than looking equally certain. A walk between two rides is
-its own row with its own duration, because that is how it arrives. A server
-without the planner caches answers 503; the panel shows the message.
+`GET /api/plan` answers with options ranked by arrival. A ride on a tracked
+vehicle says nothing more; one resting on the timetable says so, and one on a
+line nothing has been seen running on says that in the error colour. Tapping
+either word explains what it means. The option's backup count opens a dialog
+that, under each ride's stop, puts the planned way first and then the ride's
+backups - the other ways to the door from that stop, each with its routes,
+where it changes and when it gets there, at most half an hour after the option
+does - and tapping one opens the line it leaves on. Four show at first, picked
+by the sort preset and then by each other one (`Prefer.shortlist`), with the
+rest behind a button; a route the option itself rides further along is
+outlined, and a way that is also one of the listed options says `Option N`, N
+being where it sits in the list as sorted now. Past the model's 45-minute
+horizon every ride is the schedule's guess, and it says so rather than looking
+equally certain. A walk between two rides is its own row with its own duration,
+because that is how it arrives. A server without the planner caches answers
+503; the panel shows the message.
 
 ## What is saved
 

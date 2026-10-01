@@ -55,9 +55,12 @@ class Vehicle {
 }
 
 class Live extends ChangeNotifier {
-  Live(this._api);
+  /// [onRenewed] runs when the service has moved to a catalog other than the
+  /// one held: every route and stop index is stale.
+  Live(this._api, {required this.onRenewed});
 
   final Api _api;
+  final VoidCallback onRenewed;
   final Map<int, Vehicle> vehicles = {};
 
   Map<int, List<Arrival>> arrivals = {};
@@ -163,7 +166,14 @@ class Live extends ChangeNotifier {
     } on FormatException {
       return;
     }
-    if (msg is! Map || msg['type'] != 'arrivals') return;
+    if (msg is! Map) return;
+    if (msg['type'] == 'hello') {
+      final held = _api.catalogTag;
+      final now = msg['catalog'];
+      if (now is String && held != null && now != held) onRenewed();
+      return;
+    }
+    if (msg['type'] != 'arrivals') return;
     arrivals = {
       for (final e in (msg['stops'] as Map<String, dynamic>).entries)
         int.parse(e.key): [

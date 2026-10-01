@@ -8,23 +8,28 @@ Each tracked vehicle enters the timetable as an extra trip whose stop times are
 the live predictions, so a leg is "live" when the search picked one of those and
 "scheduled" otherwise.
 
-The search is RAPTOR (Delling, Pajor and Werneck, 2012): round k holds the
-earliest arrival reachable with k rides, each round scans every route touching a
-stop improved in the previous round, and between rounds a walk from every
-improved stop relaxes its neighbours on foot.
+The search is one profile scan backwards from the door (`_Profile`): every hop
+of every trip learns the soonest door arrival from riding it on. The options are
+read off it at the stops the origin walks to, and each ride's backups - the
+other ways to the door from where it boards - off the same scan at that stop,
+so a backup is searched exactly as an option is.
 """
+import bisect
+import copy
 import dataclasses
 import datetime
 import functools
+import hashlib
 import math
 import pickle
 import zoneinfo
 from dataclasses import dataclass
+from itertools import zip_longest
 from pathlib import Path
 
 import numpy as np
 
-from . import network, replay, walk as footpaths
+from . import gtfs, network, replay, walk as footpaths
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 TRANSFERS = DATA / "transfers.npz"
@@ -40,11 +45,13 @@ CHANGE = 60.0   # s of slack per change, over and above the walk
 
 ROUNDS = 3      # rides per journey; a fourth round costs as much as the first three
 
-# Each walk capped to this many seconds in an extra pass, since one pass keeps
-# only the earliest arrival per stop and so loses a ride from the door to a
-# slightly faster one behind a long walk. The walking reaches are shared, so a
-# pass is only the RAPTOR rounds.
+# Each walk also capped to this many seconds, in slots of the scan of their
+# own: the earliest arrival alone loses a ride from the door to a slightly
+# faster one behind a long walk. Both caps here are at `walk.SPEED`; a search
+# paced slower or faster keeps the distances and scales the seconds
 WALK_CAPS = (600.0, 300.0)
+
+LONGEST_WALK = 4 * 3600.0   # s past which the ends count as not joined on foot
 
 # s before the forecast horizon within which a vehicle's last prediction counts
 # as cut off by it rather than as the end of its line
@@ -55,8 +62,8 @@ HORIZON_EDGE = 300.0
 QUIET_WINDOW = 3600.0
 QUIET_TRIPS = 2
 
-# s after boarding within which another way of riding the same leg still
-# counts as a backup: missing the bus stings less when the next one is soon
+# s after the journey's arrival within which another way to the door still
+# counts as a backup: missing the bus stings less when the next way is soon
 BACKUP_WINDOW = 1800.0
 
 # weakest first, so `min` over this order is the weakest ground a journey stands on
@@ -81,11 +88,34 @@ class Leg:
 
 
 @dataclass(frozen=True, slots=True)
+class Backup:
+    """Another way to the door from where a ride boards: the rides it takes,
+    the first leaving from there, when it reaches the door and the seconds it
+    walks. `planned` is, per ride, the index of the journey's leg riding the
+    same vehicle, or -1. `option` is the place in the list of the journey
+    riding exactly these rides, or -1."""
+    rides: tuple[Leg, ...]
+    arr: float
+    walk: float
+    planned: tuple[int, ...]
+    option: int = -1
+
+
+@dataclass(frozen=True, slots=True)
 class Journey:
     legs: tuple[Leg, ...]
-    # Distinct routes repeating the weakest ride within BACKUP_WINDOW, for the
-    # ranking to prefer. Set by `_rank`, not by the search.
-    backup: int = 0
+    # per leg, the other ways to the door from where it boards
+    backups: tuple[tuple[Backup, ...], ...] = ()
+
+    @property
+    def backup(self):
+        """How many ways back up the weakest ride, for the ranking to prefer.
+        One catching that ride's own vehicle further along is no help when it
+        does not come, so it does not count."""
+        return min((sum(i not in b.planned for b in backs)
+                    for i, (leg, backs) in enumerate(zip(self.legs,
+                                                         self.backups))
+                    if leg.kind == "ride"), default=0)
 
     @property
     def dep(self):
@@ -120,31 +150,29 @@ class Pattern:
     """Every trip that calls at the same stops in the same order.
 
     `times` is one row per trip, one column per stop, in seconds since the
-    service day's midnight, rows sorted by departure so `after` is a bisect.
+    service day's midnight, rows sorted by departure. `service` indexes each
+    row's service into `Timetable.services`; a pattern of a single day
+    (`Timetable.on`) has none.
     """
 
-    __slots__ = ("route", "stops", "times")
+    __slots__ = ("route", "stops", "times", "service")
 
-    def __init__(self, route, stops, times):
+    def __init__(self, route, stops, times, service=None):
         self.route = route
         self.stops = np.asarray(stops, dtype=np.int32)
         self.times = np.asarray(times, dtype=np.float64)
+        self.service = service
 
-    def after(self, k, when):
-        """(row, shift) of the first trip leaving stop k at or after `when`,
-        in seconds since midnight, or None.
-
-        `shift` is DAY when the trip found is tomorrow's; the caller adds it to
-        every other time on that trip.
-        """
-        col = self.times[:, k]
-        i = int(np.searchsorted(col, when, side="left"))
-        if i < len(col):
-            return i, 0.0
-        i = int(np.searchsorted(col, when - DAY, side="left"))
-        if i < len(col):
-            return i, DAY
-        return None
+    def running(self, runs):
+        """The trips running on the day before, the day and the day after -
+        `runs` holding each day's services - as one day's pattern in seconds
+        since its midnight. The day before's count only past that midnight."""
+        before = self.times[runs[0][self.service]]
+        times = np.concatenate((before[before[:, -1] >= DAY] - DAY,
+                                self.times[runs[1][self.service]],
+                                self.times[runs[2][self.service]] + DAY))
+        return Pattern(self.route, self.stops,
+                       times[np.argsort(times[:, 0], kind="stable")])
 
 
 class LiveTrip:
@@ -161,34 +189,47 @@ class LiveTrip:
 
 
 class Timetable:
-    """The scheduled city, in the shape RAPTOR reads it.
+    """The scheduled city, as trips grouped into patterns.
 
     Stops are indexed by `sorted(net.stops)` and `stop_i` maps a feed id into
     that; the live side keys by the catalog's order instead, so callers must
     translate.
+
+    It holds every trip of every service; a search reads the one day it runs
+    on, from `on`.
     """
 
+    VERSION = 3
+
     def __init__(self, net):
+        self.version = self.VERSION
         self.net = net
         self.stops = sorted(net.stops)
         self.stop_i = {s: i for i, s in enumerate(self.stops)}
+        self.calendar = gtfs.Calendar()
+        of = {t["trip_id"]: t["service_id"] for t in gtfs.table("trips.txt")}
+        self.services = sorted(set(of.values()))
+        service_i = {s: i for i, s in enumerate(self.services)}
         by_key = {}
         for trip, (stops, _, sched) in net.trip_stops.items():
             route = net.trip_route.get(trip)
-            if route is None or len(stops) < 2:
+            if route is None or len(stops) < 2 or trip not in of:
                 continue
             key = (route, tuple(stops))
-            by_key.setdefault(key, []).append(sched)
+            by_key.setdefault(key, []).append((sched, service_i[of[trip]]))
         self.patterns = []
         for (route, stops), rows in by_key.items():
-            times = np.array(rows, dtype=np.float64)
-            times = times[np.argsort(times[:, 0], kind="stable")]
+            times = np.array([r[0] for r in rows], dtype=np.float64)
+            order = np.argsort(times[:, 0], kind="stable")
             idx = [self.stop_i[s] for s in stops]
-            self.patterns.append(Pattern(route, idx, times))
-        self.at_stop = [[] for _ in self.stops]
-        for p, pat in enumerate(self.patterns):
-            for k, s in enumerate(pat.stops):
-                self.at_stop[s].append((p, k))
+            self.patterns.append(Pattern(
+                route, idx, times[order],
+                np.array([r[1] for r in rows], dtype=np.int32)[order]))
+
+    def on(self, midnight):
+        """The timetable as it runs on the day starting at `midnight`, unix
+        seconds; see `Pattern.running`."""
+        return _day(self, midnight)
 
     @functools.cached_property
     def by_route(self):
@@ -204,6 +245,17 @@ class Timetable:
     @property
     def lon(self):
         return np.array([self.net.stops[s]["lon"] for s in self.stops])
+
+
+@functools.lru_cache(maxsize=3)
+def _day(tt, midnight):
+    day = datetime.datetime.fromtimestamp(midnight, TZ).date()
+    runs = [np.array([tt.calendar.runs(s, day + datetime.timedelta(days=d))
+                      for s in tt.services], dtype=bool) for d in (-1, 0, 1)]
+    out = copy.copy(tt)
+    out.__dict__.pop("by_route", None)
+    out.patterns = [pat.running(runs) for pat in tt.patterns]
+    return out
 
 
 def _seconds_since_midnight(now):
@@ -227,10 +279,6 @@ def build_transfers(tt, walk, cap=TRANSFER_CAP, path=TRANSFERS):
     """Stop-to-stop walking seconds as a CSR table: one Dijkstra per stop,
     capped at `cap`, written offline to `data/transfers.npz`."""
     node = stop_nodes(tt, walk)
-    at_node = {}
-    for i, n in enumerate(node):
-        if n >= 0:
-            at_node.setdefault(int(n), []).append(i)
     start = [0]
     to, cost = [], []
     for i in range(len(node)):
@@ -238,25 +286,42 @@ def build_transfers(tt, walk, cap=TRANSFER_CAP, path=TRANSFERS):
             start.append(len(to))
             continue
         seen = walk.reach([(int(node[i]), 0.0)], cap)
-        for n, t in seen.items():
-            for j in at_node.get(n, ()):
-                if j != i:
-                    to.append(j)
-                    cost.append(t)
+        for j, t in _at_stops(seen, node, cap).items():
+            if j != i:
+                to.append(j)
+                cost.append(t)
         start.append(len(to))
     path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(path, node=node,
+    # beside the one held and swapped in, as a running service may read it
+    fresh = path.with_name(path.stem + ".next.npz")
+    np.savez_compressed(fresh, node=node,
                         to=np.array(to, dtype=np.int32),
                         cost=np.array(cost, dtype=np.float32),
-                        start=np.array(start, dtype=np.int64))
+                        start=np.array(start, dtype=np.int64),
+                        model=np.array(walk.model),
+                        graph=np.array(walk.graph),
+                        stops=np.array(_stops_digest(tt)))
+    fresh.replace(path)
     return path
 
 
-class Transfers:
-    __slots__ = ("node", "to", "cost", "start")
+def _stops_digest(tt):
+    """The stops a transfer table is numbered against, and where they stand."""
+    h = hashlib.blake2b(digest_size=16)
+    h.update("\n".join(tt.stops).encode())
+    h.update(tt.lat.tobytes())
+    h.update(tt.lon.tobytes())
+    return h.hexdigest()
 
-    def __init__(self, node, to, cost, start):
+
+class Transfers:
+    __slots__ = ("node", "to", "cost", "start", "model", "graph", "stops")
+
+    def __init__(self, node, to, cost, start, model, graph="", stops=""):
         self.node, self.to, self.cost, self.start = node, to, cost, start
+        # the `Walk.model` and `Walk.graph` it was walked on, and the stops
+        # it was walked between; empty in a table from before they were noted
+        self.model, self.graph, self.stops = model, graph, stops
 
     @classmethod
     def load(cls, path=TRANSFERS):
@@ -265,7 +330,34 @@ class Transfers:
                 f"{path} is not there - run `python -m commuterlviv plan "
                 "--build` once to walk between every pair of stops")
         with np.load(path) as z:
-            return cls(z["node"], z["to"], z["cost"], z["start"])
+            return cls(z["node"], z["to"], z["cost"], z["start"],
+                       *(str(z[k]) if k in z.files else ""
+                         for k in ("model", "graph", "stops")))
+
+    def paced(self, pace):
+        """The table for somebody walking `pace` times as long."""
+        return Transfers(self.node, self.to, self.cost * pace, self.start,
+                         self.model, self.graph, self.stops)
+
+    def stale(self, tt, walk):
+        """Why the table cannot be read against this timetable and walk, or
+        None. It is numbered against the stop list it was built with, and a
+        rebuilt network (a new feed, a changed override) may move, add or drop
+        stops while keeping their number; and walked on one footpath graph,
+        which a refetch replaces."""
+        stops = len(self.start) - 1
+        if stops != len(tt.stops) or len(self.node) != len(tt.stops):
+            return f"it lists {stops} stops against {len(tt.stops)} in the timetable"
+        if not self.stops or not self.graph:
+            return "it predates noting the stops and footpaths it was walked on"
+        if self.stops != _stops_digest(tt):
+            return "the timetable's stops have changed since"
+        if self.graph != walk.graph:
+            return "the footpaths have been refetched since"
+        if self.model != walk.model:
+            return (f"it was walked at {self.model or 'an older model'}, "
+                    f"the footpaths now at {walk.model}")
+        return None
 
     def near(self, i, limit):
         # A table built against an older stop list is shorter than the
@@ -318,7 +410,8 @@ def _run_on(tt, route, stops, times):
     a, b = stops[-2], stops[-1]
     for pat in tt.by_route.get(route, ()):
         hit = np.flatnonzero((pat.stops[:-1] == a) & (pat.stops[1:] == b))
-        if not len(hit):
+        # a pattern runs no trips on a day none of its services does
+        if not len(hit) or not len(pat.times):
             continue
         j = int(hit[0]) + 1
         _, midnight = _seconds_since_midnight(times[-1])
@@ -351,28 +444,20 @@ def route_confidence(tt, live, sod, window=QUIET_WINDOW, expected=QUIET_TRIPS):
 
 
 def _reach(walk, lat, lon, limit):
-    """Walking seconds from a point to every node within `limit`."""
-    sources = [(i, d / footpaths.SPEED)
-               for d, i in walk.near(lat, lon, within=150.0)]
-    if not sources:
-        return {}
-    return walk.reach(sources, limit)
+    """Walking seconds from a point to every node, inf past `limit`."""
+    return walk.reach([(i, walk.flat(d)) for d, i in walk.near(lat, lon)],
+                      limit)
 
 
 def _at_stops(seen, node, limit):
-    """A node-keyed reach, read at the stops standing on those nodes."""
-    out = {}
-    for i, n in enumerate(node):
-        if n < 0:
-            continue
-        t = seen.get(int(n))
-        if t is not None and t <= limit:
-            out[i] = t
-    return out
+    """A reach read at the stops standing on its nodes: stop -> seconds."""
+    t = np.where(node >= 0, seen[node], math.inf)
+    ok = np.flatnonzero(t <= limit)
+    return dict(zip(ok.tolist(), t[ok].tolist()))
 
 
 def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
-              catalog=None, rounds=ROUNDS, keep=8, assess=True, robust=True):
+             catalog=None, rounds=ROUNDS, keep=8, assess=True):
     """Ranked journeys from `origin` to `dest` (both (lat, lon)) leaving at
     `now`, which may be in the future: the vehicles being tracked are still
     used, for as far ahead as their predictions reach.
@@ -381,181 +466,56 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
     route is not running when the departure is close enough that the vehicles
     on the road now are the ones that would carry it.
 
-    `robust` off ranks exactly as arrival, rides and walking say; on, a
-    journey whose every ride has another way behind it outranks one hanging
-    on a single vehicle.
+    Somebody slower or faster on foot than `walk.SPEED` is searched for with
+    `walk` and `transfers` paced to them.
     """
-    walked = _walk_through(walk, origin, dest)
-    limit = walked if walked is not None else TRANSFER_CAP
-    access = _at_stops(_reach(walk, *origin, limit), transfers.node, limit)
+    walked, seen = _walk_through(walk, origin, dest)
+    limit = walked if walked is not None else TRANSFER_CAP * walk.pace
+    access = _at_stops(seen, transfers.node, limit)
     egress = _at_stops(_reach(walk, *dest, limit), transfers.node, limit)
     if not access or not egress:
         return _only_walking(walked, now)
 
+    sod, midnight = _seconds_since_midnight(now)
+    tt = tt.on(midnight)
     live, covered = ([], {}) if arrivals is None else \
         live_trips(tt, arrivals, catalog, now)
-    at_stop_live = [[] for _ in tt.stops]
-    for p, trip in enumerate(live):
-        for k, s in enumerate(trip.stops):
-            at_stop_live[s].append((p, k))
-
-    sod, midnight = _seconds_since_midnight(now)
     trust = (route_confidence(tt, live, sod)
              if assess and arrivals is not None else {})
-    found = []
-    for cap in (limit, *(c for c in WALK_CAPS if c < limit)):
-        found += _raptor(tt, transfers, access, egress, cap, now, rounds,
-                         live, at_stop_live, covered, sod, midnight, trust)
-    found.extend(_only_walking(walked, now))
-    return _rank(found, keep, walked, tt, live, trust, now, midnight, sod,
-                 robust)
+    paced = [c * walk.pace for c in WALK_CAPS]
+    caps = (limit, *(c for c in paced if c < limit))
+    hi = now + (walked if walked is not None else LONGEST_WALK) + BACKUP_WINDOW
+    for quiet in (False, True):
+        hops, trips = _connections(tt, live, trust, now, midnight, hi, quiet)
+        hops = _corridor(hops, transfers, egress, caps[0],
+                         [(u, now + t) for u, t in access.items()], hi)
+        scan = _Profile(hops, trips, trust, transfers, egress, caps, rounds,
+                        covered)
+        found = _rank(scan.backed(scan.options(access, now)) +
+                      _only_walking(walked, now), keep, walked)
+        if quiet or any(j.rides for j in found) or \
+                "quiet" not in trust.values():
+            return _listed(found)
 
 
-def _raptor(tt, transfers, access, egress, cap, now, rounds, live,
-            at_stop_live, covered, sod, midnight, trust):
-    """The earliest arrival for each number of rides, each walk the search
-    takes capped at `cap` seconds."""
-    best = {}                      # stop -> earliest arrival, any round
-    board = {}                     # (round, stop) -> the leg that got there
-    round_best = [dict() for _ in range(rounds + 1)]
-    for i, t in access.items():
-        if t <= cap:
-            best[i] = round_best[0][i] = now + t
-            board[(0, i)] = Leg("walk", now, now + t, -1, i)
-    touched = set(round_best[0])
-
-    for k in range(1, rounds + 1):
-        marked = set()
-        for (kind, p), first in _routes_touching(tt, at_stop_live, touched):
-            pat = live[p] if kind == "live" else tt.patterns[p]
-            _scan(pat, kind == "live", first, k, sod, midnight, now, covered,
-                  round_best, best, board, marked, trust)
-        for i in list(marked):
-            here = round_best[k][i]
-            for j, t in transfers.near(i, min(cap, TRANSFER_CAP)):
-                arrive = here + t
-                if arrive < min(best.get(j, math.inf),
-                                round_best[k].get(j, math.inf)):
-                    round_best[k][j] = best[j] = arrive
-                    board[(k, j)] = Leg("walk", here, arrive, i, j)
-                    marked.add(j)
-        if not marked:
-            break
-        touched = marked
-
-    found = []
-    for k in range(1, rounds + 1):
-        arrive, tail = None, None
-        for i, t in egress.items():
-            got = round_best[k].get(i)
-            if got is not None and t <= cap and \
-                    (arrive is None or got + t < arrive):
-                arrive, tail = got + t, Leg("walk", got, got + t, i, -1)
-        if arrive is not None:
-            legs = _unwind(board, k, tail.a) + [tail]
-            found.append(Journey(_fold(legs)))
-    return found
-
-
-def _routes_touching(tt, at_stop_live, stops):
-    """Every route calling at one of these stops, each named once, paired with
-    the earliest position a scan may board at.
-
-    A route is ("sched", pattern index) or ("live", vehicle trip index).
-    """
-    first = {}
-    for s in stops:
-        for p, k in tt.at_stop[s]:
-            key = ("sched", p)
-            if k < first.get(key, math.inf):
-                first[key] = k
-        for p, k in at_stop_live[s]:
-            key = ("live", p)
-            if k < first.get(key, math.inf):
-                first[key] = k
-    return first.items()
-
-
-def _scan(pat, is_live, first, k, sod, midnight, now, covered,
-          round_best, best, board, marked, trust):
-    """One route, ridden from the earliest stop it can be boarded at.
-
-    A scheduled trip's times are seconds since the service midnight, so one
-    boarded before midnight for a departure after it carries `shift` = DAY; a
-    live trip's times are already absolute.
-    """
-    trip = dep_at = start = shift = None
-    for i in range(first, len(pat.stops)):
-        s = int(pat.stops[i])
-        if trip is not None:
-            arrive = (float(pat.times[i]) if is_live
-                      else midnight + shift + float(pat.times[trip, i]))
-            if arrive < min(best.get(s, math.inf),
-                            round_best[k].get(s, math.inf)):
-                round_best[k][s] = best[s] = arrive
-                board[(k, s)] = Leg("ride", dep_at, arrive, start, s,
-                                    pat.route, getattr(pat, "veh", None),
-                                    is_live,
-                                    "live" if is_live
-                                    else trust.get(pat.route, "schedule"))
-                marked.add(s)
-        ready = round_best[k - 1].get(s)
-        if ready is None:
-            continue
-        ready += CHANGE if k > 1 else 0.0
-        if is_live:
-            when = float(pat.times[i])
-            if trip is None and when >= ready:
-                trip, dep_at, start, shift = 0, when, s, 0.0
-            continue
-        ready = max(ready, covered.get((s, pat.route), -math.inf) + 1.0)
-        got = pat.after(i, sod + (ready - now))
-        if got is None:
-            continue
-        row, jump = got
-        when = midnight + jump + float(pat.times[row, i])
-        if trip is None or when < dep_at:
-            trip, dep_at, start, shift = row, when, s, jump
-
-
-def _unwind(board, k, stop):
-    legs = []
-    while k >= 0:
-        leg = board.get((k, stop))
-        if leg is None:
-            break
-        legs.append(leg)
-        stop = leg.a
-        if leg.kind == "ride":
-            k -= 1
-        if stop == -1:
-            break
-    legs.reverse()
-    return legs
-
-
-def _walk_through(walk, origin, dest, ceiling=4 * 3600.0):
+def _walk_through(walk, origin, dest, ceiling=LONGEST_WALK):
     """Seconds to walk the whole way, or None if the ends are not connected on
-    foot within `ceiling`. This bounds every other walk in the plan.
+    foot within `ceiling`. This bounds every other walk in the plan. Also the
+    walk from `origin` to every node, whole up to that bound, or to `ceiling`.
 
     The limit starts at the straight-line time, which the streets can only be
     longer than, and doubles until the search lands; an uncapped Dijkstra would
     walk the whole city.
     """
-    goal = walk.near(*dest)
-    sources = [(i, d / footpaths.SPEED) for d, i in walk.near(*origin)]
-    if not goal or not sources:
-        return None
-    want = {i: d / footpaths.SPEED for d, i in goal}
-    crow = footpaths.metres(*origin, *dest) / footpaths.SPEED
-    limit = max(crow * 1.3, 300.0)
+    goal = [(i, walk.flat(d)) for d, i in walk.near(*dest)]
+    limit = max(walk.flat(footpaths.metres(*origin, *dest)) * 1.3, 300.0)
     while True:
-        seen = walk.reach(sources, limit)
-        best = [t + want[i] for i, t in seen.items() if i in want]
-        if best:
-            return min(best)
+        seen = _reach(walk, *origin, limit)
+        walked = min((float(seen[i]) + t for i, t in goal), default=math.inf)
+        if walked <= limit:
+            return walked, seen
         if limit >= ceiling:
-            return None
+            return None, seen
         limit = min(limit * 2, ceiling)
 
 
@@ -569,69 +529,326 @@ def _score(j):
     return j.arr, -j.backup, j.rides, j.walking
 
 
-def _backup(tt, trips, trust, now, midnight, sod, journey):
-    """Distinct routes riding the journey's weakest leg again within the
-    window after it was boarded - the chosen departure itself not counted, so
-    a last bus of the day scores 0 and there is no pretending it has a backup.
+class _Profile:
+    """The search: a profile connection scan (Dibbelt, Pajor, Strasser and
+    Wagner, 2013) run backwards from the door, in which every hop of every
+    trip, latest first, learns the earliest door arrival from riding it in at
+    most 1, 2 ... `rounds` rides, with every walk capped at each of `caps`
+    (longest first) - one scan for all the caps, the i-th at slot
+    `i * rounds + rides - 1` - and each stop keeps the departures worth
+    boarding.
 
-    Both the timetable (through the same midnight arithmetic the search uses)
-    and the tracked vehicles count, but a route nothing has been seen on does
-    not: a backup on a line the city is not running is not one.
+    Tracked vehicles ride at their predictions, and a scheduled departure a
+    tracked vehicle is running is not boarded.
     """
-    backs = []
-    for leg in journey.legs:
-        if leg.kind != "ride":
+
+    def __init__(self, hops, trips, trust, transfers, egress, caps, rounds,
+                 covered):
+        self.hops, self.trips, self.trust = hops, trips, trust
+        self.transfers, self.egress = transfers, egress
+        self.caps, self.rounds = caps, rounds
+        self.n = n = len(caps) * rounds
+        none = ((math.inf,) * n, (None,) * n)
+        stay = {}       # trip -> per slot, door arrival riding on, and how
+        # hop -> the same, how being (alighted, next (hop, slot), walked)
+        self.via = {}
+        # stop -> latest first: -departure, (door, hop)
+        self.deps, self.profile = {}, {}
+        self.steps = {}     # stop -> (seconds to board, stop, walked, caps allowing it)
+        self.boards = []    # every (stop, departure, hop) boarded
+        for c, (u, v, d, a, t) in enumerate(zip(*hops)):
+            door, how = map(list, stay.get(t, none))
+            self._alight(c, v, a, door, how)
+            self._fewer(door, how)
+            self._change(c, v, a, door, how)
+            self._fewer(door, how)
+            if door[rounds - 1] == math.inf:
+                continue
+            door, how = tuple(door), tuple(how)
+            stay[t] = self.via[c] = door, how
+            route, veh = trips[t]
+            if veh is not None or d > covered.get((u, route), -math.inf):
+                self._board(u, d, c, door)
+
+    def _alight(self, c, v, a, door, how):
+        """Off hop `c` at `v` and on foot to the door: a first ride."""
+        if (e := self.egress.get(v)) is None:
+            return
+        rounds = self.rounds
+        for cap in range(sum(e <= x for x in self.caps)):
+            if a + e < door[cap * rounds]:
+                door[cap * rounds], how[cap * rounds] = a + e, (c, None, e)
+
+    def _change(self, c, v, a, door, how):
+        """Off hop `c` at `v` and onto the best departure worth boarding at a
+        stop in reach: a ride more than that departure's."""
+        rounds, deps, profile = self.rounds, self.deps, self.profile
+        if (steps := self.steps.get(v)) is None:
+            steps = self.steps[v] = sorted(
+                (x + CHANGE, w, x, sum(x <= y for y in self.caps))
+                for w, x in [(v, 0.0), *self.transfers.near(v, self.caps[0])])
+        for x, w, walk, ok in steps:
+            # a slot of a shorter cap is never ahead of a longer one's
+            if a + x >= door[(ok - 1) * rounds + 1]:
+                break
+            at = deps.get(w)
+            if at is None or at[0] > -(a + x):
+                continue
+            then, hop = profile[w][bisect.bisect_right(at, -(a + x)) - 1]
+            for i in range(ok * rounds):
+                if i % rounds and then[i - 1] < door[i]:
+                    door[i], how[i] = then[i - 1], (c, (hop[i - 1], i - 1), walk)
+
+    def _fewer(self, door, how):
+        """A slot no better than the one with a ride fewer takes that one."""
+        rounds = self.rounds
+        for i in range(self.n):
+            if i % rounds and door[i - 1] <= door[i]:
+                door[i], how[i] = door[i - 1], how[i - 1]
+
+    def _board(self, u, d, c, door):
+        """Hop `c`, leaving `u` at `d`, among the departures worth boarding
+        there if it beats every later one in some slot."""
+        self.boards.append((u, d, c))
+        at, got = self.deps.setdefault(u, []), self.profile.setdefault(u, [])
+        if got:
+            last, hop = got[-1]
+            best = tuple(map(min, door, last))
+            if best == last:
+                return
+            hop = tuple(c if x < y else h for x, y, h in zip(door, last, hop))
+            door = best
+        else:
+            hop = (c,) * self.n
+        if at and at[-1] == -d:
+            got[-1] = door, hop
+        else:
+            at.append(-d)
+            got.append((door, hop))
+
+    def chain(self, c, i):
+        """The way boarding hop `c` at slot `i`: per ride, the hop boarded,
+        the hop alighted from and the seconds walked after it."""
+        out = []
+        while c is not None:
+            e, nxt, walked = self.via[c][1][i]
+            out.append((c, e, walked))
+            c, i = nxt or (None, 0)
+        return tuple(out)
+
+    def ride(self, c, e):
+        dep_s, arr_s, dep_t, arr_t, trip_of = self.hops
+        route, veh = self.trips[trip_of[c]]
+        return Leg("ride", dep_t[c], arr_t[e], dep_s[c], arr_s[e], route, veh,
+                   veh is not None, "live" if veh is not None
+                   else self.trust.get(route, "schedule"))
+
+    def options(self, access, now):
+        """For each slot, the soonest door arrival from a stop the origin
+        walks to, the shortest walk winning a tie, as a journey with its way."""
+        best = {}
+        for u, t in sorted(access.items(), key=lambda x: x[1]):
+            at = self.deps.get(u)
+            if at is None or at[0] > -(now + t):
+                continue
+            door, hop = self.profile[u][bisect.bisect_right(at, -(now + t)) - 1]
+            for i in range(sum(t <= x for x in self.caps) * self.rounds):
+                if door[i] < best.get(i, (math.inf,))[0]:
+                    best[i] = door[i], u, t, hop[i]
+        found = {}
+        for i, (_, u, t, c) in best.items():
+            way = self.chain(c, i)
+            if (u, way) not in found:
+                legs = [Leg("walk", now, now + t, -1, u)]
+                for k, (c, e, walked) in enumerate(way):
+                    legs.append(ride := self.ride(c, e))
+                    to = self.hops[0][way[k + 1][0]] if k + 1 < len(way) else -1
+                    if to != ride.b:
+                        legs.append(Leg("walk", ride.arr, ride.arr + walked,
+                                        ride.b, to))
+                found[(u, way)] = Journey(tuple(legs)), way
+        return list(found.values())
+
+    def backed(self, found):
+        """Each journey with, per leg, the other ways to the door from where the
+        leg boards: leaving after the chosen departure, reaching the door within
+        BACKUP_WINDOW of the journey's arrival, and searched as the journey was.
+        So a route parting from the chosen one short of the door counts, and so
+        does one needing a change; the chosen route's next run counts, the
+        chosen departure itself not, so a last bus of the day has none. Walks
+        have none.
+
+        Each sequence of routes counts once, at its soonest run. A way another
+        beats - leaving no sooner, reaching the door no later, in no more rides,
+        walking no more and riding no more of the journey's own vehicles - is
+        left out: nobody changes twice to arrive with the bus they could have
+        waited for.
+        """
+        after = {}
+        for j, _ in found:
+            for leg in j.legs:
+                if leg.kind == "ride":
+                    after[leg.a] = min(leg.dep, after.get(leg.a, math.inf))
+        ways = {u: {} for u in after}
+        rounds = self.rounds
+        for u, d, c in self.boards:
+            if d <= after.get(u, math.inf):
+                continue
+            door = self.via[c][0]
+            for i, arr in enumerate(door):
+                if arr == math.inf or i % rounds and arr == door[i - 1]:
+                    continue
+                way = self.chain(c, i)
+                ways[u].setdefault(way, (d, arr, sum(w for *_, w in way)))
+        return [dataclasses.replace(j, backups=self._backups(j, way, ways))
+                for j, way in found]
+
+    def _backups(self, j, way, ways):
+        trip_of = self.hops[4]
+        mine = dict(zip((trip_of[c] for c, *_ in way),
+                        (i for i, leg in enumerate(j.legs) if leg.kind == "ride")))
+        out = []
+        for leg in j.legs:
+            runs = {}
+            for back, (d, arr, walked) in ways.get(leg.a, {}).items():
+                if leg.kind == "ride" and leg.dep < d and \
+                        arr <= j.arr + BACKUP_WINDOW:
+                    routes = tuple(self.trips[trip_of[c]][0] for c, *_ in back)
+                    runs.setdefault(routes, []).append((d, arr, walked, back))
+            scored = []
+            for held in runs.values():
+                first = min(held)[0]
+                for d, arr, walked, back in held:
+                    if d == first:
+                        planned = tuple(mine.get(trip_of[c], -1)
+                                        for c, *_ in back)
+                        scored.append(((d, arr, len(back), walked,
+                                        sum(i >= 0 for i in planned)),
+                                       back, planned))
+            # whatever beats a way sorts before it, so the kept ones are
+            # all it needs checking against
+            scored.sort(key=lambda s: (-s[0][0], s[0][1:]))
+            kept = []
+            for s in scored:
+                if not any(_beats(k[0], s[0]) for k in kept):
+                    kept.append(s)
+            out.append(tuple(
+                Backup(tuple(self.ride(c, e) for c, e, _ in back), score[1],
+                       score[3], planned)
+                for score, back, planned in sorted(kept)))
+        return tuple(out)
+
+
+def _listed(found):
+    """Marks each backup riding exactly what a listed journey rides with that
+    journey's place in the list."""
+    at = {tuple(leg for leg in j.legs if leg.kind == "ride"): n
+          for n, j in enumerate(found)}
+
+    def mark(backs):
+        return tuple(dataclasses.replace(b, option=at.get(b.rides, -1))
+                     for b in backs)
+
+    return [dataclasses.replace(j, backups=tuple(map(mark, j.backups)))
+            for j in found]
+
+
+def _beats(a, b):
+    """Whether backup score `a` - departure, door arrival, rides, seconds
+    walked, rides on the journey's vehicles - is another than `b` and nowhere
+    worse, leaving later being better."""
+    return a != b and a[0] >= b[0] and all(x <= y for x, y in zip(a[1:], b[1:]))
+
+
+def _corridor(hops, transfers, egress, cap, starts, hi):
+    """The hops a journey could ride: leaving a stop no sooner than it can be
+    reached from the origin, and reaching one from which the door is still in
+    reach by `hi`. Both are bounds - any number of rides, a change taking no
+    time - so nothing a journey could ride is lost."""
+    dep_s, arr_s, dep_t, arr_t, trip_of = hops
+    near = {}
+
+    def walked(v):
+        if v not in near:
+            near[v] = list(transfers.near(v, cap))
+        return near[v]
+
+    def reach(best, v, t, sign):
+        """Puts `t` at `v` and on foot around it where it is later than what
+        `best` holds - sooner, for a `sign` of -1."""
+        if sign * (t - best.get(v, -sign * math.inf)) > 0:
+            best[v] = t
+            for w, x in walked(v):
+                if sign * (t - sign * x - best.get(w, -sign * math.inf)) > 0:
+                    best[w] = t - sign * x
+
+    latest = {v: hi - e for v, e in egress.items() if e <= cap}
+    useful = set()
+    for u, v, d, a, t in zip(*hops):
+        if t in useful or a <= latest.get(v, -math.inf):
+            useful.add(t)
+            reach(latest, u, d, 1)
+    soonest = {}
+    for u, d in starts:
+        reach(soonest, u, d, -1)
+    boarded = set()
+    for u, v, d, a, t in zip(*map(reversed, hops)):
+        if t in boarded or d >= soonest.get(u, math.inf):
+            boarded.add(t)
+            reach(soonest, v, a, -1)
+    keep = [c for c, (u, v, d, a) in enumerate(zip(dep_s, arr_s, dep_t, arr_t))
+            if soonest.get(u, math.inf) <= d and a <= latest.get(v, -math.inf)]
+    return [[col[c] for c in keep] for col in hops]
+
+
+def _connections(tt, live, trust, now, midnight, hi, quiet):
+    """Every hop between consecutive stops leaving at `now` or later and
+    arriving by `hi`, latest first, as lists of (from, to, departure, arrival,
+    trip), with each trip's (route, vehicle) - the timetable's have none.
+    Routes nothing has been seen on only with `quiet`. Ties keep a trip's
+    later hop first, which a hop of no running time needs."""
+    parts, trips = [], []
+    for pat in tt.patterns:
+        if not quiet and trust.get(pat.route) == "quiet":
             continue
-        seen = set()
-        for p, k in tt.at_stop[leg.a]:
-            pat = tt.patterns[p]
-            if pat.route in seen or \
-                    not np.any(pat.stops[k + 1:] == leg.b):
-                continue
-            got = pat.after(k, sod + (leg.dep - now))
-            if got is None:
-                continue
-            when = midnight + got[1] + float(pat.times[got[0], k])
-            if when <= leg.dep or when - leg.dep > BACKUP_WINDOW:
-                continue
-            if trust.get(pat.route) == "quiet":
-                continue
-            seen.add(pat.route)
-        for trip in trips:
-            if trip.route in seen:
-                continue
-            at = np.flatnonzero((trip.stops == leg.a) &
-                                (trip.times > leg.dep))
-            if len(at) == 0 or \
-                    not np.any(trip.stops[at[0] + 1:] == leg.b):
-                continue
-            if trust.get(trip.route) == "quiet":
-                continue
-            seen.add(trip.route)
-        backs.append(len(seen))
-    return min(backs, default=0)
+        times = pat.times + midnight
+        rows = np.flatnonzero((times[:, 0] <= hi) & (times[:, -1] >= now))
+        if len(rows):
+            parts.append(_hops(pat.stops, times[rows], len(trips)))
+            trips += [(pat.route, None)] * len(rows)
+    for trip in live:
+        parts.append(_hops(trip.stops, trip.times[None], len(trips)))
+        trips.append((trip.route, trip.veh))
+    if not parts:
+        return ([],) * 5, trips
+    cols = [np.concatenate(x) for x in zip(*parts)]
+    keep = np.flatnonzero((cols[2] >= now) & (cols[3] <= hi))
+    order = keep[np.lexsort((-keep, -cols[2][keep]))]
+    return [x[order].tolist() for x in cols], trips
 
 
-def _rank(found, keep, walked=None, tt=None, trips=(), trust=None, now=0.0,
-          midnight=0.0, sod=0.0, robust=True):
+def _hops(stops, times, first):
+    n = len(times)
+    return (np.tile(stops[:-1], n), np.tile(stops[1:], n),
+            times[:, :-1].ravel(), times[:, 1:].ravel(),
+            np.repeat(np.arange(first, first + n), len(stops) - 1))
+
+
+def _rank(found, keep, walked=None):
     """Soonest first, keeping every journey no other one beats outright.
 
     Beaten means another is at least as good on arrival, on changes, on
-    seconds spent walking - and, when `robust`, on backups: a slower journey
-    every leg of which has another way behind it survives alongside the
-    fastest hanging on one vehicle, which is the whole point of offering more
-    than the fastest. Anything not faster than walking the way is dropped, the
-    pure walk itself excepted.
+    seconds spent walking and on backups: a slower journey every ride of
+    which has another way behind it survives alongside the fastest hanging on
+    one vehicle, which is the whole point of offering more than the fastest.
+    Anything not faster than walking the way is dropped, the pure walk itself
+    excepted.
 
     A journey riding a route nothing has been seen on is held back unless it is
     the only way of riding at all: better to be told to walk than to be sent to
-    wait for a bus the city is not running.
+    wait for a bus the city is not running. `journeys` searches those routes
+    only when nothing else rides.
     """
-    trust = trust or {}
-    if robust and tt is not None:
-        found = [dataclasses.replace(
-            j, backup=_backup(tt, trips, trust, now, midnight, sod, j))
-            for j in found]
     ceiling = math.inf if walked is None else walked
     found.sort(key=_score)
     out = []
@@ -645,41 +862,24 @@ def _rank(found, keep, walked=None, tt=None, trips=(), trust=None, now=0.0,
     return (solid if any(j.rides for j in solid) else out)[:keep]
 
 
-def _fold(legs):
-    """Consecutive walks as one walk.
-
-    A journey that reaches a stop on foot and leaves it on foot never used the
-    stop; unwinding produces that whenever the access walk lands short of where
-    the ride boards.
-    """
-    out = []
-    for leg in legs:
-        if out and leg.kind == "walk" and out[-1].kind == "walk":
-            out[-1] = dataclasses.replace(out[-1], arr=leg.arr, b=leg.b)
-        else:
-            out.append(leg)
-    return tuple(out)
-
-
 def load(net=None):
     """The three pieces a search needs; the timetable is built and cached here."""
     net = net or network.load()
     cache = DATA / "timetable.pkl"
+    tt = None
     if cache.exists() and cache.stat().st_mtime >= Path(network.CACHE).stat().st_mtime:
         with open(cache, "rb") as fh:
             tt = pickle.load(fh)
-    else:
+    if getattr(tt, "version", 0) != Timetable.VERSION:
         tt = Timetable(net)
         with open(cache, "wb") as fh:
             pickle.dump(tt, fh, protocol=5)
-    transfers = Transfers.load()
-    if len(transfers.start) - 1 != len(tt.stops) or \
-            len(transfers.node) != len(tt.stops):
+    walk, transfers = footpaths.load(), Transfers.load()
+    if why := transfers.stale(tt, walk):
         raise FileNotFoundError(
-            f"{TRANSFERS} lists {len(transfers.start) - 1} stops against "
-            f"{len(tt.stops)} in the timetable - run `python -m commuterlviv "
-            "plan --build` once to walk between every pair of stops")
-    return tt, footpaths.load(), transfers
+            f"{TRANSFERS} is stale: {why} - run `python -m commuterlviv plan "
+            "--build` once to walk between every pair of stops")
+    return tt, walk, transfers
 
 
 def main(argv):
@@ -705,7 +905,7 @@ def main(argv):
     for j in out:
         print(f"\n{_clock(j.dep)} -> {_clock(j.arr)}  "
               f"{(j.arr - j.dep) / 60:.0f} min, {j.rides} rides")
-        for leg in j.legs:
+        for leg, backs in zip_longest(j.legs, j.backups, fillvalue=()):
             where = ("the door" if leg.b < 0
                      else net.stops[tt.stops[leg.b]]["name"])
             if leg.kind == "walk":
@@ -715,6 +915,13 @@ def main(argv):
                 tag = "live" if leg.live else "timetable"
                 print(f"  {_clock(leg.dep)} {short} to {where} "
                       f"({_clock(leg.arr)}, {tag})")
+                for back in backs:
+                    shorts = " > ".join(net.routes[r.route]["short"]
+                                        for r in back.rides)
+                    also = (f", option {back.option + 1}"
+                            if back.option >= 0 else "")
+                    print(f"    or {_clock(back.rides[0].dep)} {shorts}, "
+                          f"at the door {_clock(back.arr)}{also}")
 
 
 def _clock(t):

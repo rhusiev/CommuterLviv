@@ -28,16 +28,20 @@ export function RouteBadge({
   route,
   className = "",
   muted = false,
+  outline = false,
 }: {
   route: Route;
   className?: string;
   /** The shape without the route's colour */
   muted?: boolean;
+  /** The colour as the frame and the text, the inside left clear */
+  outline?: boolean;
 }) {
+  const c = colour(route.short, route.type);
   return (
     <span
       className={`inline-flex items-center justify-center gap-1 rounded font-semibold ${className}`}
-      style={muted ? undefined : { backgroundColor: colour(route.short, route.type), color: "#0b0f14" }}
+      style={muted ? undefined : outline ? { boxShadow: `inset 0 0 0 1.5px ${c}`, color: c } : { backgroundColor: c, color: "#0b0f14" }}
       title={route.long}
     >
       <ModeIcon type={route.type} />

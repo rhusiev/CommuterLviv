@@ -34,10 +34,10 @@ class Service:
         return [asyncio.create_task(self.poll_loop()),
                 asyncio.create_task(self.epoch_loop())]
 
-    def warm(self, db=None):
+    def warm(self, live=None, db=None):
         """Prime the model by replaying the recording, when there is a fresh
         one; a cold model knows only the timetable."""
-        db = db or replay.DB
+        live, db = live or self.live, db or replay.DB
         try:
             con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
             last = con.execute("SELECT max(veh_ts) FROM veh").fetchone()[0]
@@ -50,14 +50,25 @@ class Service:
             return False
         t0 = time.time()
         try:
-            replay.run(self.live.net, t_from=last - WARM_HOURS * 3600, t_to=last,
-                       db=db, model=self.live.model, epoch=self.set.epoch)
+            replay.run(live.net, t_from=last - WARM_HOURS * 3600, t_to=last,
+                       db=db, model=live.model, epoch=self.set.epoch)
         except replay.NoData as exc:
             self.log("nothing to warm from:", str(exc)[:120])
             return False
         self.log(f"warmed the model on {WARM_HOURS:.0f}h of recording "
                  f"in {time.time() - t0:.1f}s")
         return True
+
+    def swap(self, live):
+        """Onto a new city, primed with a poll and an epoch so it is not
+        published empty. Runs in a worker thread, holding the lock."""
+        self.live = live
+        self._seen.clear()
+        try:
+            self.poll_once()
+            live.epoch()
+        except Exception as exc:
+            self.log("first poll of the new city failed", repr(exc)[:200])
 
     async def poll_loop(self):
         fails = 0

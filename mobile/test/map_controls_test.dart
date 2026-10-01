@@ -24,7 +24,10 @@ Future<MapController> pump(WidgetTester tester, {double zoom = 13}) async {
             ),
             children: const [],
           ),
-          MapControls(map: map, here: Here(onFirstFix: (_) {})),
+          MapControls(
+            map: map,
+            here: Here(onFirstFix: (_) {}),
+          ),
         ],
       ),
     ),

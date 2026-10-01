@@ -125,7 +125,7 @@ class _Tag {
 }
 
 /// Tags sharing one spot, as one marker: pills that would print over each
-/// other are one stack instead. A pill is ~60x22, so 25 m merges what shares a
+/// other are one stack instead. A pill is ~90x22, so 25 m merges what shares a
 /// stop at every zoom while leaving apart what the map can separate.
 List<List<_Tag>> _clusters(List<_Tag> tags) {
   const near = Distance();
@@ -146,7 +146,7 @@ List<List<_Tag>> _clusters(List<_Tag> tags) {
 
 Marker _stack(List<_Tag> tags, Palette ink) => Marker(
   point: tags.first.point,
-  width: 64,
+  width: 96,
   height: 22.0 * tags.length + 2.0 * (tags.length - 1),
   child: Center(
     child: Column(
@@ -171,6 +171,8 @@ Widget _pill(_Tag tag, Palette ink) => DecoratedBox(
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
     child: Text(
       tag.text,
+      maxLines: 1,
+      softWrap: false,
       style: TextStyle(
         color: ink.edge,
         fontSize: 11,

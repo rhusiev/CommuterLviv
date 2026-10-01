@@ -262,7 +262,7 @@ handled explicitly:
 | the disk fills | collection stops cleanly at `--min-free-gb` (default 2 G) while the database can still be closed |
 | the process is asked to stop | SIGTERM stops the pollers, drains the queue and closes the file |
 | the machine reboots, or the process dies | systemd restarts it; the database is append-only, so a restart just resumes |
-| the static feed changes overnight | an unchanged download is not rewritten, a changed one is, and `data/network.pkl` rebuilds off its timestamp |
+| the static feed changes overnight | the next start downloads it (it is re-fetched when over a day old), rewrites it only if changed, and `data/network.pkl` rebuilds off its timestamp; a running service checks it every night (see [Keeping the city current](#keeping-the-city-current)) |
 | an override stops applying, because the feed now lists the stop | the rule is skipped with a line on stderr, and the build carries on |
 
 Every 5 minutes it prints one line - rows and polls per feed, error counts, queue
@@ -408,11 +408,34 @@ on the trip it just finished.
 
 `GET /api/plan?from=lat,lon&to=lat,lon` answers the door-to-door question:
 walk, ride, maybe change, walk, ranked by arrival, with the whole walk offered
-as one of the options. It is RAPTOR (Delling, Pajor, Werneck 2012) over the
-GTFS timetable, three rounds so at most two changes, with footpaths from an
-OpenStreetMap walking graph rather than straight lines. There is no hardcoded
-radius for which stops count as nearby: the bound is the time to walk the whole
-way, because a walk longer than that can never be part of a better journey.
+as one of the options. It is a profile connection scan (Dibbelt, Pajor,
+Strasser, Wagner 2013) over the GTFS timetable, up to three rides so at most
+two changes, with footpaths from an OpenStreetMap walking graph rather than
+straight lines. There is no hardcoded radius for which stops count as nearby:
+the bound is the time to walk the whole way, because a walk longer than that
+can never be part of a better journey. A search takes about 0.5 s.
+
+Walks climb. Every node of the walking graph carries its height, from the
+Terrarium elevation tiles at zoom 13, and an edge's time is its length at
+`SPEED` (1.25 m/s, 4.5 km/h, on the level) divided by Tobler's hiking function
+of its slope, `exp(-3.5 * (|s + 0.05| - 0.05))`. So a gentle way down (5%) is
+the fastest, and climbing is slower than descending the same slope. Slopes are
+clipped to ±30% (`STEEPEST`). Rynok to the High Castle is 16.2 minutes on the
+level, 19.8 up and 16.1 down. `&speed=<km/h>`, from 0.5 to 8, is how fast
+this somebody walks on the level; the low end is for a walking frame or a
+manual wheelchair at its slowest. Every walk in the search and on the map is
+scaled by it, which costs about a millisecond. The walk caps below
+(`TRANSFER_CAP`, `WALK_CAPS`) are distances in disguise: seconds at `SPEED`,
+scaled by the same pace, so a slower walker is offered the same stops, each
+further away in time. Both clients keep a usual speed on the
+device (the account menu) and step it per search beside the departure time.
+
+Walks are Dijkstra on that graph, scipy's (`scipy.sparse.csgraph.dijkstra`),
+about ten times faster than one in Python. A search starts from every node
+within 150 m of a point at once, each with the walk to it already spent: they
+hang off one extra node by edges that long. The walk from the origin that finds
+the whole walk also gives the walks to the stops near the origin, so a search
+walks twice - from each end - in about 50 ms.
 
 A tracked vehicle enters the search as an ordinary one-trip pattern built from
 its own predictions, so where the model has something to say it outranks the
@@ -439,10 +462,56 @@ happily promise you a bus from. A `quiet` ride is held back unless it is the
 only ride on offer, in which case it is returned and flagged: an unreliable bus
 is worth knowing about, an invented one is not.
 
-Every journey also carries a `backup`: how many other routes repeat its
-weakest ride within half an hour of boarding it, tracked vehicles included and
-quiet routes excluded. Missing the bus stings less when another way stands
-behind it, so a journey every leg of which has one outranks a fragile one.
+Every ride also carries its `backups`, `[{rides: [{route, dep, arr, a, b,
+live, planned}, ...], arr, walk}, ...]`: the other ways to the door from the
+stop it is boarded at, leaving after the chosen departure and reaching the door
+at most half an hour after the journey arrives (`BACKUP_WINDOW`). `rides` is how
+a way gets there, the first leaving from the stop, `arr` is when it reaches the
+door and `walk` the seconds it spends on foot. A ride `planned` is on a vehicle
+the journey itself rides further along: such a way catches the plan up after a
+missed bus, but does nothing for a bus that does not come. Each sequence of
+routes counts once, at its soonest run. So a route that parts from the chosen
+one short of the door counts, and so does one that needs a change on the way.
+The next run of the chosen route counts; the chosen departure does not. A way
+that another one beats - leaving no sooner, reaching the door no later, in no
+more rides, walking no more and riding no more of the journey's own vehicles -
+is left out, since nobody changes twice to arrive with the bus they could have
+waited for. Tracked vehicles ride at their predictions, quiet routes do not
+ride at all, and a scheduled departure a tracked vehicle is running is not
+boarded.
+
+Options and backups come from the same scan (`_Profile`), so a backup is
+never a way the search itself would not take: up to `ROUNDS` rides, the minute
+every change allows (`CHANGE`), and every walk - to the door and between stops
+- under the same caps (`WALK_CAPS`, below). The scan runs backwards from the
+door over every hop of every trip between now and the latest arrival that
+counts: the whole walk, or `LONGEST_WALK` (4 h) when there is none, plus
+`BACKUP_WINDOW`. Each hop learns the earliest door arrival from riding it in at
+most 1, 2 and 3 rides under each walking cap, and each stop keeps the
+departures worth boarding there. The options are read at the stops the origin
+walks to, at the time the walk gets there; the backups at the stop each ride
+boards. Before the scan, the hops are cut to a corridor (`_corridor`): those
+leaving a stop no sooner than it can be reached from the origin, and reaching
+one from which the door is still reachable in time. That keeps about a fifth of
+them. Quiet routes are left out of the scan; it runs a second time with them
+only when no option rides without them.
+
+A backup that rides exactly what one of the listed options rides carries that
+option's index in the server's list (`option`, -1 otherwise), and both clients
+tag it "Option N" by where that option sits in their own order. That is how a
+way listed on its own is also visible as another way behind a ride.
+
+The journey's `backup` is the fewest any of its rides has, not counting ways
+that ride the journey's own vehicles. Missing the bus stings less when another
+way stands behind it, so a journey every leg of which has one outranks a
+fragile one. The clients show the backups in a dialog opened from the option's
+backup count: under each ride's stop the planned way comes first, then the
+backups, each as its departure, its routes in order - a planned one outlined -
+where it changes and when it reaches the door. A stop shows four at first
+(`shortlist`): the best by the chosen preset, then the best by each other
+preset, so a way is there should the thing the preset favours be what fails,
+then the next best by the preset. They are listed in the order they leave,
+which is the order they are needed at the stop; the rest are a tap away.
 
 Every leg also carries `pts`, `[[lat, lon], ...]`, which is where it goes on the
 map: a walk follows the footpath graph (`walk.path`), and a ride is its shape cut
@@ -453,15 +522,15 @@ share the reading - and wipe it, with the A and B marks, when you leave the
 planner. The first tap on an option only picks it; its stops and routes open
 their own views once it is picked.
 
-The options are ranked by a front over arrival time, backup routes, number of
+The options are ranked by a front over arrival time, backups, number of
 changes and seconds spent walking, so a slower journey every leg of which has
 another way behind it survives alongside the fastest hanging on one vehicle,
 and every option that does not beat simply walking the
-way is dropped. One RAPTOR pass keeps only the earliest arrival at each stop,
-so a ride from the door loses to a slightly faster one behind a 12-minute walk
-and never reaches the front. The search therefore runs again with every walk
-capped at 10 and at 5 minutes (`WALK_CAPS`); the walking reaches are shared,
-so each extra pass costs only its rounds.
+way is dropped. Keeping only the earliest arrival would lose a ride from the
+door to a slightly faster one behind a 12-minute walk, and it would never
+reach the front. So the scan also keeps, per hop, the earliest arrival with
+every walk capped at 10 and at 5 minutes (`WALK_CAPS`), as slots of its own
+in the same pass.
 
 The server's order is the fastest first. Both clients re-sort the same options
 by a preset - fastest, less walking, fewer changes, most backups - picked from
@@ -469,7 +538,12 @@ a sort icon beside the search and remembered on the device; the whole walk goes 
 under the last two. Under those two, a tie is settled by arrival plus the
 minutes walked, so a ride from the door beats one a few minutes earlier behind
 a long walk. `&at=<unix seconds>` plans a trip that starts later instead of
-now. A later departure still rides the vehicles being tracked - only their
+now, up to 30 days ahead (`PLAN_AHEAD_DAYS`); past that the city has usually
+changed its timetable. Each day is planned on the trips its services run
+(`calendar.txt`, with `calendar_dates.txt` exceptions winning), so a Sunday
+does not get a weekday timetable; the day before's trips running past midnight
+and the day after's are part of it (`Pattern.running`, `Timetable.on`). A later
+departure still rides the vehicles being tracked - only their
 arrivals that lie ahead of it are kept - so nothing is thrown away at some
 cutoff; past the model's 45 minute horizon there are none left and the timetable
 takes over on its own.
@@ -494,7 +568,7 @@ a 120 m box crossed on one of eight headings, and drew each box as one straight
 line - which is what cut the corners on Зелена and stacked lines along Княгині
 Ольги. The one split kept is tram against road: a tram on its own track is not
 in the traffic the buses are in, while a trolleybus is on the road with them and
-is pooled with them. The geometry is fixed for the life of the process and
+is pooled with them. The geometry is fixed until the feed changes and
 cached by ETag; the ratios come separately, in the same order, and are built and
 serialised once every 30 s rather than per request.
 
@@ -534,19 +608,66 @@ python3 -m commuterlviv walk         # data/walk.npz, the OSM footpath graph
 python3 -m commuterlviv plan --build # data/transfers.npz, stop-to-stop on foot
 ```
 
-`walk.npz` is pure OpenStreetMap and can be copied between hosts; `transfers.npz`
+`walk` also fetches the height of every node; it is asked for again on a graph
+that has none, so an older `walk.npz` gains it in place. `walk.npz` is pure
+OpenStreetMap plus elevation and can be copied between hosts; `transfers.npz`
 indexes stops by the catalog it was built against and must be rebuilt wherever
-`network.pkl` differs. Without them the service still starts, logs why, and
+`network.pkl` differs. It also records what it was built from: the walking model
+(`model`, such as `1.25 m/s, Tobler slopes`), a digest of the footpath graph
+(`graph`) and one of the catalog's stops (`stops`). The service rebuilds it when
+any of the three is not what it holds - about 8 s, written beside the old file
+and swapped in. A file from before the digests has none, so it is rebuilt once. Without them the service still starts, logs why, and
 `/api/plan` answers 503 - the map and the arrivals do not depend on it.
 
 `GET /api/shapes` is where a route physically goes: per route, the polylines its
 trips follow, each marked with the feed direction it runs. Direction is drawn by
 the clients, not served - a run both ways gets two tracks of chevrons, one per
 side, spaced on screen rather than on the ground, which is why nothing here has
-to be respaced per zoom. 245 KB, 33 KB gzipped, one ETag for the life of the process, and both clients ask for it
+to be respaced per zoom. 245 KB, 33 KB gzipped, one ETag per feed, and both clients ask for it
 only the first time something wants to draw a line - tapping a vehicle's badge
 to see its route, or the button that puts the whole network on the map. Nobody
 who opens neither pays for it.
+
+### Keeping the city current
+
+The feed and the footpaths change under a running service, and it follows them
+without a restart (`commuterlviv/live/refresh.py`):
+
+1. Every night at 03:30 Kyiv time (`CHECK_AT`), after the last tram and before
+   the first, it wakes up. Nobody is riding, so nobody notices what follows.
+2. If `walk.npz` is over 30 days old (`WALK_EVERY`), the footpaths are fetched
+   from Overpass again, heights and all, into `walk.next.npz`. A graph with
+   under 90% of the old one's nodes is taken as a broken answer and dropped;
+   otherwise it replaces the old file.
+3. The static feed is fetched again (`gtfs.refetch`). A body that is not a zip
+   with `routes.txt`, `trips.txt` and `stop_times.txt` in it is refused, and
+   the held file stays.
+4. The feed and `overrides.toml` are hashed (`network.source`) and compared
+   with what the service is serving. The same hash and new footpaths rebuild
+   only the planner, which is then swapped in. The same hash and nothing else
+   new is the end of the night.
+5. A new hash builds the whole city beside the old one, in worker threads:
+   the network, the live model (warmed from the recording), the shapes and
+   street JSON and the planner. Meanwhile the old city keeps serving. A new
+   feed with under half the old routes (`SHRINK`) is taken as broken.
+6. The new city is swapped in under the model's lock, polled once and stepped
+   one epoch so it is not published empty.
+7. Every socket is closed with code 1012 ("service restart"). The clients
+   reconnect within a second. The first frame on a socket is `hello`, which
+   carries `catalog`, the catalog's ETag. A client holding another catalog
+   knows every route and stop index it has is stale. The web app reloads
+   itself, keeping the view in the URL by feed id, and says the routes were
+   updated. The phone fetches the catalog, carries the selected routes, pins
+   and open route over by feed id, closes open sheets and says the same.
+
+Any step that fails leaves the old city serving, and the next night tries
+again. The cost of a swap is about 15 s of CPU in the background and, while it
+lasts, a second copy of the city in memory. The cost to a rider is one reconnect
+and, on the web, one reload.
+
+The planner is also missing while it is first built (see above). Then
+`/api/plan` answers 503 with `"preparing": true`, and both clients say the
+planner is getting ready, rather than that there is none.
 
 Accounts are required for everything except `/api/health`, for two reasons,
 neither of them capacity. They carry a person's named route sets and pinned
@@ -686,20 +807,20 @@ Copying the recording in is not housekeeping: a restart replays its last two
 hours to warm the model, and a service that starts without one spends twenty
 minutes making the worst predictions it ever makes.
 
-**What it reaches out to, and what that costs you.** Four hosts, and only one of
+**What it reaches out to, and what that costs you.** Five hosts, and only one of
 them is unavoidable:
 
 | Host | Who asks | How often | Doing without it |
 | --- | --- | --- | --- |
 | `track.ua-gis.com` | the service and the collector | every 5 s | nothing to do - this *is* the data |
 | `tiles.versatiles.org` | every phone and browser, per tile | while the map moves | `docker-compose.tiles.yml` serves the basemap from the stack instead - see below |
-| `overpass-api.de` | the service | once per volume, ever | `COMMUTERLVIV_BUILD_PLANNER=false` and copy `data/walk.npz` in |
+| `overpass-api.de` | the service | once per volume, then every 30 days at night | `COMMUTERLVIV_BUILD_PLANNER=false` and copy `data/walk.npz` in |
+| `s3.amazonaws.com` (Terrarium elevation tiles) | the service | 120 tiles with every Overpass fetch | copy a `data/walk.npz` that has heights in; unreachable, the service walks on the level and asks again next boot |
 | `api.lad.lviv.ua` | the collector only | every 5 s | `--profile collect` is off by default; the served app never touches it |
 
 The one worth thinking about is the tile server, not Overpass. Overpass is asked
-once, in the background, for a 5 MB file that is then a file - no request a user
-makes ever waits on it, and the whole dependency ends the moment `walk.npz`
-exists. The basemap is the opposite: it is a request per tile, from every
+once a month, in the background, for a 5 MB file that is then a file - no
+request a user makes ever waits on it, and a failed fetch keeps the old one. The basemap is the opposite: it is a request per tile, from every
 device, for as long as anyone pans the map, and it is the only third party your
 users talk to directly.
 

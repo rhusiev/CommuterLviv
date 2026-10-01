@@ -9,6 +9,7 @@ import asyncio
 import contextlib
 import ipaddress
 import json
+import math
 import time
 import uuid as uuidlib
 
@@ -20,8 +21,8 @@ from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
 
 from .. import __version__, network
-from . import (auth, db, geocode, geometry, hub, journeys, prefs, security,
-               service, settings, state, traffic)
+from . import (auth, db, geocode, hub, journeys, prefs, refresh, security,
+               service, settings)
 
 SESSION_COOKIE = "lp_sess"
 CSRF_COOKIE = "lp_csrf"
@@ -281,12 +282,13 @@ async def password(request, session):
 
 
 async def catalog(request, session):
-    """Routes and stops: large, unchanging, cached by the client against the ETag."""
-    app = request.app.state
-    if request.headers.get("if-none-match") == app.catalog_tag:
-        return Response(status_code=304, headers={"ETag": app.catalog_tag})
-    return Response(app.catalog_json, media_type="application/json",
-                    headers={"ETag": app.catalog_tag,
+    """Routes and stops: large, changing only with the feed, cached by the
+    client against the ETag."""
+    cat = request.app.state.svc.live.cat
+    if request.headers.get("if-none-match") == cat.tag:
+        return Response(status_code=304, headers={"ETag": cat.tag})
+    return Response(cat.body, media_type="application/json",
+                    headers={"ETag": cat.tag,
                              "Cache-Control": "private, max-age=86400"})
 
 
@@ -302,8 +304,8 @@ async def shapes(request, session):
 
 
 async def traffic_streets(request, session):
-    """Which piece of street each traffic number belongs to; fixed for the life
-    of the service, so it is cached like the shapes."""
+    """Which piece of street each traffic number belongs to; changing only
+    with the feed, so it is cached like the shapes."""
     app = request.app.state
     if request.headers.get("if-none-match") == app.traffic_tag:
         return Response(status_code=304, headers={"ETag": app.traffic_tag})
@@ -360,9 +362,12 @@ def _point(raw):
     return lat, lon
 
 
+PLAN_AHEAD_DAYS = 30
+
+
 def _departure(raw):
-    """(unix seconds or None, complaint). A day ahead is as far as the schedule
-    is worth reading, and the past cannot be planned for."""
+    """(unix seconds or None, complaint). The past cannot be planned for, and
+    past a month the city has usually changed its timetable."""
     if not raw:
         return None, None
     try:
@@ -370,9 +375,26 @@ def _departure(raw):
     except ValueError:
         return None, "at must be a unix time in seconds"
     now = time.time()
-    if at < now - 3600 or at > now + 86400:
-        return None, "at must be within the next day"
+    if at < now - 3600 or at > now + PLAN_AHEAD_DAYS * 86400:
+        return None, f"at must be within the next {PLAN_AHEAD_DAYS} days"
     return at, None
+
+
+WALK_KMH = (0.5, 8.0)   # walking speeds a search takes, on the level
+
+
+def _speed(raw):
+    """(km/h or None, complaint)."""
+    if not raw:
+        return None, None
+    try:
+        kmh = float(raw)
+    except ValueError:
+        kmh = math.nan
+    lo, hi = WALK_KMH
+    if not lo <= kmh <= hi:
+        return None, f"speed must be between {lo:g} and {hi:g} km/h"
+    return kmh, None
 
 
 async def journey(request, session):
@@ -380,12 +402,18 @@ async def journey(request, session):
     tracked vehicle or from the timetable."""
     app = request.app.state
     if app.planner is None:
+        if app.preparing:
+            return error("The journey planner is getting ready; try again in "
+                         "a few minutes", 503, preparing=True)
         return error("This service has no journey planner", status=503)
     origin = _point(request.query_params.get("from"))
     dest = _point(request.query_params.get("to"))
     if origin is None or dest is None:
         return error("From and to must each be lat,lon inside Lviv")
     at, why = _departure(request.query_params.get("at"))
+    if why:
+        return error(why)
+    speed, why = _speed(request.query_params.get("speed"))
     if why:
         return error(why)
     # refused rather than queued when every worker is busy: a queue of
@@ -395,7 +423,7 @@ async def journey(request, session):
     try:
         async with app.planning:
             found = await asyncio.to_thread(app.planner.search, origin, dest,
-                                            app.svc.live.arrivals, at)
+                                            app.svc.live.arrivals, at, speed)
     except Exception as exc:
         # answered as JSON on purpose: an unhandled exception leaves Starlette
         # with a plain-text 500, which every client reads as a JSON.parse
@@ -609,20 +637,12 @@ def build(st=None, net=None):
         s.pool = await db.connect(st.database_url)
         await db.migrate(s.pool, log)
         loaded = net if net is not None else network.load()
-        cat = state.Catalog(loaded)
-        s.catalog_json = json.dumps(cat.describe()).encode()
-        s.catalog_tag = f'W/"{len(s.catalog_json):x}-{len(cat.stops):x}"'
-        # seconds of projection and thinning, once, rather than per client
-        s.shapes_json = json.dumps(
-            geometry.describe(loaded, cat.routes)).encode()
-        s.shapes_tag = f'W/"{len(s.shapes_json):x}-{len(cat.routes):x}"'
-        s.svc = service.Service(st, loaded, cat, log)
-        streets = traffic.segments(loaded, s.svc.live.model)
-        s.traffic_units = streets.pop("unit")
-        s.traffic_json = json.dumps(streets).encode()
-        s.traffic_tag = f'W/"{len(s.traffic_json):x}-{len(s.traffic_units):x}"'
-        s.traffic_cache = traffic.Cache(s.svc.live.model, s.traffic_units)
+        s.source = network.source()
+        s.svc = service.Service(st, loaded, log=log)
+        cat = s.svc.live.cat
+        refresh.install(s, refresh.served(loaded, s.svc.live))
         s.planner = journeys.Planner.maybe(loaded, cat, log)
+        s.preparing = False
         s.geocoder = geocode.Geocoder.maybe(st.photon_url)
         s.hub = hub.Hub(s.svc.live)
         s.planning = asyncio.Semaphore(PLAN_WORKERS)
@@ -630,6 +650,9 @@ def build(st=None, net=None):
         if s.planner is None and st.build_planner:
             s.tasks.append(asyncio.create_task(
                 journeys.arrange(s, loaded, cat, log)))
+        # a network handed in is the caller's to keep
+        if net is None:
+            s.tasks.append(asyncio.create_task(refresh.nightly(s, log)))
         log(f"serving {st.variant} on {len(cat.routes)} routes, "
             f"{len(cat.stops)} stops")
         try:

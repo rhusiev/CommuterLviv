@@ -23,7 +23,7 @@ import { saved } from "./lib/places";
 import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from "./lib/theme";
 import { RAMP, useTraffic } from "./lib/traffic";
 import { readUrl, writeUrl, type UrlState } from "./lib/url";
-import { useLive } from "./lib/useLive";
+import { takeRenewed, useLive } from "./lib/useLive";
 import type { Catalog, Journey, Me, Place, RouteSet, Shapes } from "./lib/types";
 import { t } from "./lib/i18n";
 
@@ -68,9 +68,12 @@ export function App() {
   const [to, setTo] = useState<Point | null>(null);
   const [journey, setJourney] = useState<Journey | null>(null);
   const [picking, setPicking] = useState<"from" | "to" | null>(null);
+  const [folded, setFolded] = useState(false);
   const [panel, setPanel] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const [notice, setNotice] = useState<string | null>(null);
+  /** Not a failure: news worth a line, such as the city changing */
+  const [info, setInfo] = useState<string | null>(null);
   const [jams, setJams] = useState(() => loadFlag(TRAFFIC_KEY));
   const [layers, setLayers] = useState(false);
   const [account, setAccount] = useState(false);
@@ -111,7 +114,10 @@ export function App() {
 
   const loadCatalog = useCallback(() => {
     setNotice(null);
-    void fetchCatalog().then(setCat, failed);
+    void fetchCatalog().then((got) => {
+      setCat(got);
+      if (takeRenewed()) setInfo(t.renewed);
+    }, failed);
   }, [failed]);
 
   useEffect(() => {
@@ -503,12 +509,18 @@ export function App() {
         </div>
       )}
 
-      {notice !== null && (
-        <p className="panel absolute left-1/2 top-19 z-40 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-2 px-3 py-2 text-sm text-rose-200">
-          {notice}
+      {(notice ?? info) !== null && (
+        <p
+          className={`panel absolute left-1/2 top-19 z-40 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-2 px-3 py-2 text-sm ${notice !== null ? "text-rose-200" : "text-sky-200"}`}
+        >
+          {notice ?? info}
           <button
-            onClick={() => setNotice(null)}
-            className="text-rose-400 hover:text-rose-200"
+            onClick={() => (notice !== null ? setNotice(null) : setInfo(null))}
+            className={
+              notice !== null
+                ? "text-rose-400 hover:text-rose-200"
+                : "text-sky-400 hover:text-sky-200"
+            }
           >
             ✕
           </button>
@@ -516,7 +528,11 @@ export function App() {
       )}
 
       {tab === "plan" && (
-        <aside className="panel absolute right-3 top-19 bottom-20 z-20 w-96 max-w-[calc(100vw-1.5rem)] overflow-y-auto p-3">
+        <aside
+          className={`panel absolute right-3 top-19 z-20 w-96 max-w-[calc(100vw-1.5rem)] overflow-y-auto p-3 ${
+            folded || picking ? "" : "bottom-20"
+          }`}
+        >
           <JourneyPanel
             catalog={cat}
             from={from}
@@ -529,6 +545,8 @@ export function App() {
             }}
             onHere={useHere}
             onShow={setJourney}
+            folded={folded}
+            onFold={setFolded}
             onLine={openRoute}
             places={places}
             onPlaces={keepPlaces}

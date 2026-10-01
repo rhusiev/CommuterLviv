@@ -1,4 +1,4 @@
-import type { Journey } from "./types";
+import type { Backup, Journey } from "./types";
 
 export const PREFERS = ["fastest", "walk", "changes", "reliable"] as const;
 export type Prefer = (typeof PREFERS)[number];
@@ -33,10 +33,10 @@ const SCORE: Record<Prefer, (j: Journey) => number[]> = {
   reliable: (j) => [rideOr(j, -j.backup), effort(j), j.rides],
 };
 
-export function ranked(options: Journey[], p: Prefer): Journey[] {
-  const score = SCORE[p];
-  return options
-    .map((j) => [score(j), j] as const)
+/** Lowest score first, a tie settled by the next number */
+const order = <T>(items: T[], score: (x: T) => number[]): T[] =>
+  items
+    .map((x) => [score(x), x] as const)
     .sort(([a], [b]) => {
       for (const [n, x] of a.entries()) {
         const y = b[n]!;
@@ -44,5 +44,33 @@ export function ranked(options: Journey[], p: Prefer): Journey[] {
       }
       return 0;
     })
-    .map(([, j]) => j);
+    .map(([, x]) => x);
+
+export const ranked = (options: Journey[], p: Prefer) => order(options, SCORE[p]);
+
+/** What helps nothing if a planned vehicle does not come: its rides on them */
+const planned = (b: Backup) => b.rides.filter((r) => r.planned).length;
+
+const BACKUP_SCORE: Record<Prefer, (b: Backup) => number[]> = {
+  fastest: (b) => [b.arr, b.rides.length, b.walk],
+  walk: (b) => [b.walk, b.arr, b.rides.length],
+  changes: (b) => [b.rides.length, b.arr + b.walk],
+  reliable: (b) => [planned(b), b.rides.filter((r) => !r.live).length, b.arr + b.walk],
+};
+
+/** The `n` backups worth showing first, soonest first as sent: the best by
+ *  what is preferred, then the best by each other preference, so one is
+ *  there should what is preferred be the thing that fails, then the next
+ *  best by what is preferred */
+export function shortlist(backups: Backup[], p: Prefer, n = 4): Backup[] {
+  const picks = new Set<Backup>();
+  for (const q of [p, ...PREFERS.filter((q) => q !== p)]) {
+    const best = order(backups, BACKUP_SCORE[q])[0];
+    if (best && picks.size < n) picks.add(best);
+  }
+  for (const b of order(backups, BACKUP_SCORE[p])) {
+    if (picks.size >= n) break;
+    picks.add(b);
+  }
+  return backups.filter((b) => picks.has(b));
 }

@@ -1,6 +1,7 @@
 """Route geometry and linear referencing: everything downstream works in metres
 along the trip's shape rather than in lat/lon."""
 import copy
+import hashlib
 import os
 import pickle
 from dataclasses import dataclass
@@ -234,6 +235,16 @@ def fresh():
                  os.path.getmtime(overrides.PATH)
                  if os.path.exists(overrides.PATH) else 0.0)
     return os.path.getmtime(CACHE) >= newest
+
+
+def source():
+    """A digest of what the network is built from: the feed and the overrides."""
+    h = hashlib.blake2b(digest_size=16)
+    for path in (gtfs.ZIP, overrides.PATH):
+        if os.path.exists(path):
+            with open(path, "rb") as f:
+                h.update(f.read())
+    return h.hexdigest()
 
 
 def regrid(net, geom):

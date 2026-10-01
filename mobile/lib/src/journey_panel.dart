@@ -1,26 +1,29 @@
-/// Door to door: two points, and the ways between them. Each ride says whether
-/// it came from a tracked vehicle or from the timetable.
+/// Door to door: two points, and the ways between them. A ride not resting on a
+/// tracked vehicle says so, and why that matters.
 library;
+
+export 'end_field.dart' show End;
 
 import 'package:flutter/material.dart' hide Theme;
 import 'package:flutter/material.dart' as material show Theme;
 import 'package:latlong2/latlong.dart';
 
 import 'api.dart';
+import 'backups_dialog.dart';
+import 'end_field.dart';
 import 'eta.dart';
 import 'models.dart';
 import 'route_badge.dart';
-import 'sheets.dart' show askName;
 import 'strings.dart';
 import 'theme.dart';
+import 'walk_speed.dart';
 
-enum End { from, to }
-
-/// What a ride rests on, in a word under the route.
-String legPart(Confidence confidence) => switch (confidence) {
-  Confidence.live => txt.livePart,
-  Confidence.schedule => txt.schedulePart,
-  Confidence.quiet => txt.quietPart,
+/// A word on a ride not resting on a tracked vehicle, and what it means; null
+/// on one that is.
+(String, String)? legNote(Confidence confidence) => switch (confidence) {
+  Confidence.live => null,
+  Confidence.schedule => (txt.schedulePart, txt.scheduleWhy),
+  Confidence.quiet => (txt.quietPart, txt.quietWhy),
 };
 
 class JourneyPanel extends StatefulWidget {
@@ -32,15 +35,15 @@ class JourneyPanel extends StatefulWidget {
     required this.to,
     required this.picking,
     required this.onPick,
+    required this.folded,
+    required this.onFold,
     required this.onSwap,
     required this.onHere,
     required this.onStop,
     required this.onLine,
     required this.places,
     required this.onSave,
-    required this.onForget,
     required this.onPlace,
-    required this.onClose,
     required this.onShow,
   });
 
@@ -49,8 +52,13 @@ class JourneyPanel extends StatefulWidget {
   final LatLng? from;
   final LatLng? to;
 
+  /// The end waiting on a tap on the map; the panel folds out of its way
   final End? picking;
   final void Function(End? which) onPick;
+
+  /// Folded down to a strip, the map and the option on it in view
+  final bool folded;
+  final void Function(bool folded) onFold;
   final VoidCallback onSwap;
   final void Function(End which) onHere;
   final void Function(int stop) onStop;
@@ -59,9 +67,7 @@ class JourneyPanel extends StatefulWidget {
 
   final List<Place> places;
   final void Function(String name, LatLng at) onSave;
-  final void Function(String name) onForget;
   final void Function(End end, LatLng at) onPlace;
-  final VoidCallback onClose;
 
   /// The option picked to be drawn on the map, or null once none is
   final void Function(Journey? journey) onShow;
@@ -76,15 +82,25 @@ class _JourneyPanelState extends State<JourneyPanel> {
   bool _busy = false;
   String? _failed;
 
+  /// What the points picked by name were called, so they keep reading so
+  final _names = <LatLng, String>{};
+
   /// Unix seconds to leave at; null is now, which is what the server assumes.
   int? _at;
 
   late Prefer _prefer = widget.api.prefer;
 
+  /// km/h on the level, starting from the one kept as the usual.
+  late double _speed = widget.api.walkSpeed;
+
   @override
   void didUpdateWidget(JourneyPanel old) {
     super.didUpdateWidget(old);
-    if (old.from != widget.from || old.to != widget.to) _forget();
+    if (old.from != widget.from ||
+        old.to != widget.to ||
+        old.catalog != widget.catalog) {
+      _forget();
+    }
   }
 
   void _forget() {
@@ -99,23 +115,57 @@ class _JourneyPanelState extends State<JourneyPanel> {
     widget.onShow(journey);
   }
 
-  /// A time already past today is meant for tomorrow, which is as far ahead as
-  /// the server plans.
-  Future<void> _pickTime() async {
+  /// The last day any time of which the server still plans, 30 days ahead
+  static const _lastDay = 29;
+
+  DateTime get _leaving => _at == null
+      ? DateTime.now()
+      : DateTime.fromMillisecondsSinceEpoch(_at! * 1000);
+
+  void _leave(DateTime? at) => setState(() {
+    _at = at == null ? null : at.millisecondsSinceEpoch ~/ 1000;
+    _forget();
+  });
+
+  /// Keeps the time of day, or leaves now on a day that is today by then.
+  Future<void> _pickDay() async {
     final now = DateTime.now();
+    final was = _leaving;
+    final day = await showDatePicker(
+      context: context,
+      initialDate: was,
+      firstDate: DateUtils.dateOnly(now),
+      lastDate: DateUtils.addDaysToDate(now, _lastDay),
+    );
+    if (day == null) return;
+    final at = DateTime(day.year, day.month, day.day, was.hour, was.minute);
+    _leave(at.isAfter(now) ? at : null);
+  }
+
+  /// A time already past is meant for the next day.
+  Future<void> _pickTime() async {
+    final was = _leaving;
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(
-        _at == null ? now : DateTime.fromMillisecondsSinceEpoch(_at! * 1000),
+      initialTime: TimeOfDay.fromDateTime(was),
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+        child: child!,
       ),
     );
     if (picked == null) return;
-    var at = DateTime(now.year, now.month, now.day, picked.hour, picked.minute);
-    if (at.isBefore(now)) at = at.add(const Duration(days: 1));
-    setState(() {
-      _at = at.millisecondsSinceEpoch ~/ 1000;
-      _forget();
-    });
+    var at = DateTime(was.year, was.month, was.day, picked.hour, picked.minute);
+    if (at.isBefore(DateTime.now())) at = at.add(const Duration(days: 1));
+    _leave(at);
+  }
+
+  String _dayName(DateTime at) {
+    final today = DateUtils.dateOnly(DateTime.now());
+    return switch (DateUtils.dateOnly(at).difference(today).inDays) {
+      0 => txt.today,
+      1 => txt.tomorrow,
+      _ => txt.shortDay(at),
+    };
   }
 
   Future<void> _search() async {
@@ -127,12 +177,16 @@ class _JourneyPanelState extends State<JourneyPanel> {
       _failed = null;
     });
     try {
-      final got = await widget.api.plan(from, to, at: _at);
+      final got = await widget.api.plan(from, to, at: _at, speed: _speed);
       if (!mounted) return;
       setState(() => _options = got);
       _show(null);
     } on ApiError catch (e) {
-      if (mounted) setState(() => _failed = e.message);
+      if (mounted) {
+        setState(
+          () => _failed = e.preparing ? txt.plannerPreparing : e.message,
+        );
+      }
     } on Exception {
       if (mounted) setState(() => _failed = txt.unreachable(widget.api.base));
     } finally {
@@ -141,278 +195,252 @@ class _JourneyPanelState extends State<JourneyPanel> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => Material(
+    elevation: 8,
+    color: panel,
+    surfaceTintColor: Colors.transparent,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(panelRadius),
+      side: const BorderSide(color: hair),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: switch (widget.picking) {
+      final End end => _Picking(end: end, onCancel: () => widget.onPick(null)),
+      null when widget.folded => _Folded(
+        shown: _shown,
+        catalog: widget.catalog,
+        onOpen: () => widget.onFold(false),
+      ),
+      null => _open(context),
+    },
+  );
+
+  Widget _open(BuildContext context) {
     final ready = widget.from != null && widget.to != null;
     final ranked = _prefer.ranked(_options ?? const []);
-    return Material(
-      elevation: 8,
-      color: panel,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(panelRadius),
-        side: const BorderSide(color: hair),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  txt.plan,
-                  style: material.Theme.of(context).textTheme.titleMedium,
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: widget.onSwap,
-                  icon: const Icon(Icons.swap_vert),
-                  tooltip: txt.swap,
-                ),
-                IconButton(
-                  onPressed: widget.onClose,
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            for (final end in End.values)
-              _End(
-                label: end == End.from ? txt.from : txt.to,
-                icon: end == End.from
-                    ? Icons.trip_origin
-                    : Icons.place_outlined,
-                at: end == End.from ? widget.from : widget.to,
-                picking: widget.picking == end,
-                onPick: () => widget.onPick(widget.picking == end ? null : end),
-                onHere: () => widget.onHere(end),
-                places: widget.places,
-                onPlace: (at) => widget.onPlace(end, at),
-                onSave: widget.onSave,
-                onForget: widget.onForget,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                txt.plan,
+                style: material.Theme.of(context).textTheme.titleMedium,
               ),
-            Row(
-              children: [
-                _Label(text: txt.departAt, icon: Icons.schedule),
-                InputChip(
-                  label: Text(_at == null ? txt.now : clockTime(_at!)),
-                  onPressed: _pickTime,
-                  onDeleted: _at == null
-                      ? null
-                      : () => setState(() {
-                          _at = null;
-                          _forget();
-                        }),
-                ),
-                const Spacer(),
-                PopupMenuButton<Prefer>(
-                  icon: const Icon(Icons.sort),
-                  tooltip: '${txt.preferBy}: ${txt.prefer(_prefer)}',
-                  initialValue: _prefer,
-                  onSelected: (p) {
-                    setState(() => _prefer = p);
-                    widget.api.setPrefer(p);
-                  },
-                  itemBuilder: (_) => [
-                    for (final p in Prefer.values)
-                      PopupMenuItem(value: p, child: Text(txt.prefer(p))),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: ready && !_busy ? _search : null,
-                child: Text(_busy ? txt.searching : txt.findRoute),
+              const Spacer(),
+              IconButton(
+                onPressed: widget.onSwap,
+                icon: const Icon(Icons.swap_vert),
+                tooltip: txt.swap,
               ),
+              IconButton(
+                onPressed: () => widget.onFold(true),
+                icon: const Icon(Icons.expand_more),
+                tooltip: txt.hidePanel,
+              ),
+            ],
+          ),
+          for (final end in End.values)
+            EndField(
+              end: end,
+              at: end == End.from ? widget.from : widget.to,
+              api: widget.api,
+              catalog: widget.catalog,
+              onPick: () => widget.onPick(end),
+              onHere: () => widget.onHere(end),
+              name: _names[end == End.from ? widget.from : widget.to],
+              places: widget.places,
+              onPlace: (at, name) {
+                if (name != null) _names[at] = name;
+                widget.onPlace(end, at);
+              },
+              onSave: widget.onSave,
             ),
-            if (_failed != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  _failed!,
-                  style: TextStyle(
-                    color: material.Theme.of(context).colorScheme.error,
-                  ),
+          Row(
+            children: [
+              RowLabel(text: txt.departAt, icon: Icons.schedule),
+              Tooltip(
+                message: txt.leaveOn,
+                child: ActionChip(
+                  label: Text(_dayName(_leaving)),
+                  onPressed: _pickDay,
                 ),
               ),
-            if (_options != null)
-              Flexible(
-                child: _options!.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Text(txt.noJourney),
-                      )
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: ranked.length,
-                        itemBuilder: (_, i) => _Option(
-                          journey: ranked[i],
-                          shown: ranked[i] == _shown,
-                          onShow: () => setState(
-                            () => _show(ranked[i] == _shown ? null : ranked[i]),
-                          ),
-                          catalog: widget.catalog,
-                          onStop: widget.onStop,
-                          onLine: widget.onLine,
+              const SizedBox(width: 8),
+              InputChip(
+                label: Text(_at == null ? txt.now : clockTime(_at!)),
+                onPressed: _pickTime,
+                onDeleted: _at == null ? null : () => _leave(null),
+              ),
+              const Spacer(),
+              PopupMenuButton<Prefer>(
+                icon: const Icon(Icons.sort),
+                tooltip: '${txt.preferBy}: ${txt.prefer(_prefer)}',
+                initialValue: _prefer,
+                onSelected: (p) {
+                  setState(() => _prefer = p);
+                  widget.api.setPrefer(p);
+                },
+                itemBuilder: (_) => [
+                  for (final p in Prefer.values)
+                    PopupMenuItem(value: p, child: Text(txt.prefer(p))),
+                ],
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              RowLabel(text: txt.walkSpeed, icon: Icons.directions_walk),
+              SpeedStepper(
+                kmh: _speed,
+                onChanged: (v) => setState(() {
+                  _speed = v;
+                  _forget();
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: ready && !_busy ? _search : null,
+              child: Text(_busy ? txt.searching : txt.findRoute),
+            ),
+          ),
+          if (_failed != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _failed!,
+                style: TextStyle(
+                  color: material.Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ),
+          if (_options != null)
+            Flexible(
+              child: _options!.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(txt.noJourney),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      padding: EdgeInsets.zero,
+                      itemCount: ranked.length,
+                      itemBuilder: (_, i) => _Option(
+                        journey: ranked[i],
+                        shown: ranked[i] == _shown,
+                        onShow: () => setState(
+                          () => _show(ranked[i] == _shown ? null : ranked[i]),
                         ),
+                        prefer: _prefer,
+                        place: (i) => ranked.indexOf(_options![i]) + 1,
+                        catalog: widget.catalog,
+                        onStop: widget.onStop,
+                        onLine: widget.onLine,
                       ),
-              )
-            else if (_failed == null && !_busy)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  txt.planHint,
-                  style: material.Theme.of(context).textTheme.bodySmall,
-                ),
+                    ),
+            )
+          else if (!ready && _failed == null && !_busy)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                txt.planHint,
+                style: material.Theme.of(context).textTheme.bodySmall,
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
 }
 
-/// An icon standing for a row's name, which it keeps as a tooltip.
-class _Label extends StatelessWidget {
-  const _Label({required this.text, required this.icon});
+/// The panel while an end waits on a tap on the map.
+class _Picking extends StatelessWidget {
+  const _Picking({required this.end, required this.onCancel});
 
-  final String text;
-  final IconData icon;
+  final End end;
+  final VoidCallback onCancel;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 40,
-    child: Tooltip(message: text, child: Icon(icon, size: 20)),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+    child: Row(
+      children: [
+        RowLabel(text: endLabel(end), icon: endIcon(end)),
+        Expanded(child: Text('${endLabel(end)}: ${txt.tapMap}')),
+        IconButton(
+          onPressed: onCancel,
+          icon: const Icon(Icons.close),
+          tooltip: MaterialLocalizations.of(context).cancelButtonLabel,
+        ),
+      ],
+    ),
   );
 }
 
-class _End extends StatelessWidget {
-  const _End({
-    required this.label,
-    required this.icon,
-    required this.at,
-    required this.picking,
-    required this.onPick,
-    required this.onHere,
-    required this.places,
-    required this.onPlace,
-    required this.onSave,
-    required this.onForget,
+/// The panel folded to a strip: the option on the map, if one is, in brief.
+class _Folded extends StatelessWidget {
+  const _Folded({
+    required this.shown,
+    required this.catalog,
+    required this.onOpen,
   });
 
-  final String label;
-  final IconData icon;
-  final LatLng? at;
-  final bool picking;
-  final VoidCallback onPick;
-  final VoidCallback onHere;
-  final List<Place> places;
-  final void Function(LatLng at) onPlace;
-  final void Function(String name, LatLng at) onSave;
-  final void Function(String name) onForget;
-
-  /// Within about eleven metres.
-  static const _same = 1e-4;
-
-  Place? get _saved => places
-      .where(
-        (p) =>
-            at != null &&
-            (p.at.latitude - at!.latitude).abs() < _same &&
-            (p.at.longitude - at!.longitude).abs() < _same,
-      )
-      .firstOrNull;
-
-  Future<void> _menu(BuildContext context) async {
-    final here = at;
-    final chosen = await showModalBottomSheet<Object>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            if (places.isEmpty)
-              ListTile(
-                dense: true,
-                title: Text(
-                  txt.noPlaces,
-                  style: material.Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            for (final p in places)
-              ListTile(
-                leading: const Icon(Icons.place_outlined),
-                title: Text(p.name),
-                onTap: () => Navigator.pop(context, p),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  tooltip: txt.forget,
-                  onPressed: () {
-                    Navigator.pop(context);
-                    onForget(p.name);
-                  },
-                ),
-              ),
-            if (here != null && _saved == null) ...[
-              const Divider(height: 8),
-              ListTile(
-                leading: const Icon(Icons.star_outline),
-                title: Text(txt.savePlace),
-                onTap: () => Navigator.pop(context, here),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-    if (chosen is Place) onPlace(chosen.at);
-    if (chosen is LatLng && context.mounted) await _name(context, chosen);
-  }
-
-  Future<void> _name(BuildContext context, LatLng where) async {
-    final name = await askName(context, txt.namePlace, action: txt.saveHere);
-    if (name != null && name.isNotEmpty) onSave(name, where);
-  }
+  final Journey? shown;
+  final Catalog catalog;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
-    final saved = _saved;
-    final where =
-        saved?.name ??
-        (at == null
-            ? txt.tapMap
-            : '${at!.latitude.toStringAsFixed(4)}, '
-                  '${at!.longitude.toStringAsFixed(4)}');
-    return Row(
-      children: [
-        _Label(text: label, icon: icon),
-        Expanded(
-          child: OutlinedButton(
-            onPressed: onPick,
-            style: OutlinedButton.styleFrom(
-              backgroundColor: picking
-                  ? material.Theme.of(context).colorScheme.primaryContainer
-                  : null,
-              alignment: Alignment.centerLeft,
+    final theme = material.Theme.of(context).textTheme;
+    final j = shown;
+    return InkWell(
+      onTap: onOpen,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+        child: Row(
+          children: [
+            if (j == null)
+              Expanded(child: Text(txt.plan, style: theme.titleMedium))
+            else ...[
+              Text(
+                txt.minutes(spanMinutes(j.arr - j.dep)),
+                style: theme.titleMedium,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (final leg in j.legs)
+                        if (!leg.walking)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: RouteBadge(
+                              route: catalog.routes[leg.route!],
+                              fontSize: 11,
+                            ),
+                          ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            IconButton(
+              onPressed: onOpen,
+              icon: const Icon(Icons.expand_less),
+              tooltip: txt.showPanel,
             ),
-            child: Text(where, overflow: TextOverflow.ellipsis),
-          ),
+          ],
         ),
-        IconButton(
-          onPressed: () => _menu(context),
-          icon: Icon(saved == null ? Icons.star_outline : Icons.star),
-          tooltip: txt.places,
-        ),
-        IconButton(
-          onPressed: onHere,
-          icon: const Icon(Icons.my_location),
-          tooltip: txt.useHere,
-        ),
-      ],
+      ),
     );
   }
 }
@@ -422,6 +450,8 @@ class _Option extends StatelessWidget {
     required this.journey,
     required this.shown,
     required this.onShow,
+    required this.prefer,
+    required this.place,
     required this.catalog,
     required this.onStop,
     required this.onLine,
@@ -433,6 +463,10 @@ class _Option extends StatelessWidget {
   /// and lines take taps of their own only once it is
   final bool shown;
   final VoidCallback onShow;
+  final Prefer prefer;
+
+  /// Where an option, by its index in the plan, is in the list, from 1.
+  final int Function(int option) place;
   final Catalog catalog;
   final void Function(int stop) onStop;
 
@@ -477,14 +511,34 @@ class _Option extends StatelessWidget {
                         : txt.changeCount(changes),
                     style: material.Theme.of(context).textTheme.bodySmall,
                   ),
-                  if (journey.rides > 0 && journey.backup > 0) ...[
-                    const SizedBox(width: 6),
-                    Text(
-                      '· ${txt.backupCount(journey.backup)}',
-                      style: material.Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: Colors.greenAccent),
+                  if (journey.rides > 0 && journey.backup > 0)
+                    InkWell(
+                      onTap: () => showBackups(
+                        context,
+                        journey: journey,
+                        prefer: prefer,
+                        catalog: catalog,
+                        place: place,
+                        onLine: onLine,
+                      ),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        child: Text(
+                          '· ${txt.backupCount(journey.backup)}',
+                          style: material.Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Colors.greenAccent,
+                                decoration: TextDecoration.underline,
+                                decorationStyle: TextDecorationStyle.dotted,
+                                decorationColor: Colors.greenAccent,
+                              ),
+                        ),
+                      ),
                     ),
-                  ],
                 ],
               ),
               for (final leg in journey.legs)
@@ -567,13 +621,56 @@ class _LegRow extends StatelessWidget {
               const SizedBox(width: 8),
             ],
             Expanded(child: Text(where, overflow: TextOverflow.ellipsis)),
-            if (!leg.walking)
-              Text(
-                legPart(leg.confidence),
-                style: leg.confidence == Confidence.quiet
-                    ? small?.copyWith(color: theme.colorScheme.error)
-                    : small,
+            if (legNote(leg.confidence) case (final part, final why))
+              _Note(
+                part: part,
+                why: why,
+                colour: leg.confidence == Confidence.quiet
+                    ? theme.colorScheme.error
+                    : small?.color,
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A word on what a ride rests on, which explains itself when tapped.
+class _Note extends StatelessWidget {
+  const _Note({required this.part, required this.why, required this.colour});
+
+  final String part;
+  final String why;
+  final Color? colour;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = material.Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: colour);
+    return InkWell(
+      onTap: () => showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog.adaptive(
+          title: Text(part),
+          content: Text(why),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(MaterialLocalizations.of(context).okButtonLabel),
+            ),
+          ],
+        ),
+      ),
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(part, style: style),
+            const SizedBox(width: 2),
+            Icon(Icons.info_outline, size: 14, color: colour),
           ],
         ),
       ),

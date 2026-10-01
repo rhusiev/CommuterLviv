@@ -229,6 +229,7 @@ class Leg {
     this.live = false,
     this.confidence = Confidence.live,
     this.pts = const [],
+    this.backups = const [],
   });
 
   factory Leg.fromJson(Map<String, dynamic> j) => Leg(
@@ -248,6 +249,10 @@ class Leg {
           (p[1] as num).toDouble(),
         ),
     ],
+    backups: [
+      for (final b in j['backups'] as List<dynamic>? ?? const [])
+        Backup.fromJson(b as Map<String, dynamic>),
+    ],
   );
 
   final String kind;
@@ -263,7 +268,55 @@ class Leg {
   /// Where the leg goes on the map: the footpath, or the ridden stretch
   final List<LatLng> pts;
 
+  /// Other ways to the door from where the ride boards, soonest first
+  final List<Backup> backups;
+
   bool get walking => kind == 'walk';
+}
+
+/// Another way to the door from where a ride boards: the rides it takes, the
+/// first leaving from there, and when it reaches the door
+/// How fast you walk on the level, in km/h: the steps offered, and what is
+/// assumed until you say, which is also the service's own.
+const walkKmh = (min: 0.5, max: 8.0, step: 0.5, usual: 4.5);
+
+class Backup {
+  const Backup({
+    required this.rides,
+    required this.arr,
+    this.walk = 0,
+    this.planned = const [],
+    this.option = -1,
+  });
+
+  factory Backup.fromJson(Map<String, dynamic> j) {
+    final rides = [
+      for (final r in j['rides'] as List<dynamic>) r as Map<String, dynamic>,
+    ];
+    return Backup(
+      rides: [
+        for (final r in rides) Leg.fromJson({...r, 'kind': 'ride'}),
+      ],
+      arr: j['arr'] as int,
+      walk: j['walk'] as int? ?? 0,
+      planned: [for (final r in rides) r['planned'] as bool? ?? false],
+      option: j['option'] as int? ?? -1,
+    );
+  }
+
+  final List<Leg> rides;
+  final int arr;
+
+  /// Seconds on foot.
+  final int walk;
+
+  /// Per ride, whether it is on a vehicle the journey rides too, further
+  /// along - no help should that one not come.
+  final List<bool> planned;
+
+  /// The index in the plan's options of the one riding exactly these rides,
+  /// or -1; an older service sends none.
+  final int option;
 }
 
 /// What a ride rests on: a vehicle being tracked, the timetable on a route that
@@ -342,19 +395,54 @@ enum Prefer {
     };
   }
 
-  List<Journey> ranked(List<Journey> options) {
-    final scored = [for (final j in options) (_score(j), j)];
-    // List.sort is not stable, so ties fall back to the server's order
-    final order = {for (final (i, j) in options.indexed) j: i};
-    scored.sort((a, b) {
-      for (final (n, x) in a.$1.indexed) {
-        final c = x.compareTo(b.$1[n]);
-        if (c != 0) return c;
-      }
-      return order[a.$2]!.compareTo(order[b.$2]!);
-    });
-    return [for (final (_, j) in scored) j];
+  List<num> _backupScore(Backup b) {
+    final effort = b.arr + b.walk;
+    return switch (this) {
+      fastest => [b.arr, b.rides.length, b.walk],
+      walk => [b.walk, b.arr, b.rides.length],
+      changes => [b.rides.length, effort],
+      reliable => [
+        b.planned.where((p) => p).length,
+        b.rides.where((r) => !r.live).length,
+        effort,
+      ],
+    };
   }
+
+  List<Journey> ranked(List<Journey> options) => _order(options, _score);
+
+  /// The [n] backups worth showing first, soonest first as sent: the best by
+  /// this, then the best by each other preference, so one is there should this
+  /// be the thing that fails, then the next best by this.
+  List<Backup> shortlist(List<Backup> backups, {int n = 4}) {
+    final picks = <Backup>{};
+    for (final p in [this, ...values.where((p) => p != this)]) {
+      final best = _order(backups, p._backupScore).firstOrNull;
+      if (best != null && picks.length < n) picks.add(best);
+    }
+    for (final b in _order(backups, _backupScore)) {
+      if (picks.length >= n) break;
+      picks.add(b);
+    }
+    return [
+      for (final b in backups)
+        if (picks.contains(b)) b,
+    ];
+  }
+}
+
+/// Lowest score first, a tie settled by the next number and then by the order
+/// given - List.sort is not stable.
+List<T> _order<T>(List<T> items, List<num> Function(T) score) {
+  final scored = [for (final (i, x) in items.indexed) (score(x), i, x)];
+  scored.sort((a, b) {
+    for (final (n, x) in a.$1.indexed) {
+      final c = x.compareTo(b.$1[n]);
+      if (c != 0) return c;
+    }
+    return a.$2.compareTo(b.$2);
+  });
+  return [for (final (_, _, x) in scored) x];
 }
 
 /// One row of the place search: an address or a point of interest in the city.
