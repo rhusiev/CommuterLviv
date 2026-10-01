@@ -1,9 +1,12 @@
-# Build the three per-ABI release APKs and publish them as a GitHub release.
+# Build the three per-ABI release APKs, tag the commit and publish them as a
+# GitHub release.
 #
-# Runs on a `v*` tag pushed to a branch in this repository, and only the
-# version number comes off the tag - everything else (pubspec, lockfile,
-# recipe, GHA) is whatever the tag's commit says it is, and that is the
-# commit F-Droid builds from too.
+# Runs on every push to `main`, which is protected and only takes merges from
+# `dev`, so a release can never come from `dev`. A push whose version
+# (`commuterlviv/__init__.py`, which `check.sh` keeps equal to the pubspec and
+# the recipe) already has a `v<version>` tag releases nothing. Otherwise the
+# annotated tag is created here, only once the APKs have built and verified,
+# because F-Droid builds from that tag the moment it sees it.
 #
 # Reproducibility note: both this workflow and F-Droid's recipe physically
 # `mv` their checkout to `/tmp/build/nl.r1a.commuterlviv` before building,
@@ -26,11 +29,15 @@ name: release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
 
 permissions:
   contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 # The pub cache path used to have to match F-Droid's, because it reached the
 # debug info `libdartjni.so` carries out of its compile and the build-id
@@ -43,8 +50,31 @@ env:
   PUB_CACHE: /tmp/pubcache
 
 jobs:
-  release:
+  version:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      new: ${{ steps.check.outputs.new }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: check
+        run: |
+          ver=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' commuterlviv/__init__.py)
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          if [ -n "$(git ls-remote --tags origin "refs/tags/v$ver")" ]; then
+            echo "v$ver is already released"
+            echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    needs: version
+    if: needs.version.outputs.new == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -91,7 +121,7 @@ jobs:
       - name: Build per-ABI APKs
         working-directory: /tmp/build/nl.r1a.commuterlviv/mobile
         run: |
-          ver=${GITHUB_REF_NAME#v}
+          ver=$VERSION
           mkdir -p release
           flutter pub get --enforce-lockfile
           # One Gradle run per ABI, the way each of the recipe's three
@@ -141,9 +171,18 @@ jobs:
         working-directory: /tmp/build/nl.r1a.commuterlviv
         run: mkdir -p "$GITHUB_WORKSPACE"
 
+      - name: Tag the release
+        working-directory: /tmp/build/nl.r1a.commuterlviv
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "v$VERSION"
+          git push origin "v$VERSION"
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ env.VERSION }}
           files: |
             /tmp/build/nl.r1a.commuterlviv/mobile/release/commuterlviv-*.apk
           generate_release_notes: true

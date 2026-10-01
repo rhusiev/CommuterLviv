@@ -10,8 +10,9 @@
 # Tags` looks for one and the build below names it as its commit. The recipe
 # also expects the three per-ABI APKs to be on the matching GitHub release
 # under the `binary:` URLs below, because `Builds:` rebuilds from source and
-# `apksigcopier` only accepts a release whose signed bytes match. `deploy/
-# release-apk.sh` builds them and prints the `gh release create` command.
+# `apksigcopier` only accepts a release whose signed bytes match. Both come
+# from `.github/workflows/release.yml` when a new version is merged into
+# `main`; no tag is ever pushed by hand.
 #
 # The licence is MIT and the file is `LICENSE` at the root, where F-Droid looks. There is no proprietary dependency to strip: the
 # app pulls no Google Play services, no Firebase and no map vendor SDK, which is

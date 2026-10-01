@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Build the three per-ABI release APKs and put them where a GitHub release
-# upload can pick them up. F-Droid's recipe points at these same paths on
-# `releases/download/v%v/`, and reproduces each one from source to confirm
+# Build the three per-ABI release APKs locally, the way
+# `.github/workflows/release.yml` builds the published ones, to check a
+# release before it is merged. F-Droid's recipe points at the published copies
+# on `releases/download/v%v/`, and reproduces each one from source to confirm
 # they match.
 #
 # Naming matches the `binary:` URLs in
@@ -59,6 +60,5 @@ echo
 echo "Built and signed:"
 ls -l "$out"
 echo
-echo "Tag this commit and push the tag, then attach these three files to a"
-echo "GitHub release named v$(basename "$out") - the file names are what"
-echo "F-Droid's recipe expects to find there."
+echo "For a local check only: releases are built, tagged and published by"
+echo ".github/workflows/release.yml when the version is merged into main."
