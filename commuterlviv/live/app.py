@@ -21,8 +21,8 @@ from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
 
 from .. import __version__, network
-from . import (auth, db, geocode, hub, journeys, prefs, refresh, security,
-               service, settings)
+from . import (auth, db, geocode, hub, journeys, prefs, refresh, reports,
+               security, service, settings)
 
 SESSION_COOKIE = "lp_sess"
 CSRF_COOKIE = "lp_csrf"
@@ -419,17 +419,44 @@ async def journey(request, session):
     planner, live = app.planner, app.svc.live
     if planner.cat is not live.cat:
         return error("The city is being renewed; try again in a moment", 503)
+    arrivals, asked = live.arrivals, time.time()
     try:
         async with app.planning:
             found = await asyncio.to_thread(planner.search, origin, dest,
-                                            live.arrivals, at, speed)
+                                            arrivals, at, speed)
     except Exception as exc:
         # answered as JSON on purpose: an unhandled exception leaves Starlette
         # with a plain-text 500, which every client reads as a JSON.parse
         # failure rather than as what went wrong
         log("plan failed:", repr(exc)[:200])
         return error("Could not plan that journey", 500)
-    return JSONResponse(found)
+    rid = app.recent.hold(session["user_id"], {
+        "from": origin, "to": dest, "t": found["t"], "asked": asked,
+        "speed": speed, "arrivals": arrivals, "cat": live.cat, "answer": found})
+    return JSONResponse({**found, "report": rid})
+
+
+async def report(request, session):
+    """Keeps a search just made, with what it ran on, for a look later; see
+    `reports`."""
+    app = request.app.state
+    data, bad = await body(request)
+    if bad:
+        return bad
+    note = data.get("note") or ""
+    if not isinstance(note, str) or len(note) > reports.NOTE:
+        return error(f"A note is text of at most {reports.NOTE} characters")
+    search = app.recent.take(session["user_id"], data.get("id"))
+    if search is None:
+        return error("That search is no longer held; search again and report "
+                     "that one", 404)
+    try:
+        name = await asyncio.to_thread(reports.write, search, note.strip(),
+                                       session["user_id"])
+    except reports.Full:
+        return error("Too many reports are waiting to be read", 507)
+    log("search reported:", name)
+    return JSONResponse({"ok": True})
 
 
 async def places_near(request, session):
@@ -610,6 +637,7 @@ def routes():
         Route("/api/arrivals", protected(arrivals), methods=["GET"]),
         Route("/api/vehicle", protected(vehicle), methods=["GET"]),
         Route("/api/plan", protected(journey), methods=["GET"]),
+        Route("/api/report", protected(report), methods=["POST"]),
         Route("/api/pins", protected(pins), methods=["GET", "POST"]),
         Route("/api/places", protected(places), methods=["GET", "POST"]),
         Route("/api/search", protected(places_near, unsafe=False)),
@@ -645,6 +673,7 @@ def build(st=None, net=None):
         s.geocoder = geocode.Geocoder(st.photon_url)
         s.hub = hub.Hub(s.svc.live)
         s.planning = asyncio.Semaphore(PLAN_WORKERS)
+        s.recent = reports.Recent()
         s.tasks = [*await s.svc.start(s.hub), asyncio.create_task(sweeper(s.pool))]
         if s.planner is None and st.build_planner:
             s.tasks.append(asyncio.create_task(

@@ -97,6 +97,10 @@ export function JourneyPanel({
   useEffect(() => () => onShow(null), [onShow]);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  /** The search's name for reporting it, until it is reported */
+  const [report, setReport] = useState<string | null>(null);
+  /** How reporting it went */
+  const [reportSaid, setReportSaid] = useState<string | null>(null);
   /** Unix seconds, or null for now - which is what the service assumes */
   const [at, setAt] = useState<number | null>(null);
   const [prefer, setPrefer] = useState<Prefer>(heldPrefer);
@@ -109,6 +113,8 @@ export function JourneyPanel({
     if (!from || !to) return;
     setBusy(true);
     setFailed(null);
+    setReport(null);
+    setReportSaid(null);
     show(null);
     try {
       const got = await api.plan(
@@ -118,6 +124,7 @@ export function JourneyPanel({
         speed,
       );
       setOptions(got.options);
+      setReport(got.report ?? null);
     } catch (err) {
       setFailed(
         err instanceof ApiError && err.preparing
@@ -129,6 +136,19 @@ export function JourneyPanel({
       setOptions(null);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const sendReport = async () => {
+    const id = report;
+    const note = prompt(t.reportNote);
+    if (note === null || !id) return;
+    try {
+      await api.report(id, note);
+      setReport((r) => (r === id ? null : r));
+      setReportSaid(t.reported);
+    } catch (err) {
+      setReportSaid(err instanceof Error ? err.message : t.failed);
     }
   };
 
@@ -285,6 +305,20 @@ export function JourneyPanel({
             onLine={onLine}
           />
         ))}
+
+      {options !== null && (report || reportSaid) && (
+        <p className="flex gap-2 text-xs text-slate-500">
+          {reportSaid}
+          {report && (
+            <button
+              onClick={() => void sendReport()}
+              className="underline decoration-dotted underline-offset-2 hover:text-slate-300"
+            >
+              {t.report}
+            </button>
+          )}
+        </p>
+      )}
     </div>
   );
 }

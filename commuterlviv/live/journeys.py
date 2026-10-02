@@ -54,13 +54,9 @@ class Planner:
         is also where judging a route quiet stops meaning anything.
         """
         now = time.time() if now is None else now
-        walk, transfers = self.walk, self.transfers
-        if speed is not None:
-            pace = footpaths.SPEED * 3.6 / speed
-            walk, transfers = walk.paced(pace), transfers.paced(pace)
-        found = plan.journeys(self.tt, walk, transfers, origin, dest,
-                              now, arrivals=arrivals, catalog=self.cat,
-                              assess=now <= time.time() + replay.HORIZON)
+        found = self.journeys(origin, dest, arrivals, now, speed,
+                              now <= time.time() + replay.HORIZON)
+        walk = self._paced(speed)[0]
         # options share their first and last walks, so each is drawn once
         paths = {}
 
@@ -70,9 +66,22 @@ class Planner:
                 paths[key] = self._path(leg, origin, dest, arrivals, walk)
             return paths[key]
 
-        return {"t": now, "options": [self._wire(j, path) for j in found]}
+        return {"t": now, "options": [self.wire(j, path) for j in found]}
 
-    def _wire(self, j, path):
+    def journeys(self, origin, dest, arrivals, now, speed, assess):
+        """`plan.journeys` for somebody walking at `speed`."""
+        walk, transfers = self._paced(speed)
+        return plan.journeys(self.tt, walk, transfers, origin, dest, now,
+                             arrivals=arrivals, catalog=self.cat, assess=assess)
+
+    def _paced(self, speed):
+        if speed is None:
+            return self.walk, self.transfers
+        pace = footpaths.SPEED * 3.6 / speed
+        return self.walk.paced(pace), self.transfers.paced(pace)
+
+    def wire(self, j, path=None):
+        """`j` as sent; without `path`, its legs are not drawn."""
         return {"dep": int(j.dep), "arr": int(j.arr), "rides": j.rides,
                 "live": j.live, "confidence": j.confidence,
                 "backup": j.backup,
@@ -83,7 +92,7 @@ class Planner:
         out = {"kind": leg.kind, "dep": int(leg.dep), "arr": int(leg.arr),
                "a": self.stop_i[leg.a] if leg.a >= 0 else -1,
                "b": self.stop_i[leg.b] if leg.b >= 0 else -1,
-               "pts": path(leg)}
+               "pts": path(leg) if path else []}
         if leg.kind == "ride":
             out["route"] = self.route_i.get(leg.route, -1)
             out["veh"] = leg.veh

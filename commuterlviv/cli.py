@@ -1,8 +1,9 @@
-"""One entry point for the five things this project does.
+"""One entry point for everything this project does.
 
     collect     record the live feeds into data/feed.db, indefinitely
     walk        fetch the city's footpaths once, for the journey planner
     plan        door to door: walk, ride, walk, ranked by arrival
+    report      search a reported journey again, beside what was served
     serve       run the live service: the model, over HTTP and websockets
     admin       mint invite links, list accounts, disable or delete one
 """
@@ -23,6 +24,11 @@ def _walk(rest):
 def _plan(rest):
     from . import plan
     plan.main(rest)
+
+
+def _report(rest):
+    from .live import reports
+    reports.main(rest)
 
 
 def _serve(rest):
@@ -83,7 +89,7 @@ def _admin(rest):
 
 
 COMMANDS = {"collect": _collect, "walk": _walk, "plan": _plan,
-            "serve": _serve, "admin": _admin}
+            "report": _report, "serve": _serve, "admin": _admin}
 
 
 def main(argv=None):

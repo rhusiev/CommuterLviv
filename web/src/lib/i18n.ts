@@ -77,6 +77,10 @@ const en = {
   findRoute: "Find a way",
   searching: "Looking for a way",
   noJourney: "No way to get there was found",
+  report: "Something looks wrong? Report it",
+  reportNote:
+    "What looks wrong? Optional. The search and the live data it ran on are sent with it.",
+  reported: "Reported, thank you",
   walkLeg: (m: number) => `Walk ${m} min`,
   toDoor: "To the door",
   fromDoor: "From where you are",
@@ -209,6 +213,10 @@ const uk: Strings = {
   findRoute: "Знайти шлях",
   searching: "Шукаємо шлях",
   noJourney: "Шляху не знайдено",
+  report: "Щось не так? Повідомити",
+  reportNote:
+    "Що не так? Необов'язково. Разом із цим надсилається пошук і живі дані, за якими його зроблено.",
+  reported: "Надіслано, дякуємо",
   walkLeg: (m: number) => `Пішки ${m} хв`,
   toDoor: "До місця",
   fromDoor: "Звідки ви є",

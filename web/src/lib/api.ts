@@ -119,6 +119,9 @@ export const api = {
       `/api/plan?from=${from[0]},${from[1]}&to=${to[0]},${to[1]}&speed=${speed}` +
         (at ? `&at=${Math.round(at)}` : ""),
     ),
+  /** Keeps the search `id` names, with what it ran on, for a look at why it
+   * answered as it did */
+  report: (id: string, note: string) => post<void>("/api/report", { id, note }),
   search: (q: string, signal?: AbortSignal): Promise<{ places: Found[] }> =>
     call(`/api/search?q=${encodeURIComponent(q)}`, { signal }),
   traffic: (): Promise<Traffic> => call("/api/traffic"),

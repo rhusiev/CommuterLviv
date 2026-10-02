@@ -231,8 +231,9 @@ class Api {
 
   /// Door to door, ranked by arrival. Half a second on the server, so ask once
   /// per search. [at] is unix seconds, up to 30 days ahead; null is now.
-  /// [speed] is how fast you walk on the level, in km/h.
-  Future<List<Journey>> plan(
+  /// [speed] is how fast you walk on the level, in km/h. [report] is the id
+  /// to [reportPlan] this search by, while the server still holds it.
+  Future<({List<Journey> options, String? report})> plan(
     LatLng from,
     LatLng to, {
     int? at,
@@ -244,11 +245,19 @@ class Api {
           '&to=${to.latitude},${to.longitude}&speed=$speed'
           '${at == null ? '' : '&at=$at'}',
     ) as Map<String, dynamic>;
-    return [
-      for (final j in answer['options'] as List)
-        Journey.fromJson(j as Map<String, dynamic>),
-    ];
+    return (
+      options: [
+        for (final j in answer['options'] as List)
+          Journey.fromJson(j as Map<String, dynamic>),
+      ],
+      report: answer['report'] as String?,
+    );
   }
+
+  /// Has the search [id] and the live data it ran on kept for a look, with an
+  /// optional [note] on what looks wrong.
+  Future<void> reportPlan(String id, String note) =>
+      _call('POST', '/api/report', body: {'id': id, 'note': note});
 
   /// The ETag of the catalog held, which names the city it describes.
   String? get catalogTag => _prefs.getString('$_catalogKey.tag');
