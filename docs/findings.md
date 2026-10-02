@@ -103,6 +103,15 @@ exists". The fork branch's `.gitlab-ci.yml` uses `ln -sf`. This deviates from
 upstream `fdroid/fdroiddata`, so keep it out of the merge request or upstream it
 on its own.
 
+## `checkupdates` takes only a strictly higher versionCode, from the five newest tags
+
+`check_tags` in fdroidserver's `checkupdates.py` sorts the tags by commit date,
+newest first, and keeps the first five. At each tag it reads the code and name
+with `UpdateCheckData` and replaces its best only when `vercode > hcode`. So a
+newer tag whose pubspec carries the code F-Droid has already built changes
+nothing, however many of them there are - which is what makes a server-only
+release with the app's version left behind safe.
+
 ## GitHub Actions spawns every step from `github.workspace`
 
 The release workflow moves its checkout to `/tmp/build/nl.r1a.commuterlviv`, and

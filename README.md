@@ -11,8 +11,8 @@ live times, shows traffic on the streets the vehicles drive, and keeps an
 account's routes and stops in sync between devices.
 
 It is a server, a web app and an Android app - on F-Droid, and as APKs on the
-[releases page](https://github.com/rhusiev/CommuterLviv/releases) - all on one
-version number.
+[releases page](https://github.com/rhusiev/CommuterLviv/releases) - on one
+version line, which the app joins only when it changes.
 
 ## Running it
 

@@ -1,12 +1,14 @@
-# Build the three per-ABI release APKs, tag the commit and publish them as a
-# GitHub release.
+# Tag the commit and publish a GitHub release, with the three per-ABI APKs if
+# the app's version moved too.
 #
 # Runs on every push to `main`, which is protected and only takes merges from
 # `dev`, so a release can never come from `dev`. A push whose version
-# (`commuterlviv/__init__.py`, which `check.sh` keeps equal to the pubspec and
-# the recipe) already has a `v<version>` tag releases nothing. Otherwise the
-# annotated tag is created here, only once the APKs have built and verified,
-# because F-Droid builds from that tag the moment it sees it.
+# (`commuterlviv/__init__.py`) already has a `v<version>` tag releases nothing.
+# When the pubspec carries the same version, the annotated tag is created only
+# once the APKs have built and verified, because F-Droid builds from that tag
+# the moment it sees it. When the pubspec is behind, the app is still the one
+# released under that older tag, so `mobile/` must not have changed since it,
+# and the release is the tag alone.
 #
 # Reproducibility note: both this workflow and F-Droid's recipe physically
 # `mv` their checkout to `/tmp/build/nl.r1a.commuterlviv` before building,
@@ -54,24 +56,61 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.check.outputs.version }}
+      app: ${{ steps.check.outputs.app }}
       new: ${{ steps.check.outputs.new }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - id: check
         run: |
           ver=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' commuterlviv/__init__.py)
+          app=$(sed -n 's/^version: \(.*\)+.*$/\1/p' mobile/pubspec.yaml)
           echo "version=$ver" >> "$GITHUB_OUTPUT"
-          if [ -n "$(git ls-remote --tags origin "refs/tags/v$ver")" ]; then
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$ver" >/dev/null; then
             echo "v$ver is already released"
             echo "new=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "new=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          echo "new=true" >> "$GITHUB_OUTPUT"
+          if [ "$app" != "$ver" ] && ! git diff --quiet "v$app" HEAD -- mobile \
+              ':(exclude)mobile/fdroid' ':(exclude)mobile/README.md'; then
+            echo "mobile/ changed since v$app, so the app needs a version of its own"
+            exit 1
+          fi
+
+  # The app is unchanged since its own version's release: the tag and a release
+  # with no APKs, which F-Droid passes over because the pubspec it reads at the
+  # tag still carries the versionCode it has built
+  server:
+    needs: version
+    if: needs.version.outputs.new == 'true' && needs.version.outputs.app != needs.version.outputs.version
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag the release
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "v$VERSION"
+          git push origin "v$VERSION"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          body: The server and the web app only. The phone app stays at v${{ needs.version.outputs.app }}.
+          generate_release_notes: true
+          make_latest: false
 
   release:
     needs: version
-    if: needs.version.outputs.new == 'true'
+    if: needs.version.outputs.new == 'true' && needs.version.outputs.app == needs.version.outputs.version
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.version.outputs.version }}
