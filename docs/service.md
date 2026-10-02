@@ -104,9 +104,12 @@ The next run of the chosen route counts; the chosen departure does not. A way
 that another one beats - leaving no sooner, reaching the door no later, in no
 more rides, walking no more and riding no more of the journey's own vehicles -
 is left out, since nobody changes twice to arrive with the bus they could have
-waited for. So is a way that changes onto a vehicle which also calls, no sooner,
-at a stop where the way already stood: 53 then 16 onto a 16 that passes the
-53's stop after the 53 left is only that 16, waited for, with a change added.
+waited for. So is a way that changes onto a vehicle which, before the way gets
+off it, also calls at a stop where the way boarded, or at one a short walk
+(within the shortest walk cap) beside it, no sooner than the way left there and
+walked over. 53 then 16 onto a 16 that passes Угорська (439) after the 53 left
+it is only that 16, waited for, with a change added. So is 53 out to Сквер
+Думанського (421) and a 53 back that passes Угорська (438), across the street.
 Tracked vehicles ride at their predictions, quiet routes do not
 ride at all, and a scheduled departure a tracked vehicle is running is not
 boarded.
