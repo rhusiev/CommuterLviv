@@ -3,8 +3,8 @@
 The local index is osm-mapidx's (`data/lviv-search.sqlite`).
 `.github/workflows/places.yml` rebuilds it from OpenStreetMap monthly and
 publishes it, and `renew_index` downloads it at that pace. It survives typos
-and knows each place's surroundings, so "аптека сихів" and "форум львв" both find what was meant, and
-it answers without leaving the machine. It has no house numbers.
+and knows each place's surroundings, so "аптека сихів" and "форум львв" both
+find what was meant, and it answers without leaving the machine. It has no house numbers.
 
 Photon (https://photon.komoot.io) fills that in. It is used rather than
 Nominatim because it indexes every named object in OSM and answers a prefix,
