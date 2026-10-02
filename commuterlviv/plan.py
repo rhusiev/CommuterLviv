@@ -443,10 +443,9 @@ def route_confidence(tt, live, sod, window=QUIET_WINDOW, expected=QUIET_TRIPS):
             for route, n in due.items()}
 
 
-def _reach(walk, lat, lon, limit):
-    """Walking seconds from a point to every node, inf past `limit`."""
-    return walk.reach([(i, walk.flat(d)) for d, i in walk.near(lat, lon)],
-                      limit)
+def _reach(walk, spot, limit):
+    """Walking seconds from a `walk.attach` spot to every node, inf past `limit`."""
+    return walk.reach(spot.ends() if spot else [], limit)
 
 
 def _at_stops(seen, node, limit):
@@ -472,7 +471,8 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
     walked, seen = _walk_through(walk, origin, dest)
     limit = walked if walked is not None else TRANSFER_CAP * walk.pace
     access = _at_stops(seen, transfers.node, limit)
-    egress = _at_stops(_reach(walk, *dest, limit), transfers.node, limit)
+    egress = _at_stops(_reach(walk, walk.attach(*dest), limit), transfers.node,
+                       limit)
     if not access or not egress:
         return _only_walking(walked, now)
 
@@ -507,11 +507,13 @@ def _walk_through(walk, origin, dest, ceiling=LONGEST_WALK):
     longer than, and doubles until the search lands; an uncapped Dijkstra would
     walk the whole city.
     """
-    goal = [(i, walk.flat(d)) for d, i in walk.near(*dest)]
+    start, goal = walk.attach(*origin), walk.attach(*dest)
+    ends = goal.ends() if goal else []
+    direct = start.along(goal) if start and goal else math.inf
     limit = max(walk.flat(footpaths.metres(*origin, *dest)) * 1.3, 300.0)
     while True:
-        seen = _reach(walk, *origin, limit)
-        walked = min((float(seen[i]) + t for i, t in goal), default=math.inf)
+        seen = _reach(walk, start, limit)
+        walked = min([direct, *(float(seen[i]) + t for i, t in ends)])
         if walked <= limit:
             return walked, seen
         if limit >= ceiling:
@@ -682,7 +684,9 @@ class _Profile:
         beats - leaving no sooner, reaching the door no later, in no more rides,
         walking no more and riding no more of the journey's own vehicles - is
         left out: nobody changes twice to arrive with the bus they could have
-        waited for.
+        waited for. So is a way changing onto a vehicle that leaves a stop the
+        way stood at no sooner than the way left it, which is that bus waited
+        for with a change added.
         """
         after = {}
         for j, _ in found:
@@ -690,7 +694,8 @@ class _Profile:
                 if leg.kind == "ride":
                     after[leg.a] = min(leg.dep, after.get(leg.a, math.inf))
         ways = {u: {} for u in after}
-        rounds = self.rounds
+        rounds, trip_of = self.rounds, self.hops[4]
+        leaves = {(trip_of[c], u): d for u, d, c in self.boards}
         for u, d, c in self.boards:
             if d <= after.get(u, math.inf):
                 continue
@@ -699,9 +704,19 @@ class _Profile:
                 if arr == math.inf or i % rounds and arr == door[i - 1]:
                     continue
                 way = self.chain(c, i)
-                ways[u].setdefault(way, (d, arr, sum(w for *_, w in way)))
+                if not self._waits(way, leaves):
+                    ways[u].setdefault(way, (d, arr, sum(w for *_, w in way)))
         return [dataclasses.replace(j, backups=self._backups(j, way, ways))
                 for j, way in found]
+
+    def _waits(self, way, leaves):
+        """Whether a later ride of `way` could have been boarded where an
+        earlier one was, at or after that one left: `leaves` holds when each
+        (trip, stop) boarding left."""
+        dep_s, _, dep_t, _, trip_of = self.hops
+        return any(leaves.get((trip_of[c], dep_s[b]), -math.inf) >= dep_t[b]
+                   for k, (c, *_) in enumerate(way)
+                   for b, *_ in way[:k])
 
     def _backups(self, j, way, ways):
         trip_of = self.hops[4]
