@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from .. import config
 
 ENV = "COMMUTERLVIV_"
-PLACES = "https://github.com/rhusiev/osm-mapidx/releases/download/index/lviv-search.sqlite"
+PLACES = "https://github.com/rhusiev/CommuterLviv/releases/download/places/lviv-search.sqlite"
 
 
 def _env(name, default=None):

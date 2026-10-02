@@ -224,9 +224,11 @@ transliteration, and leads for queries without a digit. The second is Photon
 over OpenStreetMap, biased to the city and clamped to it, which leads when the
 query has a digit, since house numbers are what it is best at. The same name
 within 100 m is kept once. Answers are cached for a day.
-The index is not in the image. osm-mapidx's CI rebuilds it from OpenStreetMap
-on the 3rd of every month and publishes it on its `index` release, because the
-build streams the whole Ukraine extract and peaks near 5 GB. The service
+The index is not in the image. `.github/workflows/places.yml` rebuilds it from
+OpenStreetMap on the 3rd of every month and publishes it on this repository's
+`places` release, because the build streams the whole Ukraine extract and peaks
+near 5 GB. It runs osm-mapidx's builder at a pinned commit, the one the vendored
+search was copied from, so the two only ever move together. The service
 downloads it from `COMMUTERLVIV_PLACES_URL` on a start without one, then at the
 nightly check once it is 30 days old. A download is kept only if it opens and
 finds Lviv, and is swapped in with a rename; each search opens the file anew, so

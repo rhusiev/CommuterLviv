@@ -154,7 +154,7 @@ look.
 | `download.versatiles.org`, `tiles.versatiles.org`, `github.com` | the tiles container | once on the first start, then every 30 days | `COMMUTERLVIV_SELF_TILES=false`, and every client asks `tiles.versatiles.org` per tile instead |
 | `overpass-api.de` | the service | once per volume, then every 30 days at night | `COMMUTERLVIV_BUILD_PLANNER=false` and copy `data/walk.npz` in |
 | `s3.amazonaws.com` (Terrarium elevation tiles) | the service | 120 tiles with every Overpass fetch | copy a `data/walk.npz` that has heights in; unreachable, the service walks on the level and asks again next boot |
-| `github.com` (osm-mapidx's `index` release) | the service | once on the first start, then every 30 days at night, about 95 MB | `COMMUTERLVIV_PLACES_URL` empty, and copy `data/lviv-search.sqlite` in or search without it |
+| `github.com` (this repository's `places` release) | the service | once on the first start, then every 30 days at night, about 95 MB | `COMMUTERLVIV_PLACES_URL` empty, and copy `data/lviv-search.sqlite` in or search without it |
 | `photon.komoot.io` | the service | per address search, cached for a day | `COMMUTERLVIV_PHOTON_URL` to a self-hosted Photon, or empty |
 
 ## Moving a recording in

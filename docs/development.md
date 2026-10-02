@@ -65,8 +65,13 @@ from `dev`:
    if the bytes match.
 
 So bumping the version on `dev` is what asks for a release, and merging it is
-what makes one. Bumping the pubspec as well is what makes it an app release. `deploy/release-apk.sh` builds the same APKs locally, for
-checking reproducibility before a merge; it publishes nothing.
+what makes one. Bumping the pubspec as well is what makes it an app release.
+`deploy/release-apk.sh` builds the same APKs locally, for checking
+reproducibility before a merge; it publishes nothing.
+
+The `places` release is not a version. `.github/workflows/places.yml` replaces
+its `lviv-search.sqlite` on the 3rd of every month, and can be run by hand from
+the Actions tab - see [search](service.md#search).
 
 ## Not committed
 

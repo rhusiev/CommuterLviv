@@ -1,0 +1,63 @@
+# Rebuilds the place search index (`lviv-search.sqlite`) from the latest
+# Geofabrik extract once a month and publishes it on the rolling `places`
+# release, replacing the previous one. The service downloads it from there
+# (`COMMUTERLVIV_PLACES_URL`), so no server has to stream the whole country
+# file: the build peaks near 5 GB.
+#
+# The builder is osm-mapidx at the commit the search in `commuterlviv/mapidx`
+# was copied from, so the index is always in the format that search reads.
+# Move both together. `places` is never marked latest, so the version releases
+# keep that place, and F-Droid passes its tag over: the pubspec at it carries a
+# versionCode already built.
+name: places
+
+on:
+  schedule:
+    - cron: "0 4 3 * *"
+  workflow_dispatch:
+
+concurrency:
+  group: places
+
+permissions:
+  contents: write
+
+env:
+  MAPIDX_COMMIT: 2e9e5880f67ddc9cb8c7f94fc7203c301ede564e
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: rhusiev/osm-mapidx
+          ref: ${{ env.MAPIDX_COMMIT }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the builder's dependencies
+        run: python -m pip install osmium shapely numpy
+
+      - name: Download the extract
+        run: curl -fsSLo ukraine-latest.osm.pbf https://download.geofabrik.de/europe/ukraine-latest.osm.pbf
+
+      - name: Build
+        run: PYTHONPATH=mapidx python -m mapidx.cli build ukraine-latest.osm.pbf --region lviv
+
+      - name: Check it answers
+        run: |
+          PYTHONPATH=mapidx python -m mapidx.cli search out/lviv-search.sqlite "площа ринок" --limit 3 | tee hits
+          test -s hits
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view places -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create places -R "$GITHUB_REPOSITORY" --latest=false \
+                 --title "Place search index" \
+                 --notes "lviv-search.sqlite, rebuilt from OpenStreetMap on the 3rd of every month"
+          gh release upload places out/lviv-search.sqlite -R "$GITHUB_REPOSITORY" --clobber
