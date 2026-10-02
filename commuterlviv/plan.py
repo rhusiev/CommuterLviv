@@ -558,6 +558,7 @@ class _Profile:
         self.deps, self.profile = {}, {}
         self.steps = {}     # stop -> (seconds to board, stop, walked, caps allowing it)
         self.boards = []    # every (stop, departure, hop) boarded
+        self.beside = {}    # stop -> see `_beside`
         for c, (u, v, d, a, t) in enumerate(zip(*hops)):
             door, how = map(list, stay.get(t, none))
             self._alight(c, v, a, door, how)
@@ -684,9 +685,10 @@ class _Profile:
         beats - leaving no sooner, reaching the door no later, in no more rides,
         walking no more and riding no more of the journey's own vehicles - is
         left out: nobody changes twice to arrive with the bus they could have
-        waited for. So is a way changing onto a vehicle that leaves a stop the
-        way stood at no sooner than the way left it, which is that bus waited
-        for with a change added.
+        waited for. So is a way changing onto a vehicle that, before the way
+        leaves it, calls at or a short walk beside a stop the way boarded at,
+        no sooner than the way left there and walked over: that bus waited for,
+        with rides added.
         """
         after = {}
         for j, _ in found:
@@ -710,13 +712,23 @@ class _Profile:
                 for j, way in found]
 
     def _waits(self, way, leaves):
-        """Whether a later ride of `way` could have been boarded where an
-        earlier one was, at or after that one left: `leaves` holds when each
-        (trip, stop) boarding left."""
+        """Whether a later ride of `way` could have been boarded, short of
+        where it is left, at or beside a stop an earlier one boards, after
+        leaving then and walking over: `leaves` holds when each (trip, stop)
+        boarding left."""
         dep_s, _, dep_t, _, trip_of = self.hops
-        return any(leaves.get((trip_of[c], dep_s[b]), -math.inf) >= dep_t[b]
-                   for k, (c, *_) in enumerate(way)
-                   for b, *_ in way[:k])
+        return any(dep_t[b] + x <= leaves.get((trip_of[c], w), -math.inf)
+                   <= dep_t[e]
+                   for k, (c, e, _) in enumerate(way)
+                   for b, *_ in way[:k]
+                   for w, x in self._beside(dep_s[b]))
+
+    def _beside(self, u):
+        """`u` and the stops within the shortest walk cap of it, each with the
+        seconds walked there."""
+        if (got := self.beside.get(u)) is None:
+            got = self.beside[u] = [(u, 0.0), *self.transfers.near(u, self.caps[-1])]
+        return got
 
     def _backups(self, j, way, ways):
         trip_of = self.hops[4]
