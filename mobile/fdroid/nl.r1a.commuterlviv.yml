@@ -5,10 +5,11 @@
 # sent as a merge request. It is kept here so the recipe and the app it builds
 # change together.
 #
-# One rule keeps it working: each release needs an annotated tag named
+# One rule keeps it working: each app release needs an annotated tag named
 # `v<version>` on the commit carrying that version, because `UpdateCheckMode:
-# Tags` looks for one and the build below names it as its commit. The recipe
-# also expects the three per-ABI APKs to be on the matching GitHub release
+# Tags` looks for one and the build below names it as its commit. The tags of
+# server-only releases carry a versionCode already built and are passed over.
+# The recipe also expects the three per-ABI APKs to be on the matching GitHub release
 # under the `binary:` URLs below, because `Builds:` rebuilds from source and
 # `apksigcopier` only accepts a release whose signed bytes match. Both come
 # from `.github/workflows/release.yml` when a new version is merged into

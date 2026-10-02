@@ -1,7 +1,8 @@
 # Use this when the machine running the stack is the one the domain points at,
 # and nothing else on it is already listening on 80 and 443:
 #
-#   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+#   echo 'COMPOSE_FILE=docker-compose.yml:docker-compose.tls.yml' >> .env
+#   docker compose up -d
 #
 # Caddy obtains and renews the certificate itself. Set COMMUTERLVIV_SITE_ADDRESS in
 # `.env` to the bare domain, and COMMUTERLVIV_ORIGINS to https:// that domain.

@@ -103,6 +103,15 @@ exists". The fork branch's `.gitlab-ci.yml` uses `ln -sf`. This deviates from
 upstream `fdroid/fdroiddata`, so keep it out of the merge request or upstream it
 on its own.
 
+## `checkupdates` takes only a strictly higher versionCode, from the five newest tags
+
+`check_tags` in fdroidserver's `checkupdates.py` sorts the tags by commit date,
+newest first, and keeps the first five. At each tag it reads the code and name
+with `UpdateCheckData` and replaces its best only when `vercode > hcode`. So a
+newer tag whose pubspec carries the code F-Droid has already built changes
+nothing, however many of them there are - which is what makes a server-only
+release with the app's version left behind safe.
+
 ## GitHub Actions spawns every step from `github.workspace`
 
 The release workflow moves its checkout to `/tmp/build/nl.r1a.commuterlviv`, and
@@ -282,3 +291,16 @@ browser answer it without asking.
 `Cache-Control: private, no-cache` with their ETag (`_held` in
 `commuterlviv/live/app.py`), so every request revalidates and a 304 still costs
 no body.
+
+## Caddy's `header` adds to a proxied response's headers rather than replacing them
+
+**Observed.** Tiles through the stack came with two `Cache-Control` headers:
+`public, max-age=604800` from the Caddyfile and `public, max-age=2419200,
+no-transform` from `versatiles serve`, which sets its own.
+
+**Why.** `header` beside `reverse_proxy` is applied to the response before the
+upstream's headers are copied in, so a header the upstream also sends ends up
+twice. Conflicting `max-age` values leave each cache to pick one.
+
+**What the code does.** The tiles block sets it with `header_down` inside
+`reverse_proxy`, which rewrites the upstream's header in place.

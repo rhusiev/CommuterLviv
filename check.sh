@@ -24,39 +24,39 @@ run() {
   if ! (cd "$root/$dir" && "$@"); then failed="$failed $name"; fi
 }
 
-step "one version, in three trees"
+step "versions: the server's, and the app's at or behind it"
 run version . python3 - <<'EOF'
 import json, pathlib, re, sys
 
 root = pathlib.Path(".")
-want = re.search(r'__version__ = "([^"]+)"',
-                 (root / "commuterlviv/__init__.py").read_text()).group(1)
+server = re.search(r'__version__ = "([^"]+)"',
+                   (root / "commuterlviv/__init__.py").read_text()).group(1)
 pub = re.search(r"^version: (\S+)\+(\d+)$",
                 (root / "mobile/pubspec.yaml").read_text(), re.M)
+app = pub.group(1)
 recipe = (root / "mobile/fdroid/nl.r1a.commuterlviv.yml").read_text()
-found = {
-    "web/package.json": json.loads((root / "web/package.json").read_text())["version"],
-    "mobile/pubspec.yaml": pub.group(1),
+web = json.loads((root / "web/package.json").read_text())["version"]
+bad = [f"web/package.json says {web}, the server {server}"] if web != server else []
+recipe_versions = {
     **{f"fdroid versionName #{i}": v for i, v in
        enumerate(re.findall(r"versionName: (\S+)", recipe))},
     **{f"fdroid tag #{i}": v for i, v in
        enumerate(re.findall(r"commit: v(\S+)", recipe))},
     "fdroid CurrentVersion": re.search(r"CurrentVersion: (\S+)", recipe).group(1),
 }
-bad = {k: v for k, v in found.items() if v != want}
+bad += [f"{k} says {v}, the pubspec {app}" for k, v in recipe_versions.items() if v != app]
 # One build per ABI, coded as Flutter's --split-per-abi codes them
 code = int(pub.group(2))
-codes_ok = (sorted(map(int, re.findall(r"^ +versionCode: (\d+)", recipe, re.M)))
-            == [1000 + code, 2000 + code, 4000 + code]
-            and int(re.search(r"CurrentVersionCode: (\d+)", recipe).group(1)) == 4000 + code)
-if bad or not codes_ok:
-    print(f"commuterlviv/__init__.py says {want}")
-    for k, v in bad.items():
-        print(f"  {k} says {v}")
-    if not codes_ok:
-        print(f"  the fdroid version codes are not 1000/2000/4000 + {code}")
+if (sorted(map(int, re.findall(r"^ +versionCode: (\d+)", recipe, re.M)))
+        != [1000 + code, 2000 + code, 4000 + code]
+        or int(re.search(r"CurrentVersionCode: (\d+)", recipe).group(1)) != 4000 + code):
+    bad.append(f"the fdroid version codes are not 1000/2000/4000 + {code}")
+if [*map(int, app.split("."))] > [*map(int, server.split("."))]:
+    bad.append(f"the app's {app} is ahead of the server's {server}")
+if bad:
+    print(*bad, sep="\n")
     sys.exit(1)
-print(f"{want}, build {pub.group(2)}")
+print(f"server {server}, app {app} build {code}")
 EOF
 
 step "python: syntax and undefined names"

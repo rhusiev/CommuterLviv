@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from .. import config
 
 ENV = "COMMUTERLVIV_"
+PLACES = "https://github.com/rhusiev/CommuterLviv/releases/download/places/lviv-search.sqlite"
 
 
 def _env(name, default=None):
@@ -39,6 +40,7 @@ class Settings:
     build_planner: bool          # fetch the footpaths if the volume has none
     self_tiles: bool             # whether the basemap is served from this origin
     photon_url: str              # the Photon instance search asks; "" leaves only the local index
+    places_url: str              # where the local index is downloaded from; "" never downloads it
     poll_veh: float
     epoch: float
     dev: bool
@@ -77,6 +79,7 @@ def load():
         build_planner=_flag("BUILD_PLANNER", True),
         self_tiles=_flag("SELF_TILES", False),
         photon_url=_env("PHOTON_URL", "https://photon.komoot.io").rstrip("/"),
+        places_url=_env("PLACES_URL", PLACES),
         poll_veh=float(_env("POLL_VEH_S", 5.0)),
         epoch=float(_env("EPOCH_S", 60.0)),
         dev=dev,

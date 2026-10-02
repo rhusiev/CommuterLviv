@@ -37,10 +37,12 @@
 	# visitor's address from their tile requests. `handle_path` strips the
 	# prefix, so the container sees the paths it would serve at its own root.
 	# The tiles behind it change only when the extract is re-cut, monthly, so a
-	# week of staleness after that is the price of a long cache
+	# week of staleness after that is the price of a long cache. `header_down`
+	# replaces the four weeks versatiles sends; `header` would add a second one
 	handle_path /tiles/* {
-		reverse_proxy tiles:8080
-		header Cache-Control "public, max-age=604800"
+		reverse_proxy tiles:8080 {
+			header_down Cache-Control "public, max-age=604800"
+		}
 	}
 
 	handle {

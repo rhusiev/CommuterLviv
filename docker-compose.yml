@@ -43,6 +43,7 @@ services:
       COMMUTERLVIV_TRUST_PROXY: "true"
       COMMUTERLVIV_BUILD_PLANNER: ${COMMUTERLVIV_BUILD_PLANNER:-true}
       COMMUTERLVIV_PHOTON_URL: ${COMMUTERLVIV_PHOTON_URL-https://photon.komoot.io}
+      COMMUTERLVIV_PLACES_URL: ${COMMUTERLVIV_PLACES_URL-https://github.com/rhusiev/CommuterLviv/releases/download/places/lviv-search.sqlite}
       # Tells the clients, over /api/health, to take the basemap from /tiles
       COMMUTERLVIV_SELF_TILES: ${COMMUTERLVIV_SELF_TILES:-true}
     volumes:
