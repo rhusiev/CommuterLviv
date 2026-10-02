@@ -97,6 +97,10 @@ class Strings {
     required this.findRoute,
     required this.searching,
     required this.noJourney,
+    required this.report,
+    required this.reportNote,
+    required this.reported,
+    required this.send,
     required this.toDoor,
     required this.noChange,
     required this.prefer,
@@ -221,6 +225,10 @@ class Strings {
   final String findRoute;
   final String searching;
   final String noJourney;
+  final String report;
+  final String reportNote;
+  final String reported;
+  final String send;
   final String toDoor;
   final String noChange;
   final String Function(Prefer p) prefer;
@@ -337,6 +345,12 @@ const _en = Strings(
   findRoute: 'Find a way',
   searching: 'Looking for a way',
   noJourney: 'No way to get there was found',
+  report: 'Something looks wrong? Report it',
+  reportNote:
+      'What looks wrong? Optional. The search and the live data it ran on '
+      'are sent with it.',
+  reported: 'Reported, thank you',
+  send: 'Send',
   toDoor: 'To the door',
   noChange: 'No changes',
   prefer: _enPrefer,
@@ -479,6 +493,12 @@ const _uk = Strings(
   findRoute: 'Знайти шлях',
   searching: 'Шукаємо шлях',
   noJourney: 'Шляху не знайдено',
+  report: 'Щось не так? Повідомити',
+  reportNote:
+      "Що не так? Необов'язково. Разом із цим надсилається пошук і живі дані, "
+      'за якими його зроблено.',
+  reported: 'Надіслано, дякуємо',
+  send: 'Надіслати',
   toDoor: 'До місця',
   noChange: 'Без пересадок',
   prefer: _ukPrefer,

@@ -62,7 +62,8 @@ origins in `COMMUTERLVIV_ORIGINS`. Everything it downloads or learns lives in
 - **Plan.** Tap where you are and where you are going. You get ways there ranked
   by arrival, each ride marked live or timetabled, with the backups behind each
   ride should you miss it. Sort by fastest, less walking, fewer changes or most
-  backups, set your walking speed, or plan for later.
+  backups, set your walking speed, or plan for later. An answer that looks
+  wrong can be reported, and is kept with the live data it ran on.
 - **Layers.** The whole network, traffic per street, and eight map styles -
   colorful, natural, muted and gray, each light and dark.
 

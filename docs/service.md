@@ -182,6 +182,26 @@ arrivals that lie ahead of it are kept - so nothing is thrown away at some
 cutoff; past the model's 45 minute horizon there are none left and the timetable
 takes over on its own.
 
+### Reporting a search
+
+A wrong answer usually cannot be seen again afterwards: it ran on predictions
+that are gone a minute later. So every search is held in memory for 30 minutes
+(`reports.KEEP`, at most 300 at once) with the arrivals it ran on, and its
+answer carries a `report` id. Nothing is written unless the one who searched
+taps "Something looks wrong? Report it" under the options, which sends
+`POST /api/report` with `{"id", "note"}` - the note is optional, up to 1000
+characters. That writes one compressed file to `data/reports/`: the request,
+those arrivals, the catalog's stop and route ids they are indexed by, the answer
+as sent, the version, the account's id and the note. An id is good for one
+report, and only the account that searched can use it; one that has expired is
+a 404. Past 200 files (`reports.FILES`) new reports are a 507 until some are
+read and deleted.
+
+`python -m commuterlviv report FILE` prints the answer as it was sent and then
+the one the code and timetable at hand give for the same request and arrivals,
+so a fix can be checked against the case that prompted it. When the feed has
+changed since, it says so: stop and trip numbering may then no longer match.
+
 ## Traffic
 
 `GET /api/traffic/streets` and `GET /api/traffic` are the same numbers the

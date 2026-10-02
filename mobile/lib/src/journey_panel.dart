@@ -14,6 +14,7 @@ import 'end_field.dart';
 import 'eta.dart';
 import 'models.dart';
 import 'route_badge.dart';
+import 'sheets.dart';
 import 'strings.dart';
 import 'theme.dart';
 import 'walk_speed.dart';
@@ -82,6 +83,10 @@ class _JourneyPanelState extends State<JourneyPanel> {
   bool _busy = false;
   String? _failed;
 
+  /// The id to report the options shown by, and what came of reporting them
+  String? _report;
+  String? _reportSaid;
+
   /// What the points picked by name were called, so they keep reading so
   final _names = <LatLng, String>{};
 
@@ -106,6 +111,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
   void _forget() {
     _options = null;
     _failed = null;
+    _report = _reportSaid = null;
     _show(null);
   }
 
@@ -179,7 +185,11 @@ class _JourneyPanelState extends State<JourneyPanel> {
     try {
       final got = await widget.api.plan(from, to, at: _at, speed: _speed);
       if (!mounted) return;
-      setState(() => _options = got);
+      setState(() {
+        _options = got.options;
+        _report = got.report;
+        _reportSaid = null;
+      });
       _show(null);
     } on ApiError catch (e) {
       if (mounted) {
@@ -192,6 +202,25 @@ class _JourneyPanelState extends State<JourneyPanel> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _sendReport() async {
+    final id = _report!;
+    final note = await askName(context, txt.reportNote, action: txt.send);
+    if (note == null) return;
+    String? failed;
+    try {
+      await widget.api.reportPlan(id, note);
+    } on ApiError catch (e) {
+      failed = e.message;
+    } on Exception {
+      failed = txt.unreachable(widget.api.base);
+    }
+    if (!mounted || id != _report) return;
+    setState(() {
+      if (failed == null) _report = null;
+      _reportSaid = failed ?? txt.reported;
+    });
   }
 
   @override
@@ -353,6 +382,20 @@ class _JourneyPanelState extends State<JourneyPanel> {
                 txt.planHint,
                 style: material.Theme.of(context).textTheme.bodySmall,
               ),
+            ),
+          if (_options != null && _reportSaid != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _reportSaid!,
+                style: material.Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          if (_options != null && _report != null)
+            TextButton.icon(
+              onPressed: _sendReport,
+              icon: const Icon(Icons.flag_outlined),
+              label: Text(txt.report),
             ),
         ],
       ),

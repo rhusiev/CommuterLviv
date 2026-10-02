@@ -61,6 +61,16 @@ many clients are connected and how much the service is pushing. Being signed in
 does not carry that - to anyone without the flag the endpoint is a 404, so it
 does not even admit to being there. `--undo` takes it back.
 
+A search somebody reported (see [reporting a search](service.md#reporting-a-search))
+is logged as `search reported: <file>` and kept in the service volume until
+deleted; past 200 files new reports are refused:
+
+```sh
+docker compose exec service ls data/reports
+docker compose exec service python -m commuterlviv report data/reports/<file>
+docker compose exec service rm data/reports/<file>
+```
+
 `docker compose logs -f collector` prints one line every 5 minutes, which is the
 collector's whole health check - see [the collector](collector.md).
 
