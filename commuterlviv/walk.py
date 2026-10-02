@@ -13,6 +13,7 @@ import io
 import math
 import time
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import requests
@@ -220,6 +221,32 @@ def climb(path=CACHE, session=None):
     np.savez_compressed(path, **arrays)
 
 
+class Spot(NamedTuple):
+    """Where a point steps onto the footpaths: (`lat`, `lon`), `t` of the way
+    along the edge from node `u` to node `v` that `edge` seconds walk, `off`
+    seconds of walking from the point."""
+    lat: float
+    lon: float
+    u: int
+    v: int
+    t: float
+    edge: float
+    off: float
+
+    def ends(self):
+        """Each end of the edge, with the seconds walked to it from the point."""
+        return [(self.u, self.off + self.edge * self.t),
+                (self.v, self.off + self.edge * (1 - self.t))]
+
+    def along(self, other):
+        """Seconds from this spot's point to the other's along their shared
+        edge, which the graph cannot see, or inf if they are on different ones."""
+        if {self.u, self.v} != {other.u, other.v}:
+            return math.inf
+        t = other.t if other.u == self.u else 1 - other.t
+        return self.off + other.off + self.edge * abs(self.t - t)
+
+
 class Walk:
     """A footpath graph, and the walks that start anywhere on it."""
 
@@ -276,6 +303,27 @@ class Walk:
         found.sort()
         return found
 
+    def attach(self, lat, lon, within=150.0):
+        """The nearest point on any edge of a node within `within` metres, or
+        None off the graph. Only that one, and straight to it: joining a point
+        to every node in reach would let a walk cut across the block to any of
+        them."""
+        near = np.array([i for _, i in self.near(lat, lon, within)], dtype=np.int64)
+        if not len(near):
+            return None
+        e = np.concatenate([np.arange(self.start[i], self.start[i + 1]) for i in near])
+        u, v = np.repeat(near, np.diff(self.start)[near]), self.to[e]
+        k = 111320.0 * math.cos(math.radians(lat))
+        ux, uy = (self.lon[u] - lon) * k, (self.lat[u] - lat) * 111320.0
+        dx, dy = (self.lon[v] - lon) * k - ux, (self.lat[v] - lat) * 111320.0 - uy
+        t = np.clip(-(ux * dx + uy * dy) / np.maximum(dx * dx + dy * dy, 1e-9), 0, 1)
+        j = int(np.argmin(np.hypot(ux + t * dx, uy + t * dy)))
+        a, b, f = int(u[j]), int(v[j]), float(t[j])
+        at = (float(self.lat[a] + f * (self.lat[b] - self.lat[a])),
+              float(self.lon[a] + f * (self.lon[b] - self.lon[a])))
+        return Spot(*at, a, b, f, float(self.secs[e[j]]),
+                    self.flat(metres(lat, lon, *at)))
+
     def reach(self, sources, limit_s, prev=False):
         """Seconds of walking from the nearest source to every node, inf past
         `limit_s`. `sources` are `(node, seconds already spent)`. With `prev`,
@@ -299,17 +347,21 @@ class Walk:
     def path(self, a, b, limit_s):
         """The footpath from `a` to `b` (both (lat, lon)) as (lat, lon) points,
         or just the two ends when no walk within `limit_s` joins them."""
-        best, prev = self.reach([(i, self.flat(d)) for d, i in self.near(*a)],
-                                limit_s, prev=True)
-        t, end = min(((best[i] + self.flat(d), i) for d, i in self.near(*b)),
-                     default=(math.inf, -1))
-        if t == math.inf:
+        sa, sb = self.attach(*a), self.attach(*b)
+        if sa is None or sb is None:
             return [a, b]
+        best, prev = self.reach(sa.ends(), limit_s, prev=True)
+        t, end = min((best[i] + s, i) for i, s in sb.ends())
+        direct = sa.along(sb)
+        if min(direct, t) == math.inf:
+            return [a, b]
+        if direct <= t:
+            return [a, sa[:2], sb[:2], b]
         nodes = [end]
         while 0 <= (node := prev[nodes[-1]]) < len(self.lat):
             nodes.append(node)
-        return [a, *((float(self.lat[i]), float(self.lon[i]))
-                     for i in reversed(nodes)), b]
+        return [a, sa[:2], *((float(self.lat[i]), float(self.lon[i]))
+                             for i in reversed(nodes)), sb[:2], b]
 
 
 def load(path=CACHE):

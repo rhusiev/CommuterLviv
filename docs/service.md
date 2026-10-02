@@ -56,9 +56,12 @@ further away in time. Both clients keep a usual speed on the
 device (the account menu) and step it per search beside the departure time.
 
 Walks are Dijkstra on that graph, scipy's (`scipy.sparse.csgraph.dijkstra`),
-about ten times faster than one in Python. A search starts from every node
-within 150 m of a point at once, each with the walk to it already spent: they
-hang off one extra node by edges that long. The walk from the origin that finds
+about ten times faster than one in Python. A point steps onto the graph
+at the nearest point of the nearest footpath edge with a node within 150 m
+(`Walk.attach`), and the search starts from both ends of that edge, each with
+the walk to it already spent. Joining the point to every node in reach instead
+would let a walk cut straight across a block to any of them. Two points on the
+same edge are also joined along it, which the graph alone cannot see. The walk from the origin that finds
 the whole walk also gives the walks to the stops near the origin, so a search
 walks twice - from each end - in about 50 ms.
 
@@ -101,7 +104,10 @@ The next run of the chosen route counts; the chosen departure does not. A way
 that another one beats - leaving no sooner, reaching the door no later, in no
 more rides, walking no more and riding no more of the journey's own vehicles -
 is left out, since nobody changes twice to arrive with the bus they could have
-waited for. Tracked vehicles ride at their predictions, quiet routes do not
+waited for. So is a way that changes onto a vehicle which also calls, no sooner,
+at a stop where the way already stood: 53 then 16 onto a 16 that passes the
+53's stop after the 53 left is only that 16, waited for, with a change added.
+Tracked vehicles ride at their predictions, quiet routes do not
 ride at all, and a scheduled departure a tracked vehicle is running is not
 boarded.
 
