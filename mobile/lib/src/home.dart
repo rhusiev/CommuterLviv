@@ -11,6 +11,7 @@ import 'package:vector_map_tiles/vector_map_tiles.dart';
 
 import '../main.dart' show tick;
 import 'api.dart';
+import 'follow_card.dart';
 import 'here.dart';
 import 'journey_panel.dart';
 import 'live.dart';
@@ -79,6 +80,10 @@ class _HomeScreenState extends State<HomeScreen> {
   LatLng? _to;
   End? _picking;
   bool _folded = false;
+
+  /// The journey being followed, from Follow on an option until it is ended.
+  /// It outlives the planner, and while it lasts it is what the map draws
+  Journey? _following;
 
   /// Which end is waiting on a fix that has been asked for but not arrived.
   End? _wantHere;
@@ -170,6 +175,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _onRoute &= route != null;
       _stop = null;
       _journey = null;
+      _following = null;
       _shapes = null;
     });
     _push();
@@ -211,16 +217,21 @@ class _HomeScreenState extends State<HomeScreen> {
     _watch();
   }
 
-  /// What the socket sends: while a journey is shown, only its rides.
+  /// What the socket sends: while a journey is shown or followed, only its
+  /// rides, with the open route's.
   Set<int> get _shown {
-    if (_planning && _journey != null) {
-      return {
-        for (final leg in _journey!.legs)
+    final rides = {
+      for (final journey in [?_following, if (_planning) ?_journey])
+        for (final leg in journey.legs)
           if (leg.route != null) leg.route!,
-      };
-    }
-    return _onRoute && _route != null ? {_route!} : _routes;
+    };
+    final route = _onRoute ? _route : null;
+    if (rides.isNotEmpty) return {...rides, ?route};
+    return route != null ? {route} : _routes;
   }
+
+  /// The planner's option while planning, else the journey followed.
+  Journey? get _onMap => _planning ? _journey : _following;
 
   List<int> get _lines {
     if (_onRoute && _route != null) return [_route!];
@@ -304,9 +315,34 @@ class _HomeScreenState extends State<HomeScreen> {
     _push();
   }
 
-  /// The server caps the watch list, so pins go first.
+  /// The server caps the watch list, so pins go first. A followed journey's
+  /// stops are watched for when its vehicles get to them.
   void _watch() {
-    _live?.setStops({..._pins, ?_stop}.toList());
+    _live?.setStops(
+      {
+        ..._pins,
+        ?_stop,
+        for (final leg in _following?.legs ?? const <Leg>[])
+          if (leg.kind == 'ride') ...[leg.a, leg.b],
+      }.toList(),
+    );
+  }
+
+  void _follow(Journey journey) {
+    setState(() {
+      _following = journey;
+      _planning = false;
+      _picking = null;
+      _folded = false;
+      _journey = null;
+    });
+    _push();
+    unawaited(_here.start());
+  }
+
+  void _endFollow() {
+    setState(() => _following = null);
+    _push();
   }
 
   Future<void> _loadStyle() async {
@@ -668,7 +704,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (_planning && _from != null) (at: _from!, label: 'A'),
                   if (_planning && _to != null) (at: _to!, label: 'B'),
                 ],
-                journey: _planning ? _journey : null,
+                journey: _onMap,
                 pins: _pins,
                 places: _sets?.places ?? const [],
                 shapes: _shapes,
@@ -732,6 +768,24 @@ class _HomeScreenState extends State<HomeScreen> {
                     setState(() => _journey = journey);
                     _push();
                   },
+                  onFollow: _follow,
+                ),
+              ),
+            ),
+          // Offstage rather than gone, so the follower keeps what it has seen
+          if (_following != null)
+            Positioned(
+              left: floatingGap,
+              right: floatingGap,
+              bottom: floatingBottom(context),
+              child: Offstage(
+                offstage: _tab != 0 || _planning,
+                child: FollowCard(
+                  catalog: catalog,
+                  journey: _following!,
+                  live: live,
+                  here: _here,
+                  onEnd: _endFollow,
                 ),
               ),
             ),

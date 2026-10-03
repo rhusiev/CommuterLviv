@@ -28,12 +28,16 @@ enum Locating {
 }
 
 class Fix {
-  const Fix(this.point, this.accuracy);
+  const Fix(this.point, this.accuracy, this.t);
 
   final LatLng point;
 
   /// Metres, as the phone reports it.
   final double accuracy;
+
+  /// When the phone took it, in milliseconds since the epoch. Not when it
+  /// arrived: the first may be the last one known, from long before.
+  final int t;
 }
 
 class Here extends ChangeNotifier {
@@ -79,7 +83,7 @@ class Here extends ChangeNotifier {
   void _arrived(dynamic event) {
     final f = (event as Map).cast<String, double>();
     final at = LatLng(f['lat']!, f['lon']!);
-    fix = Fix(at, f['accuracy']!);
+    fix = Fix(at, f['accuracy']!, f['t']!.toInt());
     state = Locating.on;
     if (_first) {
       _first = false;

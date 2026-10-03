@@ -38,6 +38,25 @@ one for work, one for home - live on the server, so they follow the account
 rather than the browser. Serve `dist/` with a history fallback: every path has to
 return `index.html`, or `/join/<code>` is a 404 and the invite link is dead.
 
+An option can be followed. Follow on it moves to the map, turns on the dot
+where you are and puts a card at the bottom that says what to do now: walk to
+the stop, wait there, with when the vehicle is due, get off at the next, or that
+you went past it or off the way. `Follower` in `web/src/lib/follow.ts`, ported
+line for line to `mobile/lib/src/follow.dart`, works it out from the device's
+own fixes and the vehicles as the map draws them, on the device: where you are
+is never sent anywhere. Boarding is told from the fixes, not from a vehicle
+coming near. You must have gone `BOARD_M` (100 m) along the ride's line, away
+from the stop, faster than `WALK_MAX_MPS` (2.5 m/s), over at least
+`BOARD_FIXES` (3) fixes. Only then is the vehicle you are on picked, as one of
+the route's that kept pace with you - seen beside you for half the fixes and
+moving at least half as far - and the planned one wins whenever it did. A tram standing at the stop as you ride away is passed over, and so is a
+vehicle on another route. A ride whose vehicle is not found yet still counts as
+a ride, and the vehicle is looked for again: the map draws the one you boarded
+standing for some 10-20 s after it leaves - see
+[findings](findings.md#the-feed-reports-a-vehicle-10-s-late-at-median). It
+follows only while the app is open, because neither client asks for location
+in the background.
+
 One palette, two clients. `web/src/app.css` declares five colours, two radii and
 one shadow in a Tailwind `@theme` block, and `mobile/lib/src/theme.dart` repeats
 the same values; two of the colours, the near-black plate and the sky accent,
@@ -113,8 +132,8 @@ endpoint and no model - the browser and the phone see the same city, the same
 route sets and the same predictions, and the same journey planner behind the
 third choice in the tab pill. Both also carry the same three views added since:
 a saved list where a place can be renamed or dropped, a search that finds
-addresses and shops as well as stop names, and traffic drawn over the streets
-the model can see.
+addresses and shops as well as stop names, traffic drawn over the streets
+the model can see, and following a journey as you travel it.
 
 ```sh
 cd mobile && flutter pub get
@@ -141,8 +160,8 @@ The one cost of that rule is paid by the locate-me button, which is a
 hand-written channel - AOSP's `LocationManager` on Android, `CoreLocation` on
 iOS - rather than the usual package, which brings Play Services with it; see
 `mobile/README.md`. The app asks for the internet permission, and
-for location on the first press of that button; the fix never leaves the
-phone.
+for location on the first press of that button or of Follow; the fix never
+leaves the phone.
 
 The service needs one line for it: `app://commuterlviv` in `COMMUTERLVIV_ORIGINS`. The
 app is not a web page and has no web origin, and that scheme is one no browser

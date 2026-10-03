@@ -64,6 +64,8 @@ type Props = {
   marks: { lat: number; lon: number; label: string }[];
   /** The planner option picked: walks dotted, rides solid, each leg timed */
   journey: Journey | null;
+  /** Turns on the dot where the device is, as the locate button does */
+  locate: boolean;
   /** What the account kept, always on the map: stop positions and saved places */
   pinned: number[];
   places: Place[];
@@ -95,6 +97,7 @@ export function MapCanvas({
   onHoldPoint,
   marks,
   journey,
+  locate,
   pinned,
   places,
   shapes,
@@ -557,6 +560,10 @@ export function MapCanvas({
     go();
     return () => clearTimeout(timer);
   }, [focus]);
+
+  useEffect(() => {
+    if (locate) setLocating((was) => (was === "off" ? "waiting" : was));
+  }, [locate]);
 
   // A boolean and not the state: the watch must not restart when the first fix
   // turns "waiting" into "on"

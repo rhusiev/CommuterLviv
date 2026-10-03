@@ -12,6 +12,7 @@ import 'api.dart';
 import 'backups_dialog.dart';
 import 'end_field.dart';
 import 'eta.dart';
+import 'follow.dart' show followable;
 import 'models.dart';
 import 'route_badge.dart';
 import 'sheets.dart';
@@ -46,6 +47,7 @@ class JourneyPanel extends StatefulWidget {
     required this.onSave,
     required this.onPlace,
     required this.onShow,
+    required this.onFollow,
   });
 
   final Api api;
@@ -72,6 +74,7 @@ class JourneyPanel extends StatefulWidget {
 
   /// The option picked to be drawn on the map, or null once none is
   final void Function(Journey? journey) onShow;
+  final void Function(Journey journey) onFollow;
 
   @override
   State<JourneyPanel> createState() => _JourneyPanelState();
@@ -372,6 +375,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
                         catalog: widget.catalog,
                         onStop: widget.onStop,
                         onLine: widget.onLine,
+                        onFollow: () => widget.onFollow(ranked[i]),
                       ),
                     ),
             )
@@ -498,6 +502,7 @@ class _Option extends StatelessWidget {
     required this.catalog,
     required this.onStop,
     required this.onLine,
+    required this.onFollow,
   });
 
   final Journey journey;
@@ -514,6 +519,7 @@ class _Option extends StatelessWidget {
   final void Function(int stop) onStop;
 
   final void Function(int route) onLine;
+  final VoidCallback onFollow;
 
   @override
   Widget build(BuildContext context) {
@@ -592,6 +598,20 @@ class _Option extends StatelessWidget {
                     catalog: catalog,
                     onStop: onStop,
                     onLine: onLine,
+                  ),
+                ),
+              if (shown && followable(journey))
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Tooltip(
+                    message: txt.followHint,
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.tonal(
+                        onPressed: onFollow,
+                        child: Text(txt.follow),
+                      ),
+                    ),
                   ),
                 ),
             ],

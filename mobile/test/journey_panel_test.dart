@@ -44,6 +44,7 @@ Future<void> pump(
             onSave: (_, _) {},
             onPlace: (_, _) {},
             onShow: (_) {},
+            onFollow: (_) {},
           ),
         ),
       ),

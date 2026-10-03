@@ -114,6 +114,7 @@ class MainActivity : FlutterActivity(), LocationListener {
                 "lat" to fix.latitude,
                 "lon" to fix.longitude,
                 "accuracy" to fix.accuracy.toDouble(),
+                "t" to fix.time.toDouble(),
             )
         )
     }

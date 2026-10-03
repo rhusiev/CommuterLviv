@@ -99,6 +99,7 @@ final class Here: NSObject, CLLocationManagerDelegate, FlutterStreamHandler {
       // Negative means the phone does not know; the Dart side draws a ring
       // from this, and a ring of minus ten metres is worse than none
       "accuracy": max(fix.horizontalAccuracy, 0),
+      "t": fix.timestamp.timeIntervalSince1970 * 1000,
     ])
   }
 

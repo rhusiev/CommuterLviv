@@ -132,6 +132,26 @@ no vehicle "on" the trip about to depart, and a server that predicts only the
 current trip shows nothing there. The GTFS `block_id` chains a vehicle's trips
 in order, which is how the next trip is found
 
+## The feed reports a vehicle 10 s late at median
+
+**Observed.** Over 14 days of `data/feed.db` (60 vehicles, the 425 000 fixes
+taken at over 1 m/s), a fix is already 4.9 s old at the 5th percentile when the
+collector first sees it, 10.4 s at the median, 19.1 s at the 90th and 24.6 s at
+the 95th - the poll time less the vehicle's own timestamp. One vehicle's fixes
+are 10 s apart at the median, 32 s at the 90th and 41 s at the 95th.
+
+**Why.** The city's feed relays what the vehicles report, as often as they
+report it. The server then keeps a vehicle where its last fix put it until its
+speed clears the stationary threshold (`_moving` in
+`commuterlviv/live/state.py`), and after that draws only `DAMP` of the
+dead-reckoned distance.
+
+**What the code does.** The tram you have just boarded is drawn standing at the
+stop for some 10-20 s after it pulled away, and behind you after that. The
+journey follower therefore counts the ride from your own fixes first, and
+matches a vehicle to it only once one keeps pace with you, with up to
+`MATCH_M` (150 m) between you and where it is drawn.
+
 ## Long press on Android WebView/Chrome arrives as `contextmenu`
 
 maplibre has no long-press event. A touch held on the map fires the browser's

@@ -3,6 +3,7 @@ import { Icon } from "./components/Icon";
 import { MapCanvas } from "./components/MapCanvas";
 import { RoutePanel } from "./components/RoutePanel";
 import { SignIn } from "./components/SignIn";
+import { FollowCard } from "./components/FollowCard";
 import { JourneyPanel, type Point } from "./components/JourneyPanel";
 import { StopCard } from "./components/StopCard";
 import { AccountMenu } from "./components/AccountMenu";
@@ -23,6 +24,7 @@ import { saved } from "./lib/places";
 import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from "./lib/theme";
 import { RAMP, useTraffic } from "./lib/traffic";
 import { readUrl, writeUrl, type UrlState } from "./lib/url";
+import { useFollow } from "./lib/useFollow";
 import { takeRenewed, useLive } from "./lib/useLive";
 import type { Catalog, Journey, Me, Place, RouteSet, Shapes } from "./lib/types";
 import { t } from "./lib/i18n";
@@ -67,6 +69,8 @@ export function App() {
   const [from, setFrom] = useState<Point | null>(null);
   const [to, setTo] = useState<Point | null>(null);
   const [journey, setJourney] = useState<Journey | null>(null);
+  /** Being travelled: it keeps the map, whichever tab is open */
+  const [following, setFollowing] = useState<Journey | null>(null);
   const [picking, setPicking] = useState<"from" | "to" | null>(null);
   const [folded, setFolded] = useState(false);
   const [panel, setPanel] = useState(false);
@@ -197,15 +201,17 @@ export function App() {
     setFocus({ lat: s.lat, lon: s.lon });
   };
 
+  const drawn = following ?? (tab === "plan" ? journey : null);
+
   /** While a journey is shown, only its rides are on the map */
   const journeyRoutes = useMemo(() => {
-    if (tab !== "plan" || !journey) return null;
+    if (!drawn) return null;
     const out = new Set<number>();
-    for (const leg of journey.legs) {
+    for (const leg of drawn.legs) {
       if (leg.route !== undefined) out.add(leg.route);
     }
     return [...out].sort((a, b) => a - b);
-  }, [tab, journey]);
+  }, [drawn]);
 
   /** The socket's own filter: while one route is open it is the only one sent */
   const indexes = useMemo(
@@ -246,14 +252,23 @@ export function App() {
     if (cat) live.setRoutes(indexes);
   }, [live, cat, indexes]);
 
-  const watched = useMemo(
-    () => (stop === null || pins.includes(stop) ? pins : [...pins, stop]),
-    [pins, stop],
-  );
+  /** A journey followed adds the stops its rides board and leave at, for
+   * when its vehicles get there */
+  const watched = useMemo(() => {
+    const out = new Set(pins);
+    if (stop !== null) out.add(stop);
+    for (const leg of following?.legs ?? []) {
+      if (leg.kind === "ride") out.add(leg.a).add(leg.b);
+    }
+    return [...out];
+  }, [pins, stop, following]);
 
   useEffect(() => {
     if (cat) live.setStops(watched);
   }, [live, cat, watched]);
+
+  // Here rather than in its card, which a change of tab unmounts
+  const progress = useFollow(following, live);
 
   /** Only the stops of the routes on the map are drawn or clickable */
   const stops = useMemo(() => {
@@ -366,7 +381,8 @@ export function App() {
           if (name) keepPlaces(saved(places, name, lat, lon));
         }}
         marks={marks}
-        journey={tab === "plan" ? journey : null}
+        journey={drawn}
+        locate={following !== null}
         pinned={pins}
         places={places}
         shapes={geo}
@@ -545,6 +561,10 @@ export function App() {
             }}
             onHere={useHere}
             onShow={setJourney}
+            onFollow={(j) => {
+              setFollowing(j);
+              setTab("map");
+            }}
             folded={folded}
             onFold={setFolded}
             onLine={openRoute}
@@ -611,9 +631,9 @@ export function App() {
         </aside>
       )}
 
-      {tab === "map" && (stop !== null || veh !== null) && (
+      {tab === "map" && (stop !== null || veh !== null || following) && (
         <div
-          className={`pointer-events-none absolute ${clear} bottom-20 right-3 z-10 mx-auto max-w-md`}
+          className={`pointer-events-none absolute ${clear} bottom-20 right-3 z-10 mx-auto flex max-w-md flex-col gap-2`}
         >
           {stop !== null ? (
             <StopCard
@@ -641,6 +661,15 @@ export function App() {
               }}
               onRoute={openRoute}
               onClose={() => setVeh(null)}
+            />
+          )}
+          {following && (
+            <FollowCard
+              catalog={cat}
+              journey={following}
+              live={live}
+              progress={progress}
+              onEnd={() => setFollowing(null)}
             />
           )}
         </div>

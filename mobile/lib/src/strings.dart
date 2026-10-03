@@ -124,6 +124,22 @@ class Strings {
     required this.quietWhy,
     required this.wholeWalk,
     required this.planHint,
+    required this.follow,
+    required this.followHint,
+    required this.endFollow,
+    required this.locating,
+    required this.walkTo,
+    required this.walkHome,
+    required this.waitAt,
+    required this.dueIn,
+    required this.offAt,
+    required this.offSoon,
+    required this.toGo,
+    required this.passedStop,
+    required this.offTheWay,
+    required this.arrived,
+    required this.metres,
+    required this.km,
     required this.walkLeg,
     required this.changeCount,
     required this.changeAt,
@@ -252,6 +268,22 @@ class Strings {
   final String quietWhy;
   final String wholeWalk;
   final String planHint;
+  final String follow;
+  final String followHint;
+  final String endFollow;
+  final String locating;
+  final String Function(String stop) walkTo;
+  final String walkHome;
+  final String Function(String stop) waitAt;
+  final String Function(String when) dueIn;
+  final String Function(String stop) offAt;
+  final String Function(String stop) offSoon;
+  final String Function(String distance) toGo;
+  final String passedStop;
+  final String offTheWay;
+  final String arrived;
+  final String Function(int metres) metres;
+  final String Function(double km) km;
   final String Function(int minutes) walkLeg;
   final String Function(int changes) changeCount;
   final String Function(String stops) changeAt;
@@ -374,6 +406,23 @@ const _en = Strings(
   quietWhy: 'The timetable has departures on this route, but no vehicle on it has been seen for the last hour. It may not be running at all.',
   wholeWalk: 'Walk the whole way',
   planHint: 'Tap From or To to search for a place, pick a saved one or choose it on the map.',
+  follow: 'Follow it',
+  followHint:
+      'Says what to do next as you travel. Where you are stays on this phone.',
+  endFollow: 'End',
+  locating: 'Finding where you are',
+  walkTo: _enWalkTo,
+  walkHome: 'Walk to the door',
+  waitAt: _enWaitAt,
+  dueIn: _enDueIn,
+  offAt: _enOffAt,
+  offSoon: _enOffSoon,
+  toGo: _enToGo,
+  passedStop: 'You have gone past the stop to get off at',
+  offTheWay: 'You are off the planned way',
+  arrived: 'You have arrived',
+  metres: _enMetres,
+  km: _enKm,
   walkLeg: _enWalkLeg,
   changeCount: _enChangeCount,
   changeAt: _enChangeAt,
@@ -410,6 +459,14 @@ String _enMinutes(int m) => '$m min';
 String _enKmh(double v) => '${v.toStringAsFixed(1)} km/h';
 String _enAlsoOption(int n) => 'Option $n';
 String _enUnreachable(String server) => 'Could not reach $server';
+String _enWalkTo(String stop) => 'Walk to $stop';
+String _enWaitAt(String stop) => 'Wait at $stop';
+String _enDueIn(String when) => 'Due: $when';
+String _enOffAt(String stop) => 'Get off at $stop';
+String _enOffSoon(String stop) => 'Get ready to get off at $stop';
+String _enToGo(String distance) => '$distance to go';
+String _enMetres(int m) => '$m m';
+String _enKm(double km) => '${km.toStringAsFixed(1)} km';
 
 const _uk = Strings(
   signIn: 'Увійти',
@@ -522,6 +579,22 @@ const _uk = Strings(
   quietWhy: 'За розкладом цей маршрут курсує, але жодного його транспорту не було видно протягом останньої години. Можливо, він зовсім не їздить.',
   wholeWalk: 'Пішки весь шлях',
   planHint: 'Торкніться «Звідки» чи «Куди», щоб знайти місце, вибрати збережене або вказати його на мапі.',
+  follow: 'Вести',
+  followHint: 'Підказує, що робити далі, поки ви в дорозі. Де ви є, лишається на цьому телефоні.',
+  endFollow: 'Завершити',
+  locating: 'Визначаємо, де ви',
+  walkTo: _ukWalkTo,
+  walkHome: 'Ідіть до місця призначення',
+  waitAt: _ukWaitAt,
+  dueIn: _ukDueIn,
+  offAt: _ukOffAt,
+  offSoon: _ukOffSoon,
+  toGo: _ukToGo,
+  passedStop: 'Ви проїхали зупинку, на якій треба було вийти',
+  offTheWay: 'Ви зійшли з запланованого шляху',
+  arrived: 'Ви на місці',
+  metres: _ukMetres,
+  km: _ukKm,
   walkLeg: _ukWalkLeg,
   changeCount: _ukChangeCount,
   changeAt: _ukChangeAt,
@@ -559,6 +632,14 @@ String _ukKmh(double v) =>
     '${v.toStringAsFixed(1).replaceAll('.', ',')} км/год';
 String _ukAlsoOption(int n) => 'Варіант $n';
 String _ukUnreachable(String server) => 'Не вдалося зʼєднатися з $server';
+String _ukWalkTo(String stop) => 'Ідіть до зупинки $stop';
+String _ukWaitAt(String stop) => 'Чекайте на зупинці $stop';
+String _ukDueIn(String when) => 'Прибуде: $when';
+String _ukOffAt(String stop) => 'Виходьте на зупинці $stop';
+String _ukOffSoon(String stop) => 'Готуйтеся виходити на зупинці $stop';
+String _ukToGo(String distance) => 'Ще $distance';
+String _ukMetres(int m) => '$m м';
+String _ukKm(double km) => '${km.toStringAsFixed(1).replaceAll('.', ',')} км';
 
 /// Set from `main` before anything is drawn, and again from the picker.
 Lang lang = Lang.uk;

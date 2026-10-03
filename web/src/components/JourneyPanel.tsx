@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../lib/api";
 import { clock, mins } from "../lib/eta";
+import { followable } from "../lib/follow";
 import { t } from "../lib/i18n";
 import { saved } from "../lib/places";
 import {
@@ -65,6 +66,7 @@ export function JourneyPanel({
   places,
   onPlaces,
   onShow,
+  onFollow,
   folded,
   onFold,
 }: {
@@ -83,6 +85,7 @@ export function JourneyPanel({
   onPlaces: (next: Place[]) => void;
   /** The option picked to be drawn on the map, or null once none is */
   onShow: (j: Journey | null) => void;
+  onFollow: (j: Journey) => void;
   /** Folded down to a strip, the map and the option on it in view */
   folded: boolean;
   onFold: (folded: boolean) => void;
@@ -298,6 +301,7 @@ export function JourneyPanel({
             journey={j}
             shown={j === shown}
             onShow={() => show(j)}
+            onFollow={() => onFollow(j)}
             prefer={prefer}
             place={place}
             catalog={catalog}
@@ -497,6 +501,7 @@ function Option({
   journey,
   shown,
   onShow,
+  onFollow,
   prefer,
   place,
   catalog,
@@ -508,6 +513,7 @@ function Option({
    *  its stops and lines are not yet links */
   shown: boolean;
   onShow: () => void;
+  onFollow: () => void;
   prefer: Prefer;
   place: (option: number) => number;
   catalog: Catalog;
@@ -586,6 +592,11 @@ function Option({
           </li>
         ))}
       </ol>
+      {shown && followable(journey) && (
+        <button onClick={onFollow} title={t.followHint} className="btn mt-2 w-full">
+          {t.follow}
+        </button>
+      )}
     </div>
   );
 }
