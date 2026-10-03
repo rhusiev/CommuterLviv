@@ -137,6 +137,10 @@ class Strings {
     required this.toGo,
     required this.passedStop,
     required this.offTheWay,
+    required this.followAway,
+    required this.followAwayHint,
+    required this.followChannel,
+    required this.alertChannel,
     required this.arrived,
     required this.metres,
     required this.km,
@@ -281,6 +285,14 @@ class Strings {
   final String Function(String distance) toGo;
   final String passedStop;
   final String offTheWay;
+
+  /// The switch that keeps a journey followed with the app off the screen
+  final String followAway;
+  final String followAwayHint;
+
+  /// Names of the notification channels, as the phone's settings list them
+  final String followChannel;
+  final String alertChannel;
   final String arrived;
   final String Function(int metres) metres;
   final String Function(double km) km;
@@ -420,6 +432,10 @@ const _en = Strings(
   toGo: _enToGo,
   passedStop: 'You have gone past the stop to get off at',
   offTheWay: 'You are off the planned way',
+  followAway: 'Follow with the app closed',
+  followAwayHint: 'Keeps following a journey with the screen off, with a notification saying the next step. Where you are stays on this phone.',
+  followChannel: 'Journey being followed',
+  alertChannel: 'When to get off',
   arrived: 'You have arrived',
   metres: _enMetres,
   km: _enKm,
@@ -592,6 +608,10 @@ const _uk = Strings(
   toGo: _ukToGo,
   passedStop: 'Ви проїхали зупинку, на якій треба було вийти',
   offTheWay: 'Ви зійшли з запланованого шляху',
+  followAway: 'Супровід із закритим застосунком',
+  followAwayHint: 'Супроводжує поїздку з вимкненим екраном і показує наступний крок у сповіщенні. Де ви є, лишається на цьому телефоні.',
+  followChannel: 'Поїздка, яку супроводжують',
+  alertChannel: 'Коли виходити',
   arrived: 'Ви на місці',
   metres: _ukMetres,
   km: _ukKm,

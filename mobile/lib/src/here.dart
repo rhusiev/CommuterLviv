@@ -5,6 +5,10 @@
 /// rather than `geolocator`, which would pull Play services and bar F-Droid.
 /// Both answer the same two channels; elsewhere the channel is missing, which
 /// reads as a refusal.
+///
+/// Fixes stop when the app leaves the screen, unless [away] asked for them to
+/// go on: then Android runs a foreground service with a notification, and iOS
+/// keeps its updates with the location indicator up.
 library;
 
 import 'dart:async';
@@ -68,16 +72,32 @@ class Here extends ChangeNotifier {
       },
     );
 
-    bool granted;
-    try {
-      granted = await _channel.invokeMethod<bool>('start') ?? false;
-    } on PlatformException {
-      granted = false;
-    } on MissingPluginException {
-      granted = false;
-    }
-    if (!granted) return _deny();
+    if (!await _call('start')) return _deny();
     return null;
+  }
+
+  /// Whether fixes go on with the app off the screen. [channel] and [alerts]
+  /// name the notification channels where the phone lists them. False when
+  /// that is refused, or the platform has no way to.
+  Future<bool> away(
+    bool on, {
+    required String channel,
+    required String alerts,
+  }) => _call('away', {'on': on, 'channel': channel, 'alerts': alerts});
+
+  /// Says [title] and [text] on the notification [away] keeps up, and with
+  /// [alert] makes the phone sound for it.
+  Future<bool> notice(String title, String text, {bool alert = false}) =>
+      _call('notice', {'title': title, 'text': text, 'alert': alert});
+
+  Future<bool> _call(String method, [Map<String, Object>? args]) async {
+    try {
+      return await _channel.invokeMethod<bool>(method, args) ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
   }
 
   void _arrived(dynamic event) {

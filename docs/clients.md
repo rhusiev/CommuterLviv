@@ -60,8 +60,17 @@ the server holds a vehicle still until a fix shows it moving (`_moving` in
 beside you on the leg's route, and is looked for again after `LOST_FIXES` (5)
 fixes without it. That also covers its id coming back on another vehicle: the
 server frees the id of a vehicle quiet for 300 s (`GAP_RESET`) and hands freed
-ids out again oldest first. It follows only while the app is open, because
-neither client asks for location in the background.
+ids out again oldest first.
+
+By default it follows only while the app is on screen. The app has a setting,
+off until turned on, to go on with the screen off: on Android a foreground
+service keeps the location updates running behind an ongoing notification that
+repeats the card, on iOS the location updates run in the background, and both
+sound an alert once when it is time to get off, when the stop is passed and on
+arrival. Neither asks for background location: the updates were started while
+the app was open, which the while-in-use grant covers. A browser cannot locate
+with the page hidden, so the web card offers only to keep the screen on
+(the Screen Wake Lock API) for as long as the journey is followed.
 
 One palette, two clients. `web/src/app.css` declares five colours, two radii and
 one shadow in a Tailwind `@theme` block, and `mobile/lib/src/theme.dart` repeats

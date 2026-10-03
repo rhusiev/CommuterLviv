@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { canKeepAwake, heldAwake, holdAwake, useAwake } from "../lib/awake";
 import { countdown } from "../lib/eta";
 import type { Progress } from "../lib/follow";
 import { t } from "../lib/i18n";
@@ -24,6 +26,8 @@ export function FollowCard({
   onEnd: () => void;
 }) {
   const done = progress !== null && progress !== "denied" && progress.stage.kind === "arrived";
+  const [awake, setAwake] = useState(heldAwake);
+  useAwake(awake && !done);
   return (
     <div className="panel pointer-events-auto flex items-start gap-2 p-3">
       <div className="min-w-0 flex-1 text-sm">
@@ -35,6 +39,19 @@ export function FollowCard({
           <Step catalog={catalog} journey={journey} live={live} progress={progress} />
         )}
       </div>
+      {canKeepAwake() && !done && (
+        <button
+          onClick={() => {
+            holdAwake(!awake);
+            setAwake(!awake);
+          }}
+          aria-pressed={awake}
+          title={t.keepAwakeHint}
+          className={awake ? "btn" : "btn-quiet"}
+        >
+          {t.keepAwake}
+        </button>
+      )}
       <button onClick={onEnd} className={done ? "btn" : "btn-quiet"}>
         {done ? t.ok : t.endFollow}
       </button>

@@ -201,11 +201,13 @@ class _LayersSheetState extends State<LayersSheet> {
 /// Everything that belongs to the account rather than to the map, in the order
 /// it is reached for: what was kept, then how the app is set up, then the way
 /// out, set apart below a rule so it is never the tap next to anything else.
-class AccountSheet extends StatelessWidget {
+class AccountSheet extends StatefulWidget {
   const AccountSheet({
     super.key,
     required this.server,
     required this.speed,
+    required this.followAway,
+    required this.onFollowAway,
     required this.onSaved,
     required this.onLanguage,
     required this.onSpeed,
@@ -217,11 +219,20 @@ class AccountSheet extends StatelessWidget {
 
   /// The usual walking speed, km/h.
   final double speed;
+  final bool followAway;
+  final ValueChanged<bool> onFollowAway;
   final VoidCallback onSaved;
   final VoidCallback onLanguage;
   final VoidCallback onSpeed;
   final VoidCallback onServer;
   final VoidCallback onOut;
+
+  @override
+  State<AccountSheet> createState() => _AccountSheetState();
+}
+
+class _AccountSheetState extends State<AccountSheet> {
+  late bool _followAway = widget.followAway;
 
   @override
   Widget build(BuildContext context) {
@@ -233,31 +244,41 @@ class AccountSheet extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.bookmark_outline),
             title: Text(txt.saved),
-            onTap: onSaved,
+            onTap: widget.onSaved,
           ),
           ListTile(
             leading: const Icon(Icons.translate),
             title: Text(txt.language),
             trailing: Text(lang == Lang.uk ? 'Українська' : 'English'),
-            onTap: onLanguage,
+            onTap: widget.onLanguage,
           ),
           ListTile(
             leading: const Icon(Icons.directions_walk),
             title: Text(txt.walkSpeed),
-            trailing: Text(txt.kmh(speed)),
-            onTap: onSpeed,
+            trailing: Text(txt.kmh(widget.speed)),
+            onTap: widget.onSpeed,
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.notifications_outlined),
+            title: Text(txt.followAway),
+            subtitle: Text(txt.followAwayHint),
+            value: _followAway,
+            onChanged: (on) {
+              setState(() => _followAway = on);
+              widget.onFollowAway(on);
+            },
           ),
           ListTile(
             leading: const Icon(Icons.dns_outlined),
             title: Text(txt.server),
-            subtitle: Text(server),
-            onTap: onServer,
+            subtitle: Text(widget.server),
+            onTap: widget.onServer,
           ),
           const Divider(height: 1),
           ListTile(
             leading: Icon(Icons.logout, color: colours.error),
             title: Text(txt.signOut, style: TextStyle(color: colours.error)),
-            onTap: onOut,
+            onTap: widget.onOut,
           ),
         ],
       ),

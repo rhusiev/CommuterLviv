@@ -364,7 +364,9 @@ The locate button is a hand-written platform channel, not a package. The obvious
 package, `geolocator`, pulls `com.google.android.gms:play-services-location`,
 and F-Droid does not take builds with a proprietary SDK in them; so each
 platform has its own half, answering the same two channels -
-`nl.r1a.commuterlviv/here` for `start` and `stop`,
+`nl.r1a.commuterlviv/here` for `start` and `stop`, `away` (`{on, channel,
+alerts}`, the two notification channel names) and `notice` (`{title, text,
+alert}`),
 `nl.r1a.commuterlviv/here/fixes` for a `{lat, lon, accuracy, t}` map per fix,
 `t` being when the phone took it, in ms since the epoch - so
 that `here.dart` has one code path.
@@ -376,11 +378,21 @@ known fix, so the fixes do not arrive in the order they were taken; the journey
 follower goes by `t` and drops any fix no newer than the last. `ios/Runner/Here.swift` is the iOS half,
 over `CoreLocation`, which is part of the system; `AppDelegate.swift` owns it
 and hands it the app's trips in and out of the background. Both stop the
-updates while the app is off screen: no fix is taken while the map is not on
-it.
+updates while the app is off screen - no fix is taken while the map is not on
+it - unless a journey is followed with "Follow with the app closed" turned on.
+Then `away` keeps them running: on Android `FollowService.kt` is a foreground
+service of type `location` behind an ongoing notification, which `notice`
+rewrites and which sounds on the alerts channel when `alert` is set; on iOS
+`allowsBackgroundLocationUpdates` is set and `notice` posts a local
+notification only when `alert` is set, since iOS has no ongoing one.
 
 `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION` are declared, and asked for
 on the first press of the button, or of Follow on a journey - never at launch.
+`FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_LOCATION` are declared for the
+service, and `POST_NOTIFICATIONS` is asked for on Android 13 and up only when
+following away is turned on. `ACCESS_BACKGROUND_LOCATION` is not needed and not
+declared: a foreground service started while the app is open runs on the
+while-in-use grant.
 The fix stays on the phone: `lib/src/here.dart` holds it, the layer draws it,
 the journey follower reads it, and nothing sends it to the service, which has
 no use for it.

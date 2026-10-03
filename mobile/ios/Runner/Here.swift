@@ -1,5 +1,6 @@
 import CoreLocation
 import Flutter
+import UserNotifications
 
 /// Where the phone is, over CoreLocation - the other half of
 /// `android/app/src/main/kotlin/nl/r1a/commuterlviv/MainActivity.kt`.
@@ -7,13 +8,18 @@ import Flutter
 /// The two channels and their shapes are the Android ones exactly, because
 /// `lib/src/here.dart` talks to both through one code path: `start` answers
 /// true once something is feeding fixes, and each fix is one
-/// `{lat, lon, accuracy}` map. Nothing is asked of the system until `start`,
-/// and the updates stop when the app leaves the screen.
+/// `{lat, lon, accuracy, t}` map. Nothing is asked of the system until `start`,
+/// and the updates stop when the app leaves the screen - unless `away` asked
+/// for them to go on while a journey is followed. iOS then keeps them with its
+/// location indicator up, and `notice` sounds a local notification for the
+/// moments worth taking the phone out for. There is no notification kept up
+/// as on Android: the indicator stands for it.
 ///
 /// CoreLocation is part of iOS, so nothing here costs the build its place in
 /// F-Droid the way `geolocator` would.
 private let channelName = "nl.r1a.commuterlviv/here"
 private let fixesName = "nl.r1a.commuterlviv/here/fixes"
+private let alertId = "nl.r1a.commuterlviv.alert"
 
 final class Here: NSObject, CLLocationManagerDelegate, FlutterStreamHandler {
   private let locations = CLLocationManager()
@@ -23,6 +29,9 @@ final class Here: NSObject, CLLocationManagerDelegate, FlutterStreamHandler {
   private var asking: FlutterResult?
 
   private var listening = false
+
+  /// Following a journey with the app off the screen was asked for
+  private var away = false
 
   init(messenger: FlutterBinaryMessenger) {
     super.init()
@@ -40,6 +49,16 @@ final class Here: NSObject, CLLocationManagerDelegate, FlutterStreamHandler {
         case "stop":
           self.unlisten()
           result(nil)
+        case "away":
+          let args = call.arguments as? [String: Any]
+          self.goAway(args?["on"] as? Bool ?? false)
+          result(true)
+        case "notice":
+          let args = call.arguments as? [String: Any]
+          if self.away, args?["alert"] as? Bool ?? false {
+            self.alert(args?["title"] as? String ?? "", args?["text"] as? String ?? "")
+          }
+          result(self.away)
         default: result(FlutterMethodNotImplemented)
         }
       }
@@ -61,6 +80,31 @@ final class Here: NSObject, CLLocationManagerDelegate, FlutterStreamHandler {
     default:
       result(false)
     }
+  }
+
+  /// The while-in-use grant covers updates kept on from the screen, so no
+  /// "always" grant is asked for. Needs `location` in `UIBackgroundModes`.
+  private func goAway(_ on: Bool) {
+    away = on
+    locations.allowsBackgroundLocationUpdates = on
+    locations.showsBackgroundLocationIndicator = on
+    locations.pausesLocationUpdatesAutomatically = !on
+    let notices = UNUserNotificationCenter.current()
+    if on {
+      notices.requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    } else {
+      notices.removeDeliveredNotifications(withIdentifiers: [alertId])
+    }
+  }
+
+  private func alert(_ title: String, _ text: String) {
+    let content = UNMutableNotificationContent()
+    content.title = title
+    content.body = text
+    content.sound = .default
+    // One identifier, so each alert replaces the one before
+    UNUserNotificationCenter.current().add(
+      UNNotificationRequest(identifier: alertId, content: content, trigger: nil))
   }
 
   /// True if anything is now feeding the stream
@@ -121,9 +165,10 @@ final class Here: NSObject, CLLocationManagerDelegate, FlutterStreamHandler {
     return nil
   }
 
-  /// Nothing on this map is worth a fix taken while it is not on screen
+  /// Nothing on this map is worth a fix taken while it is not on screen,
+  /// unless a journey is followed with it off
   func background() {
-    unlisten()
+    if !away { unlisten() }
   }
 
   func foreground() {

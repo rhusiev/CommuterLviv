@@ -35,7 +35,10 @@ vector tiles. No key, no account, no map vendor.
 
 Permissions: internet, and location. Nothing is asked of the system until you
 press the button that centres the map on you, or Follow on a journey, so the
-app can be installed and used by somebody who never grants location at all. The fix is kept on the phone
+app can be installed and used by somebody who never grants location at all.
+Following a journey with the app closed is off until you turn it on; then it
+runs as a foreground service with a notification, which is what the
+foreground service and notification permissions are for. The fix is kept on the phone
 and is never reported to the server as your position. The two things that do
 leave are the ones you ask for: a journey planned from where you are sends that
 one point so the server can plan it, and a place you save is saved on the server

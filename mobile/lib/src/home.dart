@@ -71,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Only while it is on does anything ask the server how the streets run.
   late bool _traffic = widget.api.showTraffic;
+  late bool _followAway = widget.api.followAway;
 
   bool _planning = false;
 
@@ -614,6 +615,11 @@ class _HomeScreenState extends State<HomeScreen> {
     (sheet) => AccountSheet(
       server: widget.api.base,
       speed: widget.api.walkSpeed,
+      followAway: _followAway,
+      onFollowAway: (on) {
+        setState(() => _followAway = on);
+        unawaited(widget.api.setFollowAway(on));
+      },
       onSaved: () {
         Navigator.pop(sheet);
         _openSaved();
@@ -785,6 +791,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   journey: _following!,
                   live: live,
                   here: _here,
+                  away: _followAway,
                   onEnd: _endFollow,
                 ),
               ),

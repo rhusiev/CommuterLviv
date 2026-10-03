@@ -355,6 +355,11 @@ class Api {
 
   Future<void> setShowLines(bool on) => _keep('lines', on);
 
+  /// Off unless asked for: it keeps location on with the app off the screen
+  bool get followAway => _setting('followAway', false);
+
+  Future<void> setFollowAway(bool on) => _keep('followAway', on);
+
   /// Null means the phone's own, which is what `main` falls back to.
   String? get language => _setting<String?>('lang', null);
 
