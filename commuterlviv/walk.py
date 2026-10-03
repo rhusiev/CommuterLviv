@@ -334,7 +334,9 @@ class Walk:
             head[node] = min(spent, head.get(node, math.inf))
         n = len(self.lat)
         # one extra node with an edge to each source, as long as the walk
-        # already spent getting there, starts them all in one search
+        # already spent getting there, starts them all in one search. A 0 s
+        # edge is kept: sparse input takes stored entries as edges, whatever
+        # their value
         graph = csr_matrix(
             (np.append(self.secs, list(head.values())),
              np.append(self.to, list(head)),

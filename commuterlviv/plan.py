@@ -513,6 +513,8 @@ def _walk_through(walk, origin, dest, ceiling=LONGEST_WALK):
     limit = max(walk.flat(footpaths.metres(*origin, *dest)) * 1.3, 300.0)
     while True:
         seen = _reach(walk, start, limit)
+        # a plain float: as an np.float64 this cap makes the profile scan
+        # half again slower
         walked = min([direct, *(float(seen[i]) + t for i, t in ends)])
         if walked <= limit:
             return walked, seen

@@ -129,7 +129,6 @@ a scored prediction.
 | [the collector](docs/collector.md) | the recording: failure handling, disk, merging and copying |
 | [the clients](docs/clients.md) | the web app and the phone app |
 | [development](docs/development.md) | branches, checks, versions and releases |
-| [findings](docs/findings.md) | how the city's feeds and the tools around them actually behave |
 | [mobile/README.md](mobile/README.md) | building the phone app |
 
 ## License

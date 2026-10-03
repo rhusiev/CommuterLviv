@@ -52,8 +52,10 @@ the route's that kept pace with you - seen beside you for half the fixes and
 moving at least half as far - and the planned one wins whenever it did. A tram standing at the stop as you ride away is passed over, and so is a
 vehicle on another route. A ride whose vehicle is not found yet still counts as
 a ride, and the vehicle is looked for again: the map draws the one you boarded
-standing for some 10-20 s after it leaves - see
-[findings](findings.md#the-feed-reports-a-vehicle-10-s-late-at-median). It
+standing for some 10-20 s after it leaves, because a fix reaches the server
+about 10 s after the vehicle took it at the median and 19 s at the 90th
+percentile, and the server holds a vehicle still until a fix shows it moving
+(`_moving` in `commuterlviv/live/state.py`). It
 follows only while the app is open, because neither client asks for location
 in the background.
 
