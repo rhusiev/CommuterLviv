@@ -78,8 +78,7 @@ class MainActivity : FlutterActivity(), LocationListener {
                         )
                         askToNotify()
                     } else {
-                        stopService(Intent(this, FollowService::class.java))
-                        Notices.clear(this)
+                        stopFollowing()
                     }
                     result.success(!away || follow())
                 }
@@ -129,6 +128,12 @@ class MainActivity : FlutterActivity(), LocationListener {
             // Android 12 refuses a start from the background
             false
         }
+    }
+
+    /** The service and its notification go, and so does an alert left in the shade */
+    private fun stopFollowing() {
+        stopService(Intent(this, FollowService::class.java))
+        Notices.clear(this)
     }
 
     /** Without the grant the service still runs; only its notification is hidden */
@@ -197,7 +202,7 @@ class MainActivity : FlutterActivity(), LocationListener {
 
     override fun onDestroy() {
         unlisten()
-        stopService(Intent(this, FollowService::class.java))
+        stopFollowing()
         super.onDestroy()
     }
 
