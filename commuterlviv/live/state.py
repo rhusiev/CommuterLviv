@@ -8,6 +8,7 @@ the tracks with no model consulted, and arrivals every epoch, which is when the
 model updates. Both are frozen and replaced wholesale, so readers never see
 half-updated state and need no lock.
 """
+import collections
 import datetime
 import functools
 import hashlib
@@ -141,7 +142,7 @@ class Live:
         self.epoch_s = epoch
         self.tracks, self.runs, self.closed = {}, {}, []
         self.offset = {} if cfg.vehicle_offset != "off" else None
-        self.wire, self.free, self.next_wire = {}, [], 0
+        self.wire, self.free, self.next_wire = {}, collections.deque(), 0
         self.next_epoch = None
         self.epochs = 0
         self.positions = Positions(0.0)
@@ -268,9 +269,11 @@ class Live:
         w = self.wire.get(veh)
         if w is None:
             # ids are reused once a vehicle is pruned, so the counter stays
-            # inside the 16-bit wire field over a long run
+            # inside the 16-bit wire field over a long run. Oldest first: a
+            # client still holding a pruned vehicle's id - a planned or a
+            # followed ride - is then least likely to find another under it
             if self.free:
-                w = self.free.pop()
+                w = self.free.popleft()
             else:
                 w, self.next_wire = self.next_wire, self.next_wire + 1
                 if w > MAX_WIRE:

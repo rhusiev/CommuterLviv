@@ -267,7 +267,9 @@ export class Follower {
     const leg = this.legs[i]!;
     const here = line.project(this.now.at).s;
     const v = veh === null ? undefined : this.now.seen.find((x) => x.id === veh);
-    const inStep = v !== undefined && Math.abs(line.project(v.at).s - here) <= MATCH_M;
+    // The route too: a pruned vehicle's id can come back on another one
+    const inStep =
+      v !== undefined && v.route === leg.route && Math.abs(line.project(v.at).s - here) <= MATCH_M;
     this.misses = inStep ? 0 : this.misses + 1;
     if (this.misses >= LOST_FIXES) {
       const found = this.pace(line, leg, this.history);

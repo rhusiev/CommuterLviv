@@ -224,6 +224,42 @@ void main() {
     expect(p.stage.veh, 12);
   });
 
+  test('a ridden vehicle whose id comes back on another route is let go', () {
+    // A second ride on route 99, so the follower watches that route too
+    final j = journey();
+    final transfer = Journey(
+      dep: 0,
+      arr: 0,
+      rides: 2,
+      live: true,
+      confidence: Confidence.live,
+      legs: [
+        ...j.legs.take(2),
+        Leg(kind: 'walk', dep: 0, arr: 0, a: 2, b: 3, pts: [at(2000, 200)]),
+        Leg(
+          kind: 'ride',
+          dep: 0,
+          arr: 0,
+          a: 3,
+          b: 4,
+          route: 99,
+          pts: [at(2000, 200), at(2000, 2000)],
+        ),
+        Leg(kind: 'walk', dep: 0, arr: 0, a: 4, b: -1, pts: [at(2000, 2000)]),
+      ],
+    );
+    final trip = atStop(transfer);
+    trip.east(0, 8, 10, seen: (x) => [vehicle(planned, x)]);
+    final p = trip.east(
+      160,
+      8,
+      6,
+      seen: (x) => [vehicle(planned, x, onRoute: 99)],
+    );
+    expect(p.stage.kind, StageKind.ride);
+    expect(p.stage.veh, isNull);
+  });
+
   test('getting off at the stop walks the rest, then arrives', () {
     final trip = atStop(journey());
     trip.east(0, 8, 250, seen: (x) => [vehicle(planned, math.min(x, 2000))]);

@@ -49,15 +49,19 @@ coming near. You must have gone `BOARD_M` (100 m) along the ride's line, away
 from the stop, faster than `WALK_MAX_MPS` (2.5 m/s), over at least
 `BOARD_FIXES` (3) fixes. Only then is the vehicle you are on picked, as one of
 the route's that kept pace with you - seen beside you for half the fixes and
-moving at least half as far - and the planned one wins whenever it did. A tram standing at the stop as you ride away is passed over, and so is a
-vehicle on another route. A ride whose vehicle is not found yet still counts as
-a ride, and the vehicle is looked for again: the map draws the one you boarded
-standing for some 10-20 s after it leaves, because a fix reaches the server
-about 10 s after the vehicle took it at the median and 19 s at the 90th
-percentile, and the server holds a vehicle still until a fix shows it moving
-(`_moving` in `commuterlviv/live/state.py`). It
-follows only while the app is open, because neither client asks for location
-in the background.
+moving at least half as far - and the planned one wins whenever it did. A tram
+standing at the stop as you ride away is passed over, and so is a vehicle on
+another route. A ride whose vehicle is not found yet still counts as a ride,
+and the vehicle is looked for again: the map draws the one you boarded standing
+for some 10-20 s after it leaves, because a fix reaches the server about 10 s
+after the vehicle took it at the median and 19 s at the 90th percentile, and
+the server holds a vehicle still until a fix shows it moving (`_moving` in
+`commuterlviv/live/state.py`). The vehicle found is kept only while it stays
+beside you on the leg's route, and is looked for again after `LOST_FIXES` (5)
+fixes without it. That also covers its id coming back on another vehicle: the
+server frees the id of a vehicle quiet for 300 s (`GAP_RESET`) and hands freed
+ids out again oldest first. It follows only while the app is open, because
+neither client asks for location in the background.
 
 One palette, two clients. `web/src/app.css` declares five colours, two radii and
 one shadow in a Tailwind `@theme` block, and `mobile/lib/src/theme.dart` repeats

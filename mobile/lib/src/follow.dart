@@ -372,7 +372,11 @@ class Follower {
     final v = veh == null
         ? null
         : _now.seen.where((x) => x.id == veh).firstOrNull;
-    final inStep = v != null && (line.project(v.at).s - here).abs() <= _matchM;
+    // The route too: a pruned vehicle's id can come back on another one
+    final inStep =
+        v != null &&
+        v.route == _legs[i].route &&
+        (line.project(v.at).s - here).abs() <= _matchM;
     _misses = inStep ? 0 : _misses + 1;
     if (_misses >= _lostFixes) {
       _stage = Stage(StageKind.ride, i, _pace(line, _legs[i], _history));
