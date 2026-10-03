@@ -7,10 +7,9 @@ is written out by hand here.
 
 ## Running it
 
-The toolchain lives under XDG paths; `/tmp/flutterenv.sh` exports the lot.
+These need the Flutter SDK's `bin` on `PATH`, and the Android SDK for a build.
 
 ```sh
-source /tmp/flutterenv.sh
 cd mobile
 flutter pub get
 flutter test                       # the wire decoder against bytes Python made
@@ -138,10 +137,10 @@ not undoing:
 * `subdir: mobile` is the Flutter project, not the Gradle module inside it: it is where the `build:` commands run and what `output:` is relative to, and `flutter build` has to run from the Flutter project.
 * The recipe has three `Builds:` blocks, not one, and `--split-per-abi` builds each: arm, arm64 and x86_64 on their own, so a phone downloads roughly a third. Flutter's Gradle plugin codes an APK as `<abi> * 1000 + <pubspec code>` (`ABI_VERSION` in `FlutterPluginConstants.kt`), so the three blocks carry 1023, 2023 and 4023 for build 23; F-Droid rejects any APK whose code differs from the block it sits in, and `VercodeOperation` rewrites them from the single code `UpdateCheckData` finds in `pubspec.yaml`. arm64 must outrank arm because a 64-bit phone can run both and gets the higher one.
 * No dependency pulls Play services (see "Where the phone is" below).
-* The listing - text, screenshots, changelogs - lives in `fastlane/metadata/android/en-US/` at the root of the repository, not here beside the app, because F-Droid looks for it only at the root of the checkout. `Summary` and `Description` in the recipe repeat the text because fdroiddata requires both fields; they are kept in step by hand.
+* The listing - text, screenshots, changelogs - lives in `fastlane/metadata/android/en-US/` at the root of the repository, not here beside the app, because F-Droid looks for it only at the root of the checkout. `Summary` and `Description` in the recipe repeat the text and are kept in step by hand. The copy in fdroiddata carries no `Summary:`: fdroiddata keeps it in `metadata/nl.r1a.commuterlviv/en-US/summary.txt`, and its `tools check scripts` job fails a recipe that still has one.
 * A screenshot is read from the commit the build names, so it has to be in the tree the release tag points at, not merely on the branch.
 * `prebuild:` and `build:` move the checkout to `/tmp/build/nl.r1a.commuterlviv` and back again, and `.github/workflows/release.yml` moves its own there too, so Flutter's Gradle plugin bakes the same absolute path into `libapp.so` on both sides. A symlink is not enough - the plugin resolves it - and `/tmp` is the one place both an F-Droid build (which drops sudo) and a GitHub runner can write. `PUB_CACHE=/tmp/pubcache` is pinned for the same reason: the pub cache path reaches the pre-strip debug info of `libdartjni.so`. Without all of it the two builds share a lockfile, a toolchain and a signing key and still disagree on the `dart_plugin_registrant.dart` path baked into the .so, and F-Droid's `diff -r` fails on it.
-* Each block builds its one ABI with `--target-platform`, and the release workflow runs `flutter build` once per ABI for the same reason. AGP packages the merged manifest of a build's *first* split verbatim and re-serialises it for the rest, which inserts a blank line before a comment and shifts every line number in the packaged `AndroidManifest.xml`. One run emitting all three splits therefore produces one manifest F-Droid can reproduce and two it cannot. See [`../FINDINGS.md`](../FINDINGS.md).
+* Each block builds its one ABI with `--target-platform`, and the release workflow runs `flutter build` once per ABI for the same reason. AGP packages the merged manifest of a build's *first* split verbatim and re-serialises it for the rest, which inserts a blank line before a comment and shifts every line number in the packaged `AndroidManifest.xml`. One run emitting all three splits therefore produces one manifest F-Droid can reproduce and two it cannot.
 
 ## Cutting a release
 

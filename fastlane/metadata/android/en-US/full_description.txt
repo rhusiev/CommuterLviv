@@ -28,7 +28,7 @@ What it shows:
   road
 * Nothing coloured where too few have passed to say, or at the ends of a line,
   where standing at a terminus is not traffic
-* Five map styles, dark and light
+* Eight map styles, dark and light
 
 The map is OpenStreetMap data rendered on the device from VersaTiles' free
 vector tiles. No key, no account, no map vendor.

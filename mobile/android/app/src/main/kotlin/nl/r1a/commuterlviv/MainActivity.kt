@@ -19,9 +19,8 @@ import io.flutter.plugin.common.MethodChannel
  * with a proprietary SDK in it. LocationManager is AOSP, and all this needs of
  * it is a fix every couple of seconds.
  *
- * The permission is asked for on the first `start`, never at launch. There is
- * no iOS half yet: the Dart side treats a missing channel as a refusal, so an
- * iPhone gets a dead button rather than a crash.
+ * The permission is asked for on the first `start`, never at launch. The iOS
+ * half is `ios/Runner/Here.swift`, on the same channels.
  */
 private const val CHANNEL = "nl.r1a.commuterlviv/here"
 private const val FIXES = "nl.r1a.commuterlviv/here/fixes"
