@@ -66,7 +66,8 @@ origins in `COMMUTERLVIV_ORIGINS`. Everything it downloads or learns lives in
   wrong can be reported, and is kept with the live data it ran on. Follow an
   option and it tells you what to do next as you go - which stop to walk to,
   when the vehicle is due, where to get off - from where you are, which stays
-  on the device.
+  on the device. The app can go on with the screen off, on a notification that
+  sounds when to get off.
 - **Layers.** The whole network, traffic per street, and eight map styles -
   colorful, natural, muted and gray, each light and dark.
 
