@@ -259,6 +259,16 @@ class Api {
   Future<void> reportPlan(String id, String note) =>
       _call('POST', '/api/report', body: {'id': id, 'note': note});
 
+  /// The search [id] names with its option [option] taking the [n]-th backup
+  /// of its [leg]-th leg, drawn as an option is.
+  Future<Journey> backup(String id, int option, int leg, int n) async =>
+      Journey.fromJson(
+        await _call(
+          'GET',
+          '/api/backup?report=$id&option=$option&leg=$leg&backup=$n',
+        ) as Map<String, dynamic>,
+      );
+
   /// The ETag of the catalog held, which names the city it describes.
   String? get catalogTag => _prefs.getString('$_catalogKey.tag');
 

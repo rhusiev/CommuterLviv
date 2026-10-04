@@ -422,8 +422,8 @@ async def journey(request, session):
     arrivals, asked = live.arrivals, time.time()
     try:
         async with app.planning:
-            found = await asyncio.to_thread(planner.search, origin, dest,
-                                            arrivals, at, speed)
+            found, ways = await asyncio.to_thread(planner.search, origin, dest,
+                                                  arrivals, at, speed)
     except Exception as exc:
         # answered as JSON on purpose: an unhandled exception leaves Starlette
         # with a plain-text 500, which every client reads as a JSON.parse
@@ -432,8 +432,43 @@ async def journey(request, session):
         return error("Could not plan that journey", 500)
     rid = app.recent.hold(session["user_id"], {
         "from": origin, "to": dest, "t": found["t"], "asked": asked,
-        "speed": speed, "arrivals": arrivals, "cat": live.cat, "answer": found})
+        "speed": speed, "arrivals": arrivals, "cat": live.cat, "answer": found,
+        "journeys": ways})
     return JSONResponse({**found, "report": rid})
+
+
+async def backup(request, session):
+    """One backup of a search still held, as a journey of its own with its
+    walks and rides drawn: `report` names the search, `option` the journey in
+    its answer, `leg` the ride and `backup` the way in that ride's list."""
+    app = request.app.state
+    q = request.query_params
+    held = app.recent.get(session["user_id"], q.get("report"))
+    if held is None:
+        return error("That search is no longer held; search again", 404)
+    try:
+        option, leg, n = (int(q.get(k, "")) for k in ("option", "leg", "backup"))
+    except ValueError:
+        return error("Option, leg and backup must each be a whole number")
+    planner = app.planner
+    if planner is None or planner.cat is not held["cat"]:
+        return error("The city has been renewed since; search again", 409)
+    if not 0 <= option < len(held["journeys"]):
+        return error("That search has no such backup", 404)
+    if app.planning.locked():
+        return error("The planner is busy; try that again", 503)
+    try:
+        async with app.planning:
+            found = await asyncio.to_thread(
+                planner.backup, held["from"], held["to"], held["arrivals"],
+                held["speed"], held["journeys"][option], leg, n)
+    except Exception as exc:
+        # as JSON for the same reason as a failed search's
+        log("backup failed:", repr(exc)[:200])
+        return error("Could not draw that way", 500)
+    if found is None:
+        return error("That search has no such backup", 404)
+    return JSONResponse(found)
 
 
 async def report(request, session):
@@ -638,6 +673,7 @@ def routes():
         Route("/api/vehicle", protected(vehicle), methods=["GET"]),
         Route("/api/plan", protected(journey), methods=["GET"]),
         Route("/api/report", protected(report), methods=["POST"]),
+        Route("/api/backup", protected(backup), methods=["GET"]),
         Route("/api/pins", protected(pins), methods=["GET", "POST"]),
         Route("/api/places", protected(places), methods=["GET", "POST"]),
         Route("/api/search", protected(places_near, unsafe=False)),

@@ -158,6 +158,19 @@ preset, so a way is there should the thing the preset favours be what fails,
 then the next best by the preset. They are listed in the order they leave,
 which is the order they are needed at the stop; the rest are a tap away.
 
+A tap on a way draws it. The planned way is the option itself, and a backup
+that is also an option is that option. Any other backup is asked for with
+`GET /api/backup?report=ID&option=I&leg=L&backup=N`: the search the `report`
+id holds, its option `I` with backup `N` of its leg `L` taken in place of the
+rest of the journey (all counted from 0 as sent, walks among the legs), built as `/api/plan` builds an option, with
+the walks, shapes and `stops`, and its rides before that leg keeping their
+backups. The clients list it as an option of its own, after the others. It
+answers 404 when the search is no longer held or has no such backup, 400 for an
+index that is not a whole number, 409 when the city was renewed since the
+search, and 503 while the planner is busy. The rides a built option shares with
+the option it came from are the only ones with backups, so the clients ask for
+those under that option's index.
+
 Every leg also carries `pts`, `[[lat, lon], ...]`, which is where it goes on the
 map: a walk follows the footpath graph (`walk.path`), and a ride is its shape cut
 between the stop it is boarded at and the stop it is left at. Both are simplified
@@ -215,9 +228,9 @@ taps "Something looks wrong? Report it" under the options, which sends
 characters. That writes one compressed file to `data/reports/`: the request,
 those arrivals, the catalog's stop and route ids they are indexed by, the answer
 as sent, the version, the account's id and the note. An id is good for one
-report, and only the account that searched can use it; one that has expired is
-a 404. Past 200 files (`reports.FILES`) new reports are a 507 until some are
-read and deleted.
+report, and only the account that searched can use it, for the report and for
+`/api/backup`; one that has expired is a 404. Past 200 files (`reports.FILES`)
+new reports are a 507 until some are read and deleted.
 
 `python -m commuterlviv report FILE` prints the answer as it was sent and then
 the one the code and timetable at hand give for the same request and arrivals,

@@ -12,7 +12,7 @@ import {
   type Prefer,
 } from "../lib/prefer";
 import { heldSpeed } from "../lib/walking";
-import { Backups } from "./Backups";
+import { Backups, type WayPick } from "./Backups";
 import { Icon, type IconName } from "./Icon";
 import { RouteBadge } from "./RouteBadge";
 import { Speed } from "./Speed";
@@ -104,6 +104,14 @@ export function JourneyPanel({
   const [report, setReport] = useState<string | null>(null);
   /** How reporting it went */
   const [reportSaid, setReportSaid] = useState<string | null>(null);
+  /** The search's name for its backups, which reporting it leaves alone; the
+   *  backups fetched as options of their own, by the option, leg and backup
+   *  they came from; and the option of the search's each was built from */
+  const held = useRef<{
+    id: string | null;
+    built: Map<string, Journey>;
+    from: Map<Journey, number>;
+  }>({ id: null, built: new Map(), from: new Map() });
   /** Unix seconds, or null for now - which is what the service assumes */
   const [at, setAt] = useState<number | null>(null);
   const [prefer, setPrefer] = useState<Prefer>(heldPrefer);
@@ -128,6 +136,7 @@ export function JourneyPanel({
       );
       setOptions(got.options);
       setReport(got.report ?? null);
+      held.current = { id: got.report ?? null, built: new Map(), from: new Map() };
     } catch (err) {
       setFailed(
         err instanceof ApiError && err.preparing
@@ -153,6 +162,28 @@ export function JourneyPanel({
     } catch (err) {
       setReportSaid(err instanceof Error ? err.message : t.failed);
     }
+  };
+
+  /** Draws `pick` of option `j`: the journey itself, the option riding the
+   *  same, or else that way fetched and listed as an option of its own */
+  const takeWay = async (j: Journey, pick: WayPick) => {
+    if (pick === null) return show(j);
+    const same = options?.[j.legs[pick.leg]?.backups?.[pick.n]?.option ?? -1];
+    if (same) return show(same);
+    const search = held.current;
+    const from = search.from.get(j) ?? options?.indexOf(j) ?? -1;
+    const key = `${from} ${pick.leg} ${pick.n}`;
+    let got = search.built.get(key);
+    if (!got) {
+      if (!search.id) throw new Error(t.searchAgain);
+      got = await api.backup(search.id, from, pick.leg, pick.n);
+      // a search made meanwhile has options of its own
+      if (held.current !== search) return;
+      search.built.set(key, got);
+      search.from.set(got, from);
+      setOptions((o) => o && [...o, got!]);
+    }
+    show(got);
   };
 
   if (picking)
@@ -302,6 +333,7 @@ export function JourneyPanel({
             shown={j === shown}
             onShow={() => show(j)}
             onFollow={() => onFollow(j)}
+            onWay={(pick) => takeWay(j, pick)}
             prefer={prefer}
             place={place}
             catalog={catalog}
@@ -502,6 +534,7 @@ function Option({
   shown,
   onShow,
   onFollow,
+  onWay,
   prefer,
   place,
   catalog,
@@ -514,6 +547,7 @@ function Option({
   shown: boolean;
   onShow: () => void;
   onFollow: () => void;
+  onWay: (pick: WayPick) => Promise<void>;
   prefer: Prefer;
   place: (option: number) => number;
   catalog: Catalog;
@@ -563,7 +597,7 @@ function Option({
           prefer={prefer}
           place={place}
           catalog={catalog}
-          onLine={onLine}
+          onWay={onWay}
           onClose={() => setBackups(false)}
         />
       )}

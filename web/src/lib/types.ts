@@ -99,7 +99,8 @@ export type Journey = {
   legs: Leg[];
 };
 
-/** `report` names the search for `api.report`, for half an hour */
+/** `report` names the search for `api.report` and `api.backup`, for half an
+ * hour */
 export type Plan = { t: number; options: Journey[]; report?: string };
 
 /** `dir` is the feed's `direction_id`, kept only to tell the two apart */

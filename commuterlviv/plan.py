@@ -96,14 +96,34 @@ class Leg:
 class Backup:
     """Another way to the door from where a ride boards: the rides it takes,
     the first leaving from there, when it reaches the door and the seconds it
-    walks. `planned` is, per ride, the index of the journey's leg riding the
-    same vehicle, or -1. `option` is the place in the list of the journey
-    riding exactly these rides, or -1."""
+    walks after each ride. `planned` is, per ride, the index of the journey's
+    leg riding the same vehicle, or -1. `option` is the place in the list of
+    the journey riding exactly these rides, or -1."""
     rides: tuple[Leg, ...]
     arr: float
-    walk: float
+    walks: tuple[float, ...]
     planned: tuple[int, ...]
     option: int = -1
+
+    @property
+    def walk(self):
+        return sum(self.walks)
+
+    def legs(self):
+        """As a journey's legs, from the stop it leaves on."""
+        return _onward(self.rides, self.walks)
+
+
+def _onward(rides, walks):
+    """Legs riding `rides` in turn, each followed by a walk of the seconds in
+    `walks` to where the next boards, or to the door after the last."""
+    out = []
+    for k, (ride, walked) in enumerate(zip(rides, walks)):
+        out.append(ride)
+        to = rides[k + 1].a if k + 1 < len(rides) else -1
+        if to != ride.b:
+            out.append(Leg("walk", ride.arr, ride.arr + walked, ride.b, to))
+    return tuple(out)
 
 
 @dataclass(frozen=True, slots=True)
@@ -718,13 +738,9 @@ class _Profile:
 
     def _journey(self, u, t, now, way):
         """The walk from the origin to `u`, `t` seconds, then `way`."""
-        legs = [Leg("walk", now, now + t, -1, u)]
-        for k, (c, e, walked) in enumerate(way):
-            legs.append(ride := self.ride(c, e))
-            to = self.hops[0][way[k + 1][0]] if k + 1 < len(way) else -1
-            if to != ride.b:
-                legs.append(Leg("walk", ride.arr, ride.arr + walked, ride.b, to))
-        return Journey(tuple(legs))
+        rides = tuple(self.ride(c, e) for c, e, _ in way)
+        return Journey((Leg("walk", now, now + t, -1, u),
+                        *_onward(rides, tuple(w for *_, w in way))))
 
     def backed(self, found):
         """Each journey with, per leg, the other ways to the door from where the
@@ -819,7 +835,7 @@ class _Profile:
                     kept.append(s)
             out.append(tuple(
                 Backup(tuple(self.ride(c, e) for c, e, _ in back), score[1],
-                       score[3], planned)
+                       tuple(w for *_, w in back), planned)
                 for score, back, planned in sorted(kept)))
         return tuple(out)
 

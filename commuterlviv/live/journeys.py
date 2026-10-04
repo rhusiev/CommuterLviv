@@ -43,9 +43,10 @@ class Planner:
         return cls(tt, walk, transfers, cat)
 
     def search(self, origin, dest, arrivals, now=None, speed=None):
-        """Ranked journeys, on the wire. Call it from a worker thread: a
-        city-wide search is half a second of Python. `speed` is how fast the
-        traveller walks on the level, in km/h, `walk.SPEED` by default.
+        """Ranked journeys, on the wire, and as `plan` found them. Call it
+        from a worker thread: a city-wide search is half a second of Python.
+        `speed` is how fast the traveller walks on the level, in km/h,
+        `walk.SPEED` by default.
 
         A `now` in the future still gets the vehicles being tracked: the search
         keeps only their arrivals that lie ahead of it, so a trip starting in
@@ -56,6 +57,24 @@ class Planner:
         now = time.time() if now is None else now
         found = self.journeys(origin, dest, arrivals, now, speed,
                               now <= time.time() + replay.HORIZON)
+        path, between = self._drawing(origin, dest, arrivals, speed)
+        return {"t": now,
+                "options": [self.wire(j, path, between) for j in found]}, found
+
+    def backup(self, origin, dest, arrivals, speed, j, leg, n):
+        """Journey `j` taking the `n`-th backup of its `leg`-th leg as sent,
+        on the wire as an option is: its legs up to the stop that one boards,
+        then the backup's. None when `j` has no such backup."""
+        if not 0 <= leg < len(j.backups):
+            return None
+        backs = self._sent(j.backups[leg])
+        if not 0 <= n < len(backs):
+            return None
+        way = plan.Journey((*j.legs[:leg], *backs[n].legs()), j.backups[:leg])
+        return self.wire(way, *self._drawing(origin, dest, arrivals, speed))
+
+    def _drawing(self, origin, dest, arrivals, speed):
+        """What `wire` draws legs and lists the stops of rides with."""
         walk = self._paced(speed)[0]
         # options share their first and last walks, so each is drawn once
         paths = {}
@@ -69,8 +88,7 @@ class Planner:
         def between(leg):
             return self._between(leg, arrivals)
 
-        return {"t": now,
-                "options": [self.wire(j, path, between) for j in found]}
+        return path, between
 
     def journeys(self, origin, dest, arrivals, now, speed, assess):
         """`plan.journeys` for somebody walking at `speed`."""
@@ -110,9 +128,13 @@ class Planner:
                 {"rides": [self._ride(r, p >= 0)
                            for r, p in zip(b.rides, b.planned)],
                  "arr": int(b.arr), "walk": int(b.walk), "option": b.option}
-                for b in backups
-                if all(r.route in self.route_i for r in b.rides)]
+                for b in self._sent(backups)]
         return out
+
+    def _sent(self, backups):
+        """The backups the wire carries: those on routes the catalog has."""
+        return [b for b in backups
+                if all(r.route in self.route_i for r in b.rides)]
 
     def _ride(self, r, planned):
         return {"route": self.route_i[r.route], "dep": int(r.dep),
