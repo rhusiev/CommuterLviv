@@ -712,6 +712,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 theme: _theme,
                 here: _here,
                 onLocate: _following != null ? _tracking.start : null,
+                // Offstage rather than gone, so the follower keeps what it has
+                // seen
+                card: _following == null
+                    ? null
+                    : Offstage(
+                        offstage: _planning,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: floatingGap),
+                          child: FollowCard(
+                            catalog: catalog,
+                            journey: _following!,
+                            live: live,
+                            here: _here,
+                            away: _followAway,
+                            onEnd: _endFollow,
+                          ),
+                        ),
+                      ),
                 empty: _shown.isEmpty,
                 marks: [
                   if (_planning && _from != null) (at: _from!, label: 'A'),
@@ -782,24 +800,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     _push();
                   },
                   onFollow: _follow,
-                ),
-              ),
-            ),
-          // Offstage rather than gone, so the follower keeps what it has seen
-          if (_following != null)
-            Positioned(
-              left: floatingGap,
-              right: floatingGap,
-              bottom: floatingBottom(context),
-              child: Offstage(
-                offstage: _tab != 0 || _planning,
-                child: FollowCard(
-                  catalog: catalog,
-                  journey: _following!,
-                  live: live,
-                  here: _here,
-                  away: _followAway,
-                  onEnd: _endFollow,
                 ),
               ),
             ),

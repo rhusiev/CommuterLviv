@@ -38,6 +38,7 @@ class MapTab extends StatelessWidget {
     required this.theme,
     required this.here,
     this.onLocate,
+    this.card,
     required this.empty,
     required this.marks,
     required this.journey,
@@ -69,6 +70,11 @@ class MapTab extends StatelessWidget {
 
   /// Also run by the locate button, after it has moved to the dot.
   final VoidCallback? onLocate;
+
+  /// Across the bottom, under the map buttons rather than over them. It
+  /// brings its own gap above, so that an offstage one leaves the buttons
+  /// where they were.
+  final Widget? card;
 
   final bool empty;
 
@@ -175,9 +181,20 @@ class MapTab extends StatelessWidget {
         // map, a swipe up to leave the app also drags it
         ..._gestureStrips(MediaQuery.systemGestureInsetsOf(context)),
         Positioned(
+          left: floatingGap,
           right: floatingGap,
           bottom: floatingBottom(context),
-          child: MapControls(map: map, here: here, onLocate: onLocate),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: MapControls(map: map, here: here, onLocate: onLocate),
+              ),
+              ?card,
+            ],
+          ),
         ),
         if (style == null) const LinearProgressIndicator(minHeight: 2),
         if (empty)
