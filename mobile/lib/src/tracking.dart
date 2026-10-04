@@ -1,4 +1,4 @@
-/// The camera keeping to the dot while a journey is followed. A hand on the map
+/// The camera keeping to the dot while a journey is followed. Panning the map
 /// lets go of it, so the way ahead can be looked at; the locate button takes it
 /// back.
 library;
@@ -9,13 +9,13 @@ import 'package:flutter_map/flutter_map.dart';
 
 import 'here.dart';
 
-/// What moves the camera without a hand on the map.
-const _notByHand = {
-  MapEventSource.mapController,
-  MapEventSource.fitCamera,
-  MapEventSource.custom,
-  MapEventSource.nonRotatedSizeChange,
-  MapEventSource.interactiveFlagsChanged,
+/// A pan by hand. A zoom - a pinch, a double tap, the buttons - keeps the dot
+/// in the middle, as navigation apps do.
+const _pans = {
+  MapEventSource.dragStart,
+  MapEventSource.onDrag,
+  MapEventSource.dragEnd,
+  MapEventSource.flingAnimationController,
 };
 
 class Tracking {
@@ -49,7 +49,7 @@ class Tracking {
   }
 
   void _moved(MapEvent event) {
-    if (event is MapEventMove && !_notByHand.contains(event.source)) {
+    if (event is MapEventMove && _pans.contains(event.source)) {
       _held = false;
     }
   }
