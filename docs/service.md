@@ -59,7 +59,11 @@ Walks are Dijkstra on that graph, scipy's (`scipy.sparse.csgraph.dijkstra`),
 about ten times faster than one in Python. A point steps onto the graph
 at the nearest point of the nearest footpath edge with a node within 150 m
 (`Walk.attach`), and the search starts from both ends of that edge, each with
-the walk to it already spent. Joining the point to every node in reach instead
+the walk to it already spent. Only edges on the largest connected piece of the
+graph count: OpenStreetMap has hundreds of small pieces drawn apart from the
+streets - a plaza, a platform, a courtyard - and a point or a stop stepping onto
+one could walk nowhere. In Lviv's graph 4286 of 239922 nodes, and 17 of the 1071
+stops' nearest edges, are on such pieces. Joining the point to every node in reach instead
 would let a walk cut straight across a block to any of them. Two points on the
 same edge are also joined along it, which the graph alone cannot see. The walk from the origin that finds
 the whole walk also gives the walks to the stops near the origin, so a search
@@ -283,8 +287,8 @@ that has none, so an older `walk.npz` gains it in place. `walk.npz` is pure
 OpenStreetMap plus elevation and can be copied between hosts; `transfers.npz`
 indexes stops by the catalog it was built against and must be rebuilt wherever
 `network.pkl` differs. It also records what it was built from: the walking model
-(`model`, such as `1.25 m/s, Tobler slopes`), a digest of the footpath graph
-(`graph`) and one of the catalog's stops (`stops`). The service rebuilds it when
+(`model`, such as `1.25 m/s, Tobler slopes`), a digest of the footpath graph and of
+which part of it is walked on (`graph`) and one of the catalog's stops (`stops`). The service rebuilds it when
 any of the three is not what it holds - about 8 s, written beside the old file
 and swapped in. A file from before the digests has none, so it is rebuilt once. Without them the service still starts, logs why, and
 `/api/plan` answers 503 - the map and the arrivals do not depend on it.
