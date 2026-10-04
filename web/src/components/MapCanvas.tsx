@@ -582,7 +582,10 @@ export function MapCanvas({
         }
         setLocating("on");
       },
-      () => {
+      (err) => {
+        // A fix that could not be had this time is followed by the next one;
+        // only a refusal ends the watch
+        if (err.code !== err.PERMISSION_DENIED) return;
         here.current = null;
         setLocating("denied");
       },

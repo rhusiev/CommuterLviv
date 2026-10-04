@@ -4,8 +4,9 @@ import { sample, type Live } from "./live";
 import type { Catalog, Journey } from "./types";
 
 /** Follows `journey` from the device's own fixes until it is null: null until
- * the first fix, "denied" once the browser refuses one. The fixes go nowhere
- * but the follower. `catalog` places the stops a ride calls at. */
+ * the first fix, "denied" once the browser refuses them - a fix it could not
+ * get is only waited out. The fixes go nowhere but the follower. `catalog`
+ * places the stops a ride calls at. */
 export function useFollow(
   journey: Journey | null,
   live: Live,
@@ -31,7 +32,9 @@ export function useFollow(
           follower.update({ lat: latitude, lon: longitude, accuracy, t: pos.timestamp }, seen),
         );
       },
-      () => setProgress("denied"),
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) setProgress("denied");
+      },
       // Boarding is told from how fast the fixes move, so none may be a reused one
       { enableHighAccuracy: true, maximumAge: 0 },
     );
