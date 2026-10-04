@@ -18,7 +18,7 @@ from typing import NamedTuple
 import numpy as np
 import requests
 from scipy.sparse import csr_matrix
-from scipy.sparse.csgraph import dijkstra
+from scipy.sparse.csgraph import connected_components, dijkstra
 
 from . import network
 
@@ -247,6 +247,14 @@ class Spot(NamedTuple):
         return self.off + other.off + self.edge * abs(self.t - t)
 
 
+def _main_network(to, start):
+    """Which nodes are on the largest connected piece of the graph."""
+    n = len(start) - 1
+    graph = csr_matrix((np.ones(len(to)), to, start), shape=(n, n))
+    _, piece = connected_components(graph, directed=False)
+    return piece == np.argmax(np.bincount(piece))
+
+
 class Walk:
     """A footpath graph, and the walks that start anywhere on it."""
 
@@ -257,20 +265,25 @@ class Walk:
         if ele is not None:
             tail = np.repeat(np.arange(len(lat)), np.diff(start))
             self.secs /= hill(ele[to].astype(float) - ele[tail], cost)
+        # Only the largest connected piece is ever stood on: a plaza or a
+        # platform mapped apart from its streets is a nearest edge that leads
+        # nowhere, for a tap on the map and for a stop alike
+        joined = _main_network(to, start)
         # what a walking time rests on, for a table of them to be checked against
         self.model = f"{SPEED} m/s, " + ("Tobler slopes" if ele is not None
                                          else "level")
         # and which footpaths it was walked on
         h = hashlib.blake2b(digest_size=16)
-        for a in (lat, lon, to, cost, start, *(() if ele is None else (ele,))):
+        for a in (lat, lon, to, cost, start, *(() if ele is None else (ele,)),
+                  joined):
             h.update(np.ascontiguousarray(a).tobytes())
         self.graph = h.hexdigest()
         self.pace = 1.0
         self.cell = 0.002   # degrees, about 200 m per grid cell
         self.grid = {}
-        for i, (a, o) in enumerate(zip(lat, lon)):
-            self.grid.setdefault((int(a / self.cell), int(o / self.cell)),
-                                 []).append(i)
+        for i in np.flatnonzero(joined).tolist():
+            self.grid.setdefault((int(lat[i] / self.cell),
+                                  int(lon[i] / self.cell)), []).append(i)
 
     @classmethod
     def load(cls, path=CACHE):
@@ -334,7 +347,9 @@ class Walk:
             head[node] = min(spent, head.get(node, math.inf))
         n = len(self.lat)
         # one extra node with an edge to each source, as long as the walk
-        # already spent getting there, starts them all in one search
+        # already spent getting there, starts them all in one search. A 0 s
+        # edge is kept: sparse input takes stored entries as edges, whatever
+        # their value
         graph = csr_matrix(
             (np.append(self.secs, list(head.values())),
              np.append(self.to, list(head)),

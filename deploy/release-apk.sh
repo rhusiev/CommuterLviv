@@ -15,7 +15,7 @@ out="$root/release/$(sed -n 's/^version: \([^+]*\)+.*/\1/p' "$root/mobile/pubspe
 
 [ -n "${FLUTTER_ENV:-}" ] && . "$FLUTTER_ENV"
 command -v flutter >/dev/null || {
-  echo "flutter is not on PATH - /tmp/flutterenv.sh puts it there" >&2
+  echo "flutter is not on PATH - put the Flutter SDK's bin there" >&2
   exit 1
 }
 

@@ -9,6 +9,10 @@ import type { Catalog, Journey, Leg } from "../lib/types";
 
 type Chain = { route: number; dep: number; a: number; planned?: boolean }[];
 
+/** The `n`-th backup of the journey's `leg`-th leg, or null for the journey
+ *  itself */
+export type WayPick = { leg: number; n: number } | null;
+
 /** Each ride of a journey with the other ways to the door from where it
  *  boards, over everything else. Its clicks stay out of the card it opens
  *  from, which would toggle */
@@ -17,7 +21,7 @@ export function Backups({
   prefer,
   place,
   catalog,
-  onLine,
+  onWay,
   onClose,
 }: {
   journey: Journey;
@@ -25,19 +29,32 @@ export function Backups({
   /** Where the plan's option of that index is listed, from 1 */
   place: (option: number) => number;
   catalog: Catalog;
-  onLine: (i: number) => void;
+  /** Draws the way picked on the map, failing with what went wrong */
+  onWay: (pick: WayPick) => Promise<void>;
   onClose: () => void;
 }) {
+  const [pending, setPending] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  const pick = async (which: WayPick) => {
+    setPending(true);
+    setFailed(null);
+    try {
+      await onWay(which);
+      onClose();
+    } catch (err) {
+      setFailed(err instanceof Error ? err.message : t.failed);
+    } finally {
+      setPending(false);
+    }
+  };
   const rides = journey.legs.filter((leg) => leg.kind === "ride" && leg.route !== undefined);
-  const way = (chain: Chain, arr: number, mine = false, option = -1) => (
+  const way = (chain: Chain, arr: number, which: WayPick, option = -1) => (
     <button
       key={chain.map((r) => `${r.route} ${r.dep}`).join()}
-      onClick={() => {
-        onClose();
-        onLine(chain[0]!.route);
-      }}
-      title={t.showLine}
-      className={`block w-full rounded px-1 py-1 text-left ${mine ? "bg-accent/15" : ""}`}
+      onClick={() => void pick(which)}
+      disabled={pending}
+      title={t.showWay}
+      className={`block w-full rounded px-1 py-1 text-left disabled:opacity-50 ${which === null ? "bg-accent/15" : ""}`}
     >
       <span className="flex items-center gap-1">
         <span className="w-12 shrink-0 tabular-nums text-slate-400">{clock(chain[0]!.dep)}</span>
@@ -80,15 +97,16 @@ export function Backups({
       <div onClick={(e) => e.stopPropagation()} className="panel max-h-full w-96 max-w-full overflow-y-auto p-4 text-sm">
         <h2 className="font-medium">{t.backups}</h2>
         <p className="mt-1 text-xs text-slate-400">{t.backupsWhy}</p>
+        {failed && <p className="mt-2 text-xs text-rose-300">{failed}</p>}
         {rides.map((leg, i) => (
           <div key={i} className="mt-3 border-t border-hair pt-2">
             <h3 className="mb-1 truncate text-slate-200">{catalog.stops[leg.a]?.name}</h3>
             {way(
               rides.slice(i).map((r) => ({ route: r.route!, dep: r.dep, a: r.a })),
               journey.arr,
-              true,
+              null,
             )}
-            <Ways leg={leg} prefer={prefer} way={way} />
+            <Ways leg={leg} at={journey.legs.indexOf(leg)} prefer={prefer} way={way} />
           </div>
         ))}
         <button onClick={onClose} className="btn-quiet mt-3 ml-auto block">
@@ -103,12 +121,15 @@ export function Backups({
 /** A ride's backups, the shortlist by what is preferred until asked for all */
 function Ways({
   leg,
+  at,
   prefer,
   way,
 }: {
   leg: Leg;
+  /** The leg's place in its journey */
+  at: number;
   prefer: Prefer;
-  way: (chain: Chain, arr: number, mine: boolean, option?: number) => ReactNode;
+  way: (chain: Chain, arr: number, which: WayPick, option?: number) => ReactNode;
 }) {
   const [all, setAll] = useState(false);
   const backups = leg.backups ?? [];
@@ -116,7 +137,7 @@ function Ways({
   const shown = all ? backups : shortlist(backups, prefer);
   return (
     <>
-      {shown.map((b) => way(b.rides, b.arr, false, b.option))}
+      {shown.map((b) => way(b.rides, b.arr, { leg: at, n: backups.indexOf(b) }, b.option))}
       {shown.length < backups.length && (
         <button onClick={() => setAll(true)} className="px-1 py-1 text-xs text-accent">
           {t.moreBackups(backups.length - shown.length)}

@@ -1,11 +1,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- The app is nothing but a client for a service: no network, no map,
          no times. Location is the one other thing asked for, and only when the
-         locate button is pressed: it draws the dot on the map and is never
-         sent anywhere. Nothing else is asked for. -->
+         locate button or Follow is pressed: it draws the dot on the map,
+         follows a journey and is never sent anywhere. The foreground service
+         and the notifications are for following with the app closed, which
+         is off until switched on; the while-in-use grant covers it, so
+         background location is never asked for. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <!-- Backup is on by default, and the cookie jar holds a session cookie and
          a remember-me token good for sixty days. The jar is encrypted under a
@@ -40,6 +46,10 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <service
+            android:name=".FollowService"
+            android:exported="false"
+            android:foregroundServiceType="location"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

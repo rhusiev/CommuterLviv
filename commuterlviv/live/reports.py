@@ -34,12 +34,13 @@ class Full(Exception):
 
 
 class Recent:
-    """The searches still reportable. The arrivals are shared with the live
-    state, which replaces rather than mutates them, so holding one costs
-    nothing past the answer itself."""
+    """The searches still reportable, and whose backups can still be drawn.
+    The arrivals are shared with the live state, which replaces rather than
+    mutates them, so holding one costs nothing past the answer itself."""
 
     def __init__(self):
         self.held = OrderedDict()
+        self.reported = set()
         self.lock = threading.Lock()
 
     def hold(self, user, search):
@@ -50,16 +51,26 @@ class Recent:
             self.held[rid] = (now, user, search)
             while self.held and (len(self.held) > HELD or
                                  next(iter(self.held.values()))[0] < now - KEEP):
-                self.held.popitem(last=False)
+                self.reported.discard(self.held.popitem(last=False)[0])
         return rid
+
+    def get(self, user, rid):
+        """The search `rid` of `user`'s, or None once it is no longer held."""
+        with self.lock:
+            return self._mine(user, rid)
 
     def take(self, user, rid):
         """The search `rid` of `user`'s, once: a report is written at most once."""
         with self.lock:
-            got = self.held.get(rid) if isinstance(rid, str) else None
-            if got is None or got[1] != user or got[0] < time.monotonic() - KEEP:
+            if (got := self._mine(user, rid)) is None or rid in self.reported:
                 return None
-            del self.held[rid]
+            self.reported.add(rid)
+        return got
+
+    def _mine(self, user, rid):
+        got = self.held.get(rid) if isinstance(rid, str) else None
+        if got is None or got[1] != user or got[0] < time.monotonic() - KEEP:
+            return None
         return got[2]
 
 

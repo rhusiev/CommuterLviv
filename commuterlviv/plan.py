@@ -66,6 +66,11 @@ QUIET_TRIPS = 2
 # counts as a backup: missing the bus stings less when the next way is soon
 BACKUP_WINDOW = 1800.0
 
+# s: a way whose first ride leaves at most this much before an option's and
+# reaches the door at most this much after it is an option too, though the
+# other beats it - whichever comes first. Chosen, not derived
+NEAR_TIE = 300.0
+
 # weakest first, so `min` over this order is the weakest ground a journey stands on
 CONFIDENCE = ("quiet", "schedule", "live")
 
@@ -91,14 +96,34 @@ class Leg:
 class Backup:
     """Another way to the door from where a ride boards: the rides it takes,
     the first leaving from there, when it reaches the door and the seconds it
-    walks. `planned` is, per ride, the index of the journey's leg riding the
-    same vehicle, or -1. `option` is the place in the list of the journey
-    riding exactly these rides, or -1."""
+    walks after each ride. `planned` is, per ride, the index of the journey's
+    leg riding the same vehicle, or -1. `option` is the place in the list of
+    the journey riding exactly these rides, or -1."""
     rides: tuple[Leg, ...]
     arr: float
-    walk: float
+    walks: tuple[float, ...]
     planned: tuple[int, ...]
     option: int = -1
+
+    @property
+    def walk(self):
+        return sum(self.walks)
+
+    def legs(self):
+        """As a journey's legs, from the stop it leaves on."""
+        return _onward(self.rides, self.walks)
+
+
+def _onward(rides, walks):
+    """Legs riding `rides` in turn, each followed by a walk of the seconds in
+    `walks` to where the next boards, or to the door after the last."""
+    out = []
+    for k, (ride, walked) in enumerate(zip(rides, walks)):
+        out.append(ride)
+        to = rides[k + 1].a if k + 1 < len(rides) else -1
+        if to != ride.b:
+            out.append(Leg("walk", ride.arr, ride.arr + walked, ride.b, to))
+    return tuple(out)
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +153,11 @@ class Journey:
     @property
     def rides(self):
         return sum(1 for leg in self.legs if leg.kind == "ride")
+
+    @property
+    def boards(self):
+        """When the first ride leaves, or None on a walk."""
+        return next((leg.dep for leg in self.legs if leg.kind == "ride"), None)
 
     @property
     def live(self):
@@ -491,7 +521,8 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
                          [(u, now + t) for u, t in access.items()], hi)
         scan = _Profile(hops, trips, trust, transfers, egress, caps, rounds,
                         covered)
-        found = _rank(scan.backed(scan.options(access, now)) +
+        found = scan.options(access, now)
+        found = _rank(scan.backed(found + scan.near(access, now, found)) +
                       _only_walking(walked, now), keep, walked)
         if quiet or any(j.rides for j in found) or \
                 "quiet" not in trust.values():
@@ -513,6 +544,8 @@ def _walk_through(walk, origin, dest, ceiling=LONGEST_WALK):
     limit = max(walk.flat(footpaths.metres(*origin, *dest)) * 1.3, 300.0)
     while True:
         seen = _reach(walk, start, limit)
+        # a plain float: as an np.float64 this cap makes the profile scan
+        # half again slower
         walked = min([direct, *(float(seen[i]) + t for i, t in ends)])
         if walked <= limit:
             return walked, seen
@@ -662,15 +695,52 @@ class _Profile:
         for i, (_, u, t, c) in best.items():
             way = self.chain(c, i)
             if (u, way) not in found:
-                legs = [Leg("walk", now, now + t, -1, u)]
-                for k, (c, e, walked) in enumerate(way):
-                    legs.append(ride := self.ride(c, e))
-                    to = self.hops[0][way[k + 1][0]] if k + 1 < len(way) else -1
-                    if to != ride.b:
-                        legs.append(Leg("walk", ride.arr, ride.arr + walked,
-                                        ride.b, to))
-                found[(u, way)] = Journey(tuple(legs)), way
+                found[(u, way)] = self._journey(u, t, now, way), way
         return list(found.values())
+
+    def near(self, access, now, found):
+        """Per option of `found`, soonest first, a near tie of it (`_near`) as
+        `options` gives journeys: the soonest at the door counting the minutes
+        walked. It rides no vehicle an option or an earlier near tie rides, as
+        that is no other way should the vehicle be late."""
+        firsts = sorted((j for j, _ in found if j.rides), key=_score)
+        trip_of, ways = self.hops[4], self._earlier(access, now, firsts)
+        taken = {trip_of[c] for _, way in found for c, *_ in way}
+        out = []
+        for o in firsts:
+            near = [(_hurried(j), n) for n, (j, way) in enumerate(ways)
+                    if _near(o, j.boards, j.arr)
+                    and not any(trip_of[c] in taken for c, *_ in way)]
+            if near:
+                out.append(ways[min(near)[1]])
+                taken.update(trip_of[c] for c, *_ in out[-1][1])
+        return out
+
+    def _earlier(self, access, now, firsts):
+        """Every way from a stop the origin walks to that is a near tie of one
+        of `firsts`, but for those `_waits` says waited for a bus with rides
+        added: boardings the options pass over, as they leave earlier and
+        arrive later."""
+        rounds, leaves, out = self.rounds, self._leaves(), {}
+        for u, d, c in self.boards:
+            if (t := access.get(u)) is None or d < now + t:
+                continue
+            door = self.via[c][0]
+            for i in range(sum(t <= x for x in self.caps) * rounds):
+                arr = door[i]
+                if arr == math.inf or i % rounds and arr == door[i - 1] or \
+                        not any(_near(o, d, arr) for o in firsts):
+                    continue
+                way = self.chain(c, i)
+                if (u, way) not in out and not self._waits(way, leaves):
+                    out[(u, way)] = self._journey(u, t, now, way), way
+        return list(out.values())
+
+    def _journey(self, u, t, now, way):
+        """The walk from the origin to `u`, `t` seconds, then `way`."""
+        rides = tuple(self.ride(c, e) for c, e, _ in way)
+        return Journey((Leg("walk", now, now + t, -1, u),
+                        *_onward(rides, tuple(w for *_, w in way))))
 
     def backed(self, found):
         """Each journey with, per leg, the other ways to the door from where the
@@ -696,8 +766,7 @@ class _Profile:
                 if leg.kind == "ride":
                     after[leg.a] = min(leg.dep, after.get(leg.a, math.inf))
         ways = {u: {} for u in after}
-        rounds, trip_of = self.rounds, self.hops[4]
-        leaves = {(trip_of[c], u): d for u, d, c in self.boards}
+        rounds, leaves = self.rounds, self._leaves()
         for u, d, c in self.boards:
             if d <= after.get(u, math.inf):
                 continue
@@ -710,6 +779,11 @@ class _Profile:
                     ways[u].setdefault(way, (d, arr, sum(w for *_, w in way)))
         return [dataclasses.replace(j, backups=self._backups(j, way, ways))
                 for j, way in found]
+
+    def _leaves(self):
+        """When each (trip, stop) boarding leaves."""
+        trip_of = self.hops[4]
+        return {(trip_of[c], u): d for u, d, c in self.boards}
 
     def _waits(self, way, leaves):
         """Whether a later ride of `way` could have been boarded, short of
@@ -761,7 +835,7 @@ class _Profile:
                     kept.append(s)
             out.append(tuple(
                 Backup(tuple(self.ride(c, e) for c, e, _ in back), score[1],
-                       score[3], planned)
+                       tuple(w for *_, w in back), planned)
                 for score, back, planned in sorted(kept)))
         return tuple(out)
 
@@ -778,6 +852,19 @@ def _listed(found):
 
     return [dataclasses.replace(j, backups=tuple(map(mark, j.backups)))
             for j in found]
+
+
+def _hurried(j):
+    """Door arrival plus the seconds walked, which settles near ties."""
+    return j.arr + j.walking
+
+
+def _near(o, boards, arr):
+    """Whether a way whose first ride leaves at `boards` and which reaches
+    the door at `arr` is a near tie of journey `o`: leaving before its first
+    ride by at most NEAR_TIE and arriving at most NEAR_TIE after it. Should
+    `o`'s ride be late, it is the one to take."""
+    return o.boards - NEAR_TIE <= boards < o.boards and arr <= o.arr + NEAR_TIE
 
 
 def _beats(a, b):
@@ -862,7 +949,8 @@ def _hops(stops, times, first):
 
 
 def _rank(found, keep, walked=None):
-    """Soonest first, keeping every journey no other one beats outright.
+    """Soonest first, keeping every journey no other one beats outright,
+    except as a near tie of it (`_near`).
 
     Beaten means another is at least as good on arrival, on changes, on
     seconds spent walking and on backups: a slower journey every ride of
@@ -882,7 +970,9 @@ def _rank(found, keep, walked=None):
     for j in found:
         if j.rides and j.arr - j.dep >= ceiling:
             continue
-        if any(all(a <= b for a, b in zip(_score(o), _score(j))) for o in out):
+        if any(all(a <= b for a, b in zip(_score(o), _score(j))) and
+               not (j.rides and o.rides and _near(o, j.boards, j.arr))
+               for o in out):
             continue
         out.append(j)
     solid = [j for j in out if j.confidence != "quiet"]

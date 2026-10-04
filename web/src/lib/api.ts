@@ -3,6 +3,7 @@ import type {
   Call,
   Catalog,
   Found,
+  Journey,
   Me,
   Place,
   Plan,
@@ -122,6 +123,10 @@ export const api = {
   /** Keeps the search `id` names, with what it ran on, for a look at why it
    * answered as it did */
   report: (id: string, note: string) => post<void>("/api/report", { id, note }),
+  /** The search `id` names with option `option` taking the `n`-th backup of
+   * its `leg`-th leg, drawn as an option is */
+  backup: (id: string, option: number, leg: number, n: number): Promise<Journey> =>
+    call(`/api/backup?report=${id}&option=${option}&leg=${leg}&backup=${n}`),
   search: (q: string, signal?: AbortSignal): Promise<{ places: Found[] }> =>
     call(`/api/search?q=${encodeURIComponent(q)}`, { signal }),
   traffic: (): Promise<Traffic> => call("/api/traffic"),

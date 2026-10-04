@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS veh(
   lat REAL, lon REAL, bearing REAL, speed REAL, odometer REAL,
   poll_ts REAL, label TEXT,
   PRIMARY KEY(veh_id, veh_ts)) WITHOUT ROWID;
+-- the key orders by vehicle first, so a read by time needs its own index
 CREATE INDEX IF NOT EXISTS veh_ts ON veh(veh_ts);
 
 CREATE TABLE IF NOT EXISTS pred(

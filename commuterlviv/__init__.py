@@ -1,2 +1,2 @@
 """The version the whole project ships under; web/ and mobile/ must match it."""
-__version__ = "0.14.0"
+__version__ = "0.15.0"

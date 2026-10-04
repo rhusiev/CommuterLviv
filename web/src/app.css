@@ -82,3 +82,11 @@ body {
 @utility field-bar {
   @apply field bg-panel/80 shadow-float backdrop-blur-xl;
 }
+
+/* Below `sm` the cards over the map span its width and would cover the zoom
+   buttons, and a pinch zooms there anyway */
+@media (width < 40rem) {
+  .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
+    display: none;
+  }
+}

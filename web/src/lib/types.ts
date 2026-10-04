@@ -67,6 +67,9 @@ export type Leg = {
   confidence?: Confidence;
   /** `[lat, lon]` along the footpath or the ridden stretch */
   pts?: [number, number][];
+  /** Catalog stops a ride calls at on the way, in order; absent from an older
+   *  service */
+  stops?: number[];
   /** Other ways to the door from where the ride boards, soonest first */
   backups?: Backup[];
 };
@@ -96,7 +99,8 @@ export type Journey = {
   legs: Leg[];
 };
 
-/** `report` names the search for `api.report`, for half an hour */
+/** `report` names the search for `api.report` and `api.backup`, for half an
+ * hour */
 export type Plan = { t: number; options: Journey[]; report?: string };
 
 /** `dir` is the feed's `direction_id`, kept only to tell the two apart */

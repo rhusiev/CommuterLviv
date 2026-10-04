@@ -62,7 +62,6 @@ class Strings {
     required this.departAt,
     required this.preferBy,
     required this.quietPart,
-    required this.forget,
     required this.saveHere,
     required this.cancel,
     required this.save,
@@ -114,6 +113,8 @@ class Strings {
     required this.slower,
     required this.faster,
     required this.alsoOptionHint,
+    required this.showWay,
+    required this.searchAgain,
     required this.today,
     required this.tomorrow,
     required this.backups,
@@ -124,6 +125,26 @@ class Strings {
     required this.quietWhy,
     required this.wholeWalk,
     required this.planHint,
+    required this.follow,
+    required this.followHint,
+    required this.endFollow,
+    required this.locating,
+    required this.walkTo,
+    required this.walkHome,
+    required this.waitAt,
+    required this.dueIn,
+    required this.offAt,
+    required this.offSoon,
+    required this.toGo,
+    required this.passedStop,
+    required this.offTheWay,
+    required this.followAway,
+    required this.followAwayHint,
+    required this.followChannel,
+    required this.alertChannel,
+    required this.arrived,
+    required this.metres,
+    required this.km,
     required this.walkLeg,
     required this.changeCount,
     required this.changeAt,
@@ -188,7 +209,6 @@ class Strings {
 
   /// The timetable on a line nothing has been seen running on.
   final String quietPart;
-  final String forget;
   final String saveHere;
   final String cancel;
   final String save;
@@ -242,6 +262,8 @@ class Strings {
   final String slower;
   final String faster;
   final String alsoOptionHint;
+  final String showWay;
+  final String searchAgain;
   final String today;
   final String tomorrow;
   final String backups;
@@ -252,6 +274,30 @@ class Strings {
   final String quietWhy;
   final String wholeWalk;
   final String planHint;
+  final String follow;
+  final String followHint;
+  final String endFollow;
+  final String locating;
+  final String Function(String stop) walkTo;
+  final String walkHome;
+  final String Function(String stop) waitAt;
+  final String Function(String when) dueIn;
+  final String Function(String stop) offAt;
+  final String Function(String stop) offSoon;
+  final String Function(String distance) toGo;
+  final String passedStop;
+  final String offTheWay;
+
+  /// The switch that keeps a journey followed with the app off the screen
+  final String followAway;
+  final String followAwayHint;
+
+  /// Names of the notification channels, as the phone's settings list them
+  final String followChannel;
+  final String alertChannel;
+  final String arrived;
+  final String Function(int metres) metres;
+  final String Function(double km) km;
   final String Function(int minutes) walkLeg;
   final String Function(int changes) changeCount;
   final String Function(String stops) changeAt;
@@ -313,7 +359,6 @@ const _en = Strings(
   departAt: 'Leave at',
   preferBy: 'Order',
   quietPart: 'Nothing seen running',
-  forget: 'Forget',
   saveHere: 'Save',
   cancel: 'Cancel',
   save: 'Save',
@@ -360,20 +405,45 @@ const _en = Strings(
   showPanel: 'Show the journey',
   leaveOn: 'Leave on',
   walkSpeed: 'Walking speed',
-  walkSpeedHint: 'On the level: up a hill takes longer, down a gentle one less. Each search starts from this.',
+  walkSpeedHint: 'On flat ground - hills are taken into account',
   slower: 'Slower',
   faster: 'Faster',
   alsoOptionHint: 'This way is also among the options',
+  showWay: 'Show this way on the map',
+  searchAgain: 'That search is no longer held; search again',
   today: 'Today',
   tomorrow: 'Tomorrow',
   backups: 'Backups',
-  backupsWhy: 'Under each stop the planned way comes first. If you miss it or it does not come, the ones below leave the same stop later and still reach the door at most half an hour after this journey, some by another route or with a change. The first few are the best by your order, then the best by each other one. An outlined route is a vehicle of the planned way further along, no help if that one does not come.',
+  backupsWhy: 'Later ways from the same stop if you miss a ride, arriving within half an hour of the plan. Outlined: a vehicle already in your plan.',
   noBackup: 'None within half an hour',
   moreBackups: _enMoreBackups,
-  scheduleWhy: 'No vehicle on this route is being tracked for this ride yet, so its time is the city timetable. The bus may come early or late.',
-  quietWhy: 'The timetable has departures on this route, but no vehicle on it has been seen for the last hour. It may not be running at all.',
+  scheduleWhy:
+      'No vehicle tracked for this ride yet - the time is from the timetable',
+  quietWhy: 'Timetabled, but nothing on this route has been seen for an hour. It may not be running.',
   wholeWalk: 'Walk the whole way',
-  planHint: 'Tap From or To to search for a place, pick a saved one or choose it on the map.',
+  planHint:
+      'Tap From or To to search, pick a saved place or choose on the map.',
+  follow: 'Follow it',
+  followHint:
+      'Says what to do next as you travel. Where you are stays on this phone.',
+  endFollow: 'End',
+  locating: 'Finding where you are',
+  walkTo: _enWalkTo,
+  walkHome: 'Walk to the door',
+  waitAt: _enWaitAt,
+  dueIn: _enDueIn,
+  offAt: _enOffAt,
+  offSoon: _enOffSoon,
+  toGo: _enToGo,
+  passedStop: 'You have passed your stop',
+  offTheWay: 'You are off the planned way',
+  followAway: 'Follow with the app closed',
+  followAwayHint: 'Follows with the screen off and shows the next step in a notification. Your location stays on this phone.',
+  followChannel: 'Journey being followed',
+  alertChannel: 'When to get off',
+  arrived: 'You have arrived',
+  metres: _enMetres,
+  km: _enKm,
   walkLeg: _enWalkLeg,
   changeCount: _enChangeCount,
   changeAt: _enChangeAt,
@@ -410,6 +480,14 @@ String _enMinutes(int m) => '$m min';
 String _enKmh(double v) => '${v.toStringAsFixed(1)} km/h';
 String _enAlsoOption(int n) => 'Option $n';
 String _enUnreachable(String server) => 'Could not reach $server';
+String _enWalkTo(String stop) => 'Walk to $stop';
+String _enWaitAt(String stop) => 'Wait at $stop';
+String _enDueIn(String when) => 'Due: $when';
+String _enOffAt(String stop) => 'Get off at $stop';
+String _enOffSoon(String stop) => 'Get ready to get off at $stop';
+String _enToGo(String distance) => '$distance to go';
+String _enMetres(int m) => '$m m';
+String _enKm(double km) => '${km.toStringAsFixed(1)} km';
 
 const _uk = Strings(
   signIn: 'Увійти',
@@ -461,7 +539,6 @@ const _uk = Strings(
   departAt: 'Виїзд о',
   preferBy: 'Порядок',
   quietPart: 'Рейсів не видно',
-  forget: 'Забути',
   saveHere: 'Зберегти',
   cancel: 'Скасувати',
   save: 'Зберегти',
@@ -508,20 +585,43 @@ const _uk = Strings(
   showPanel: 'Показати маршрут',
   leaveOn: 'Виїзд',
   walkSpeed: 'Швидкість ходьби',
-  walkSpeedHint: 'По рівному: під гору довше, з пологої гори швидше. Кожен пошук починається з неї.',
+  walkSpeedHint: 'По рівному - схили враховано',
   slower: 'Повільніше',
   faster: 'Швидше',
   alsoOptionHint: 'Цей шлях є і серед варіантів',
+  showWay: 'Показати цей шлях на мапі',
+  searchAgain: 'Цей пошук уже не збережено; шукайте знову',
   today: 'Сьогодні',
   tomorrow: 'Завтра',
   backups: 'Запасні',
-  backupsWhy: 'Під кожною зупинкою спершу запланований шлях. Якщо ви його пропустите чи транспорт не прийде, рейси під ним відходять пізніше з тієї ж зупинки й доправлять до мети щонайбільше на пів години пізніше за цю поїздку, деякі іншим маршрутом чи з пересадкою. Перші кілька - найкращі за вашим порядком, далі найкращі за кожним іншим. Маршрут у рамці - це транспорт запланованого шляху далі по ньому, і він не допоможе, якщо той не прийде.',
+  backupsWhy: 'Пізніші способи з тієї ж зупинки, якщо ви пропустили рейс, з прибуттям щонайбільше на пів години пізніше. У рамці - транспорт, який уже є у вашому плані.',
   noBackup: 'Жодного за пів години',
   moreBackups: _ukMoreBackups,
-  scheduleWhy: 'Для цієї поїздки ще не відстежується жоден транспорт на маршруті, тож час узято з міського розкладу. Транспорт може прийти раніше чи пізніше.',
-  quietWhy: 'За розкладом цей маршрут курсує, але жодного його транспорту не було видно протягом останньої години. Можливо, він зовсім не їздить.',
+  scheduleWhy:
+      'Для цієї поїздки ще не відстежується транспорт - час із розкладу',
+  quietWhy: 'За розкладом курсує, але транспорту цього маршруту не видно вже годину. Можливо, він не їздить.',
   wholeWalk: 'Пішки весь шлях',
-  planHint: 'Торкніться «Звідки» чи «Куди», щоб знайти місце, вибрати збережене або вказати його на мапі.',
+  planHint: 'Торкніться «Звідки» чи «Куди», щоб шукати, вибрати збережене місце або вказати на мапі.',
+  follow: 'Вести',
+  followHint: 'Підказує, що робити далі, поки ви в дорозі. Де ви є, лишається на цьому телефоні.',
+  endFollow: 'Завершити',
+  locating: 'Визначаємо, де ви',
+  walkTo: _ukWalkTo,
+  walkHome: 'Ідіть до місця призначення',
+  waitAt: _ukWaitAt,
+  dueIn: _ukDueIn,
+  offAt: _ukOffAt,
+  offSoon: _ukOffSoon,
+  toGo: _ukToGo,
+  passedStop: 'Ви проїхали свою зупинку',
+  offTheWay: 'Ви зійшли з запланованого шляху',
+  followAway: 'Супровід із закритим застосунком',
+  followAwayHint: 'Супроводжує з вимкненим екраном і показує наступний крок у сповіщенні. Де ви є, лишається на цьому телефоні.',
+  followChannel: 'Поїздка, яку супроводжують',
+  alertChannel: 'Коли виходити',
+  arrived: 'Ви на місці',
+  metres: _ukMetres,
+  km: _ukKm,
   walkLeg: _ukWalkLeg,
   changeCount: _ukChangeCount,
   changeAt: _ukChangeAt,
@@ -559,6 +659,14 @@ String _ukKmh(double v) =>
     '${v.toStringAsFixed(1).replaceAll('.', ',')} км/год';
 String _ukAlsoOption(int n) => 'Варіант $n';
 String _ukUnreachable(String server) => 'Не вдалося зʼєднатися з $server';
+String _ukWalkTo(String stop) => 'Ідіть до зупинки $stop';
+String _ukWaitAt(String stop) => 'Чекайте на зупинці $stop';
+String _ukDueIn(String when) => 'Прибуде: $when';
+String _ukOffAt(String stop) => 'Виходьте на зупинці $stop';
+String _ukOffSoon(String stop) => 'Готуйтеся виходити на зупинці $stop';
+String _ukToGo(String distance) => 'Ще $distance';
+String _ukMetres(int m) => '$m м';
+String _ukKm(double km) => '${km.toStringAsFixed(1).replaceAll('.', ',')} км';
 
 /// Set from `main` before anything is drawn, and again from the picker.
 Lang lang = Lang.uk;

@@ -12,6 +12,7 @@ import 'api.dart';
 import 'backups_dialog.dart';
 import 'end_field.dart';
 import 'eta.dart';
+import 'follow.dart' show followable;
 import 'models.dart';
 import 'route_badge.dart';
 import 'sheets.dart';
@@ -46,6 +47,7 @@ class JourneyPanel extends StatefulWidget {
     required this.onSave,
     required this.onPlace,
     required this.onShow,
+    required this.onFollow,
   });
 
   final Api api;
@@ -72,6 +74,7 @@ class JourneyPanel extends StatefulWidget {
 
   /// The option picked to be drawn on the map, or null once none is
   final void Function(Journey? journey) onShow;
+  final void Function(Journey journey) onFollow;
 
   @override
   State<JourneyPanel> createState() => _JourneyPanelState();
@@ -86,6 +89,15 @@ class _JourneyPanelState extends State<JourneyPanel> {
   /// The id to report the options shown by, and what came of reporting them
   String? _report;
   String? _reportSaid;
+
+  /// The search's name for its backups, which reporting it leaves alone; the
+  /// backups fetched as options of their own, by the option, leg and backup
+  /// they came from; and the option of the search's each was built from
+  ({String? id, Map<String, Journey> built, Map<Journey, int> from}) _held = (
+    id: null,
+    built: {},
+    from: {},
+  );
 
   /// What the points picked by name were called, so they keep reading so
   final _names = <LatLng, String>{};
@@ -112,6 +124,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
     _options = null;
     _failed = null;
     _report = _reportSaid = null;
+    _held = (id: null, built: {}, from: {});
     _show(null);
   }
 
@@ -189,6 +202,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
         _options = got.options;
         _report = got.report;
         _reportSaid = null;
+        _held = (id: got.report, built: {}, from: {});
       });
       _show(null);
     } on ApiError catch (e) {
@@ -202,6 +216,44 @@ class _JourneyPanelState extends State<JourneyPanel> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Draws [pick] of option [j]: the journey itself, the option riding the
+  /// same, or else that way fetched and listed as an option of its own.
+  /// Answers what went wrong, if anything did.
+  Future<String?> _takeWay(Journey j, WayPick? pick) async {
+    if (pick == null) return _showNow(j);
+    final options = _options ?? const <Journey>[];
+    final same = options.elementAtOrNull(
+      j.legs[pick.leg].backups.elementAtOrNull(pick.n)?.option ?? -1,
+    );
+    if (same != null) return _showNow(same);
+    final search = _held;
+    final from = search.from[j] ?? options.indexOf(j);
+    final key = '$from ${pick.leg} ${pick.n}';
+    var got = search.built[key];
+    if (got == null) {
+      final id = search.id;
+      if (id == null) return txt.searchAgain;
+      try {
+        got = await widget.api.backup(id, from, pick.leg, pick.n);
+      } on ApiError catch (e) {
+        return e.message;
+      } on Exception {
+        return txt.unreachable(widget.api.base);
+      }
+      // a search made meanwhile has options of its own
+      if (!mounted || !identical(_held.built, search.built)) return null;
+      search.built[key] = got;
+      search.from[got] = from;
+      _options = [...options, got];
+    }
+    return _showNow(got);
+  }
+
+  String? _showNow(Journey j) {
+    setState(() => _show(j));
+    return null;
   }
 
   Future<void> _sendReport() async {
@@ -372,6 +424,8 @@ class _JourneyPanelState extends State<JourneyPanel> {
                         catalog: widget.catalog,
                         onStop: widget.onStop,
                         onLine: widget.onLine,
+                        onWay: (pick) => _takeWay(ranked[i], pick),
+                        onFollow: () => widget.onFollow(ranked[i]),
                       ),
                     ),
             )
@@ -498,6 +552,8 @@ class _Option extends StatelessWidget {
     required this.catalog,
     required this.onStop,
     required this.onLine,
+    required this.onWay,
+    required this.onFollow,
   });
 
   final Journey journey;
@@ -514,6 +570,8 @@ class _Option extends StatelessWidget {
   final void Function(int stop) onStop;
 
   final void Function(int route) onLine;
+  final Future<String?> Function(WayPick? pick) onWay;
+  final VoidCallback onFollow;
 
   @override
   Widget build(BuildContext context) {
@@ -562,7 +620,7 @@ class _Option extends StatelessWidget {
                         prefer: prefer,
                         catalog: catalog,
                         place: place,
-                        onLine: onLine,
+                        onWay: onWay,
                       ),
                       borderRadius: BorderRadius.circular(6),
                       child: Padding(
@@ -592,6 +650,20 @@ class _Option extends StatelessWidget {
                     catalog: catalog,
                     onStop: onStop,
                     onLine: onLine,
+                  ),
+                ),
+              if (shown && followable(journey))
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Tooltip(
+                    message: txt.followHint,
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.tonal(
+                        onPressed: onFollow,
+                        child: Text(txt.follow),
+                      ),
+                    ),
                   ),
                 ),
             ],

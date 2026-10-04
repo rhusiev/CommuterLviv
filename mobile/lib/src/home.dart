@@ -11,6 +11,7 @@ import 'package:vector_map_tiles/vector_map_tiles.dart';
 
 import '../main.dart' show tick;
 import 'api.dart';
+import 'follow_card.dart';
 import 'here.dart';
 import 'journey_panel.dart';
 import 'live.dart';
@@ -25,6 +26,7 @@ import 'stop_card.dart';
 import 'stop_search.dart';
 import 'theme.dart';
 import 'times_tab.dart';
+import 'tracking.dart';
 import 'vehicle_card.dart';
 import 'vehicle_layer.dart' show badgeRadius, stopsZoom;
 import 'walk_speed.dart';
@@ -70,6 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Only while it is on does anything ask the server how the streets run.
   late bool _traffic = widget.api.showTraffic;
+  late bool _followAway = widget.api.followAway;
 
   bool _planning = false;
 
@@ -80,10 +83,15 @@ class _HomeScreenState extends State<HomeScreen> {
   End? _picking;
   bool _folded = false;
 
+  /// The journey being followed, from Follow on an option until it is ended.
+  /// It outlives the planner, and while it lasts it is what the map draws
+  Journey? _following;
+
   /// Which end is waiting on a fix that has been asked for but not arrived.
   End? _wantHere;
 
   late final Here _here = Here(onFirstFix: (at) => _map.move(at, 16));
+  late final _tracking = Tracking(_map, _here);
 
   late MapTheme _theme = themeById(widget.api.mapTheme);
   Style? _style;
@@ -101,6 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _live?.dispose();
     _here.removeListener(_fixArrived);
+    _tracking.stop();
     _here.dispose();
     _map.dispose();
     super.dispose();
@@ -170,8 +179,10 @@ class _HomeScreenState extends State<HomeScreen> {
       _onRoute &= route != null;
       _stop = null;
       _journey = null;
+      _following = null;
       _shapes = null;
     });
+    _tracking.stop();
     _push();
     if (_allLines || _onRoute) unawaited(_geometry());
     ScaffoldMessenger.of(context)
@@ -211,16 +222,21 @@ class _HomeScreenState extends State<HomeScreen> {
     _watch();
   }
 
-  /// What the socket sends: while a journey is shown, only its rides.
+  /// What the socket sends: while a journey is shown or followed, only its
+  /// rides, with the open route's.
   Set<int> get _shown {
-    if (_planning && _journey != null) {
-      return {
-        for (final leg in _journey!.legs)
+    final rides = {
+      for (final journey in [?_following, if (_planning) ?_journey])
+        for (final leg in journey.legs)
           if (leg.route != null) leg.route!,
-      };
-    }
-    return _onRoute && _route != null ? {_route!} : _routes;
+    };
+    final route = _onRoute ? _route : null;
+    if (rides.isNotEmpty) return {...rides, ?route};
+    return route != null ? {route} : _routes;
   }
+
+  /// The planner's option while planning, else the journey followed.
+  Journey? get _onMap => _planning ? _journey : _following;
 
   List<int> get _lines {
     if (_onRoute && _route != null) return [_route!];
@@ -304,9 +320,36 @@ class _HomeScreenState extends State<HomeScreen> {
     _push();
   }
 
-  /// The server caps the watch list, so pins go first.
+  /// The server caps the watch list, so pins go first. A followed journey's
+  /// stops are watched for when its vehicles get to them.
   void _watch() {
-    _live?.setStops({..._pins, ?_stop}.toList());
+    _live?.setStops(
+      {
+        ..._pins,
+        ?_stop,
+        for (final leg in _following?.legs ?? const <Leg>[])
+          if (leg.kind == 'ride') ...[leg.a, leg.b],
+      }.toList(),
+    );
+  }
+
+  void _follow(Journey journey) {
+    setState(() {
+      _following = journey;
+      _planning = false;
+      _picking = null;
+      _folded = false;
+      _journey = null;
+    });
+    _push();
+    unawaited(_here.start());
+    _tracking.start();
+  }
+
+  void _endFollow() {
+    setState(() => _following = null);
+    _tracking.stop();
+    _push();
   }
 
   Future<void> _loadStyle() async {
@@ -578,6 +621,11 @@ class _HomeScreenState extends State<HomeScreen> {
     (sheet) => AccountSheet(
       server: widget.api.base,
       speed: widget.api.walkSpeed,
+      followAway: _followAway,
+      onFollowAway: (on) {
+        setState(() => _followAway = on);
+        unawaited(widget.api.setFollowAway(on));
+      },
       onSaved: () {
         Navigator.pop(sheet);
         _openSaved();
@@ -663,12 +711,31 @@ class _HomeScreenState extends State<HomeScreen> {
                 selected: _stop,
                 theme: _theme,
                 here: _here,
-                empty: _routes.isEmpty,
+                onLocate: _following != null ? _tracking.start : null,
+                // Offstage rather than gone, so the follower keeps what it has
+                // seen
+                card: _following == null
+                    ? null
+                    : Offstage(
+                        offstage: _planning,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: floatingGap),
+                          child: FollowCard(
+                            catalog: catalog,
+                            journey: _following!,
+                            live: live,
+                            here: _here,
+                            away: _followAway,
+                            onEnd: _endFollow,
+                          ),
+                        ),
+                      ),
+                empty: _shown.isEmpty,
                 marks: [
                   if (_planning && _from != null) (at: _from!, label: 'A'),
                   if (_planning && _to != null) (at: _to!, label: 'B'),
                 ],
-                journey: _planning ? _journey : null,
+                journey: _onMap,
                 pins: _pins,
                 places: _sets?.places ?? const [],
                 shapes: _shapes,
@@ -732,6 +799,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     setState(() => _journey = journey);
                     _push();
                   },
+                  onFollow: _follow,
                 ),
               ),
             ),

@@ -64,6 +64,9 @@ type Props = {
   marks: { lat: number; lon: number; label: string }[];
   /** The planner option picked: walks dotted, rides solid, each leg timed */
   journey: Journey | null;
+  /** Turns on the dot where the device is, as the locate button does, and
+   * keeps the camera on it until the map is panned */
+  locate: boolean;
   /** What the account kept, always on the map: stop positions and saved places */
   pinned: number[];
   places: Place[];
@@ -95,6 +98,7 @@ export function MapCanvas({
   onHoldPoint,
   marks,
   journey,
+  locate,
   pinned,
   places,
   shapes,
@@ -116,6 +120,9 @@ export function MapCanvas({
   const style = useRef(styleUrl(theme));
   const held = useRef<MapLibre | null>(null);
   const here = useRef<Fix | null>(null);
+  /** Whether each fix centres the camera: from `locate` until a pan, and again
+   * from the locate button */
+  const keep = useRef(false);
   const pickPoint = useRef(onPickPoint);
   const holdPoint = useRef(onHoldPoint);
   const picks = useRef(picking);
@@ -451,6 +458,10 @@ export function MapCanvas({
 
       map.on("error", (e) => console.warn("basemap:", e.error?.message ?? e));
       map.on("moveend", () => saveView(viewOf(map!)));
+      // A pan lets go of the dot; a zoom keeps it in the middle
+      map.on("dragstart", () => {
+        keep.current = false;
+      });
       // Mobile browsers raise a long press as `contextmenu` too
       map.on("contextmenu", (e) => holdPoint.current(e.lngLat.lat, e.lngLat.lng));
       map.on("click", (e) => {
@@ -558,6 +569,11 @@ export function MapCanvas({
     return () => clearTimeout(timer);
   }, [focus]);
 
+  useEffect(() => {
+    keep.current = locate;
+    if (locate) setLocating((was) => (was === "off" ? "waiting" : was));
+  }, [locate]);
+
   // A boolean and not the state: the watch must not restart when the first fix
   // turns "waiting" into "on"
   const tracking = locating === "waiting" || locating === "on";
@@ -572,10 +588,15 @@ export function MapCanvas({
         if (first) {
           first = false;
           held.current?.flyTo({ center: [longitude, latitude], zoom: 16, speed: 1.6 });
+        } else if (keep.current) {
+          held.current?.easeTo({ center: [longitude, latitude] });
         }
         setLocating("on");
       },
-      () => {
+      (err) => {
+        // A fix that could not be had this time is followed by the next one;
+        // only a refusal ends the watch
+        if (err.code !== err.PERMISSION_DENIED) return;
         here.current = null;
         setLocating("denied");
       },
@@ -595,6 +616,7 @@ export function MapCanvas({
           if (locating === "on" && here.current) {
             const f = here.current;
             held.current?.flyTo({ center: [f.lon, f.lat], zoom: 16, speed: 1.6 });
+            keep.current = locate;
           } else if (locating !== "denied") {
             setLocating("waiting");
           }

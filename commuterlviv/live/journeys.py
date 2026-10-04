@@ -43,9 +43,10 @@ class Planner:
         return cls(tt, walk, transfers, cat)
 
     def search(self, origin, dest, arrivals, now=None, speed=None):
-        """Ranked journeys, on the wire. Call it from a worker thread: a
-        city-wide search is half a second of Python. `speed` is how fast the
-        traveller walks on the level, in km/h, `walk.SPEED` by default.
+        """Ranked journeys, on the wire, and as `plan` found them. Call it
+        from a worker thread: a city-wide search is half a second of Python.
+        `speed` is how fast the traveller walks on the level, in km/h,
+        `walk.SPEED` by default.
 
         A `now` in the future still gets the vehicles being tracked: the search
         keeps only their arrivals that lie ahead of it, so a trip starting in
@@ -56,6 +57,24 @@ class Planner:
         now = time.time() if now is None else now
         found = self.journeys(origin, dest, arrivals, now, speed,
                               now <= time.time() + replay.HORIZON)
+        path, between = self._drawing(origin, dest, arrivals, speed)
+        return {"t": now,
+                "options": [self.wire(j, path, between) for j in found]}, found
+
+    def backup(self, origin, dest, arrivals, speed, j, leg, n):
+        """Journey `j` taking the `n`-th backup of its `leg`-th leg as sent,
+        on the wire as an option is: its legs up to the stop that one boards,
+        then the backup's. None when `j` has no such backup."""
+        if not 0 <= leg < len(j.backups):
+            return None
+        backs = self._sent(j.backups[leg])
+        if not 0 <= n < len(backs):
+            return None
+        way = plan.Journey((*j.legs[:leg], *backs[n].legs()), j.backups[:leg])
+        return self.wire(way, *self._drawing(origin, dest, arrivals, speed))
+
+    def _drawing(self, origin, dest, arrivals, speed):
+        """What `wire` draws legs and lists the stops of rides with."""
         walk = self._paced(speed)[0]
         # options share their first and last walks, so each is drawn once
         paths = {}
@@ -66,7 +85,10 @@ class Planner:
                 paths[key] = self._path(leg, origin, dest, arrivals, walk)
             return paths[key]
 
-        return {"t": now, "options": [self.wire(j, path) for j in found]}
+        def between(leg):
+            return self._between(leg, arrivals)
+
+        return path, between
 
     def journeys(self, origin, dest, arrivals, now, speed, assess):
         """`plan.journeys` for somebody walking at `speed`."""
@@ -80,15 +102,16 @@ class Planner:
         pace = footpaths.SPEED * 3.6 / speed
         return self.walk.paced(pace), self.transfers.paced(pace)
 
-    def wire(self, j, path=None):
-        """`j` as sent; without `path`, its legs are not drawn."""
+    def wire(self, j, path=None, between=None):
+        """`j` as sent; without `path`, its legs are not drawn, and without
+        `between` its rides do not say where they call on the way."""
         return {"dep": int(j.dep), "arr": int(j.arr), "rides": j.rides,
                 "live": j.live, "confidence": j.confidence,
                 "backup": j.backup,
-                "legs": [self._leg(x, path, b) for x, b in
+                "legs": [self._leg(x, path, between, b) for x, b in
                          zip_longest(j.legs, j.backups, fillvalue=())]}
 
-    def _leg(self, leg, path, backups):
+    def _leg(self, leg, path, between, backups):
         out = {"kind": leg.kind, "dep": int(leg.dep), "arr": int(leg.arr),
                "a": self.stop_i[leg.a] if leg.a >= 0 else -1,
                "b": self.stop_i[leg.b] if leg.b >= 0 else -1,
@@ -98,13 +121,20 @@ class Planner:
             out["veh"] = leg.veh
             out["live"] = leg.live
             out["confidence"] = leg.confidence
+            stops = between(leg) if between else None
+            if stops is not None:
+                out["stops"] = stops
             out["backups"] = [
                 {"rides": [self._ride(r, p >= 0)
                            for r, p in zip(b.rides, b.planned)],
                  "arr": int(b.arr), "walk": int(b.walk), "option": b.option}
-                for b in backups
-                if all(r.route in self.route_i for r in b.rides)]
+                for b in self._sent(backups)]
         return out
+
+    def _sent(self, backups):
+        """The backups the wire carries: those on routes the catalog has."""
+        return [b for b in backups
+                if all(r.route in self.route_i for r in b.rides)]
 
     def _ride(self, r, planned):
         return {"route": self.route_i[r.route], "dep": int(r.dep),
@@ -128,15 +158,9 @@ class Planner:
         if leg.kind == "walk":
             limit = (leg.arr - leg.dep) * 1.5 + 60.0
             return network.to_xy(*np.array(walk.path(a, b, limit)).T)
-        at, to = self.tt.stops[leg.a], self.tt.stops[leg.b]
-        for sid, ids, dist in self.rides.get(leg.route, {}).values():
-            if at not in ids or to not in ids[ids.index(at) + 1:]:
-                continue
-            i = ids.index(at)
-            d0, d1 = dist[i], dist[ids.index(to, i + 1)]
-            shape = self.tt.net.shapes[sid]
-            inner = shape.xy[(shape.cum > d0) & (shape.cum < d1)]
-            return np.vstack([shape.at(d0), inner, shape.at(d1)])
+        stretch = self._stretch(leg.route, leg.a, leg.b)
+        if stretch is not None:
+            return self._shape(*stretch)
         # A tracked vehicle keeps its wire id across the trips it runs next,
         # so one ride can span two patterns and no single shape covers it:
         # draw each stretch on its own shape, hopping straight only between
@@ -167,17 +191,44 @@ class Planner:
     def _piece(self, route, u, v):
         """The shape between two timetable stops, or straight across when no
         pattern runs one to the other."""
+        stretch = self._stretch(route, u, v)
+        if stretch is not None:
+            return self._shape(*stretch)
+        a, b = self._where(u, None), self._where(v, None)
+        return network.to_xy(*np.array([a, b]).T)
+
+    def _stretch(self, route, u, v):
+        """The first of the route's patterns calling at timetable stop `u` and
+        later at `v`: its (shape, stop ids, dist) and where in them the two
+        are, or None."""
         at, to = self.tt.stops[u], self.tt.stops[v]
         for sid, ids, dist in self.rides.get(route, {}).values():
             if at not in ids or to not in ids[ids.index(at) + 1:]:
                 continue
             i = ids.index(at)
-            d0, d1 = dist[i], dist[ids.index(to, i + 1)]
-            shape = self.tt.net.shapes[sid]
-            inner = shape.xy[(shape.cum > d0) & (shape.cum < d1)]
-            return np.vstack([shape.at(d0), inner, shape.at(d1)])
-        a, b = self._where(u, None), self._where(v, None)
-        return network.to_xy(*np.array([a, b]).T)
+            return sid, ids, dist, i, ids.index(to, i + 1)
+        return None
+
+    def _shape(self, sid, ids, dist, i, j):
+        d0, d1 = dist[i], dist[j]
+        shape = self.tt.net.shapes[sid]
+        inner = shape.xy[(shape.cum > d0) & (shape.cum < d1)]
+        return np.vstack([shape.at(d0), inner, shape.at(d1)])
+
+    def _between(self, leg, arrivals):
+        """The catalog stops a ride calls at after boarding and before getting
+        off, in order, from the same pattern its line is drawn along; None
+        when nothing says."""
+        stretch = self._stretch(leg.route, leg.a, leg.b)
+        if stretch is not None:
+            _, ids, _, i, j = stretch
+            inner = [self.cat.stop_i.get(s, -1) for s in ids[i + 1:j]]
+        else:
+            seq = self._live_seq(leg, arrivals)
+            if seq is None:
+                return None
+            inner = [self.stop_i[k] for k in seq[1:-1]]
+        return [k for k in inner if k >= 0]
 
 
 def _make(net, log):

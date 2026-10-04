@@ -38,6 +38,46 @@ one for work, one for home - live on the server, so they follow the account
 rather than the browser. Serve `dist/` with a history fallback: every path has to
 return `index.html`, or `/join/<code>` is a 404 and the invite link is dead.
 
+An option can be followed. Follow on it moves to the map, turns on the dot
+where you are and puts a card at the bottom that says what to do now: walk to
+the stop, wait there, with when the vehicle is due, get off at the next, or that
+you went past it or off the way. The map keeps the dot in the middle with each
+fix, through a zoom too. A pan by hand lets go of it, so the way ahead can be
+looked at, and the locate button takes it back. `Follower` in `web/src/lib/follow.ts`, ported
+line for line to `mobile/lib/src/follow.dart`, works it out from the device's
+own fixes and the vehicles as the map draws them, on the device: where you are
+is never sent anywhere. Boarding is told from the fixes, not from a vehicle
+coming near. You must have gone `BOARD_M` (100 m) along the ride's line, away
+from the stop, faster than `WALK_MAX_MPS` (2.5 m/s), over at least
+`BOARD_FIXES` (3) fixes. Only then is the vehicle you are on picked, as one of
+the route's that kept pace with you - seen beside you for half the fixes and
+moving at least half as far - and the planned one wins whenever it did. A tram
+standing at the stop as you ride away is passed over, and so is a vehicle on
+another route. A ride whose vehicle is not found yet still counts as a ride,
+and the vehicle is looked for again: the map draws the one you boarded standing
+for some 10-20 s after it leaves, because a fix reaches the server about 10 s
+after the vehicle took it at the median and 19 s at the 90th percentile, and
+the server holds a vehicle still until a fix shows it moving (`_moving` in
+`commuterlviv/live/state.py`). The vehicle found is kept only while it stays
+beside you on the leg's route, and is looked for again after `LOST_FIXES` (5)
+fixes without it. That also covers its id coming back on another vehicle: the
+server frees the id of a vehicle quiet for 300 s (`GAP_RESET`) and hands freed
+ids out again oldest first. The card says to get ready to get off once the ride
+is past the last stop before yours, from the stops the server sends with each
+ride (docs/service.md), and right from boarding on a ride of one stop. A ride
+without them - from a reported journey, say, or an older server - gets ready
+`SOON_M` (400 m) before the stop instead.
+
+By default it follows only while the app is on screen. The app has a setting,
+off until turned on, to go on with the screen off: on Android a foreground
+service keeps the location updates running behind an ongoing notification that
+repeats the card, on iOS the location updates run in the background, and both
+sound an alert once when it is time to get off, when the stop is passed and on
+arrival. Neither asks for background location: the updates were started while
+the app was open, which the while-in-use grant covers. A browser cannot locate
+with the page hidden, so the web card offers only to keep the screen on
+(the Screen Wake Lock API) for as long as the journey is followed.
+
 One palette, two clients. `web/src/app.css` declares five colours, two radii and
 one shadow in a Tailwind `@theme` block, and `mobile/lib/src/theme.dart` repeats
 the same values; two of the colours, the near-black plate and the sky accent,
@@ -51,7 +91,8 @@ because the map underneath is the context. Nothing outside `app.css` names a
 Nothing is docked to an edge. The map is the whole window in both clients and
 every piece of chrome floats over it: a search bar and a menu at the top, the
 map/times/plan pill at the bottom where a thumb is, round buttons for locate and
-zoom, and cards that rise off the bottom rather than out of it. That is why the
+zoom (on the web only from the `sm` width up, since below it the cards span the
+window and would cover them), and cards that rise off the bottom rather than out of it. That is why the
 web layout is one `relative` box of absolutely positioned pieces instead of a
 column, and why the phone's `Scaffold` has neither an `appBar` nor a
 `bottomNavigationBar`: `floatingTop` and `floatingBottom` in `theme.dart` are
@@ -113,8 +154,8 @@ endpoint and no model - the browser and the phone see the same city, the same
 route sets and the same predictions, and the same journey planner behind the
 third choice in the tab pill. Both also carry the same three views added since:
 a saved list where a place can be renamed or dropped, a search that finds
-addresses and shops as well as stop names, and traffic drawn over the streets
-the model can see.
+addresses and shops as well as stop names, traffic drawn over the streets
+the model can see, and following a journey as you travel it.
 
 ```sh
 cd mobile && flutter pub get
@@ -141,8 +182,8 @@ The one cost of that rule is paid by the locate-me button, which is a
 hand-written channel - AOSP's `LocationManager` on Android, `CoreLocation` on
 iOS - rather than the usual package, which brings Play Services with it; see
 `mobile/README.md`. The app asks for the internet permission, and
-for location on the first press of that button; the fix never leaves the
-phone.
+for location on the first press of that button or of Follow; the fix never
+leaves the phone.
 
 The service needs one line for it: `app://commuterlviv` in `COMMUTERLVIV_ORIGINS`. The
 app is not a web page and has no web origin, and that scheme is one no browser

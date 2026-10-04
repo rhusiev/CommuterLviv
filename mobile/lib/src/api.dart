@@ -259,6 +259,16 @@ class Api {
   Future<void> reportPlan(String id, String note) =>
       _call('POST', '/api/report', body: {'id': id, 'note': note});
 
+  /// The search [id] names with its option [option] taking the [n]-th backup
+  /// of its [leg]-th leg, drawn as an option is.
+  Future<Journey> backup(String id, int option, int leg, int n) async =>
+      Journey.fromJson(
+        await _call(
+          'GET',
+          '/api/backup?report=$id&option=$option&leg=$leg&backup=$n',
+        ) as Map<String, dynamic>,
+      );
+
   /// The ETag of the catalog held, which names the city it describes.
   String? get catalogTag => _prefs.getString('$_catalogKey.tag');
 
@@ -354,6 +364,11 @@ class Api {
   bool get showLines => _setting('lines', false);
 
   Future<void> setShowLines(bool on) => _keep('lines', on);
+
+  /// Off unless asked for: it keeps location on with the app off the screen
+  bool get followAway => _setting('followAway', false);
+
+  Future<void> setFollowAway(bool on) => _keep('followAway', on);
 
   /// Null means the phone's own, which is what `main` falls back to.
   String? get language => _setting<String?>('lang', null);

@@ -7,10 +7,9 @@ is written out by hand here.
 
 ## Running it
 
-The toolchain lives under XDG paths; `/tmp/flutterenv.sh` exports the lot.
+These need the Flutter SDK's `bin` on `PATH`, and the Android SDK for a build.
 
 ```sh
-source /tmp/flutterenv.sh
 cd mobile
 flutter pub get
 flutter test                       # the wire decoder against bytes Python made
@@ -138,10 +137,10 @@ not undoing:
 * `subdir: mobile` is the Flutter project, not the Gradle module inside it: it is where the `build:` commands run and what `output:` is relative to, and `flutter build` has to run from the Flutter project.
 * The recipe has three `Builds:` blocks, not one, and `--split-per-abi` builds each: arm, arm64 and x86_64 on their own, so a phone downloads roughly a third. Flutter's Gradle plugin codes an APK as `<abi> * 1000 + <pubspec code>` (`ABI_VERSION` in `FlutterPluginConstants.kt`), so the three blocks carry 1023, 2023 and 4023 for build 23; F-Droid rejects any APK whose code differs from the block it sits in, and `VercodeOperation` rewrites them from the single code `UpdateCheckData` finds in `pubspec.yaml`. arm64 must outrank arm because a 64-bit phone can run both and gets the higher one.
 * No dependency pulls Play services (see "Where the phone is" below).
-* The listing - text, screenshots, changelogs - lives in `fastlane/metadata/android/en-US/` at the root of the repository, not here beside the app, because F-Droid looks for it only at the root of the checkout. `Summary` and `Description` in the recipe repeat the text because fdroiddata requires both fields; they are kept in step by hand.
+* The listing - text, screenshots, changelogs - lives in `fastlane/metadata/android/en-US/` at the root of the repository, not here beside the app, because F-Droid looks for it only at the root of the checkout. `Summary` and `Description` in the recipe repeat the text and are kept in step by hand. The copy in fdroiddata carries no `Summary:`: fdroiddata keeps it in `metadata/nl.r1a.commuterlviv/en-US/summary.txt`, and its `tools check scripts` job fails a recipe that still has one.
 * A screenshot is read from the commit the build names, so it has to be in the tree the release tag points at, not merely on the branch.
 * `prebuild:` and `build:` move the checkout to `/tmp/build/nl.r1a.commuterlviv` and back again, and `.github/workflows/release.yml` moves its own there too, so Flutter's Gradle plugin bakes the same absolute path into `libapp.so` on both sides. A symlink is not enough - the plugin resolves it - and `/tmp` is the one place both an F-Droid build (which drops sudo) and a GitHub runner can write. `PUB_CACHE=/tmp/pubcache` is pinned for the same reason: the pub cache path reaches the pre-strip debug info of `libdartjni.so`. Without all of it the two builds share a lockfile, a toolchain and a signing key and still disagree on the `dart_plugin_registrant.dart` path baked into the .so, and F-Droid's `diff -r` fails on it.
-* Each block builds its one ABI with `--target-platform`, and the release workflow runs `flutter build` once per ABI for the same reason. AGP packages the merged manifest of a build's *first* split verbatim and re-serialises it for the rest, which inserts a blank line before a comment and shifts every line number in the packaged `AndroidManifest.xml`. One run emitting all three splits therefore produces one manifest F-Droid can reproduce and two it cannot. See [`../FINDINGS.md`](../FINDINGS.md).
+* Each block builds its one ABI with `--target-platform`, and the release workflow runs `flutter build` once per ABI for the same reason. AGP packages the merged manifest of a build's *first* split verbatim and re-serialises it for the rest, which inserts a blank line before a comment and shifts every line number in the packaged `AndroidManifest.xml`. One run emitting all three splits therefore produces one manifest F-Droid can reproduce and two it cannot.
 
 ## Cutting a release
 
@@ -322,8 +321,9 @@ either word explains what it means. The option's backup count opens a dialog
 that, under each ride's stop, puts the planned way first and then the ride's
 backups - the other ways to the door from that stop, each with its routes,
 where it changes and when it gets there, at most half an hour after the option
-does - and tapping one opens the line it leaves on. Four show at first, picked
-by the sort preset and then by each other one (`Prefer.shortlist`), with the
+does - and tapping one draws it on the map, a backup that is not already an
+option fetched and added to the list as one (`/api/backup`). Four show at
+first, picked by the sort preset and then by each other one (`Prefer.shortlist`), with the
 rest behind a button; a route the option itself rides further along is
 outlined, and a way that is also one of the listed options says `Option N`, N
 being where it sits in the list as sorted now. Past the model's 45-minute
@@ -365,22 +365,38 @@ The locate button is a hand-written platform channel, not a package. The obvious
 package, `geolocator`, pulls `com.google.android.gms:play-services-location`,
 and F-Droid does not take builds with a proprietary SDK in them; so each
 platform has its own half, answering the same two channels -
-`nl.r1a.commuterlviv/here` for `start` and `stop`,
-`nl.r1a.commuterlviv/here/fixes` for a `{lat, lon, accuracy}` map per fix - so
+`nl.r1a.commuterlviv/here` for `start` and `stop`, `away` (`{on, channel,
+alerts}`, the two notification channel names) and `notice` (`{title, text,
+alert}`),
+`nl.r1a.commuterlviv/here/fixes` for a `{lat, lon, accuracy, t}` map per fix,
+`t` being when the phone took it, in ms since the epoch - so
 that `here.dart` has one code path.
 
 `MainActivity.kt` is the Android half, over `android.location.LocationManager`,
 which is AOSP. It asks both providers, GPS and network, because which one
-answers first differs indoors and out. `ios/Runner/Here.swift` is the iOS half,
+answers first differs indoors and out. Both feed one listener, after the last
+known fix, so the fixes do not arrive in the order they were taken; the journey
+follower goes by `t` and drops any fix no newer than the last. `ios/Runner/Here.swift` is the iOS half,
 over `CoreLocation`, which is part of the system; `AppDelegate.swift` owns it
 and hands it the app's trips in and out of the background. Both stop the
-updates while the app is off screen: no fix is taken while the map is not on
-it.
+updates while the app is off screen - no fix is taken while the map is not on
+it - unless a journey is followed with "Follow with the app closed" turned on.
+Then `away` keeps them running: on Android `FollowService.kt` is a foreground
+service of type `location` behind an ongoing notification, which `notice`
+rewrites and which sounds on the alerts channel when `alert` is set; on iOS
+`allowsBackgroundLocationUpdates` is set and `notice` posts a local
+notification only when `alert` is set, since iOS has no ongoing one.
 
 `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION` are declared, and asked for
-on the first press of the button - never at launch. The fix stays on the phone:
-`lib/src/here.dart` holds it, the layer draws it, and nothing sends it to the
-service, which has no use for it.
+on the first press of the button, or of Follow on a journey - never at launch.
+`FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_LOCATION` are declared for the
+service, and `POST_NOTIFICATIONS` is asked for on Android 13 and up only when
+following away is turned on. `ACCESS_BACKGROUND_LOCATION` is not needed and not
+declared: a foreground service started while the app is open runs on the
+while-in-use grant.
+The fix stays on the phone: `lib/src/here.dart` holds it, the layer draws it,
+the journey follower reads it, and nothing sends it to the service, which has
+no use for it.
 
 **The iOS half is unbuilt.** It is written but has never been through a
 compiler: there is no Mac here, and `flutter build ios` needs one. Read it as a

@@ -59,7 +59,11 @@ Walks are Dijkstra on that graph, scipy's (`scipy.sparse.csgraph.dijkstra`),
 about ten times faster than one in Python. A point steps onto the graph
 at the nearest point of the nearest footpath edge with a node within 150 m
 (`Walk.attach`), and the search starts from both ends of that edge, each with
-the walk to it already spent. Joining the point to every node in reach instead
+the walk to it already spent. Only edges on the largest connected piece of the
+graph count: OpenStreetMap has hundreds of small pieces drawn apart from the
+streets - a plaza, a platform, a courtyard - and a point or a stop stepping onto
+one could walk nowhere. In Lviv's graph 4286 of 239922 nodes, and 17 of the 1071
+stops' nearest edges, are on such pieces. Joining the point to every node in reach instead
 would let a walk cut straight across a block to any of them. Two points on the
 same edge are also joined along it, which the graph alone cannot see. The walk from the origin that finds
 the whole walk also gives the walks to the stops near the origin, so a search
@@ -89,6 +93,13 @@ since - a line the city is not running today, which the timetable alone will
 happily promise you a bus from. A `quiet` ride is held back unless it is the
 only ride on offer, in which case it is returned and flagged: an unreliable bus
 is worth knowing about, an invented one is not.
+
+A ride also carries its `stops`: the catalog stops it calls at after boarding
+and before getting off, in order, read off the same pattern its line is drawn
+along (or the tracked vehicle's arrivals when no one pattern covers it), and
+empty for a ride to the very next stop. The journey follower says to get ready
+once the last of them is reached. A ride neither of those covers, a report's
+stored journeys and an older service have no `stops`.
 
 Every ride also carries its `backups`, `[{rides: [{route, dep, arr, a, b,
 live, planned}, ...], arr, walk}, ...]`: the other ways to the door from the
@@ -147,6 +158,19 @@ preset, so a way is there should the thing the preset favours be what fails,
 then the next best by the preset. They are listed in the order they leave,
 which is the order they are needed at the stop; the rest are a tap away.
 
+A tap on a way draws it. The planned way is the option itself, and a backup
+that is also an option is that option. Any other backup is asked for with
+`GET /api/backup?report=ID&option=I&leg=L&backup=N`: the search the `report`
+id holds, its option `I` with backup `N` of its leg `L` taken in place of the
+rest of the journey (all counted from 0 as sent, walks among the legs), built as `/api/plan` builds an option, with
+the walks, shapes and `stops`, and its rides before that leg keeping their
+backups. The clients list it as an option of its own, after the others. It
+answers 404 when the search is no longer held or has no such backup, 400 for an
+index that is not a whole number, 409 when the city was renewed since the
+search, and 503 while the planner is busy. The rides a built option shares with
+the option it came from are the only ones with backups, so the clients ask for
+those under that option's index.
+
 Every leg also carries `pts`, `[[lat, lon], ...]`, which is where it goes on the
 map: a walk follows the footpath graph (`walk.path`), and a ride is its shape cut
 between the stop it is boarded at and the stop it is left at. Both are simplified
@@ -165,6 +189,17 @@ door to a slightly faster one behind a 12-minute walk, and it would never
 reach the front. So the scan also keeps, per hop, the earliest arrival with
 every walk capped at 10 and at 5 minutes (`WALK_CAPS`), as slots of its own
 in the same pass.
+
+A ride a minute or two before an option's that arrives a minute or two after it
+is an option too, though the other beats it: at the stop, whichever comes first
+is the one to take. So each option may bring one near tie (`_Profile.near`): a
+way whose first ride leaves at most 5 minutes before the option's and which
+reaches the door at most 5 minutes after it (`NEAR_TIE`, chosen, not derived),
+the soonest at the door counting the minutes walked. It rides no vehicle an
+option or another near tie rides, since that is no other way should the vehicle
+be late, and it is not a bus waited for with rides added, as for backups. А10
+at 13:55 to the door at 14:13 is listed beside Тр38 at 13:56 to the door at
+14:11 this way.
 
 The server's order is the fastest first. Both clients re-sort the same options
 by a preset - fastest, less walking, fewer changes, most backups - picked from
@@ -193,9 +228,9 @@ taps "Something looks wrong? Report it" under the options, which sends
 characters. That writes one compressed file to `data/reports/`: the request,
 those arrivals, the catalog's stop and route ids they are indexed by, the answer
 as sent, the version, the account's id and the note. An id is good for one
-report, and only the account that searched can use it; one that has expired is
-a 404. Past 200 files (`reports.FILES`) new reports are a 507 until some are
-read and deleted.
+report, and only the account that searched can use it, for the report and for
+`/api/backup`; one that has expired is a 404. Past 200 files (`reports.FILES`)
+new reports are a 507 until some are read and deleted.
 
 `python -m commuterlviv report FILE` prints the answer as it was sent and then
 the one the code and timetable at hand give for the same request and arrivals,
@@ -283,8 +318,8 @@ that has none, so an older `walk.npz` gains it in place. `walk.npz` is pure
 OpenStreetMap plus elevation and can be copied between hosts; `transfers.npz`
 indexes stops by the catalog it was built against and must be rebuilt wherever
 `network.pkl` differs. It also records what it was built from: the walking model
-(`model`, such as `1.25 m/s, Tobler slopes`), a digest of the footpath graph
-(`graph`) and one of the catalog's stops (`stops`). The service rebuilds it when
+(`model`, such as `1.25 m/s, Tobler slopes`), a digest of the footpath graph and of
+which part of it is walked on (`graph`) and one of the catalog's stops (`stops`). The service rebuilds it when
 any of the three is not what it holds - about 8 s, written beside the old file
 and swapped in. A file from before the digests has none, so it is rebuilt once. Without them the service still starts, logs why, and
 `/api/plan` answers 503 - the map and the arrivals do not depend on it.

@@ -85,7 +85,7 @@ if command -v flutter >/dev/null; then
   run analyze mobile flutter analyze
   run test mobile flutter test
 else
-  echo "flutter is not on PATH - skipped. /tmp/flutterenv.sh puts it there"
+  echo "flutter is not on PATH - skipped. Put the Flutter SDK's bin there"
 fi
 
 echo
