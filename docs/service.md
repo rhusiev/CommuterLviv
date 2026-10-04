@@ -94,6 +94,13 @@ happily promise you a bus from. A `quiet` ride is held back unless it is the
 only ride on offer, in which case it is returned and flagged: an unreliable bus
 is worth knowing about, an invented one is not.
 
+A ride also carries its `stops`: the catalog stops it calls at after boarding
+and before getting off, in order, read off the same pattern its line is drawn
+along (or the tracked vehicle's arrivals when no one pattern covers it), and
+empty for a ride to the very next stop. The journey follower says to get ready
+once the last of them is reached. A ride neither of those covers, a report's
+stored journeys and an older service have no `stops`.
+
 Every ride also carries its `backups`, `[{rides: [{route, dep, arr, a, b,
 live, planned}, ...], arr, walk}, ...]`: the other ways to the door from the
 stop it is boarded at, leaving after the chosen departure and reaching the door

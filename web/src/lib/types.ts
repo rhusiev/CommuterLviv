@@ -67,6 +67,9 @@ export type Leg = {
   confidence?: Confidence;
   /** `[lat, lon]` along the footpath or the ridden stretch */
   pts?: [number, number][];
+  /** Catalog stops a ride calls at on the way, in order; absent from an older
+   *  service */
+  stops?: number[];
   /** Other ways to the door from where the ride boards, soonest first */
   backups?: Backup[];
 };

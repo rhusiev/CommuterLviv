@@ -62,6 +62,7 @@ class Progress {
     required this.left,
     required this.astray,
     required this.passed,
+    required this.soon,
   });
 
   final Stage stage;
@@ -74,6 +75,9 @@ class Progress {
 
   /// Carried on past the stop to get off at
   final bool passed;
+
+  /// On the ride, past its last stop before the one to get off at
+  final bool soon;
 }
 
 /// A fix vaguer than this says nothing about which side of a tram it is on
@@ -119,6 +123,11 @@ const _alightS = 15;
 
 /// This far beyond the stop, faster than walking, is carried past it
 const _passedM = 150.0;
+
+/// Where a ride does not say which stops it calls at, this close to the stop
+/// to get off at is getting ready for it. Chosen, not derived: about a stop's
+/// spacing in the city centre.
+const _soonM = 400.0;
 
 /// What is kept of the fixes: enough for [_boardM] at walking pace
 const _historyMs = 60000;
@@ -184,7 +193,9 @@ Stage start(Journey j) => j.legs.first.kind == 'ride'
     : const Stage(StageKind.walk, 0);
 
 class Follower {
-  Follower(Journey journey) : _legs = journey.legs {
+  /// [catalog] places the stops a ride calls at; without it, or without them,
+  /// getting ready goes by [_soonM].
+  Follower(Journey journey, [Catalog? catalog]) : _legs = journey.legs {
     final o = _legs.first.pts.first;
     _lat0 = o.latitude;
     _lon0 = o.longitude;
@@ -197,12 +208,16 @@ class Follower {
       for (final l in _legs)
         if (l.route != null) l.route!,
     };
+    _ready = [
+      for (final (i, l) in _legs.indexed) _readyAt(l, _lines[i], catalog),
+    ];
     _stage = start(journey);
     _last = Progress(
       stage: _stage,
       left: _lines.first.length,
       astray: false,
       passed: false,
+      soon: false,
     );
   }
 
@@ -210,6 +225,9 @@ class Follower {
   late final double _lat0, _lon0, _kx;
   late final List<_Line> _lines;
   late final Set<int> _routes;
+
+  /// Metres along each leg from which it is time to get ready to get off
+  late final List<double> _ready;
   late Stage _stage;
   var _history = <_Sample>[];
 
@@ -227,6 +245,15 @@ class Follower {
       (x: (lon - _lon0) * _kx, y: (lat - _lat0) * _earthM * _rad);
 
   _Sample get _now => _history.last;
+
+  /// Reaching the stop before the one to get off at - the boarding stop, for a
+  /// ride of one stop - or else [_soonM] short of the end
+  double _readyAt(Leg leg, _Line line, Catalog? catalog) {
+    final stops = leg.stops;
+    if (catalog == null || stops == null) return line.length - _soonM;
+    final s = catalog.stops[stops.isEmpty ? leg.a : stops.last];
+    return line.project(_at(s.lat, s.lon)).s - _arriveM;
+  }
 
   /// Takes a fix and the vehicles drawn at its time, and says where on the
   /// journey that puts the device. A vague fix changes nothing, and nor does
@@ -262,7 +289,13 @@ class Follower {
 
   Progress _report(bool passed) {
     if (_stage.kind == StageKind.arrived) {
-      return Progress(stage: _stage, left: 0, astray: false, passed: false);
+      return Progress(
+        stage: _stage,
+        left: 0,
+        astray: false,
+        passed: false,
+        soon: false,
+      );
     }
     final line = _lines[_stage.leg];
     final p = line.project(_now.at);
@@ -271,6 +304,7 @@ class Follower {
       left: math.max(0, line.length - p.s),
       astray: p.off > _astrayM,
       passed: passed,
+      soon: _stage.kind == StageKind.ride && p.s >= _ready[_stage.leg],
     );
   }
 

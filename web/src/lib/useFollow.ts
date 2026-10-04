@@ -1,17 +1,21 @@
 import { useEffect, useState } from "react";
 import { Follower, type Progress, type Seen } from "./follow";
 import { sample, type Live } from "./live";
-import type { Journey } from "./types";
+import type { Catalog, Journey } from "./types";
 
 /** Follows `journey` from the device's own fixes until it is null: null until
  * the first fix, "denied" once the browser refuses one. The fixes go nowhere
- * but the follower. */
-export function useFollow(journey: Journey | null, live: Live): Progress | "denied" | null {
+ * but the follower. `catalog` places the stops a ride calls at. */
+export function useFollow(
+  journey: Journey | null,
+  live: Live,
+  catalog: Catalog | undefined,
+): Progress | "denied" | null {
   const [progress, setProgress] = useState<Progress | "denied" | null>(null);
   useEffect(() => {
     setProgress(null);
     if (!journey) return;
-    const follower = new Follower(journey);
+    const follower = new Follower(journey, catalog);
     const watch = navigator.geolocation.watchPosition(
       (pos) => {
         // Where the map draws each vehicle at this moment, which is all the
@@ -32,6 +36,6 @@ export function useFollow(journey: Journey | null, live: Live): Progress | "deni
       { enableHighAccuracy: true, maximumAge: 0 },
     );
     return () => navigator.geolocation.clearWatch(watch);
-  }, [journey, live]);
+  }, [journey, live, catalog]);
   return progress;
 }

@@ -15,10 +15,6 @@ import 'route_badge.dart';
 import 'strings.dart';
 import 'theme.dart';
 
-/// Closer than this to the stop to get off at, the card says to get ready.
-/// Chosen, not derived: about a stop's spacing in the city centre.
-const _soonM = 400;
-
 const _mPerKm = 1000;
 
 /// Short distances are said to this many metres
@@ -51,7 +47,7 @@ class FollowCard extends StatefulWidget {
 }
 
 class _FollowCardState extends State<FollowCard> {
-  late Follower _follower = Follower(widget.journey);
+  late Follower _follower = Follower(widget.journey, widget.catalog);
   Progress? _progress;
 
   /// What the notification last said, so a fix that changes nothing in it
@@ -75,7 +71,7 @@ class _FollowCardState extends State<FollowCard> {
   void didUpdateWidget(FollowCard old) {
     super.didUpdateWidget(old);
     if (old.journey != widget.journey) {
-      _follower = Follower(widget.journey);
+      _follower = Follower(widget.journey, widget.catalog);
       _progress = null;
       _noticed = null;
       _alerted.clear();
@@ -129,7 +125,7 @@ class _FollowCardState extends State<FollowCard> {
     final moment = switch (progress) {
       Progress(stage: Stage(kind: StageKind.arrived)) => 'arrived',
       Progress(passed: true) => 'passed $leg',
-      _ when _soon(progress) => 'soon $leg',
+      Progress(soon: true) => 'soon $leg',
       _ => null,
     };
     final alert = moment != null && _alerted.add(moment);
@@ -255,9 +251,7 @@ _Said _say(Catalog catalog, Journey journey, Live live, Progress progress) {
     default:
       // Only the vehicle ridden says when it gets there; another of its
       // route could be the one ahead
-      head = _soon(progress)
-          ? txt.offSoon(name(leg.b))
-          : txt.offAt(name(leg.b));
+      head = progress.soon ? txt.offSoon(name(leg.b)) : txt.offAt(name(leg.b));
       when = stage.veh == null
           ? null
           : due(leg.b).where((a) => a.veh == stage.veh).firstOrNull;
@@ -272,8 +266,6 @@ _Said _say(Catalog catalog, Journey journey, Live live, Progress progress) {
       ? _Said(head, sub, txt.passedStop, passed: true)
       : _Said(head, sub, progress.astray ? txt.offTheWay : null);
 }
-
-bool _soon(Progress p) => p.stage.kind == StageKind.ride && p.left <= _soonM;
 
 class _Step extends StatelessWidget {
   const _Step({required this.said, required this.route});

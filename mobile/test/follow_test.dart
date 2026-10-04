@@ -19,9 +19,9 @@ LatLng at(double east, double north) => LatLng(
   lon0 + east / (mPerDegree * math.cos(lat0 * math.pi / 180)),
 );
 
-/// From the door 200 m north to a stop, 2 km east on route 7, then 200 m
-/// south to the door
-Journey journey({int? veh = planned}) => Journey(
+/// From the door 200 m north to a stop, 2 km east on route 7 calling at
+/// [stops] on the way, then 200 m south to the door
+Journey journey({int? veh = planned, List<int>? stops}) => Journey(
   dep: 0,
   arr: 0,
   rides: 1,
@@ -37,6 +37,7 @@ Journey journey({int? veh = planned}) => Journey(
       b: 2,
       route: route,
       veh: veh,
+      stops: stops,
       pts: [at(0, 200), at(1000, 200), at(2000, 200)],
     ),
     Leg(
@@ -50,9 +51,32 @@ Journey journey({int? veh = planned}) => Journey(
   ],
 );
 
+/// Stop 1 is boarded at, 2 got off at, and 3 lies between them, 1200 m on
+final catalog = Catalog(
+  routes: const [],
+  stops: [
+    for (final (i, p) in [
+      at(0, 0),
+      at(0, 200),
+      at(2000, 200),
+      at(1200, 200),
+    ].indexed)
+      Stop(
+        id: 's$i',
+        name: '$i',
+        code: '$i',
+        lat: p.latitude,
+        lon: p.longitude,
+        routes: const [],
+      ),
+  ],
+  index: const {},
+  stopIndex: const {},
+);
+
 /// Drives a [Follower] one fix at a time, every [fixEveryMs]
 class Trip {
-  Trip(Journey j) : follower = Follower(j);
+  Trip(Journey j) : follower = Follower(j, catalog);
 
   final Follower follower;
   var t = 0;
@@ -258,6 +282,34 @@ void main() {
     );
     expect(p.stage.kind, StageKind.ride);
     expect(p.stage.veh, isNull);
+  });
+
+  test(
+    'getting ready starts at the last stop before the one to get off at',
+    () {
+      final trip = atStop(journey(stops: [3]));
+      var p = trip.east(0, 8, 70, seen: (x) => [vehicle(planned, x)]);
+      expect(p.stage.kind, StageKind.ride);
+      expect(p.soon, isFalse);
+      p = trip.east(1120, 8, 4, seen: (x) => [vehicle(planned, x)]);
+      expect(p.soon, isTrue);
+    },
+  );
+
+  test('a ride of one stop is getting ready from boarding', () {
+    final trip = atStop(journey(stops: const []));
+    final p = trip.east(0, 8, 10, seen: (x) => [vehicle(planned, x)]);
+    expect(p.stage.kind, StageKind.ride);
+    expect(p.soon, isTrue);
+  });
+
+  test('without the stops on the way, getting ready is 400 m out', () {
+    final trip = atStop(journey());
+    var p = trip.east(0, 8, 100, seen: (x) => [vehicle(planned, x)]);
+    expect(p.stage.kind, StageKind.ride);
+    expect(p.soon, isFalse);
+    p = trip.east(1600, 8, 3, seen: (x) => [vehicle(planned, x)]);
+    expect(p.soon, isTrue);
   });
 
   test('getting off at the stop walks the rest, then arrives', () {

@@ -7,10 +7,6 @@ import type { Live } from "../lib/live";
 import type { Arrival, Catalog, Journey } from "../lib/types";
 import { RouteBadge } from "./RouteBadge";
 
-/** Closer than this to the stop to get off at, the card says to get ready.
- * Chosen, not derived: about a stop's spacing in the city centre. */
-const SOON_M = 400;
-
 /** What to do now on a journey being followed */
 export function FollowCard({
   catalog,
@@ -89,7 +85,7 @@ function Step({
   } else {
     // Only the vehicle ridden says when it gets there; another of its route
     // could be the one ahead
-    head = progress.left <= SOON_M ? t.offSoon(name(leg.b)) : t.offAt(name(leg.b));
+    head = progress.soon ? t.offSoon(name(leg.b)) : t.offAt(name(leg.b));
     when = stage.veh === null ? undefined : due(leg.b).find((a) => a.veh === stage.veh);
   }
   return (

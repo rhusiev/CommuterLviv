@@ -229,6 +229,7 @@ class Leg {
     this.live = false,
     this.confidence = Confidence.live,
     this.pts = const [],
+    this.stops,
     this.backups = const [],
   });
 
@@ -249,6 +250,7 @@ class Leg {
           (p[1] as num).toDouble(),
         ),
     ],
+    stops: (j['stops'] as List<dynamic>?)?.cast<int>(),
     backups: [
       for (final b in j['backups'] as List<dynamic>? ?? const [])
         Backup.fromJson(b as Map<String, dynamic>),
@@ -267,6 +269,10 @@ class Leg {
 
   /// Where the leg goes on the map: the footpath, or the ridden stretch
   final List<LatLng> pts;
+
+  /// Catalog stops a ride calls at on the way, in order; null from an older
+  /// service
+  final List<int>? stops;
 
   /// Other ways to the door from where the ride boards, soonest first
   final List<Backup> backups;

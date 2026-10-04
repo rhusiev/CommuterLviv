@@ -268,7 +268,7 @@ export function App() {
   }, [live, cat, watched]);
 
   // Here rather than in its card, which a change of tab unmounts
-  const progress = useFollow(following, live);
+  const progress = useFollow(following, live, cat ?? undefined);
 
   /** Only the stops of the routes on the map are drawn or clickable */
   const stops = useMemo(() => {

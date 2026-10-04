@@ -60,7 +60,11 @@ the server holds a vehicle still until a fix shows it moving (`_moving` in
 beside you on the leg's route, and is looked for again after `LOST_FIXES` (5)
 fixes without it. That also covers its id coming back on another vehicle: the
 server frees the id of a vehicle quiet for 300 s (`GAP_RESET`) and hands freed
-ids out again oldest first.
+ids out again oldest first. The card says to get ready to get off once the ride
+is past the last stop before yours, from the stops the server sends with each
+ride (docs/service.md), and right from boarding on a ride of one stop. A ride
+without them - from a reported journey, say, or an older server - gets ready
+`SOON_M` (400 m) before the stop instead.
 
 By default it follows only while the app is on screen. The app has a setting,
 off until turned on, to go on with the screen off: on Android a foreground

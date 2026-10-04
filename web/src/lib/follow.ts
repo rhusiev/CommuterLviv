@@ -8,7 +8,7 @@
  * fixes move along the ride's line faster than anyone walks. Only then is the
  * vehicle picked: the one of the leg's route keeping pace with the fixes. */
 
-import type { Journey, Leg } from "./types";
+import type { Catalog, Journey, Leg } from "./types";
 
 export type Fix = { lat: number; lon: number; accuracy: number; t: number };
 
@@ -30,6 +30,8 @@ export type Progress = {
   astray: boolean;
   /** Carried on past the stop to get off at */
   passed: boolean;
+  /** On the ride, past its last stop before the one to get off at */
+  soon: boolean;
 };
 
 /** A fix vaguer than this says nothing about which side of a tram it is on */
@@ -63,6 +65,10 @@ const LOST_FIXES = 5;
 const ALIGHT_S = 15;
 /** This far beyond the stop, faster than walking, is carried past it */
 const PASSED_M = 150;
+/** Where a ride does not say which stops it calls at, this close to the stop
+ * to get off at is getting ready for it. Chosen, not derived: about a stop's
+ * spacing in the city centre. */
+const SOON_M = 400;
 /** What is kept of the fixes: enough for `BOARD_M` at walking pace */
 const HISTORY_MS = 60_000;
 
@@ -127,6 +133,8 @@ export class Follower {
   private readonly lines: Line[];
   private readonly at: (lat: number, lon: number) => XY;
   private readonly routes: Set<number>;
+  /** Metres along each leg from which it is time to get ready to get off */
+  private readonly ready: number[];
   private stage: Stage;
   private history: Sample[] = [];
   /** Fixes in a row the ridden vehicle has been out of step */
@@ -135,14 +143,25 @@ export class Follower {
   private reached = false;
   private last: Progress;
 
-  constructor(journey: Journey) {
+  /** `catalog` places the stops a ride calls at; without it, or without them,
+   * getting ready goes by `SOON_M`. */
+  constructor(journey: Journey, catalog?: Catalog) {
     this.legs = journey.legs;
     const [lat0, lon0] = this.legs[0]?.pts?.[0] ?? [0, 0];
     this.at = plane(lat0, lon0);
     this.lines = this.legs.map((l) => new Line((l.pts ?? []).map(([lat, lon]) => this.at(lat, lon))));
     this.routes = new Set(this.legs.flatMap((l) => (l.route === undefined ? [] : [l.route])));
+    this.ready = this.legs.map((l, i) => this.readyAt(l, this.lines[i]!, catalog));
     this.stage = start(journey);
-    this.last = { stage: this.stage, left: this.lines[0]?.length ?? 0, astray: false, passed: false };
+    this.last = { stage: this.stage, left: this.lines[0]?.length ?? 0, astray: false, passed: false, soon: false };
+  }
+
+  /** Reaching the stop before the one to get off at - the boarding stop, for a
+   * ride of one stop - or else `SOON_M` short of the end */
+  private readyAt(leg: Leg, line: Line, catalog?: Catalog): number {
+    if (!catalog || !leg.stops) return line.length - SOON_M;
+    const s = catalog.stops[leg.stops.length ? leg.stops[leg.stops.length - 1]! : leg.a]!;
+    return line.project(this.at(s.lat, s.lon)).s - ARRIVE_M;
   }
 
   get progress() {
@@ -169,10 +188,13 @@ export class Follower {
   }
 
   private report(passed: boolean): Progress {
-    if (this.stage.kind === "arrived") return { stage: this.stage, left: 0, astray: false, passed: false };
+    if (this.stage.kind === "arrived") {
+      return { stage: this.stage, left: 0, astray: false, passed: false, soon: false };
+    }
     const line = this.lines[this.stage.leg]!;
     const { s, off } = line.project(this.now.at);
-    return { stage: this.stage, left: Math.max(0, line.length - s), astray: off > ASTRAY_M, passed };
+    const soon = this.stage.kind === "ride" && s >= this.ready[this.stage.leg]!;
+    return { stage: this.stage, left: Math.max(0, line.length - s), astray: off > ASTRAY_M, passed, soon };
   }
 
   private get now() {
