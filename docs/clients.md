@@ -41,7 +41,9 @@ return `index.html`, or `/join/<code>` is a 404 and the invite link is dead.
 An option can be followed. Follow on it moves to the map, turns on the dot
 where you are and puts a card at the bottom that says what to do now: walk to
 the stop, wait there, with when the vehicle is due, get off at the next, or that
-you went past it or off the way. `Follower` in `web/src/lib/follow.ts`, ported
+you went past it or off the way. The map keeps the dot in the middle with each
+fix, through a zoom too. A pan by hand lets go of it, so the way ahead can be
+looked at, and the locate button takes it back. `Follower` in `web/src/lib/follow.ts`, ported
 line for line to `mobile/lib/src/follow.dart`, works it out from the device's
 own fixes and the vehicles as the map draws them, on the device: where you are
 is never sent anywhere. Boarding is told from the fixes, not from a vehicle
@@ -89,7 +91,8 @@ because the map underneath is the context. Nothing outside `app.css` names a
 Nothing is docked to an edge. The map is the whole window in both clients and
 every piece of chrome floats over it: a search bar and a menu at the top, the
 map/times/plan pill at the bottom where a thumb is, round buttons for locate and
-zoom, and cards that rise off the bottom rather than out of it. That is why the
+zoom (on the web only from the `sm` width up, since below it the cards span the
+window and would cover them), and cards that rise off the bottom rather than out of it. That is why the
 web layout is one `relative` box of absolutely positioned pieces instead of a
 column, and why the phone's `Scaffold` has neither an `appBar` nor a
 `bottomNavigationBar`: `floatingTop` and `floatingBottom` in `theme.dart` are
