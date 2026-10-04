@@ -705,7 +705,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 selected: _stop,
                 theme: _theme,
                 here: _here,
-                empty: _routes.isEmpty,
+                empty: _shown.isEmpty,
                 marks: [
                   if (_planning && _from != null) (at: _from!, label: 'A'),
                   if (_planning && _to != null) (at: _to!, label: 'B'),
