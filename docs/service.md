@@ -177,6 +177,17 @@ reach the front. So the scan also keeps, per hop, the earliest arrival with
 every walk capped at 10 and at 5 minutes (`WALK_CAPS`), as slots of its own
 in the same pass.
 
+A ride a minute or two before an option's that arrives a minute or two after it
+is an option too, though the other beats it: at the stop, whichever comes first
+is the one to take. So each option may bring one near tie (`_Profile.near`): a
+way whose first ride leaves at most 5 minutes before the option's and which
+reaches the door at most 5 minutes after it (`NEAR_TIE`, chosen, not derived),
+the soonest at the door counting the minutes walked. It rides no vehicle an
+option or another near tie rides, since that is no other way should the vehicle
+be late, and it is not a bus waited for with rides added, as for backups. А10
+at 13:55 to the door at 14:13 is listed beside Тр38 at 13:56 to the door at
+14:11 this way.
+
 The server's order is the fastest first. Both clients re-sort the same options
 by a preset - fastest, less walking, fewer changes, most backups - picked from
 a sort icon beside the search and remembered on the device; the whole walk goes last
