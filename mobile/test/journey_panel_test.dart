@@ -1,6 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:commuterlviv/src/api.dart';
@@ -13,10 +17,21 @@ Future<void> pump(
   End? picking,
   void Function(End? which)? onPick,
   Map<String, Object> prefs = const {},
+  String? server,
+  Catalog catalog = const Catalog(
+    routes: [],
+    stops: [],
+    index: {},
+    stopIndex: {},
+  ),
+  LatLng? from,
+  LatLng? to,
+  void Function(Journey? journey)? onShow,
 }) async {
   SharedPreferences.setMockInitialValues(prefs);
   FlutterSecureStorage.setMockInitialValues({});
   final api = await Api.open();
+  if (server != null) await api.setBase(server);
   var folded = false;
   await tester.pumpWidget(
     MaterialApp(
@@ -24,14 +39,9 @@ Future<void> pump(
         body: StatefulBuilder(
           builder: (context, setState) => JourneyPanel(
             api: api,
-            catalog: const Catalog(
-              routes: [],
-              stops: [],
-              index: {},
-              stopIndex: {},
-            ),
-            from: null,
-            to: null,
+            catalog: catalog,
+            from: from,
+            to: to,
             picking: picking,
             onPick: onPick ?? (_) {},
             folded: folded,
@@ -43,13 +53,112 @@ Future<void> pump(
             places: const [],
             onSave: (_, _) {},
             onPlace: (_, _) {},
-            onShow: (_) {},
+            onShow: onShow ?? (_) {},
             onFollow: (_) {},
           ),
         ),
       ),
     ),
   );
+}
+
+const _twoLines = Catalog(
+  routes: [
+    TransitRoute(id: 'r8', short: '8', long: 'A to B', type: 'tram'),
+    TransitRoute(id: 'r3', short: '3', long: 'C to D', type: 'tram'),
+  ],
+  stops: [
+    Stop(id: 's0', name: 'Home stop', code: '0', lat: 0, lon: 0, routes: []),
+    Stop(id: 's1', name: 'Work stop', code: '1', lat: 0, lon: 0, routes: []),
+  ],
+  index: {'r8': 0, 'r3': 1},
+  stopIndex: {},
+);
+
+Map<String, Object> _ride(
+  int route,
+  int dep, {
+  List<Object> backups = const [],
+}) => {
+  'kind': 'ride',
+  'dep': dep,
+  'arr': dep + 600,
+  'a': 0,
+  'b': 1,
+  'route': route,
+  'live': true,
+  'backups': backups,
+};
+
+Map<String, Object> _journey(Map<String, Object> ride, {int backup = 0}) => {
+  'dep': 0,
+  'arr': (ride['arr']! as int) + 60,
+  'rides': 1,
+  'live': true,
+  'confidence': 'live',
+  'backup': backup,
+  'legs': [
+    {'kind': 'walk', 'dep': 0, 'arr': 60, 'a': -1, 'b': 0},
+    ride,
+    {
+      'kind': 'walk',
+      'dep': ride['arr']!,
+      'arr': (ride['arr']! as int) + 60,
+      'a': 1,
+      'b': -1,
+    },
+  ],
+};
+
+/// Answers a search with one option backed by a ride that is no option of its
+/// own, and that ride's way when asked for it, noting the asks.
+Future<HttpServer> _serve(List<Uri> asked) async {
+  final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+  final later = _ride(1, 900);
+  server.listen((req) {
+    asked.add(req.uri);
+    final body = switch (req.uri.path) {
+      '/api/plan' => {
+        't': 0,
+        'report': 'r1',
+        'options': [
+          _journey(
+            _ride(
+              0,
+              60,
+              backups: [
+                {
+                  'rides': [later],
+                  'arr': 1560,
+                  'walk': 120,
+                  'option': -1,
+                },
+              ],
+            ),
+            backup: 1,
+          ),
+        ],
+      },
+      _ => _journey(later),
+    };
+    // A kept connection's idle timer would outlive the test's fake clock
+    req.response
+      ..persistentConnection = false
+      ..headers.contentType = ContentType.json
+      ..write(jsonEncode(body))
+      ..close();
+  });
+  return server;
+}
+
+/// Pumps, letting the fake server answer, until [done] says so.
+Future<void> _until(WidgetTester tester, bool Function() done) async {
+  for (var i = 0; i < 100 && !done(); i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+  }
 }
 
 void main() {
@@ -235,5 +344,44 @@ void main() {
     expect(Prefer.fastest.shortlist(all, n: 2), [dry, mine]);
     expect(Prefer.reliable.shortlist(all, n: 1), [soonest]);
     expect(Prefer.walk.shortlist(all, n: 9), all);
+  });
+
+  testWidgets('a backup that is no option is fetched and drawn as one', (
+    tester,
+  ) async {
+    // The test binding answers every request 400 unless let through
+    final faked = HttpOverrides.current;
+    HttpOverrides.global = null;
+    addTearDown(() => HttpOverrides.global = faked);
+    final asked = <Uri>[];
+    final server = (await tester.runAsync(() => _serve(asked)))!;
+    addTearDown(() => server.close(force: true));
+    final shown = <Journey?>[];
+    await pump(
+      tester,
+      server: 'http://${server.address.host}:${server.port}',
+      catalog: _twoLines,
+      from: const LatLng(49.84, 24.03),
+      to: const LatLng(49.81, 24.05),
+      onShow: shown.add,
+    );
+
+    await tester.tap(find.text(txt.findRoute));
+    final backups = find.text('· ${txt.backupCount(1)}');
+    await _until(tester, () => backups.evaluate().isNotEmpty);
+    await tester.tap(backups);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip(txt.showWay).last);
+    await _until(tester, () => find.byType(AlertDialog).evaluate().isEmpty);
+
+    expect(asked.last.path, '/api/backup');
+    expect(asked.last.queryParameters, {
+      'report': 'r1',
+      'option': '0',
+      'leg': '1',
+      'backup': '0',
+    });
+    expect(shown.last?.legs[1].route, 1);
+    expect(shown.last?.legs[1].dep, 900);
   });
 }

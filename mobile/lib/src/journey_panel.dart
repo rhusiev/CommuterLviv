@@ -224,10 +224,8 @@ class _JourneyPanelState extends State<JourneyPanel> {
   Future<String?> _takeWay(Journey j, WayPick? pick) async {
     if (pick == null) return _showNow(j);
     final options = _options ?? const <Journey>[];
-    final same = options.elementAtOrNull(
-      j.legs[pick.leg].backups.elementAtOrNull(pick.n)?.option ?? -1,
-    );
-    if (same != null) return _showNow(same);
+    final same = j.legs[pick.leg].backups[pick.n].option;
+    if (same >= 0) return _showNow(options[same]);
     final search = _held;
     final from = search.from[j] ?? options.indexOf(j);
     final key = '$from ${pick.leg} ${pick.n}';
