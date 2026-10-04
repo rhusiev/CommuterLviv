@@ -675,12 +675,13 @@ export function App() {
         </div>
       )}
 
-      {/* Equal columns and one font weight throughout, so choosing a tab does
-          not resize its label and slide the others */}
+      {/* One font weight throughout, so choosing a tab does not resize its
+          label and slide the others. Equal columns where they fit; a phone
+          has room only for each label's own width */}
       <nav
-        className={`bar absolute bottom-3 left-1/2 z-30 grid ${
-          route === null ? "grid-cols-4" : "grid-cols-5"
-        } -translate-x-1/2 gap-1 p-1 text-sm`}
+        className={`bar absolute bottom-3 left-1/2 z-30 grid w-max grid-flow-col ${
+          route === null ? "sm:grid-cols-4" : "sm:grid-cols-5"
+        } -translate-x-1/2 gap-0.5 p-1 text-sm sm:gap-1`}
       >
         {(route === null
           ? (["map", "times", "plan", "saved"] as const)
@@ -693,7 +694,7 @@ export function App() {
               setLayers(false);
               setAccount(false);
             }}
-            className={`rounded-full px-3 py-1.5 font-medium transition-colors sm:px-4 ${
+            className={`rounded-full px-2 py-1.5 font-medium transition-colors sm:px-4 ${
               tab === v
                 ? "bg-accent/15 text-accent"
                 : "text-slate-400 hover:text-slate-200"
