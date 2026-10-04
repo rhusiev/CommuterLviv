@@ -26,6 +26,7 @@ import 'stop_card.dart';
 import 'stop_search.dart';
 import 'theme.dart';
 import 'times_tab.dart';
+import 'tracking.dart';
 import 'vehicle_card.dart';
 import 'vehicle_layer.dart' show badgeRadius, stopsZoom;
 import 'walk_speed.dart';
@@ -90,6 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
   End? _wantHere;
 
   late final Here _here = Here(onFirstFix: (at) => _map.move(at, 16));
+  late final _tracking = Tracking(_map, _here);
 
   late MapTheme _theme = themeById(widget.api.mapTheme);
   Style? _style;
@@ -107,6 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _live?.dispose();
     _here.removeListener(_fixArrived);
+    _tracking.stop();
     _here.dispose();
     _map.dispose();
     super.dispose();
@@ -179,6 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _following = null;
       _shapes = null;
     });
+    _tracking.stop();
     _push();
     if (_allLines || _onRoute) unawaited(_geometry());
     ScaffoldMessenger.of(context)
@@ -339,10 +343,12 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     _push();
     unawaited(_here.start());
+    _tracking.start();
   }
 
   void _endFollow() {
     setState(() => _following = null);
+    _tracking.stop();
     _push();
   }
 
@@ -705,6 +711,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 selected: _stop,
                 theme: _theme,
                 here: _here,
+                onLocate: _following != null ? _tracking.start : null,
                 empty: _shown.isEmpty,
                 marks: [
                   if (_planning && _from != null) (at: _from!, label: 'A'),

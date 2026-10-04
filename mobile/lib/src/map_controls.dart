@@ -27,11 +27,19 @@ const mapInteraction = InteractionOptions(
 );
 
 class MapControls extends StatefulWidget {
-  const MapControls({super.key, required this.map, required this.here});
+  const MapControls({
+    super.key,
+    required this.map,
+    required this.here,
+    this.onLocate,
+  });
 
   final MapController map;
 
   final Here here;
+
+  /// Run once the button has moved to the dot.
+  final VoidCallback? onLocate;
 
   @override
   State<MapControls> createState() => _MapControlsState();
@@ -63,7 +71,9 @@ class _MapControlsState extends State<MapControls> {
 
   Future<void> _locate() async {
     final at = await widget.here.start();
-    if (at != null && mounted) widget.map.move(at, 16);
+    if (at == null || !mounted) return;
+    widget.map.move(at, 16);
+    widget.onLocate?.call();
   }
 
   void _zoom(double by) {

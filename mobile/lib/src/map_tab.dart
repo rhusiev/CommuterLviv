@@ -37,6 +37,7 @@ class MapTab extends StatelessWidget {
     required this.selected,
     required this.theme,
     required this.here,
+    this.onLocate,
     required this.empty,
     required this.marks,
     required this.journey,
@@ -65,6 +66,9 @@ class MapTab extends StatelessWidget {
   final MapTheme theme;
 
   final Here here;
+
+  /// Also run by the locate button, after it has moved to the dot.
+  final VoidCallback? onLocate;
 
   final bool empty;
 
@@ -173,7 +177,7 @@ class MapTab extends StatelessWidget {
         Positioned(
           right: floatingGap,
           bottom: floatingBottom(context),
-          child: MapControls(map: map, here: here),
+          child: MapControls(map: map, here: here, onLocate: onLocate),
         ),
         if (style == null) const LinearProgressIndicator(minHeight: 2),
         if (empty)
