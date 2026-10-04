@@ -56,24 +56,46 @@ Future<String?> askName(
   String? action,
 }) => showDialog<String>(
   context: context,
-  builder: (context) {
-    final field = TextEditingController(text: was);
-    return AlertDialog.adaptive(
-      title: Text(title),
-      content: TextField(controller: field, autofocus: true),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(txt.cancel),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, field.text.trim()),
-          child: Text(action ?? txt.save),
-        ),
-      ],
-    );
-  },
+  builder: (context) => _NameDialog(title, was: was, action: action),
 );
+
+/// Owns its field, so the field is disposed once the dialog has closed.
+class _NameDialog extends StatefulWidget {
+  const _NameDialog(this.title, {this.was, this.action});
+
+  final String title;
+  final String? was;
+  final String? action;
+
+  @override
+  State<_NameDialog> createState() => _NameDialogState();
+}
+
+class _NameDialogState extends State<_NameDialog> {
+  late final _field = TextEditingController(text: widget.was);
+
+  @override
+  void dispose() {
+    _field.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog.adaptive(
+    title: Text(widget.title),
+    content: TextField(controller: _field, autofocus: true),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: Text(txt.cancel),
+      ),
+      TextButton(
+        onPressed: () => Navigator.pop(context, _field.text.trim()),
+        child: Text(widget.action ?? txt.save),
+      ),
+    ],
+  );
+}
 
 /// What a long press on a saved thing offers. A thing that cannot be renamed -
 /// a pinned stop wears the stop's own name - passes a null [onRename].
