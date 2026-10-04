@@ -164,12 +164,17 @@ export function JourneyPanel({
     }
   };
 
+  /** Shows `j`, folding the panel out of the way of it on the map */
+  const draw = (j: Journey) => {
+    show(j);
+    onFold(true);
+  };
   /** Draws `pick` of option `j`: the journey itself, the option riding the
    *  same, or else that way fetched and listed as an option of its own */
   const takeWay = async (j: Journey, pick: WayPick) => {
-    if (pick === null) return show(j);
+    if (pick === null) return draw(j);
     const same = options?.[j.legs[pick.leg]?.backups?.[pick.n]?.option ?? -1];
-    if (same) return show(same);
+    if (same) return draw(same);
     const search = held.current;
     const from = search.from.get(j) ?? options?.indexOf(j) ?? -1;
     const key = `${from} ${pick.leg} ${pick.n}`;
@@ -183,7 +188,7 @@ export function JourneyPanel({
       search.from.set(got, from);
       setOptions((o) => o && [...o, got!]);
     }
-    show(got);
+    draw(got);
   };
 
   if (picking)
