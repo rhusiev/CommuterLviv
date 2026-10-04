@@ -383,5 +383,6 @@ void main() {
     });
     expect(shown.last?.legs[1].route, 1);
     expect(shown.last?.legs[1].dep, 900);
+    expect(find.text(txt.findRoute), findsNothing);
   });
 }

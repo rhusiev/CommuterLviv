@@ -321,8 +321,9 @@ either word explains what it means. The option's backup count opens a dialog
 that, under each ride's stop, puts the planned way first and then the ride's
 backups - the other ways to the door from that stop, each with its routes,
 where it changes and when it gets there, at most half an hour after the option
-does - and tapping one draws it on the map, a backup that is not already an
-option fetched and added to the list as one (`/api/backup`). Four show at
+does - and tapping one draws it on the map, folding the panel out of its way,
+a backup that is not already an option fetched and added to the list as one
+(`/api/backup`). Four show at
 first, picked by the sort preset and then by each other one (`Prefer.shortlist`), with the
 rest behind a button; a route the option itself rides further along is
 outlined, and a way that is also one of the listed options says `Option N`, N

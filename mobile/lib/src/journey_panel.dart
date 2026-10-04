@@ -249,8 +249,10 @@ class _JourneyPanelState extends State<JourneyPanel> {
     return _showNow(got);
   }
 
+  /// Shows [j], folding the panel out of the way of it on the map.
   String? _showNow(Journey j) {
     setState(() => _show(j));
+    widget.onFold(true);
     return null;
   }
 
