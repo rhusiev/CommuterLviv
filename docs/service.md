@@ -22,12 +22,28 @@ python3 -m commuterlviv serve
 
 A vehicle's arrivals do not stop at the end of its trip. The trips the
 timetable chains after it on the same vehicle (GTFS `block_id`) are predicted
-too: each leaves its first stop at the later of its scheduled time and the
-moment the vehicle can be there plus a 120 s turnaround, and runs to schedule
-from there. Those rows are flagged `planned`, and both clients show them in
-italics with a schedule mark. This is what fills a start stop such as
-Аквапарк (519) for tram 3, where the vehicle about to leave is still reported
-on the trip it just finished.
+too, and run to schedule from their first stop. Those rows are flagged
+`planned`, and both clients show them in italics with a schedule mark. This is
+what fills a start stop such as Аквапарк (519) for tram 3, where the vehicle
+about to leave is still reported on the trip it just finished.
+
+When the next trip leaves depends on the route and the terminus
+(`commuterlviv/layover.py`). Never sooner than 120 s after the vehicle gets in,
+and never before it can be there. Past that, trams and trolleybuses that get in
+early mostly wait for the timetable - on most lines 85-90% leave within a
+minute of it - but bus routes differ widely, and on half of them at most one
+in five waits: the rest set off minutes, up to half an hour, ahead of it. So
+each route keeps its last 50 early turnarounds at each terminus, each one
+whether it left within a minute of the timetable and how far ahead of it it
+left. Where at least 10 are kept and fewer than half of them waited, a vehicle
+in early leaves as far ahead of the timetable as the upper quartile of those
+that left after now - so one still in after all but two of them is taken to be
+waiting for the timetable after all. On any other route it leaves on the
+timetable, and a vehicle in late leaves 120 s after it got there. Asked every
+minute of every early stand on the last 3 of the 14 days of recording to
+2026-10-07, this took the departure's mean error from 10.34 to 6.48 minutes,
+and the share foretold over two minutes after the vehicle had actually gone
+from 50% to 16%. The turnarounds are kept with the model across restarts.
 
 ## The journey planner
 
@@ -415,7 +431,10 @@ two hours of recording cannot replay.
 A missing or unreadable snapshot is not an error - the model starts from the
 timetable, as it did before the file existed, and the log says so. The
 snapshot is about 35 MB, and only the per-cell online models
-(`snapshot.supported`) have one.
+(`snapshot.supported`) have one. It also carries each route's recent early
+turnarounds at its termini ([trips after this one](#trips-after-this-one)),
+which a snapshot from before they were kept simply lacks: they are then
+learned again as vehicles come in.
 
 ## Accounts and registration
 

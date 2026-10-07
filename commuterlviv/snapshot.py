@@ -18,13 +18,14 @@ import time
 
 import numpy as np
 
-from . import gtfs
+from . import gtfs, layover
 from .model import PaceModel
 
 PATH = gtfs.DATA / "model.npz"
 UNIT = ("cf", "cs", "cd")       # per unit, beside the profile's `pr`
 CORR = ("rf", "rs", "rd")       # per corridor
 LENGTH_TOL = 0.01               # a shape longer or shorter than this has moved
+LAYOVER = "layover."            # before each of `layover.FIELDS`
 
 
 def supported(model):
@@ -64,6 +65,8 @@ def export(model, t=None):
         out[f"{name}.mean"] = e.mean.copy()
         out[f"{name}.w"] = e.w.copy()
         out[f"{name}.t"] = e.t.copy()
+    for name, a in model.layovers.export().items():
+        out[LAYOVER + name] = a
     return out
 
 
@@ -72,6 +75,8 @@ def restore(model, data):
     was taken, or None if none of it fits this model."""
     if not supported(model) or str(data["variant"]) != model.cfg.name:
         return None
+    if all(LAYOVER + k in data for k in layover.FIELDS):
+        model.layovers.restore(*(data[LAYOVER + k] for k in layover.FIELDS))
     net = model.net
     src, dst = [], []
     base = 0

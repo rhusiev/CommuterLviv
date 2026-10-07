@@ -129,6 +129,7 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
             tr = tracks[veh] = track.Track(veh, runs.get(veh, 0))
         done, passings = track.observe(tr, net, float(ts), lat, lon,
                                        speed, odo, trip)
+        model.layovers.follow(veh, tr)
         if done:
             base = model.shape_base[tr.shape_id]
             closed.extend((base + c.i, c, veh) for c in done)

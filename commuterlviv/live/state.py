@@ -9,7 +9,6 @@ model updates. Both are frozen and replaced wholesale, so readers never see
 half-updated state and need no lock.
 """
 import collections
-import datetime
 import functools
 import hashlib
 import json
@@ -19,7 +18,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .. import model as pace, network, replay, track
+from .. import layover, model as pace, network, replay, track
 
 VEH = np.dtype([("id", "u2"), ("route", "u2"), ("lat", "f8"), ("lon", "f8"),
                 ("heading", "u2"), ("flags", "u1"), ("run", "u2")])
@@ -33,8 +32,6 @@ MAX_WIRE = 65535         # vehicle ids are 16-bit on the wire
 HEAD_SPAN = 25.0         # m either side of the vehicle the arrow averages over
 SURE = 1.0               # sigmas the speed must clear "stopped" by to be motion
 DAMP = 0.7               # of the dead reckoned distance the map draws
-TURN = 120.0             # s at least between reaching a terminus and leaving it
-DAY = 86400.0
 
 STALE, MOVING = 1, 2     # the flag bits, mirrored in `web/src/lib/wire.ts`
 
@@ -163,6 +160,7 @@ class Live:
             tr = self.tracks[veh] = track.Track(veh, self.runs.get(veh, 0))
         done, _ = track.observe(tr, self.net, float(ts), lat, lon,
                                 speed, odometer, trip)
+        self.model.layovers.follow(veh, tr)
         if done:
             base = self.model.shape_base[tr.shape_id]
             self.closed.extend((base + c.i, c, veh) for c in done)
@@ -213,7 +211,7 @@ class Live:
             w = self._wire(veh)
             got = replay.etas(self.model, tr, veh, now, self.offset)
             if got is None:
-                ends = now
+                ends = self.model.layovers.came(veh, tr.trip) or now
             else:
                 i, _, dt, k = got
                 self._rows(rows, tr.stops, i + k, now + dt[k], ri, w, 0)
@@ -237,16 +235,18 @@ class Live:
         The feed keeps a vehicle on its finished trip for as long as it stands
         at the terminus, and names the next one only as it pulls up to the first
         stop - so without this, the first stops of a line show nothing until the
-        vehicle is already there. Each next trip leaves when the timetable says,
-        or `TURN` after the vehicle gets in if it is running late, and the model
-        times it from there. A trip another vehicle is already on is left to it.
+        vehicle is already there. Each next trip leaves when its route's
+        turnarounds say (`layover`), counted from when the vehicle got in, and
+        the model times it from there. A trip another vehicle is already on is
+        left to it.
         """
         horizon = now + replay.HORIZON
         while (trip := self.net.trip_next.get(trip)) is not None:
             if trip in running:
                 return
             stops, dist, sched = self.net.trip_stops[trip]
-            leave = max(self._clock(sched[0], now), ends + TURN)
+            leave = self.model.layovers.leave(
+                trip, layover.clock(sched[0], now, pace.TZ), ends, now)
             if leave > horizon:
                 return
             sid = self.net.trip_shape[trip]
@@ -254,16 +254,6 @@ class Live:
             keep = np.flatnonzero(at <= horizon)
             self._rows(rows, stops, keep, at[keep], ri, w, 1)
             ends = float(at[-1])
-
-    @staticmethod
-    def _clock(sched, now):
-        """A timetable time - seconds past a service day's midnight, possibly
-        over 24 h - as the unix instant nearest `now`."""
-        local = datetime.datetime.fromtimestamp(now, pace.TZ)
-        midnight = local.replace(hour=0, minute=0, second=0,
-                                 microsecond=0).timestamp()
-        return min((midnight + k * DAY + sched for k in (-1, 0, 1)),
-                   key=lambda t: abs(t - now))
 
     def _wire(self, veh):
         w = self.wire.get(veh)
