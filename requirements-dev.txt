@@ -1,0 +1,5 @@
+-r requirements-live.txt
+pytest>=9.1
+pytest-timeout>=2.4
+httpx2>=2.13
+playwright>=1.63
