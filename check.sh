@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Everything that can be checked without a database, a service or a recording.
-# Run it before a commit; it needs nothing but the checkout.
+# Everything that can be checked without a service or a recording. Run it
+# before a commit; it needs nothing but the checkout. The tests that need a
+# database start a throwaway Postgres in podman or docker, or are skipped.
 #
 # A missing toolchain is reported and stepped over rather than failing the run,
 # so someone editing the service need not install Flutter. Nothing is skipped
@@ -71,13 +72,21 @@ fi
 step "python: the package imports"
 run import . python3 -c "import commuterlviv.live.app, commuterlviv.cli"
 
-step "web: types and build"
+step "web: types, tests and build"
 if command -v npm >/dev/null; then
   [ -d "$root/web/node_modules" ] || run npm-ci web npm ci
   run typecheck web npm run typecheck
+  run vitest web npm test
   run build web npm run build
 else
   echo "npm is not installed - skipped"
+fi
+
+step "python: tests, the browser ones against the web build"
+if python3 -c "import pytest" 2>/dev/null; then
+  run pytest . python3 -m pytest
+else
+  echo "pytest is not installed - skipped. pip install -r requirements-dev.txt"
 fi
 
 step "mobile: analyze and test"
