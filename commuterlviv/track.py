@@ -18,6 +18,7 @@ MAX_LATERAL = 60.0       # m off the shape: refuse to trust the snap
 HOLD_SPEED = 0.7         # m/s below which the vehicle counts as stationary
 HOLD_DIST = 3.0          # m of progress below which it counts as stationary
 MAX_HOLD = 240.0         # s standing: a layover or a breakdown, not traffic
+AT_END = 1.0             # m short of the shape's end that counts as at it
 SIG_SNAP = 12.0          # m, along-track map-match error
 SIG_SPEED = 1.5          # m/s, reported speed error
 SIG_ACC = 0.8            # m/s^2, unmodelled acceleration
@@ -143,10 +144,13 @@ def observe(tr, net, ts, lat, lon, speed, odometer, trip):
     holding = dist < HOLD_DIST and speed < HOLD_SPEED
     done = _spread(tr, s0, dist, gap, holding)
 
+    # the position stops at the shape's end, and the filter only nears it, so
+    # a stop placed at the end - or just past it - is passed on getting there
+    reach = tr.s if tr.s < tr.shape.length - AT_END else np.inf
     passings = []
     i = tr.next_stop
-    while i < len(tr.sdist) and tr.sdist[i] <= tr.s:
-        f = (tr.sdist[i] - s0) / dist if dist > 0 else 0.0
+    while i < len(tr.sdist) and tr.sdist[i] <= reach:
+        f = min((tr.sdist[i] - s0) / dist, 1.0) if dist > 0 else 0.0
         passings.append((i, ts - gap + f * gap, gap))
         i += 1
     tr.next_stop = i
