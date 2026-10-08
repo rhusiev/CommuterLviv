@@ -8,3 +8,4 @@ uvicorn>=0.52
 websockets>=17.1
 asyncpg>=0.31
 argon2-cffi>=25.1
+scikit-learn>=1.9

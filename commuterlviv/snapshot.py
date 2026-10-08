@@ -26,6 +26,7 @@ UNIT = ("cf", "cs", "cd")       # per unit, beside the profile's `pr`
 CORR = ("rf", "rs", "rd")       # per corridor
 LENGTH_TOL = 0.01               # a shape longer or shorter than this has moved
 LAYOVER = "layover."            # before each of `layover.FIELDS`
+STANDS = "layover.rows"         # the minutes of stands its departure model learns from
 
 
 def supported(model):
@@ -67,6 +68,7 @@ def export(model, t=None):
         out[f"{name}.t"] = e.t.copy()
     for name, a in model.layovers.export().items():
         out[LAYOVER + name] = a
+    out[STANDS] = model.layovers.training()
     return out
 
 
@@ -77,6 +79,8 @@ def restore(model, data):
         return None
     if all(LAYOVER + k in data for k in layover.FIELDS):
         model.layovers.restore(*(data[LAYOVER + k] for k in layover.FIELDS))
+    if STANDS in data:
+        model.layovers.restore_rows(data[STANDS])
     net = model.net
     src, dst = [], []
     base = 0

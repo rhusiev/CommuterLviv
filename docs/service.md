@@ -41,11 +41,24 @@ timetable as the upper quartile of those that left after now - so one still in
 after all but two of them is taken to be waiting for the timetable after all.
 The other is as far ahead as the last vehicle in early there went. On any
 other route it leaves on the timetable, and a vehicle in late leaves 120 s
-after it got there. Asked every minute of every early stand on the last 3 of
-the 14 days of recording to 2026-10-07, this took the departure's mean error
-from 10.34 to 6.02 minutes, and the share foretold over two minutes after the
-vehicle had actually gone from 50% to 17%. The turnarounds are kept with the
-model across restarts.
+after it got there.
+
+That rule is the fallback. Every minute a vehicle stands in early, the service
+also notes what the rule's two halves said, how long ago and how far ahead of
+the timetable the route last left that terminus, the timetable's gap to it,
+the hour, and how long the vehicle has stood; once the vehicle leaves, each of
+those minutes is labelled with how long was really left. A gradient-boosted
+model (scikit-learn's `HistGradientBoostingRegressor`) is fitted on start and
+every 6 hours (`FIT_EVERY`) in a worker thread, on 50 000 of the newest 500 000
+such minutes - about 12 s of CPU - and once 20 000 are there it times every
+vehicle standing in early, all of them in one call a minute of a few
+milliseconds. It foretells the 0.4 quantile rather than the median, which
+keeps it as rarely late as the rule.
+Asked every minute of every early stand on the last 3 of the 14 days of
+recording to 2026-10-07, the timetable was out by 10.34 minutes on average,
+the rule by 6.02 and the model by 5.14, and the share foretold over two
+minutes after the vehicle had actually gone was 50%, 17% and 17%. The
+turnarounds and the minutes of stands are kept with the model across restarts.
 
 ## The journey planner
 
@@ -436,9 +449,10 @@ A missing or unreadable snapshot is not an error - the model starts from the
 timetable, as it did before the file existed, and the log says so. The
 snapshot is about 35 MB, and only the per-cell online models
 (`snapshot.supported`) have one. It also carries each route's recent early
-turnarounds at its termini ([trips after this one](#trips-after-this-one)),
-which a snapshot from before they were kept simply lacks: they are then
-learned again as vehicles come in.
+turnarounds at its termini and the minutes of stands its departure model
+learns from ([trips after this one](#trips-after-this-one)), which a snapshot
+from before they were kept simply lacks: they are then learned again as
+vehicles come in, and the rule times departures until there are enough.
 
 ## Accounts and registration
 

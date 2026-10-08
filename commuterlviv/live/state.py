@@ -202,7 +202,7 @@ class Live:
         return self.arrivals
 
     def _arrivals(self, now):
-        rows = []
+        rows, standing = [], []
         running = {tr.trip for tr in self.tracks.values()}
         for veh, tr in self.tracks.items():
             ri = self.cat.route_i.get(self.net.trip_route.get(tr.trip))
@@ -210,13 +210,21 @@ class Live:
                 continue
             w = self._wire(veh)
             got = replay.etas(self.model, tr, veh, now, self.offset)
+            came = self.model.layovers.came(veh, tr.trip)
+            if got is None and came is not None:
+                self._stand(tr.trip, came, now, running)
+                standing.append((tr.trip, came, ri, w))
+                continue
             if got is None:
-                ends = self.model.layovers.came(veh, tr.trip) or now
+                ends = now
             else:
                 i, _, dt, k = got
                 self._rows(rows, tr.stops, i + k, now + dt[k], ri, w, 0)
                 ends = now + float(dt[-1])
             self._next_trips(rows, tr.trip, ends, now, ri, w, running)
+        self.model.layovers.foretell(now)
+        for trip, came, ri, w in standing:
+            self._next_trips(rows, trip, came, now, ri, w, running)
         eta = np.array(rows, dtype=ETA) if rows else np.zeros(0, ETA)
         eta = eta[np.lexsort((eta["t"], eta["stop"]))]
         start = np.searchsorted(eta["stop"], np.arange(len(self.cat.stops) + 1))
@@ -227,6 +235,15 @@ class Live:
             si = self.cat.stop_i.get(stops[j])
             if si is not None:
                 rows.append((si, ri, w, t, planned))
+
+    def _stand(self, trip, came, now, running):
+        """A vehicle in at the end of `trip` since `came`, for `layover` to
+        time its next trip with the others standing this epoch."""
+        trip = self.net.trip_next.get(trip)
+        if trip is not None and trip not in running:
+            sched = self.net.trip_stops[trip][2][0]
+            self.model.layovers.stand(trip, layover.clock(sched, now, pace.TZ),
+                                      came, now)
 
     def _next_trips(self, rows, trip, ends, now, ri, w, running):
         """The trips this vehicle runs after the one it is on, within the
