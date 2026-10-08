@@ -36,14 +36,16 @@ in five waits: the rest set off minutes, up to half an hour, ahead of it. So
 each route keeps its last 50 early turnarounds at each terminus, each one
 whether it left within a minute of the timetable and how far ahead of it it
 left. Where at least 10 are kept and fewer than half of them waited, a vehicle
-in early leaves as far ahead of the timetable as the upper quartile of those
-that left after now - so one still in after all but two of them is taken to be
-waiting for the timetable after all. On any other route it leaves on the
-timetable, and a vehicle in late leaves 120 s after it got there. Asked every
-minute of every early stand on the last 3 of the 14 days of recording to
-2026-10-07, this took the departure's mean error from 10.34 to 6.48 minutes,
-and the share foretold over two minutes after the vehicle had actually gone
-from 50% to 16%. The turnarounds are kept with the model across restarts.
+in early leaves halfway between two estimates. One is as far ahead of the
+timetable as the upper quartile of those that left after now - so one still in
+after all but two of them is taken to be waiting for the timetable after all.
+The other is as far ahead as the last vehicle in early there went. On any
+other route it leaves on the timetable, and a vehicle in late leaves 120 s
+after it got there. Asked every minute of every early stand on the last 3 of
+the 14 days of recording to 2026-10-07, this took the departure's mean error
+from 10.34 to 6.02 minutes, and the share foretold over two minutes after the
+vehicle had actually gone from 50% to 17%. The turnarounds are kept with the
+model across restarts.
 
 ## The journey planner
 

@@ -8,10 +8,13 @@ five waited: the rest set off minutes, up to half an hour, ahead of it. How
 far ahead depends on the route and the terminus far more than on how long the
 vehicle has stood, so each route keeps its recent turnarounds at each
 terminus, and the next trip is timed by what they did: the timetable where it
-is kept, otherwise as far ahead of it as those that left early went. Asked
-every minute of every early stand of the last three of those days, that took
-the departure's mean error from 10.34 to 6.48 minutes, and the share foretold
-over two minutes after the vehicle had gone from 50% to 16%.
+is kept, otherwise halfway between as far ahead of it as those that left early
+went and as far ahead as the last one went. Asked every minute of every early
+stand of the last three of those days, that took the departure's mean error
+from 10.34 to 6.02 minutes, and the share foretold over two minutes after the
+vehicle had gone from 50% to 17%. Either half alone came to 6.4-6.5 minutes;
+the time since the vehicle got in, or since the route last left there
+whatever its vehicle had done, did worse.
 """
 import collections
 import datetime
@@ -83,19 +86,23 @@ class Layovers:
 
     def leave(self, trip, sched, ready, now):
         """When a vehicle in at `ready` sets off on `trip`, which the timetable
-        has leave at `sched`, as seen at `now`. Only the turnarounds that left
-        after `now` count: a vehicle still in after nearly all of them is
-        waiting for the timetable after all."""
-        kept = max(sched, ready + TURN, now)
+        has leave at `sched`, as seen at `now`: halfway between how far ahead
+        the route's early departures go and how far ahead the last vehicle in
+        early went. Only the departures that left after `now` count for the
+        first: a vehicle still in after nearly all of them is waiting for the
+        timetable after all."""
+        soonest = max(now, ready + TURN)
+        kept = max(sched, soonest)
         got = self.seen.get(self._key(trip))
         if ready + TURN >= sched or got is None or len(got) < NEED:
             return kept
         if np.mean([w for w, _ in got]) >= WAITS:
             return kept
         ahead = [a for w, a in got if not w and sched - a > now]
-        if len(ahead) < STILL:
-            return kept
-        return max(now, ready + TURN, sched - float(np.quantile(ahead, QUANTILE)))
+        habit = kept if len(ahead) < STILL else max(
+            soonest, sched - float(np.quantile(ahead, QUANTILE)))
+        last = max(soonest, sched - got[-1][1])
+        return (habit + last) / 2
 
     def export(self):
         """The turnarounds as flat arrays, oldest first within a key."""
