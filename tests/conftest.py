@@ -2,7 +2,7 @@ import pytest
 
 from commuterlviv import config
 
-from . import city
+from . import city, postgres
 
 
 @pytest.fixture
@@ -26,3 +26,9 @@ def jammed_recording(tmp_path, net):
                      for k, (trip, *_) in enumerate(city.FLEET)})
     return db
 
+
+@pytest.fixture(scope="session")
+def database():
+    """A Postgres for the service, shared by every test that needs one."""
+    with postgres.server() as url:
+        yield url
