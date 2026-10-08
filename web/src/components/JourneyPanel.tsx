@@ -34,6 +34,11 @@ const RESTS: Record<
     tone: "text-slate-500",
     why: t.scheduleWhy,
   },
+  terminus: {
+    word: t.terminusPart,
+    tone: "text-slate-500",
+    why: t.terminusWhy,
+  },
   quiet: { word: t.quietPart, tone: "text-amber-400", why: t.quietWhy },
 };
 

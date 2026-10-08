@@ -24,6 +24,7 @@ import 'walk_speed.dart';
 /// on one that is.
 (String, String)? legNote(Confidence confidence) => switch (confidence) {
   Confidence.live => null,
+  Confidence.terminus => (txt.terminusPart, txt.terminusWhy),
   Confidence.schedule => (txt.schedulePart, txt.scheduleWhy),
   Confidence.quiet => (txt.quietPart, txt.quietWhy),
 };

@@ -122,6 +122,8 @@ class Strings {
     required this.noBackup,
     required this.moreBackups,
     required this.scheduleWhy,
+    required this.terminusPart,
+    required this.terminusWhy,
     required this.quietWhy,
     required this.wholeWalk,
     required this.planHint,
@@ -271,6 +273,8 @@ class Strings {
   final String noBackup;
   final String Function(int more) moreBackups;
   final String scheduleWhy;
+  final String terminusPart;
+  final String terminusWhy;
   final String quietWhy;
   final String wholeWalk;
   final String planHint;
@@ -419,6 +423,8 @@ const _en = Strings(
   moreBackups: _enMoreBackups,
   scheduleWhy:
       'No vehicle tracked for this ride yet - the time is from the timetable',
+  terminusPart: 'Next trip',
+  terminusWhy: 'The vehicle has not set off on this trip yet - the time is estimated from when this line usually leaves its terminus',
   quietWhy: 'Timetabled, but nothing on this route has been seen for an hour. It may not be running.',
   wholeWalk: 'Walk the whole way',
   planHint:
@@ -599,6 +605,8 @@ const _uk = Strings(
   moreBackups: _ukMoreBackups,
   scheduleWhy:
       'Для цієї поїздки ще не відстежується транспорт - час із розкладу',
+  terminusPart: 'Наступний рейс',
+  terminusWhy: 'Транспорт ще не вирушив у цей рейс - час оцінено за тим, коли ця лінія зазвичай рушає з кінцевої',
   quietWhy: 'За розкладом курсує, але транспорту цього маршруту не видно вже годину. Можливо, він не їздить.',
   wholeWalk: 'Пішки весь шлях',
   planHint: 'Торкніться «Звідки» чи «Куди», щоб шукати, вибрати збережене місце або вказати на мапі.',

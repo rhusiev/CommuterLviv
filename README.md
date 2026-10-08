@@ -60,9 +60,10 @@ origins in `COMMUTERLVIV_ORIGINS`. Everything it downloads or learns lives in
 - **Times.** Pinned stops and their arrivals, live. Arrivals beyond the current
   trip - the vehicle's next run - are in italics with a schedule mark.
 - **Plan.** Tap where you are and where you are going. You get ways there ranked
-  by arrival, each ride marked live or timetabled, with the backups behind each
-  ride should you miss it. Sort by fastest, less walking, fewer changes or most
-  backups, set your walking speed, or plan for later. An answer that looks
+  by arrival, each ride marked live, timetabled or on a vehicle's next trip,
+  with the backups behind each ride should you miss it. Sort by fastest, less
+  walking, fewer changes or most backups, set your walking speed, or plan for
+  later. An answer that looks
   wrong can be reported, and is kept with the live data it ran on. Follow an
   option and it tells you what to do next as you go - which stop to walk to,
   when the vehicle is due, where to get off - from where you are, which stays

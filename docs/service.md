@@ -102,7 +102,9 @@ line at the timetable's running times (`_run_on`), or a rider boarding it now
 could not be taken past the 45th minute.
 
 Every ride also carries a `confidence`, which is what the schedule is worth on
-that route right now. `live` is a vehicle being tracked. `schedule` is the
+that route right now. `live` is a vehicle being tracked. `terminus` is a
+tracked vehicle boarded on a trip after the one it is on, so its departure is
+the estimate of [trips after this one](#trips-after-this-one). `schedule` is the
 timetable on a route that is running. `quiet` is the timetable on a route the
 schedule wanted at least twice in the last hour and nothing has been seen on
 since - a line the city is not running today, which the timetable alone will

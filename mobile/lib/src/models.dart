@@ -325,15 +325,17 @@ class Backup {
   final int option;
 }
 
-/// What a ride rests on: a vehicle being tracked, the timetable on a route that
-/// is running, or the timetable on one nothing has been seen running on.
-enum Confidence { live, schedule, quiet }
+/// What a ride rests on: a vehicle being tracked, one on a trip it is yet to set
+/// off on, the timetable on a route that is running, or the timetable on one
+/// nothing has been seen running on.
+enum Confidence { live, terminus, schedule, quiet }
 
 /// Absent is a leg that rests on nothing in particular - a walk, or a server
 /// from before this field. An unknown word reads as the timetable rather than
 /// as a promise of a tracked vehicle.
 Confidence confidenceOf(Object? word) => switch (word) {
   null || 'live' => Confidence.live,
+  'terminus' => Confidence.terminus,
   'quiet' => Confidence.quiet,
   _ => Confidence.schedule,
 };

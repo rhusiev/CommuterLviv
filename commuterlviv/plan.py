@@ -72,7 +72,7 @@ BACKUP_WINDOW = 1800.0
 NEAR_TIE = 300.0
 
 # weakest first, so `min` over this order is the weakest ground a journey stands on
-CONFIDENCE = ("quiet", "schedule", "live")
+CONFIDENCE = ("quiet", "schedule", "terminus", "live")
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,8 +87,9 @@ class Leg:
     veh: int | None = None
     live: bool = False
 
-    # "live" is a vehicle being tracked, "schedule" is the timetable on a route
-    # that is running, "quiet" is the timetable on one nothing has been seen on
+    # "live" is a vehicle being tracked, "terminus" one boarded on a trip it is
+    # yet to set off on, "schedule" is the timetable on a route that is running,
+    # "quiet" is the timetable on one nothing has been seen on
     confidence: str = "live"
 
 
@@ -207,15 +208,17 @@ class Pattern:
 
 class LiveTrip:
     """One tracked vehicle dressed as a single-trip pattern; its times are
-    absolute unix seconds, not seconds since midnight."""
+    absolute unix seconds, not seconds since midnight. From `turns` on it runs
+    the trips after the one it is on (`Live._next_trips`)."""
 
-    __slots__ = ("route", "veh", "stops", "times")
+    __slots__ = ("route", "veh", "stops", "times", "turns")
 
-    def __init__(self, route, veh, stops, times):
+    def __init__(self, route, veh, stops, times, turns=math.inf):
         self.route = route
         self.veh = veh
         self.stops = np.asarray(stops, dtype=np.int32)
         self.times = np.asarray(times, dtype=np.float64)
+        self.turns = turns
 
 
 class Timetable:
@@ -412,7 +415,7 @@ def live_trips(tt, arrivals, catalog, now, horizon=replay.HORIZON):
         return trips, covered
     for veh in np.unique(arrivals.eta["veh"]):
         rows = arrivals.of(int(veh))
-        stops, times = [], []
+        stops, times, turns = [], [], math.inf
         for r in rows:
             when = float(r["t"])
             if when < now or when > now + horizon:
@@ -423,6 +426,8 @@ def live_trips(tt, arrivals, catalog, now, horizon=replay.HORIZON):
                 continue
             stops.append(i)
             times.append(when)
+            if r["planned"]:
+                turns = min(turns, when)
         if len(stops) < 2:
             continue
         route = catalog.routes[int(rows[0]["route"])]
@@ -430,7 +435,7 @@ def live_trips(tt, arrivals, catalog, now, horizon=replay.HORIZON):
             _run_on(tt, route, stops, times)
         for i, when in zip(stops, times):
             covered[(i, route)] = max(covered.get((i, route), -math.inf), when)
-        trips.append(LiveTrip(route, int(veh), stops, times))
+        trips.append(LiveTrip(route, int(veh), stops, times, turns))
     return trips, covered
 
 
@@ -602,7 +607,7 @@ class _Profile:
                 continue
             door, how = tuple(door), tuple(how)
             stay[t] = self.via[c] = door, how
-            route, veh = trips[t]
+            route, veh, _ = trips[t]
             if veh is not None or d > covered.get((u, route), -math.inf):
                 self._board(u, d, c, door)
 
@@ -674,10 +679,13 @@ class _Profile:
 
     def ride(self, c, e):
         dep_s, arr_s, dep_t, arr_t, trip_of = self.hops
-        route, veh = self.trips[trip_of[c]]
+        route, veh, turns = self.trips[trip_of[c]]
+        if veh is None:
+            confidence = self.trust.get(route, "schedule")
+        else:
+            confidence = "terminus" if dep_t[c] >= turns else "live"
         return Leg("ride", dep_t[c], arr_t[e], dep_s[c], arr_s[e], route, veh,
-                   veh is not None, "live" if veh is not None
-                   else self.trust.get(route, "schedule"))
+                   veh is not None, confidence)
 
     def options(self, access, now):
         """For each slot, the soonest door arrival from a stop the origin
@@ -918,7 +926,8 @@ def _corridor(hops, transfers, egress, cap, starts, hi):
 def _connections(tt, live, trust, now, midnight, hi, quiet):
     """Every hop between consecutive stops leaving at `now` or later and
     arriving by `hi`, latest first, as lists of (from, to, departure, arrival,
-    trip), with each trip's (route, vehicle) - the timetable's have none.
+    trip), with each trip's (route, vehicle, `LiveTrip.turns`) - the
+    timetable's have no vehicle.
     Routes nothing has been seen on only with `quiet`. Ties keep a trip's
     later hop first, which a hop of no running time needs."""
     parts, trips = [], []
@@ -929,10 +938,10 @@ def _connections(tt, live, trust, now, midnight, hi, quiet):
         rows = np.flatnonzero((times[:, 0] <= hi) & (times[:, -1] >= now))
         if len(rows):
             parts.append(_hops(pat.stops, times[rows], len(trips)))
-            trips += [(pat.route, None)] * len(rows)
+            trips += [(pat.route, None, math.inf)] * len(rows)
     for trip in live:
         parts.append(_hops(trip.stops, trip.times[None], len(trips)))
-        trips.append((trip.route, trip.veh))
+        trips.append((trip.route, trip.veh, trip.turns))
     if not parts:
         return ([],) * 5, trips
     cols = [np.concatenate(x) for x in zip(*parts)]

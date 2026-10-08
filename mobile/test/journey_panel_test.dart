@@ -271,8 +271,16 @@ void main() {
     expect(Arrival.fromJson({...at, 'planned': true}).planned, isTrue);
   });
 
-  test('only a ride not on a tracked vehicle says what it rests on', () {
+  test('a ride reads what it rests on, an unknown word as the timetable', () {
+    expect(confidenceOf(null), Confidence.live);
+    expect(confidenceOf('terminus'), Confidence.terminus);
+    expect(confidenceOf('quiet'), Confidence.quiet);
+    expect(confidenceOf('something newer'), Confidence.schedule);
+  });
+
+  test('only a ride resting on more than a tracked vehicle says so', () {
     expect(legNote(Confidence.live), isNull);
+    expect(legNote(Confidence.terminus)?.$1, txt.terminusPart);
     expect(legNote(Confidence.schedule)?.$1, txt.schedulePart);
     expect(legNote(Confidence.quiet)?.$1, txt.quietPart);
   });
