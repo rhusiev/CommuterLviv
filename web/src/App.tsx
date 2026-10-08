@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./components/Icon";
 import { MapCanvas } from "./components/MapCanvas";
 import { RoutePanel } from "./components/RoutePanel";
 import { SignIn } from "./components/SignIn";
 import { FollowCard } from "./components/FollowCard";
-import { JourneyPanel, type Point } from "./components/JourneyPanel";
+import { JourneyPanel, type Origin, type Point } from "./components/JourneyPanel";
 import { StopCard } from "./components/StopCard";
 import { AccountMenu } from "./components/AccountMenu";
 import { LayersPanel } from "./components/LayersPanel";
@@ -66,7 +66,9 @@ export function App() {
   const [route, setRoute] = useState<number | null>(null);
   const [allLines, setAllLines] = useState(() => loadFlag(LINES_KEY));
   const [geo, setGeo] = useState<Shapes | null>(null);
-  const [from, setFrom] = useState<Point | null>(null);
+  const [from, setFrom] = useState<Origin | null>(null);
+  /** Times got on board, so a fix asked for before it does not move the start */
+  const boarded = useRef(0);
   const [to, setTo] = useState<Point | null>(null);
   const [journey, setJourney] = useState<Journey | null>(null);
   /** Being travelled: it keeps the map, whichever tab is open */
@@ -284,18 +286,26 @@ export function App() {
   const marks = useMemo(() => {
     const out: { lat: number; lon: number; label: string }[] = [];
     if (tab !== "plan") return out;
-    if (from) out.push({ ...from, label: "A" });
+    if (from && !("veh" in from)) out.push({ ...from, label: "A" });
     if (to) out.push({ ...to, label: "B" });
     return out;
   }, [tab, from, to]);
 
+  // On board lasts only while planning: the vehicle goes on without the planner
+  useEffect(() => {
+    if (tab !== "plan") setFrom((was) => (was && "veh" in was ? null : was));
+  }, [tab]);
+
   /** Asked separately from the map's own locate button, so a refusal here does
    * not turn the map's dot off */
   const useHere = (which: "from" | "to") => {
+    const asked = boarded.current;
     navigator.geolocation?.getCurrentPosition(
       (pos) => {
         const at = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        (which === "from" ? setFrom : setTo)(at);
+        // A fix asked for before getting on board is no longer the start
+        if (which === "to") setTo(at);
+        else if (asked === boarded.current) setFrom(at);
       },
       () => setNotice(t.noLocation),
       { enableHighAccuracy: true, timeout: 10_000 },
@@ -556,6 +566,7 @@ export function App() {
             picking={picking}
             onPick={setPicking}
             onSwap={() => {
+              if (from && "veh" in from) return;
               setFrom(to);
               setTo(from);
             }}
@@ -660,6 +671,12 @@ export function App() {
                 setVeh(null);
               }}
               onRoute={openRoute}
+              onAboard={(on) => {
+                boarded.current += 1;
+                setFrom(on);
+                setVeh(null);
+                setTab("plan");
+              }}
               onClose={() => setVeh(null)}
             />
           )}

@@ -1,4 +1,5 @@
-/// What to do now on a journey being followed, from the bottom of the map.
+/// What to do now on a journey being followed, from the bottom of the map; a
+/// tap on it lists every step.
 library;
 
 import 'dart:async';
@@ -9,6 +10,7 @@ import 'package:flutter/material.dart' as material show Theme;
 import 'eta.dart';
 import 'follow.dart';
 import 'here.dart' show Here, Locating;
+import 'legs.dart';
 import 'live.dart';
 import 'models.dart';
 import 'route_badge.dart';
@@ -19,6 +21,12 @@ const _mPerKm = 1000;
 
 /// Short distances are said to this many metres
 const _stepM = 10;
+
+/// The steps list scrolls past this height
+const _stepsMaxHeight = 256.0;
+
+/// Room for a step's `HH:MM - HH:MM`
+const _clockWidth = 96.0;
 
 /// Follows [journey] from [here]'s fixes for as long as it is mounted. The
 /// fixes go nowhere but the follower.
@@ -49,6 +57,9 @@ class FollowCard extends StatefulWidget {
 class _FollowCardState extends State<FollowCard> {
   late Follower _follower = Follower(widget.journey, widget.catalog);
   Progress? _progress;
+
+  /// Every step of the journey is listed
+  bool _steps = false;
 
   /// What the notification last said, so a fix that changes nothing in it
   /// is not sent on
@@ -111,8 +122,7 @@ class _FollowCardState extends State<FollowCard> {
     if (p.stage.kind == StageKind.walk || p.stage.kind == StageKind.arrived) {
       return null;
     }
-    final id = widget.journey.legs[p.stage.leg].route;
-    return id == null ? null : widget.catalog.routes[id];
+    return _routeOf(widget.catalog, widget.journey.legs[p.stage.leg].route);
   }
 
   /// Repeats the card on the notification, sounding once for each moment
@@ -184,30 +194,62 @@ class _FollowCardState extends State<FollowCard> {
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: progress != null
-                  ? _Step(said: _said(progress), route: _route(progress))
-                  : widget.here.state == Locating.denied
-                  ? Text(
-                      txt.noLocation,
-                      style: TextStyle(
-                        color: material.Theme.of(context).colorScheme.error,
+            Row(
+              children: [
+                Expanded(
+                  child: Tooltip(
+                    message: _steps ? txt.hideSteps : txt.showSteps,
+                    child: InkWell(
+                      onTap: () => setState(() => _steps = !_steps),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: progress != null
+                                ? _Step(
+                                    said: _said(progress),
+                                    route: _route(progress),
+                                  )
+                                : widget.here.state == Locating.denied
+                                ? Text(
+                                    txt.noLocation,
+                                    style: TextStyle(
+                                      color: material.Theme.of(context)
+                                          .colorScheme
+                                          .error,
+                                    ),
+                                  )
+                                : Text(txt.locating, style: faint),
+                          ),
+                          Icon(
+                            _steps ? Icons.expand_less : Icons.expand_more,
+                            size: 18,
+                          ),
+                        ],
                       ),
-                    )
-                  : Text(txt.locating, style: faint),
-            ),
-            const SizedBox(width: 8),
-            done
-                ? FilledButton(
-                    onPressed: widget.onEnd,
-                    child: Text(txt.endFollow),
-                  )
-                : TextButton(
-                    onPressed: widget.onEnd,
-                    child: Text(txt.endFollow),
+                    ),
                   ),
+                ),
+                const SizedBox(width: 8),
+                done
+                    ? FilledButton(
+                        onPressed: widget.onEnd,
+                        child: Text(txt.endFollow),
+                      )
+                    : TextButton(
+                        onPressed: widget.onEnd,
+                        child: Text(txt.endFollow),
+                      ),
+              ],
+            ),
+            if (_steps)
+              _Steps(
+                catalog: widget.catalog,
+                journey: widget.journey,
+                stage: progress?.stage,
+              ),
           ],
         ),
       ),
@@ -233,7 +275,7 @@ _Said _say(Catalog catalog, Journey journey, Live live, Progress progress) {
   final stage = progress.stage;
   if (stage.kind == StageKind.arrived) return _Said(txt.arrived, null, null);
   final leg = journey.legs[stage.leg];
-  String name(int stop) => catalog.stops[stop].name;
+  String name(int stop) => _stopName(catalog, stop);
   List<Arrival> due(int stop) => [
     for (final a in live.arrivals[stop] ?? const <Arrival>[])
       if (a.route == leg.route) a,
@@ -308,6 +350,110 @@ class _Step extends StatelessWidget {
     );
   }
 }
+
+/// Every walk, wait and ride of the journey with when it starts and ends, the
+/// one under way marked
+class _Steps extends StatelessWidget {
+  const _Steps({
+    required this.catalog,
+    required this.journey,
+    required this.stage,
+  });
+
+  final Catalog catalog;
+  final Journey journey;
+
+  /// Where the journey is, or null while that is not known
+  final Stage? stage;
+
+  @override
+  Widget build(BuildContext context) {
+    final list = rows(journey);
+    final now = stage == null ? -1 : current(list, stage!);
+    final theme = material.Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.only(top: 8),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: hair)),
+      ),
+      constraints: const BoxConstraints(maxHeight: _stepsMaxHeight),
+      child: ListView(
+        shrinkWrap: true,
+        padding: EdgeInsets.zero,
+        children: [
+          for (final (i, row) in list.indexed)
+            Container(
+              key: ValueKey(('step', i)),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+              decoration: i == now
+                  ? BoxDecoration(
+                      color: raised,
+                      borderRadius: BorderRadius.circular(6),
+                    )
+                  : null,
+              child: DefaultTextStyle.merge(
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: i < now ? theme.disabledColor : null,
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: _clockWidth,
+                      child: Text(
+                        '${clockTime(row.dep)} - ${clockTime(row.arr)}',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                    ..._what(row),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _what(PlanRow row) {
+    String name(int stop) => _stopName(catalog, stop);
+    final route = _routeOf(catalog, row.route);
+    final (Widget lead, String text) = switch (row.kind) {
+      PlanRowKind.ride => (
+        route == null
+            ? const SizedBox.shrink()
+            : RouteBadge(route: route, fontSize: 10),
+        '${name(row.a)} → ${name(row.b)}',
+      ),
+      PlanRowKind.wait => (
+        const Icon(Icons.schedule, size: 16),
+        txt.waitAt(name(row.a)),
+      ),
+      PlanRowKind.walk => (
+        const Icon(Icons.directions_walk, size: 16),
+        row.b < 0
+            ? txt.walkHome
+            : row.change
+            ? txt.changeAt(name(row.b))
+            : txt.walkTo(name(row.b)),
+      ),
+    };
+    return [
+      lead,
+      const SizedBox(width: 6),
+      Expanded(child: Text(text, overflow: TextOverflow.ellipsis)),
+    ];
+  }
+}
+
+/// A stop's name; the server sends -1 for a stop the catalog lacks
+String _stopName(Catalog catalog, int stop) =>
+    stop >= 0 && stop < catalog.stops.length ? catalog.stops[stop].name : '';
+
+TransitRoute? _routeOf(Catalog catalog, int? route) =>
+    route != null && route >= 0 && route < catalog.routes.length
+    ? catalog.routes[route]
+    : null;
 
 String _distance(double m) => m < _mPerKm
     ? txt.metres((m / _stepM).round() * _stepM)

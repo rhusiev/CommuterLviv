@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { canKeepAwake, heldAwake, holdAwake, useAwake } from "../lib/awake";
-import { countdown } from "../lib/eta";
-import type { Progress } from "../lib/follow";
+import { clock, countdown } from "../lib/eta";
+import type { Progress, Stage } from "../lib/follow";
 import { t } from "../lib/i18n";
+import { current, rows, type Row } from "../lib/legs";
 import type { Live } from "../lib/live";
 import type { Arrival, Catalog, Journey } from "../lib/types";
+import { Icon } from "./Icon";
 import { RouteBadge } from "./RouteBadge";
 
-/** What to do now on a journey being followed */
+/** What to do now on a journey being followed; a tap on it lists every step */
 export function FollowCard({
   catalog,
   journey,
@@ -23,35 +25,120 @@ export function FollowCard({
 }) {
   const done = progress !== null && progress !== "denied" && progress.stage.kind === "arrived";
   const [awake, setAwake] = useState(heldAwake);
+  const [steps, setSteps] = useState(false);
   useAwake(awake && !done);
   return (
-    <div className="panel pointer-events-auto flex items-start gap-2 p-3">
-      <div className="min-w-0 flex-1 text-sm">
-        {progress === null ? (
-          <p className="text-slate-400">{t.locating}</p>
-        ) : progress === "denied" ? (
-          <p className="text-rose-300">{t.noLocation}</p>
-        ) : (
-          <Step catalog={catalog} journey={journey} live={live} progress={progress} />
-        )}
-      </div>
-      {canKeepAwake() && !done && (
-        <button
-          onClick={() => {
-            holdAwake(!awake);
-            setAwake(!awake);
+    <div className="panel pointer-events-auto p-3">
+      <div className="flex items-start gap-2">
+        {/* A div, as a button may not hold the paragraphs of the step */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setSteps(!steps)}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" && e.key !== " ") return;
+            e.preventDefault();
+            setSteps(!steps);
           }}
-          aria-pressed={awake}
-          title={t.keepAwakeHint}
-          className={awake ? "btn" : "btn-quiet"}
+          aria-expanded={steps}
+          title={steps ? t.hideSteps : t.showSteps}
+          className="flex min-w-0 flex-1 cursor-pointer items-start gap-1 text-sm"
         >
-          {t.keepAwake}
+          <div className="min-w-0 flex-1">
+            {progress === null ? (
+              <p className="text-slate-400">{t.locating}</p>
+            ) : progress === "denied" ? (
+              <p className="text-rose-300">{t.noLocation}</p>
+            ) : (
+              <Step catalog={catalog} journey={journey} live={live} progress={progress} />
+            )}
+          </div>
+          <Icon name={steps ? "up" : "down"} className="size-4 shrink-0 text-slate-500" />
+        </div>
+        {canKeepAwake() && !done && (
+          <button
+            onClick={() => {
+              holdAwake(!awake);
+              setAwake(!awake);
+            }}
+            aria-pressed={awake}
+            title={t.keepAwakeHint}
+            className={awake ? "btn" : "btn-quiet"}
+          >
+            {t.keepAwake}
+          </button>
+        )}
+        <button onClick={onEnd} className={done ? "btn" : "btn-quiet"}>
+          {done ? t.ok : t.endFollow}
         </button>
+      </div>
+      {steps && (
+        <Steps
+          catalog={catalog}
+          journey={journey}
+          stage={progress !== null && progress !== "denied" ? progress.stage : null}
+        />
       )}
-      <button onClick={onEnd} className={done ? "btn" : "btn-quiet"}>
-        {done ? t.ok : t.endFollow}
-      </button>
     </div>
+  );
+}
+
+/** Every walk, wait and ride of the journey with when it starts and ends, the
+ *  one under way marked */
+function Steps({
+  catalog,
+  journey,
+  stage,
+}: {
+  catalog: Catalog;
+  journey: Journey;
+  /** Where the journey is, or null while that is not known */
+  stage: Stage | null;
+}) {
+  const list = rows(journey);
+  const now = stage === null ? -1 : current(list, stage);
+  return (
+    <ol className="mt-2 max-h-64 space-y-0.5 overflow-y-auto border-t border-raised pt-2">
+      {list.map((row, i) => (
+        <li
+          key={i}
+          aria-current={i === now ? "step" : undefined}
+          className={`flex items-center gap-2 rounded-md px-1 py-0.5 text-sm ${
+            i === now ? "bg-raised text-slate-100" : i < now ? "text-slate-500" : "text-slate-300"
+          }`}
+        >
+          <span className="w-24 shrink-0 text-xs tabular-nums text-slate-400">
+            {clock(row.dep)} - {clock(row.arr)}
+          </span>
+          <StepRow catalog={catalog} row={row} />
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function StepRow({ catalog, row }: { catalog: Catalog; row: Row }) {
+  const name = (i: number) => stopName(catalog, i);
+  if (row.kind === "ride") {
+    const route = row.route === undefined ? undefined : catalog.routes[row.route];
+    return (
+      <>
+        {route && <RouteBadge route={route} className="shrink-0 px-1.5 text-xs" />}
+        <span className="min-w-0 truncate">
+          {name(row.a)} → {name(row.b)}
+        </span>
+      </>
+    );
+  }
+  const [icon, text] =
+    row.kind === "wait"
+      ? (["clock", t.waitAt(name(row.at))] as const)
+      : (["walk", row.to < 0 ? t.walkHome : row.change ? t.changeAt(name(row.to)) : t.walkTo(name(row.to))] as const);
+  return (
+    <>
+      <Icon name={icon} className="size-4 shrink-0 text-slate-500" />
+      <span className="min-w-0 truncate">{text}</span>
+    </>
   );
 }
 
@@ -70,7 +157,7 @@ function Step({
   if (stage.kind === "arrived") return <p className="font-medium text-slate-100">{t.arrived}</p>;
   const leg = journey.legs[stage.leg]!;
   const route = leg.route === undefined ? undefined : catalog.routes[leg.route];
-  const name = (i: number) => catalog.stops[i]?.name ?? "";
+  const name = (i: number) => stopName(catalog, i);
   const due = (stop: number) =>
     live.arrivals[String(stop)]?.filter((a) => a.route === leg.route) ?? [];
   let head: string;
@@ -115,3 +202,5 @@ const STEP_M = 10;
 function distance(m: number): string {
   return m < M_PER_KM ? t.metres(Math.round(m / STEP_M) * STEP_M) : t.km(m / M_PER_KM);
 }
+
+const stopName = (catalog: Catalog, i: number) => catalog.stops[i]?.name ?? "";

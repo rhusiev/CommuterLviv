@@ -70,7 +70,8 @@ class Planner:
         backs = self._sent(j.backups[leg])
         if not 0 <= n < len(backs):
             return None
-        way = plan.Journey((*j.legs[:leg], *backs[n].legs()), j.backups[:leg])
+        way = plan.Journey((*j.legs[:leg], *backs[n].legs()), j.backups[:leg],
+                           j.aboard and leg > 0)
         return self.wire(way, *self._drawing(origin, dest, arrivals, speed))
 
     def _drawing(self, origin, dest, arrivals, speed):
@@ -104,12 +105,16 @@ class Planner:
 
     def wire(self, j, path=None, between=None):
         """`j` as sent; without `path`, its legs are not drawn, and without
-        `between` its rides do not say where they call on the way."""
-        return {"dep": int(j.dep), "arr": int(j.arr), "rides": j.rides,
-                "live": j.live, "confidence": j.confidence,
-                "backup": j.backup,
-                "legs": [self._leg(x, path, between, b) for x, b in
-                         zip_longest(j.legs, j.backups, fillvalue=())]}
+        `between` its rides do not say where they call on the way. One
+        starting on board says it is already being ridden."""
+        out = {"dep": int(j.dep), "arr": int(j.arr), "rides": j.rides,
+               "live": j.live, "confidence": j.confidence,
+               "backup": j.backup,
+               "legs": [self._leg(x, path, between, b) for x, b in
+                        zip_longest(j.legs, j.backups, fillvalue=())]}
+        if j.aboard:
+            out["aboard"] = True
+        return out
 
     def _leg(self, leg, path, between, backups):
         out = {"kind": leg.kind, "dep": int(leg.dep), "arr": int(leg.arr),

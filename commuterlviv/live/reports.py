@@ -83,8 +83,8 @@ def write(search, note, user, folder=DIR):
     meta = {"version": __version__, "user": str(user), "note": note,
             "reported": time.time(), "catalog": cat.tag,
             "stops": cat.stops, "routes": cat.routes,
-            **{k: search[k] for k in ("from", "to", "t", "asked", "speed",
-                                      "answer")}}
+            **{k: search[k] for k in ("to", "t", "asked", "speed", "answer")},
+            "from": _sent(search["from"])}
     stamp = datetime.datetime.now(plan.TZ).strftime("%Y%m%d-%H%M%S")
     path = folder / f"{stamp}-{uuid.uuid4().hex[:6]}.npz"
     tmp = path.with_suffix(".tmp.npz")
@@ -94,11 +94,18 @@ def write(search, note, user, folder=DIR):
     return path.name
 
 
+def _sent(origin):
+    """An origin as JSON holds it: a point as [lat, lon], on board as {"veh"}."""
+    return {"veh": origin.veh} if isinstance(origin, plan.Aboard) else origin
+
+
 def read(path):
     """The report's meta, with its arrivals and catalog rebuilt."""
     with np.load(path) as z:
         meta = json.loads(str(z["meta"]))
         meta["arrivals"] = Arrivals(float(z["arrivals_t"]), z["eta"], z["start"])
+    if isinstance(meta["from"], dict):
+        meta["from"] = plan.Aboard(meta["from"]["veh"])
     stops, routes = meta["stops"], meta["routes"]
     meta["cat"] = SimpleNamespace(
         stops=stops, routes=routes, tag=meta["catalog"],

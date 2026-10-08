@@ -33,7 +33,11 @@ that vehicle is predicted to reach and when, out to the model's 45-minute
 horizon, read off the same predictions the stop card shows - so the two cannot
 disagree. A third tab plans a journey: tap where you are and where you are
 going, and it answers with ways to get there, ranked by arrival - walk to a
-stop, ride, maybe change, walk to the door. Named sets of routes -
+stop, ride, maybe change, walk to the door. Already on a vehicle, "I'm on it"
+on its card plans from on board it: the From field shows it, there is no time
+to leave at, and only its id is sent (docs/service.md). It lasts only while
+the planner is open: leaving the planner, or following a journey, drops it, as
+the vehicle goes on without the planner. Named sets of routes -
 one for work, one for home - live on the server, so they follow the account
 rather than the browser. Serve `dist/` with a history fallback: every path has to
 return `index.html`, or `/join/<code>` is a 404 and the invite link is dead.
@@ -67,6 +71,11 @@ is past the last stop before yours, from the stops the server sends with each
 ride (docs/service.md), and right from boarding on a ride of one stop. A ride
 without them - from a reported journey, say, or an older server - gets ready
 `SOON_M` (400 m) before the stop instead.
+
+A tap on the card lists every step of the journey with its start and end:
+each walk, each wait of a minute or more (`WAIT_MIN_S`) at a stop, and each
+ride with its route and its two stops, the step under way marked. The rows are
+built by `rows()` in `web/src/lib/legs.ts`, ported to `mobile/lib/src/legs.dart`.
 
 By default it follows only while the app is on screen. The app has a setting,
 off until turned on, to go on with the screen off: on Android a foreground

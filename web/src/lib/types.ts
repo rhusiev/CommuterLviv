@@ -98,7 +98,12 @@ export type Journey = {
   confidence: Confidence;
   backup: number;
   legs: Leg[];
+  /** Starts on board the vehicle the search was made from */
+  aboard?: boolean;
 };
+
+/** A vehicle to plan from as though on board, with its route if known */
+export type Aboard = { veh: number; route: number | null };
 
 /** `report` names the search for `api.report` and `api.backup`, for half an
  * hour */

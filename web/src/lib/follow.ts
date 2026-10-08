@@ -125,8 +125,12 @@ type Sample = { t: number; at: XY; seen: { id: number; route: number; at: XY }[]
 /** Every leg must carry its line; an older service sends none */
 export const followable = (j: Journey) => j.legs.every((l) => (l.pts?.length ?? 0) > 0);
 
-export const start = (j: Journey): Stage =>
-  j.legs[0]?.kind === "ride" ? { kind: "wait", leg: 0 } : { kind: "walk", leg: 0 };
+/** A journey begun on board starts on its ride, the rest walking or waiting */
+export const start = (j: Journey): Stage => {
+  const first = j.legs[0];
+  if (first?.kind !== "ride") return { kind: "walk", leg: 0 };
+  return j.aboard ? { kind: "ride", leg: 0, veh: first.veh ?? null } : { kind: "wait", leg: 0 };
+};
 
 export class Follower {
   private readonly legs: Leg[];

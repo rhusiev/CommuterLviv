@@ -3,19 +3,22 @@ import { api } from "../lib/api";
 import { countdown } from "../lib/eta";
 import { t } from "../lib/i18n";
 import { RouteBadge } from "./RouteBadge";
-import type { Call, Catalog } from "../lib/types";
+import type { Aboard, Call, Catalog } from "../lib/types";
 
 export function VehicleCard({
   catalog,
   veh,
   onStop,
   onRoute,
+  onAboard,
   onClose,
 }: {
   catalog: Catalog;
   veh: number;
   onStop: (i: number) => void;
   onRoute: (i: number) => void;
+  /** Plans a journey from on board it */
+  onAboard: (from: Aboard) => void;
   onClose: () => void;
 }) {
   const [calls, setCalls] = useState<Call[] | null>(null);
@@ -97,6 +100,15 @@ export function VehicleCard({
           );
         })}
       </ul>
+      {calls !== null && calls.length > 0 && (
+        <button
+          onClick={() => onAboard({ veh, route: at ?? null })}
+          title={t.onItHint}
+          className="btn mt-2 w-full"
+        >
+          {t.onIt}
+        </button>
+      )}
     </div>
   );
 }

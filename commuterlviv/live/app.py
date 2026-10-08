@@ -20,7 +20,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
 
-from .. import __version__, network
+from .. import __version__, network, plan
 from . import (auth, db, geocode, hub, journeys, prefs, refresh, reports,
                security, service, settings)
 
@@ -358,6 +358,17 @@ def _point(raw):
     return lat, lon
 
 
+def _origin(q):
+    """Where a search starts: a point `from`, or on board vehicle `veh`, which
+    keeps the traveller's own position off the request."""
+    veh = q.get("veh")
+    if veh is None:
+        return _point(q.get("from"))
+    if not veh.isdigit() or len(veh) > 9:
+        return None
+    return plan.Aboard(int(veh))
+
+
 PLAN_AHEAD_DAYS = 30
 
 
@@ -402,13 +413,16 @@ async def journey(request, session):
             return error("The journey planner is getting ready; try again in "
                          "a few minutes", 503, preparing=True)
         return error("This service has no journey planner", status=503)
-    origin = _point(request.query_params.get("from"))
+    origin = _origin(request.query_params)
     dest = _point(request.query_params.get("to"))
     if origin is None or dest is None:
-        return error("From and to must each be lat,lon inside Lviv")
+        return error("From and to must each be lat,lon inside Lviv, or veh a "
+                     "vehicle in place of from")
     at, why = _departure(request.query_params.get("at"))
     if why:
         return error(why)
+    if at is not None and isinstance(origin, plan.Aboard):
+        return error("On board, a journey leaves now, so it takes no at")
     speed, why = _speed(request.query_params.get("speed"))
     if why:
         return error(why)

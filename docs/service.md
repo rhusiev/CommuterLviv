@@ -109,6 +109,24 @@ somebody deciding whether to run for a bus deserves to know which of the two
 they are reading. How much accuracy is lost at the far end of that horizon is
 still unmeasured - it needs the VPS recording.
 
+`veh=<id>` in place of `from` searches from on board that tracked vehicle, so
+only its id leaves the device. It is searched as getting off at the vehicle's
+next stop when the vehicle gets there, the stops a short walk from that one
+included, and every journey found is then ridden there on it (`plan.Aboard`,
+`_on`). Staying on is one ride from now. Getting off for another vehicle is a
+change like any other, so a departure sooner than `CHANGE` (60 s) after getting
+off is dropped. When the door is in walking reach of the next stop, one more
+option gets off there and walks. The ride there starts at the stop before the
+next one, taken from a pattern of the route that runs the next two predicted
+stops one after the other. A vehicle standing at its first stop has none, and
+neither does one whose next two stops no pattern runs in a row - across a
+layover, say. Its journeys then start at the next stop instead. An option that
+starts on board carries `aboard: true`, and the clients follow it as a ride
+already under way. That ride needs no backups, so it is left out of the ranking's
+count of them. A ride slower than walking is not dropped here, since it is
+already being ridden. A vehicle the planner no longer sees running gets no
+options. On board the journey leaves now, so `at` is refused with `veh`.
+
 A tracked vehicle stands in for the scheduled trips on its route at each stop
 up to the last time it calls there, so the timetable is only suppressed that
 far. Later scheduled departures stay, since no vehicle is tracked on them yet.

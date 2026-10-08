@@ -279,6 +279,22 @@ describe("follow", () => {
     expect(p.passed).toBe(true);
   });
 
+  test("a journey begun on board starts riding its vehicle, then walks the rest", () => {
+    const j = journey();
+    const trip = new Trip({ ...j, aboard: true, legs: j.legs.slice(1) });
+    let p = trip.fix(at(0, 200), [vehicle(PLANNED, 0)]);
+    expect(p.stage).toEqual({ kind: "ride", leg: 0, veh: PLANNED });
+    trip.east(0, 8, 250, (x) => [vehicle(PLANNED, Math.min(x, 2000))]);
+    p = trip.east(2000, 0, 10);
+    expect(p.stage).toEqual({ kind: "walk", leg: 1 });
+  });
+
+  test("a journey not begun on board waits for its first ride", () => {
+    const j = journey();
+    const trip = new Trip({ ...j, legs: j.legs.slice(1) });
+    expect(trip.fix(at(0, 200)).stage.kind).toBe("wait");
+  });
+
   test("a journey without lines cannot be followed", () => {
     const j = journey();
     expect(followable(j)).toBe(true);

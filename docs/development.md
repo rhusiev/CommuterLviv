@@ -46,7 +46,8 @@ or docker. With neither, they are skipped.
 `vite preview` serves `web/dist` and proxies to the service, which runs in the
 test process on the made-up city. A user registers through the sign-in screen,
 finds a stop and sees the bus on its board, and picks the route and sees the
-bus on the map. It needs `npm run build` first, and a Chromium -
+bus on the map. Another boards the bus from its card, plans to a point picked
+on the map, follows the journey and opens its list of steps. It needs `npm run build` first, and a Chromium -
 `chromium-browser`, `chromium` or `google-chrome` on the PATH, or
 `COMMUTERLVIV_TEST_CHROMIUM`. Playwright's own browser download is not needed.
 Map tiles and fonts are blocked, so the map itself stays blank.
