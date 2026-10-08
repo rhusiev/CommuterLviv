@@ -17,9 +17,43 @@ A release is `dev` merged into `main`. Deploy from `main`.
 ```
 
 It needs nothing but the checkout: the versions agree (see below), ruff
-finds no syntax errors or undefined names, the package imports, the web app
-typechecks and builds, and `flutter analyze` and `flutter test` pass. A missing
-toolchain is reported and stepped over rather than failing the run.
+finds no syntax errors or undefined names, the package imports, the Python
+tests pass, the web app typechecks, passes its tests and builds, and
+`flutter analyze` and `flutter test` pass. A missing toolchain is reported and
+stepped over rather than failing the run.
+
+## Tests
+
+```sh
+pip install -r requirements-dev.txt
+python3 -m pytest
+```
+
+The Python tests run against a made-up city (`tests/city.py`): one bus line
+of five stops along a straight road, built into a GTFS feed that the real
+network build reads, and vehicles driven along it at a chosen speed. Because
+the city is known exactly, the tests can say what the right answer is - when
+a bus passes a stop, how long it stands, what a jammed road should teach the
+model.
+
+They cover the vehicle tracker, the layover rule and its learned model, the
+offline replay, the live engine, the snapshot, and the HTTP and websocket API.
+The API tests need Postgres. They use `COMMUTERLVIV_TEST_DATABASE_URL` if it is
+set, and otherwise start a throwaway `postgres:16-alpine` container with podman
+or docker. With neither, they are skipped.
+
+`tests/browser_test.py` drives the built web app in headless Chromium:
+`vite preview` serves `web/dist` and proxies to the service, which runs in the
+test process on the made-up city. A user registers through the sign-in screen,
+finds a stop and sees the bus on its board, and picks the route and sees the
+bus on the map. It needs `npm run build` first, and a Chromium -
+`chromium-browser`, `chromium` or `google-chrome` on the PATH, or
+`COMMUTERLVIV_TEST_CHROMIUM`. Playwright's own browser download is not needed.
+Map tiles and fonts are blocked, so the map itself stays blank.
+
+`npm test` in `web/` runs the web app's unit tests (vitest). Those of
+`mobile/test` that test logic both apps share are ported line for line, so
+the two implementations are checked against the same cases.
 
 ## The version
 
