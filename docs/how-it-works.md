@@ -184,7 +184,9 @@ most 60 s from its last fix, and every remaining stop within a 45 minute horizon
 gets a predicted arrival. That horizon matches the API's own.
 
 The service then corrects those seconds by a boosted model of how far out they
-used to be, learned from the stops vehicles went on to pass, and brings them
+used to be, learned from the stops vehicles went on to pass and told what
+the last minutes said - how late the city's arrivals came, how fast the
+vehicle itself went, how far the vehicles around it are - and brings them
 4% forward, since an arrival foretold too late is the one a rider misses
 ([seconds to each stop, corrected](service.md#seconds-to-each-stop-corrected)).
 An offline replay applies the correction only to a model that has been fitted.

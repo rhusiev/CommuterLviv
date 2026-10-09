@@ -15,6 +15,7 @@ from .service import settings_for
 TO_GO_TOL_S = 15.0
 WAIT_S = 10.0
 FIT_TOL_S = 5.0
+SPEED_TOL = 0.1
 
 
 class _Shift:
@@ -61,6 +62,17 @@ def test_a_stop_passed_teaches_how_far_out_the_model_was(live, monkeypatch):
     to_go = rows[:, -1] + rows[:, boost.FEATURES.index("model s")]
     went = rows[:, boost.FEATURES.index("m to go")] / city.SPEED
     assert to_go == pytest.approx(went, abs=TO_GO_TOL_S)
+
+
+def test_what_it_learns_from_carries_the_vehicles_own_recent_speed(live, monkeypatch):
+    monkeypatch.setattr(boost, "KEEP", 1.0)
+    monkeypatch.setattr(boost, "SAMPLE_S", live.epoch_s)
+
+    _ride(live, city.at(city.DEPARTS["t1"]) + city.STOPS * city.LEG_S)
+
+    speed = live.model.boost.training()[:, boost.FEATURES.index("own speed")]
+    assert np.isfinite(speed).any()
+    assert speed[np.isfinite(speed)] == pytest.approx(city.SPEED, rel=SPEED_TOL)
 
 
 @pytest.mark.parametrize("shift", [120.0, -200.0])

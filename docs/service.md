@@ -73,7 +73,14 @@ them off:
    stops each vehicle is foretold to reach, what the model said with the
    timetable's seconds to the same stop, how late the vehicle runs, the
    metres and stops to go, its speed, the age of its fix, the hour, the
-   weekday, the route and its type.
+   weekday, the route and its type, and the model's seconds per timetabled
+   second. With them go what the last minutes said (`commuterlviv/recent.py`):
+   how far the stops the city passed in the last 30 minutes came off their
+   first forecast inside 15 minutes, as the median of the log of real over
+   foretold seconds, and how many there were; the vehicle's own metres per
+   second over the last 5 minutes and the model's seconds per second for
+   that stretch; and the metres to the vehicles ahead and behind on the same
+   shape, the model's seconds to the one ahead and the age of its fix.
 2. When the vehicle passes that stop, timed between fixes at most 120 s
    apart (`MAX_GAP_S`), each note is labelled with how many seconds later
    than the model it got there. A note whose stop is not passed within 2
@@ -101,7 +108,8 @@ fitted after each day and scored on the last three (1.5 million ETAs), the
 correction without step 5 brought the mean miss from 178.5 to 130.9 s, from
 237 to 167 s 20-45 minutes out and from 21.3 to 22.2 s under two minutes. A
 fit takes about 30 s of CPU in a worker thread every 6 hours. Correcting the
-morning peak's 7 600 stops takes about 0.1 s of CPU a minute.
+morning peak's 7 600 stops takes about 0.12 s of CPU a minute, 0.05 s of
+it for what the last minutes said. The 500 000 notes take 46 MB.
 
 ## The journey planner
 
@@ -509,7 +517,8 @@ two hours of recording cannot replay.
 3. Every weight carries the time it was earned and decays from that stamp, so
    an old snapshot needs no expiry: it fades back to the timetable on its own.
 4. If the terminus model or the ETA correction has too few rows to be fitted
-   (`Service.short`) - no snapshot, or one from before they were kept - the
+   (`Service.short`) - no snapshot, or one from before they were kept or
+   noted with other features - the
    service learns them from the recording instead of waiting hours of service
    for them (`Service.backfill`). A process of its own, at a lower priority,
    replays the last 4 days into a fresh model, noting rows past the first day
@@ -525,7 +534,7 @@ two hours of recording cannot replay.
 
 A missing or unreadable snapshot is not an error - the model starts from the
 timetable, as it did before the file existed, and the log says so. The
-snapshot is about 95 MB, and only the per-cell online models
+snapshot is about 111 MB, and only the per-cell online models
 (`snapshot.supported`) have one. It also carries each route's recent early
 turnarounds at its termini and the minutes of stands its departure model
 learns from ([trips after this one](#trips-after-this-one)) and the passed

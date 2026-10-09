@@ -5,8 +5,8 @@ habits of a route, of a day of the week or of a vehicle running late, and it
 reads Lviv as faster than it is: over the recording of 2026-09-14 to 10-08 it
 foretold arrivals 112 s early on average. A boosted model of its own misses
 (`fit`), given what the model said with the timetable, the lateness, the
-distance and stops to go, the hour and the weekday, learns those and takes
-the difference off. Within two minutes of a stop the model is better than the
+distance and stops to go, the hour, the weekday and what the last minutes
+said (`recent`), learns those and takes the difference off. Within two minutes of a stop the model is better than the
 correction, so there it is faded out (`FADE_FROM_S`). docs/service.md has
 what it was measured on.
 """
@@ -14,6 +14,8 @@ import datetime
 
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingRegressor
+
+from . import recent
 
 # the rows learned from: of the ETAs of an epoch every SAMPLE_S, a KEEP share,
 # labelled when the vehicle passes the stop. Lviv has ~460 000 such ETAs a day
@@ -39,8 +41,10 @@ FADE_S = 120.0
 # is as often early as late, but a rider told too late misses the vehicle: at
 # 4% that happens as rarely as with the model alone. Chosen, not derived
 EARLIER = 0.04
+MIN_TIMETABLE_S = 30.0  # timetabled s to a stop below which their ratio to the model's is noise
 FEATURES = ("model s", "timetable s", "late", "m to go", "stops to go", "speed",
-            "fix age", "hour", "weekday", "route", "type", "stop", "stops")
+            "fix age", "hour", "weekday", "route", "type", "stop", "stops",
+            "model per timetable", *recent.NAMES)
 CATEGORIES = ("route", "type")
 TYPES = ("bus", "tram", "trolleybus")
 DAY_S = 86400.0
@@ -61,19 +65,19 @@ class Boost:
         self._asked = {}     # (veh, trip, run, stop index) -> [(time, features)]
         self._pick = np.random.default_rng(0)
         self._sampled = -np.inf   # when ETAs were last noted to learn from
+        self.recent = recent.Recent(MAX_GAP_S)
 
-    def correct(self, now, asked):
+    def correct(self, now, asked, time_between):
         """Correct in place, in one call of the model, the seconds `etas` gave
         each `(veh, track)` of `asked` - each a `(next stop, distance, seconds,
-        inside the horizon)` or None. On a sampled epoch, also note them to
-        learn from."""
-        learn = now - self._sampled >= SAMPLE_S
-        if self.model is None and not learn:
-            return
+        inside the horizon)` or None - `time_between` being the pace model's.
+        Note them in `recent`, and on a sampled epoch to learn from too."""
         got = [(veh, tr, e) for (veh, tr), e in asked if e is not None]
-        if not got:
+        self.recent.note(now, got)
+        learn = now - self._sampled >= SAMPLE_S
+        if not got or self.model is None and not learn:
             return
-        rows = [self._features(tr, now, *e) for _, tr, e in got]
+        rows = [self._features(veh, tr, now, time_between, *e) for veh, tr, e in got]
         if learn:
             self._sampled = now
             self._note(now, got, rows)
@@ -88,20 +92,25 @@ class Boost:
             np.maximum.accumulate(np.maximum(dt, 0.0), out=dt)
             at += len(k)
 
-    def _features(self, tr, now, i, s_now, dt, k):
+    def _features(self, veh, tr, now, time_between, i, s_now, dt, k):
         """One row of `FEATURES` per stop inside the horizon."""
         j = i + k
         sched_now = float(np.interp(s_now, tr.sdist, tr.sched))
+        sched = tr.sched[j] - sched_now
+        per = np.full(len(k), np.nan)
+        np.divide(dt[k], sched, out=per, where=sched > MIN_TIMETABLE_S)
         local = datetime.datetime.fromtimestamp(now, self.tz)
         day_s = local.hour * 3600 + local.minute * 60 + local.second
         late = (day_s - sched_now + DAY_S / 2) % DAY_S - DAY_S / 2
         route, kind = self._route.get(self.net.trip_route.get(tr.trip), (np.nan,) * 2)
         same = (tr.v, now - tr.ts, local.hour + local.minute / 60, local.weekday(),
                 route, kind)
-        return np.column_stack([dt[k], tr.sched[j] - sched_now, np.full(len(k), late),
+        lately = self.recent.features(veh, tr, now, s_now, time_between)
+        return np.column_stack([dt[k], sched, np.full(len(k), late),
                                 tr.sdist[j] - s_now, k + 1,
                                 *(np.full(len(k), v) for v in same), j,
-                                np.full(len(k), len(tr.sdist))])
+                                np.full(len(k), len(tr.sdist)), per,
+                                *(np.full(len(k), v) for v in lately)])
 
     def _note(self, now, got, rows):
         for (veh, tr, (i, _, _, k)), f in zip(got, rows):
@@ -114,6 +123,7 @@ class Boost:
     def passed(self, veh, tr, j, t, gap):
         """`veh` on `tr` passed its stop `j` at `t`, timed between fixes `gap`
         s apart: what was foretold of it is labelled with how far out it was."""
+        self.recent.passed(veh, tr, j, t, gap)
         asked = self._asked.pop((veh, tr.trip, tr.run, j), ())
         if gap > MAX_GAP_S:
             return

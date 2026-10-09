@@ -281,7 +281,7 @@ def all_etas(model, asked, now, offset):
     """`etas` for each `(veh, track)` of `asked`, in order, as the model's
     learned correction (`boost`) has them."""
     got = [etas(model, tr, veh, now, offset) for veh, tr in asked]
-    model.boost.correct(now, list(zip(asked, got)))
+    model.boost.correct(now, list(zip(asked, got)), model.time_between)
     return got
 
 
