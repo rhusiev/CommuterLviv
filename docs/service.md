@@ -50,9 +50,9 @@ the hour, and how long the vehicle has stood; once the vehicle leaves, each of
 those minutes is labelled with how long was really left. A gradient-boosted
 model (scikit-learn's `HistGradientBoostingRegressor`) is fitted on start,
 every 6 hours (`FIT_EVERY`) and after a feed swap, in a worker thread, on
-50 000 of the newest 500 000 such minutes - about 12 s of CPU - and once 20 000 are there it times every
-vehicle standing in early, all of them in one call a minute of a few
-milliseconds. It foretells the 0.4 quantile rather than the median, which
+50 000 of the newest 500 000 such minutes - about 12 s of CPU - and once
+20 000 are there it times every vehicle standing in early, all of them in one
+call a minute of a few milliseconds. It foretells the 0.4 quantile rather than the median, which
 keeps it as rarely late as the rule.
 Asked every minute of every early stand on the last 3 of the 14 days of
 recording to 2026-10-07, the timetable was out by 10.34 minutes on average,
