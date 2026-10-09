@@ -183,6 +183,11 @@ For each tracked vehicle the current position is dead-reckoned forward by at
 most 60 s from its last fix, and every remaining stop within a 45 minute horizon
 gets a predicted arrival. That horizon matches the API's own.
 
+The service then corrects those seconds by a boosted model of how far out they
+used to be, learned from the stops vehicles went on to pass
+([seconds to each stop, corrected](service.md#seconds-to-each-stop-corrected)).
+An offline replay applies the correction only to a model that has been fitted.
+
 The whole pass is strictly causal: one forward sweep in timestamp order, model
 read only after it has been written, so nothing downstream can leak backwards
 into a prediction. A full replay of the current database takes about 17 s.

@@ -137,6 +137,7 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
             vi = _idx(veh_idx, res.veh_ids, veh)
             ti = _idx(trip_idx, res.trip_ids, tr.trip)
             for i, t, gap in passings:
+                model.boost.passed(veh, tr, i, t, gap)
                 k = (vi, ti, tr.run, i)
                 if k not in res.truth:
                     res.truth[k] = t
@@ -275,6 +276,14 @@ def etas(model, tr, veh, now, offset):
     return (i, s_now, dt, k) if len(k) else None
 
 
+def all_etas(model, asked, now, offset):
+    """`etas` for each `(veh, track)` of `asked`, in order, as the model's
+    learned correction (`boost`) has them."""
+    got = [etas(model, tr, veh, now, offset) for veh, tr in asked]
+    model.boost.correct(now, list(zip(asked, got)))
+    return got
+
+
 def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True,
            offset=None):
     # set before the drain, so the first scored epoch is past any training
@@ -286,14 +295,12 @@ def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True,
         return
     model.refresh(now)
     ep = int(now - res.t0)
-    for veh, tr in tracks.items():
-        if not predictable(tr, now):
-            continue
-        # numbered before the model is consulted, so variants replaying the same
-        # recording agree on event numbering
-        vi = _idx(veh_idx, res.veh_ids, veh)
-        ti = _idx(trip_idx, res.trip_ids, tr.trip)
-        got = etas(model, tr, veh, now, offset)
+    asked = [(veh, tr) for veh, tr in tracks.items() if predictable(tr, now)]
+    # numbered before the model is consulted, so variants replaying the same
+    # recording agree on event numbering
+    idx = [(_idx(veh_idx, res.veh_ids, veh), _idx(trip_idx, res.trip_ids, tr.trip))
+           for veh, tr in asked]
+    for (veh, tr), (vi, ti), got in zip(asked, idx, all_etas(model, asked, now, offset)):
         if got is None:
             continue
         i, s_now, dt, k = got

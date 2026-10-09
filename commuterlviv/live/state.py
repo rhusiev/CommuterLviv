@@ -158,9 +158,11 @@ class Live:
         tr = self.tracks.get(veh)
         if tr is None:
             tr = self.tracks[veh] = track.Track(veh, self.runs.get(veh, 0))
-        done, _ = track.observe(tr, self.net, float(ts), lat, lon,
-                                speed, odometer, trip)
+        done, passings = track.observe(tr, self.net, float(ts), lat, lon,
+                                       speed, odometer, trip)
         self.model.layovers.follow(veh, tr)
+        for i, t, gap in passings:
+            self.model.boost.passed(veh, tr, i, t, gap)
         if done:
             base = self.model.shape_base[tr.shape_id]
             self.closed.extend((base + c.i, c, veh) for c in done)
@@ -204,12 +206,11 @@ class Live:
     def _arrivals(self, now):
         rows, standing = [], []
         running = {tr.trip for tr in self.tracks.values()}
-        for veh, tr in self.tracks.items():
-            ri = self.cat.route_i.get(self.net.trip_route.get(tr.trip))
-            if ri is None or tr.ts is None or tr.s is None or now - tr.ts > replay.STALE:
-                continue
+        asked = list(self._timed(now))
+        etas = replay.all_etas(self.model, [(veh, tr) for veh, tr, _ in asked], now,
+                               self.offset)
+        for (veh, tr, ri), got in zip(asked, etas):
             w = self._wire(veh)
-            got = replay.etas(self.model, tr, veh, now, self.offset)
             came = self.model.layovers.came(veh, tr.trip)
             if got is None and came is not None:
                 self._stand(tr.trip, came, now, running)
@@ -229,6 +230,14 @@ class Live:
         eta = eta[np.lexsort((eta["t"], eta["stop"]))]
         start = np.searchsorted(eta["stop"], np.arange(len(self.cat.stops) + 1))
         return Arrivals(now, eta, start.astype(np.int64))
+
+    def _timed(self, now):
+        """Each fresh track on a route the clients know, with its index."""
+        for veh, tr in self.tracks.items():
+            ri = self.cat.route_i.get(self.net.trip_route.get(tr.trip))
+            if ri is not None and tr.ts is not None and tr.s is not None \
+                    and now - tr.ts <= replay.STALE:
+                yield veh, tr, ri
 
     def _rows(self, rows, stops, idx, at, ri, w, planned):
         for j, t in zip(idx, np.rint(at).astype("i8")):

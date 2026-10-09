@@ -48,7 +48,7 @@ also notes what the rule's two halves said, how long ago and how far ahead of
 the timetable the route last left that terminus, the timetable's gap to it,
 the hour, and how long the vehicle has stood; once the vehicle leaves, each of
 those minutes is labelled with how long was really left. A gradient-boosted
-model (scikit-learn's `HistGradientBoostingRegressor`) is fitted on start and
+model (scikit-learn's `HistGradientBoostingRegressor`) is fitted on start,
 every 6 hours (`FIT_EVERY`) in a worker thread, on 50 000 of the newest 500 000
 such minutes - about 12 s of CPU - and once 20 000 are there it times every
 vehicle standing in early, all of them in one call a minute of a few
@@ -59,6 +59,38 @@ recording to 2026-10-07, the timetable was out by 10.34 minutes on average,
 the rule by 6.02 and the model by 5.14, and the share foretold over two
 minutes after the vehicle had actually gone was 50%, 17% and 17%. The
 turnarounds and the minutes of stands are kept with the model across restarts.
+
+## Seconds to each stop, corrected
+
+The pace model reads Lviv as faster than it is - over 2026-09-14..10-08 it
+foretold arrivals 112 s early on average - and it knows nothing of a route's
+habits, of the day of the week or of a vehicle running late. A second
+gradient-boosted model (`commuterlviv/boost.py`) learns its misses and takes
+them off:
+
+1. Every 10 minutes (`SAMPLE_S`) the service notes, for 15% (`KEEP`) of the
+   stops each vehicle is foretold to reach, what the model said with the
+   timetable's seconds to the same stop, how late the vehicle runs, the
+   metres and stops to go, its speed, the age of its fix, the hour, the
+   weekday, the route and its type.
+2. When the vehicle passes that stop, timed between fixes at most 120 s
+   apart (`MAX_GAP_S`), each note is labelled with how many seconds later
+   than the model it got there. A note whose stop is not passed within 2
+   hours is dropped. The newest 500 000 labelled notes, about 6.5 days, are kept.
+3. The fit loop fits the correction on them with the terminus model, once
+   there are 50 000 (`NEED_ROWS`, about two thirds of a day).
+4. Every epoch, every vehicle's seconds to every stop inside the horizon are
+   corrected in one call of the model. Within a minute of a stop the model is
+   better than the correction, so the correction is faded in from 60 s to
+   180 s of the model's seconds (`FADE_FROM_S`, `FADE_S`), chosen, not derived.
+   The seconds are kept from falling and from going below zero along the trip.
+
+Replaying the recording of 2026-09-28..10-07 through the service's own code,
+fitted after each day and scored on the last three (1.5 million ETAs), it
+brought the mean miss from 178.5 to 130.9 s, from 237 to 167 s 20-45 minutes
+out and from 21.3 to 22.2 s under two minutes. A fit takes about 30 s of CPU
+in a worker thread every 6 hours. Correcting the morning peak's 7 600 stops
+takes about 0.1 s of CPU a minute.
 
 ## The journey planner
 
@@ -455,8 +487,9 @@ two hours of recording cannot replay.
 
 1. On start the service reads the snapshot into a fresh model. Its indexes are
    positions in one build of the feed, so it carries what each meant - shape
-   id, cell count and length per unit, the corridor key per corridor - and only
-   what still matches is read back.
+   id, cell count and length per unit, the corridor key per corridor, the
+   route ids the passed stops were noted under - and only what still matches
+   is read back.
 2. It then replays the recording from the later of the snapshot's time and two
    hours ago (`WARM_HOURS`), so the minutes between the last save and the
    restart are learned again.
@@ -465,12 +498,15 @@ two hours of recording cannot replay.
 
 A missing or unreadable snapshot is not an error - the model starts from the
 timetable, as it did before the file existed, and the log says so. The
-snapshot is about 35 MB, and only the per-cell online models
+snapshot is about 95 MB, and only the per-cell online models
 (`snapshot.supported`) have one. It also carries each route's recent early
 turnarounds at its termini and the minutes of stands its departure model
-learns from ([trips after this one](#trips-after-this-one)), which a snapshot
-from before they were kept simply lacks: they are then learned again as
-vehicles come in, and the rule times departures until there are enough.
+learns from ([trips after this one](#trips-after-this-one)) and the passed
+stops the ETA correction learns from
+([seconds to each stop, corrected](#seconds-to-each-stop-corrected)), which a
+snapshot from before they were kept simply lacks: they are then learned again
+as vehicles come in, and the uncorrected model and the rule answer until there
+are enough. The fitted models are not kept: they are fitted again on start.
 
 ## Accounts and registration
 

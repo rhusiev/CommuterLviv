@@ -10,13 +10,13 @@ import asyncio
 import sqlite3
 import time
 
-from .. import collect, layover, replay, snapshot
+from .. import boost, collect, layover, replay, snapshot
 from .state import Live
 
 WARM_HOURS = 2.0         # of recorded history replayed at most, if it is fresh
 WARM_MAX_AGE = 900.0     # s: older than this and the recording is not "now"
 SAVE_EVERY = 600.0       # s between snapshots of the model
-FIT_EVERY = 6 * 3600.0   # s between refits of the terminus departure model
+FIT_EVERY = 6 * 3600.0   # s between refits of the learned models
 
 
 class Service:
@@ -85,21 +85,28 @@ class Service:
         await asyncio.to_thread(snapshot.save, data)
 
     async def fit_loop(self):
-        """Refit the terminus departure model (`layover.fit`) on start and
-        every `FIT_EVERY`, outside the lock: a fit takes seconds of CPU."""
+        """Refit the learned models on start and every `FIT_EVERY`: the
+        terminus departures (`layover.fit`) and the ETA correction
+        (`boost.fit`)."""
         while True:
-            try:
-                async with self.lock:
-                    lay = self.live.model.layovers
-                    rows = lay.training()
-                fitted = await asyncio.to_thread(layover.fit, rows)
-                if fitted is not None:
-                    async with self.lock:
-                        lay.model = fitted
-                    self.log(f"terminus model fitted on {len(rows)} minutes of stands")
-            except Exception as exc:
-                self.log("terminus model fit failed", repr(exc)[:200])
+            await self._fit("layovers", layover.fit, "terminus model", "minutes of stands")
+            await self._fit("boost", boost.fit, "ETA correction", "passed stops")
             await asyncio.sleep(FIT_EVERY)
+
+    async def _fit(self, part, fit, name, rows_are):
+        """Refit the model's `part` by `fit` on its `training()` rows,
+        outside the lock: a fit takes seconds of CPU."""
+        try:
+            async with self.lock:
+                learner = getattr(self.live.model, part)
+                rows = learner.training()
+            fitted = await asyncio.to_thread(fit, rows)
+            if fitted is not None:
+                async with self.lock:
+                    learner.model = fitted
+                self.log(f"{name} fitted on {len(rows)} {rows_are}")
+        except Exception as exc:
+            self.log(f"{name} fit failed", repr(exc)[:200])
 
     def swap(self, live):
         """Onto a new city, primed with a poll and an epoch so it is not
