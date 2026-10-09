@@ -49,8 +49,8 @@ the timetable the route last left that terminus, the timetable's gap to it,
 the hour, and how long the vehicle has stood; once the vehicle leaves, each of
 those minutes is labelled with how long was really left. A gradient-boosted
 model (scikit-learn's `HistGradientBoostingRegressor`) is fitted on start,
-every 6 hours (`FIT_EVERY`) in a worker thread, on 50 000 of the newest 500 000
-such minutes - about 12 s of CPU - and once 20 000 are there it times every
+every 6 hours (`FIT_EVERY`) and after a feed swap, in a worker thread, on
+50 000 of the newest 500 000 such minutes - about 12 s of CPU - and once 20 000 are there it times every
 vehicle standing in early, all of them in one call a minute of a few
 milliseconds. It foretells the 0.4 quantile rather than the median, which
 keeps it as rarely late as the rule.
@@ -445,7 +445,9 @@ without a restart (`commuterlviv/live/refresh.py`):
    (`snapshot.restore`) for every shape the feed left alone - same id, same
    number of cells, length within 1% - and every corridor both cities have.
    It is then warmed on the recording since that copy, which is the last
-   minute or so. A shape the feed changed starts from the timetable.
+   minute or so. A shape the feed changed starts from the timetable. The
+   learned models are fitted again on the rows it took over, rather than
+   leaving the new city without them until the next `FIT_EVERY`.
 7. The new city is swapped in under the model's lock, polled once and stepped
    one epoch so it is not published empty. The planner is swapped with it, and
    a plan asked for in the instant between the two answers 503 rather than

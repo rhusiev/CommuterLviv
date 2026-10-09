@@ -30,6 +30,7 @@ class Service:
         self.errors = 0
         self.polls = 0
         self._seen = {}
+        self.refit = asyncio.Event()   # set to fit now rather than at the next `FIT_EVERY`
 
     async def start(self, hub):
         self.hub = hub
@@ -87,11 +88,15 @@ class Service:
     async def fit_loop(self):
         """Refit the learned models on start and every `FIT_EVERY`: the
         terminus departures (`layover.fit`) and the ETA correction
-        (`boost.fit`)."""
+        (`boost.fit`), and again whenever `refit` is set."""
         while True:
+            self.refit.clear()
             await self._fit("layovers", layover.fit, "terminus model", "minutes of stands")
             await self._fit("boost", boost.fit, "ETA correction", "passed stops")
-            await asyncio.sleep(FIT_EVERY)
+            try:
+                await asyncio.wait_for(self.refit.wait(), FIT_EVERY)
+            except TimeoutError:
+                pass
 
     async def _fit(self, part, fit, name, rows_are):
         """Refit the model's `part` by `fit` on its `training()` rows,

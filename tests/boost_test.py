@@ -1,13 +1,19 @@
-"""The learned ETA correction: what it learns from and what it changes."""
+"""The learned ETA correction: what it learns from, what it changes, and when
+the service refits it."""
+import asyncio
+
 import numpy as np
 import pytest
 
-from commuterlviv import boost, snapshot
+from commuterlviv import boost, layover, snapshot
 from commuterlviv.live import state
+from commuterlviv.live.service import Service
 
 from . import city
+from .service import settings_for
 
 TO_GO_TOL_S = 15.0
+WAIT_S = 10.0
 FIT_TOL_S = 5.0
 
 
@@ -120,3 +126,28 @@ def test_rows_from_another_feed_keep_their_routes_and_forget_dropped_ones(net):
 
     got = b.training()[:, col]
     assert np.isnan(got[0]) and got[1] == b.routes.index(city.ROUTE) and np.isnan(got[2])
+
+
+async def _until(done):
+    async with asyncio.timeout(WAIT_S):
+        while not done():
+            await asyncio.sleep(0.01)
+
+
+def test_a_refit_asked_for_fits_both_models_again(net, monkeypatch):
+    fits = []
+    monkeypatch.setattr(layover, "fit", lambda rows: fits.append("layover"))
+    monkeypatch.setattr(boost, "fit", lambda rows: fits.append("boost"))
+    svc = Service(settings_for("postgresql://unused", "http://localhost"), net,
+                  log=lambda *a: None, persist=False)
+
+    async def go():
+        task = asyncio.create_task(svc.fit_loop())
+        await _until(lambda: len(fits) == 2)
+        svc.refit.set()
+        await _until(lambda: len(fits) == 4)
+        task.cancel()
+
+    asyncio.run(go())
+
+    assert fits == ["layover", "boost"] * 2
