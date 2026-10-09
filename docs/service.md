@@ -88,13 +88,20 @@ them off:
    better than the correction, so the correction is faded in from 60 s to
    180 s of the model's seconds (`FADE_FROM_S`, `FADE_S`), chosen, not derived.
    The seconds are kept from falling and from going below zero along the trip.
+5. The corrected seconds are then brought forward by 4% of themselves
+   (`EARLIER`), faded in the same way. The correction alone is as often early
+   as late, and that made riders miss the vehicle: foretold over two minutes
+   too late 14% of the time against the model's 8%. Brought forward, that is
+   8% again, at 136 s rather than 128 s on average over 2026-10-05..07. All
+   of that is lost past 10 minutes out; under 10 minutes it is closer than
+   without. 3% was 133 s and 9%, 5% was 140 s and 7%.
 
 Replaying the recording of 2026-09-28..10-07 through the service's own code,
-fitted after each day and scored on the last three (1.5 million ETAs), it
-brought the mean miss from 178.5 to 130.9 s, from 237 to 167 s 20-45 minutes
-out and from 21.3 to 22.2 s under two minutes. A fit takes about 30 s of CPU
-in a worker thread every 6 hours. Correcting the morning peak's 7 600 stops
-takes about 0.1 s of CPU a minute.
+fitted after each day and scored on the last three (1.5 million ETAs), the
+correction without step 5 brought the mean miss from 178.5 to 130.9 s, from
+237 to 167 s 20-45 minutes out and from 21.3 to 22.2 s under two minutes. A
+fit takes about 30 s of CPU in a worker thread every 6 hours. Correcting the
+morning peak's 7 600 stops takes about 0.1 s of CPU a minute.
 
 ## The journey planner
 

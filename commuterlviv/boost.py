@@ -35,6 +35,10 @@ L2 = 10.0
 # correction is taken whole. Chosen from the test above, not derived
 FADE_FROM_S = 60.0
 FADE_S = 120.0
+# the share of its seconds a corrected ETA is brought forward by. A median fit
+# is as often early as late, but a rider told too late misses the vehicle: at
+# 4% that happens as rarely as with the model alone. Chosen, not derived
+EARLIER = 0.04
 FEATURES = ("model s", "timetable s", "late", "m to go", "stops to go", "speed",
             "fix age", "hour", "weekday", "route", "type", "stop", "stops")
 CATEGORIES = ("route", "type")
@@ -78,7 +82,9 @@ class Boost:
         fix = self.model.predict(np.concatenate(rows))
         at = 0
         for _, _, (_, _, dt, k) in got:
-            dt[k] += np.clip((dt[k] - FADE_FROM_S) / FADE_S, 0.0, 1.0) * fix[at:at + len(k)]
+            w = np.clip((dt[k] - FADE_FROM_S) / FADE_S, 0.0, 1.0)
+            fixed = dt[k] + w * fix[at:at + len(k)]
+            dt[k] = fixed - w * EARLIER * np.maximum(fixed, 0.0)
             np.maximum.accumulate(np.maximum(dt, 0.0), out=dt)
             at += len(k)
 

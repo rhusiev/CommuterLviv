@@ -76,7 +76,9 @@ def test_the_correction_is_faded_in_past_the_next_stops_and_keeps_their_order(ne
     before = [_due(plain, raw, i) - now for i in range(2, city.STOPS)]
     after = [_due(fixed, got, i) - now for i in range(2, city.STOPS)]
     weight = np.clip((np.array(before) - boost.FADE_FROM_S) / boost.FADE_S, 0, 1)
-    want = np.maximum.accumulate(np.maximum(np.array(before) + weight * shift, 0))
+    fixed = np.array(before) + weight * shift
+    fixed -= weight * boost.EARLIER * np.maximum(fixed, 0)
+    want = np.maximum.accumulate(np.maximum(fixed, 0))
     assert after == pytest.approx(want, abs=1)
     assert before[0] < boost.FADE_FROM_S and after[0] == before[0]
 
