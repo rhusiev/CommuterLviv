@@ -510,8 +510,11 @@ two hours of recording cannot replay.
    The live model takes its rows, put before the ones it has noted itself
    since the start, and, if it started with no snapshot, everything else the
    fresh model learned, and both models are fitted again. On the recording to
-   2026-10-07 that was 228 000 passed stops, about 25 minutes of one core and
-   375 MB at most; until it ends the uncorrected model and the rule answer.
+   2026-10-07 that was 228 000 passed stops and 143 000 minutes of stands,
+   about 27 minutes of one core and 395 MB at most; until it ends the
+   uncorrected model and the rule answer. Started on 2026-10-05 at 03:00
+   with no rows, the ETAs of the first 6 hours missed by 163 s rather than
+   243 s, and those of the next 18 hours by about 130 s rather than 158 s.
 
 A missing or unreadable snapshot is not an error - the model starts from the
 timetable, as it did before the file existed, and the log says so. The
