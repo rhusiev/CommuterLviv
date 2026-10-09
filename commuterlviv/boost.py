@@ -21,12 +21,16 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 SAMPLE_S = 600.0
 KEEP = 0.15
 ROWS = 500_000
-NEED_ROWS = 50_000  # before a fitted model is trusted, ~two thirds of a day
+NEED_ROWS = 20_000  # before a fitted model is trusted, ~6 h of service
 MAX_GAP_S = 120.0   # s between the fixes a passing is timed between, at most
 PENDING_S = 2 * 3600.0  # s an ETA waits for its stop to be passed before dropped
 ITERS = 300
 RATE = 0.08
 LEAVES = 63
+# rows a leaf holds at least, and the L2 penalty on its value: a fit on a few
+# hours of rows is less sure of itself, and as good on a week's
+MIN_LEAF = 200
+L2 = 10.0
 # below FADE_FROM_S the model is left alone, past FADE_FROM_S + FADE_S the
 # correction is taken whole. Chosen from the test above, not derived
 FADE_FROM_S = 60.0
@@ -141,6 +145,7 @@ def fit(rows):
         return None
     model = HistGradientBoostingRegressor(
         loss="absolute_error", max_iter=ITERS, learning_rate=RATE,
-        max_leaf_nodes=LEAVES, categorical_features=[f in CATEGORIES for f in FEATURES],
+        max_leaf_nodes=LEAVES, min_samples_leaf=MIN_LEAF, l2_regularization=L2,
+        categorical_features=[f in CATEGORIES for f in FEATURES],
         random_state=0)
     return model.fit(rows[:, :-1], rows[:, -1])

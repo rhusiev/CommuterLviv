@@ -79,7 +79,10 @@ them off:
    than the model it got there. A note whose stop is not passed within 2
    hours is dropped. The newest 500 000 labelled notes, about 6.5 days, are kept.
 3. The fit loop fits the correction on them with the terminus model, once
-   there are 50 000 (`NEED_ROWS`, about two thirds of a day).
+   there are 20 000 (`NEED_ROWS`, about 6 hours of service). Every leaf of it
+   holds at least 200 notes (`MIN_LEAF`, with an L2 penalty `L2` of 10): on a
+   week of notes that changes nothing, and fitted on the first hours after a
+   start it misses 153 s rather than 158 s against the model's 169 s.
 4. Every epoch, every vehicle's seconds to every stop inside the horizon are
    corrected in one call of the model. Within a minute of a stop the model is
    better than the correction, so the correction is faded in from 60 s to
@@ -500,7 +503,7 @@ two hours of recording cannot replay.
    an old snapshot needs no expiry: it fades back to the timetable on its own.
 4. If the terminus model or the ETA correction has too few rows to be fitted
    (`Service.short`) - no snapshot, or one from before they were kept - the
-   service learns them from the recording instead of waiting a day of service
+   service learns them from the recording instead of waiting hours of service
    for them (`Service.backfill`). A process of its own, at a lower priority,
    replays the last 4 days into a fresh model, noting rows past the first day
    of them (`BACKFILL_S`, `BACKFILL_WARMUP_S`), and hands back its snapshot.
