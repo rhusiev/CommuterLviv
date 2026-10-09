@@ -138,7 +138,6 @@ class Live:
         self.model = replay.build(net, cfg)
         self.epoch_s = epoch
         self.tracks, self.runs, self.closed = {}, {}, []
-        self.offset = {} if cfg.vehicle_offset != "off" else None
         self.wire, self.free, self.next_wire = {}, collections.deque(), 0
         self.next_epoch = None
         self.epochs = 0
@@ -194,7 +193,7 @@ class Live:
         order, then the arrivals they imply."""
         now = now or time.time()
         self.model.emitting = True
-        replay.drain(self.model, self.tracks, self.closed, now, self.offset)
+        replay.drain(self.model, self.tracks, self.closed, now)
         replay.prune(self.tracks, self.runs, now)
         for veh in [v for v in self.wire if v not in self.tracks]:
             self.free.append(self.wire.pop(veh))
@@ -207,8 +206,7 @@ class Live:
         rows, standing = [], []
         running = {tr.trip for tr in self.tracks.values()}
         asked = list(self._timed(now))
-        etas = replay.all_etas(self.model, [(veh, tr) for veh, tr, _ in asked], now,
-                               self.offset)
+        etas = replay.all_etas(self.model, [(veh, tr) for veh, tr, _ in asked], now)
         for (veh, tr, ri), got in zip(asked, etas):
             w = self._wire(veh)
             came = self.model.layovers.came(veh, tr.trip)
