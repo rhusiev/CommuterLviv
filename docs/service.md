@@ -22,12 +22,96 @@ python3 -m commuterlviv serve
 
 A vehicle's arrivals do not stop at the end of its trip. The trips the
 timetable chains after it on the same vehicle (GTFS `block_id`) are predicted
-too: each leaves its first stop at the later of its scheduled time and the
-moment the vehicle can be there plus a 120 s turnaround, and runs to schedule
-from there. Those rows are flagged `planned`, and both clients show them in
-italics with a schedule mark. This is what fills a start stop such as
-Аквапарк (519) for tram 3, where the vehicle about to leave is still reported
-on the trip it just finished.
+too, and run to schedule from their first stop. Those rows are flagged
+`planned`, and both clients show them in italics with a schedule mark. This is
+what fills a start stop such as Аквапарк (519) for tram 3, where the vehicle
+about to leave is still reported on the trip it just finished.
+
+When the next trip leaves depends on the route and the terminus
+(`commuterlviv/layover.py`). Never sooner than 120 s after the vehicle gets in,
+and never before it can be there. Past that, trams and trolleybuses that get in
+early mostly wait for the timetable - on most lines 85-90% leave within a
+minute of it - but bus routes differ widely, and on half of them at most one
+in five waits: the rest set off minutes, up to half an hour, ahead of it. So
+each route keeps its last 50 early turnarounds at each terminus, each one
+whether it left within a minute of the timetable and how far ahead of it it
+left. Where at least 10 are kept and fewer than half of them waited, a vehicle
+in early leaves halfway between two estimates. One is as far ahead of the
+timetable as the upper quartile of those that left after now - so one still in
+after all but two of them is taken to be waiting for the timetable after all.
+The other is as far ahead as the last vehicle in early there went. On any
+other route it leaves on the timetable, and a vehicle in late leaves 120 s
+after it got there.
+
+That rule is the fallback. Every minute a vehicle stands in early, the service
+also notes what the rule's two halves said, how long ago and how far ahead of
+the timetable the route last left that terminus, the timetable's gap to it,
+the hour, and how long the vehicle has stood, and a replay of the recording
+notes the same (`replay._stands`); once the vehicle leaves, each of
+those minutes is labelled with how long was really left. A gradient-boosted
+model (scikit-learn's `HistGradientBoostingRegressor`) is fitted on start,
+every 6 hours (`FIT_EVERY`) and after a feed swap, in a worker thread, on
+50 000 of the newest 500 000 such minutes - about 12 s of CPU - and once
+20 000 are there it times every vehicle standing in early, all of them in one
+call a minute of a few milliseconds. It foretells the 0.4 quantile rather than the median, which
+keeps it as rarely late as the rule.
+Asked every minute of every early stand on the last 3 of the 14 days of
+recording to 2026-10-07, the timetable was out by 10.34 minutes on average,
+the rule by 6.02 and the model by 5.14, and the share foretold over two
+minutes after the vehicle had actually gone was 50%, 17% and 17%. The
+turnarounds and the minutes of stands are kept with the model across restarts.
+
+## Seconds to each stop, corrected
+
+The pace model reads Lviv as faster than it is - over 2026-09-14..10-08 it
+foretold arrivals 112 s early on average - and it knows nothing of a route's
+habits, of the day of the week or of a vehicle running late. A second
+gradient-boosted model (`commuterlviv/boost.py`) learns its misses and takes
+them off:
+
+1. Every 10 minutes (`SAMPLE_S`) the service notes, for 15% (`KEEP`) of the
+   stops each vehicle is foretold to reach, what the model said with the
+   timetable's seconds to the same stop, how late the vehicle runs, the
+   metres and stops to go, its speed, the age of its fix, the hour, the
+   weekday, the route and its type, and the model's seconds per timetabled
+   second. With them go what the last minutes said (`commuterlviv/recent.py`):
+   how far the stops the city passed in the last 30 minutes came off their
+   first forecast inside 15 minutes, as the median of the log of real over
+   foretold seconds, and how many there were; the vehicle's own metres per
+   second over the last 5 minutes and the model's seconds per second for
+   that stretch; and the metres to the vehicles ahead and behind on the same
+   shape, the model's seconds to the one ahead and the age of its fix.
+2. When the vehicle passes that stop, timed between fixes at most 120 s
+   apart (`MAX_GAP_S`), each note is labelled with how many seconds later
+   than the model it got there. A note whose stop is not passed within 2
+   hours is dropped. The newest 500 000 labelled notes, about 6.5 days, are kept.
+3. The fit loop fits the correction on them with the terminus model, once
+   there are 20 000 (`NEED_ROWS`, about 6 hours of service). Every leaf of it
+   holds at least 200 notes (`MIN_LEAF`, with an L2 penalty `L2` of 10): on a
+   week of notes that changes nothing, and fitted on the first hours after a
+   start it misses 153 s rather than 158 s against the model's 169 s.
+4. Every epoch, every vehicle's seconds to every stop inside the horizon are
+   corrected in one call of the model. Within a minute of a stop the model is
+   better than the correction, so the correction is faded in from 60 s to
+   180 s of the model's seconds (`FADE_FROM_S`, `FADE_S`), chosen, not derived.
+   The seconds are kept from falling and from going below zero along the trip.
+5. The corrected seconds are then brought forward by 4% of themselves
+   (`EARLIER`), faded in the same way. The correction alone is as often early
+   as late, and that made riders miss the vehicle: foretold over two minutes
+   too late 14% of the time against the model's 8%. Brought forward, that is
+   8% again, at 135 s rather than 127 s over the replay below. All of that
+   is lost past 10 minutes out; under 10 minutes it is closer than without.
+   3% was 132 s and 9%, 5% was 139 s and 7%.
+
+Replaying the recording of 2026-09-28..10-07 through the service's own code,
+fitted after each day and scored on the last three (1.5 million ETAs), the
+correction without step 5 brought the mean miss from 178.5 to 127.1 s, from
+237 to 161 s 20-45 minutes out and from 21.3 to 22.3 s under two minutes.
+Without what the last minutes said it was 130.9 s, and 138.9 s at the 3% that
+brings its misses to the model's. A fit takes about 50 s of CPU in a worker
+thread every 6 hours. Correcting the morning peak's 7 600 stops takes about
+0.12 s of CPU a minute, 0.05 s of it for what the last minutes said. The
+500 000 notes take 46 MB.
 
 ## The journey planner
 
@@ -78,6 +162,24 @@ somebody deciding whether to run for a bus deserves to know which of the two
 they are reading. How much accuracy is lost at the far end of that horizon is
 still unmeasured - it needs the VPS recording.
 
+`veh=<id>` in place of `from` searches from on board that tracked vehicle, so
+only its id leaves the device. It is searched as getting off at the vehicle's
+next stop when the vehicle gets there, the stops a short walk from that one
+included, and every journey found is then ridden there on it (`plan.Aboard`,
+`_on`). Staying on is one ride from now. Getting off for another vehicle is a
+change like any other, so a departure sooner than `CHANGE` (60 s) after getting
+off is dropped. When the door is in walking reach of the next stop, one more
+option gets off there and walks. The ride there starts at the stop before the
+next one, taken from a pattern of the route that runs the next two predicted
+stops one after the other. A vehicle standing at its first stop has none, and
+neither does one whose next two stops no pattern runs in a row - across a
+layover, say. Its journeys then start at the next stop instead. An option that
+starts on board carries `aboard: true`, and the clients follow it as a ride
+already under way. That ride needs no backups, so it is left out of the ranking's
+count of them. A ride slower than walking is not dropped here, since it is
+already being ridden. A vehicle the planner no longer sees running gets no
+options. On board the journey leaves now, so `at` is refused with `veh`.
+
 A tracked vehicle stands in for the scheduled trips on its route at each stop
 up to the last time it calls there, so the timetable is only suppressed that
 far. Later scheduled departures stay, since no vehicle is tracked on them yet.
@@ -86,7 +188,9 @@ line at the timetable's running times (`_run_on`), or a rider boarding it now
 could not be taken past the 45th minute.
 
 Every ride also carries a `confidence`, which is what the schedule is worth on
-that route right now. `live` is a vehicle being tracked. `schedule` is the
+that route right now. `live` is a vehicle being tracked. `terminus` is a
+tracked vehicle boarded on a trip after the one it is on, so its departure is
+the estimate of [trips after this one](#trips-after-this-one). `schedule` is the
 timetable on a route that is running. `quiet` is the timetable on a route the
 schedule wanted at least twice in the last hour and nothing has been seen on
 since - a line the city is not running today, which the timetable alone will
@@ -362,7 +466,9 @@ without a restart (`commuterlviv/live/refresh.py`):
    (`snapshot.restore`) for every shape the feed left alone - same id, same
    number of cells, length within 1% - and every corridor both cities have.
    It is then warmed on the recording since that copy, which is the last
-   minute or so. A shape the feed changed starts from the timetable.
+   minute or so. A shape the feed changed starts from the timetable. The
+   learned models are fitted again on the rows it took over, rather than
+   leaving the new city without them until the next `FIT_EVERY`.
 7. The new city is swapped in under the model's lock, polled once and stepped
    one epoch so it is not published empty. The planner is swapped with it, and
    a plan asked for in the instant between the two answers 503 rather than
@@ -404,18 +510,39 @@ two hours of recording cannot replay.
 
 1. On start the service reads the snapshot into a fresh model. Its indexes are
    positions in one build of the feed, so it carries what each meant - shape
-   id, cell count and length per unit, the corridor key per corridor - and only
-   what still matches is read back.
+   id, cell count and length per unit, the corridor key per corridor, the
+   route ids the passed stops were noted under - and only what still matches
+   is read back.
 2. It then replays the recording from the later of the snapshot's time and two
    hours ago (`WARM_HOURS`), so the minutes between the last save and the
    restart are learned again.
 3. Every weight carries the time it was earned and decays from that stamp, so
    an old snapshot needs no expiry: it fades back to the timetable on its own.
+4. If the terminus model or the ETA correction has too few rows to be fitted
+   (`Service.short`) - no snapshot, or one from before they were kept or
+   noted with other features - the
+   service learns them from the recording instead of waiting hours of service
+   for them (`Service.backfill`). A process of its own, at a lower priority,
+   replays the last 4 days into a fresh model, noting rows past the first day
+   of them (`BACKFILL_S`, `BACKFILL_WARMUP_S`), and hands back its snapshot.
+   The live model takes its rows, put before the ones it has noted itself
+   since the start, and, if it started with no snapshot, everything else the
+   fresh model learned, and both models are fitted again. On the recording to
+   2026-10-07 that was 228 000 passed stops and 143 000 minutes of stands,
+   about 27 minutes of one core and 395 MB at most; until it ends the
+   uncorrected model and the rule answer. Started on 2026-10-05 at 03:00
+   with no rows, the ETAs of the first 6 hours missed by 163 s rather than
+   243 s, and those of the next 18 hours by about 130 s rather than 158 s.
 
 A missing or unreadable snapshot is not an error - the model starts from the
 timetable, as it did before the file existed, and the log says so. The
-snapshot is about 35 MB, and only the per-cell online models
-(`snapshot.supported`) have one.
+snapshot is about 111 MB, and only the per-cell online models
+(`snapshot.supported`) have one. It also carries each route's recent early
+turnarounds at its termini and the minutes of stands its departure model
+learns from ([trips after this one](#trips-after-this-one)) and the passed
+stops the ETA correction learns from
+([seconds to each stop, corrected](#seconds-to-each-stop-corrected)). The
+fitted models are not kept: they are fitted again on start.
 
 ## Accounts and registration
 

@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 
 import 'api.dart';
 import 'models.dart';
+import 'route_badge.dart';
 import 'sheets.dart' show askName;
 import 'stop_search.dart';
 import 'strings.dart';
@@ -39,6 +40,7 @@ class EndField extends StatelessWidget {
     super.key,
     required this.end,
     required this.at,
+    this.aboard,
     required this.api,
     required this.catalog,
     required this.onPick,
@@ -51,6 +53,9 @@ class EndField extends StatelessWidget {
 
   final End end;
   final LatLng? at;
+
+  /// The end is on board this vehicle rather than at a point
+  final Aboard? aboard;
   final String? name;
   final Api api;
   final Catalog catalog;
@@ -148,6 +153,21 @@ class EndField extends StatelessWidget {
     if (name != null && name.isNotEmpty) onSave(name, where);
   }
 
+  Widget _label(String where) {
+    final on = aboard?.route;
+    if (aboard == null) return Text(where, overflow: TextOverflow.ellipsis);
+    final route = on == null ? null : catalog.routes[on];
+    return Row(
+      children: [
+        if (route != null) ...[
+          RouteBadge(route: route, fontSize: 10),
+          const SizedBox(width: 6),
+        ],
+        Flexible(child: Text(txt.aboard, overflow: TextOverflow.ellipsis)),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final where =
@@ -165,7 +185,7 @@ class EndField extends StatelessWidget {
             onPressed: () => _find(context),
             style: OutlinedButton.styleFrom(alignment: Alignment.centerLeft),
             icon: const Icon(Icons.search, size: 18),
-            label: Text(where, overflow: TextOverflow.ellipsis),
+            label: _label(where),
           ),
         ),
         IconButton(

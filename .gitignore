@@ -1,4 +1,5 @@
 __pycache__/
+.pytest_cache/
 *.pyc
 
 # Downloaded feeds, the recorded database and the learned model: all rebuildable

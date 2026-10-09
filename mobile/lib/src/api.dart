@@ -234,14 +234,19 @@ class Api {
   /// [speed] is how fast you walk on the level, in km/h. [report] is the id
   /// to [reportPlan] this search by, while the server still holds it.
   Future<({List<Journey> options, String? report})> plan(
-    LatLng from,
+    LatLng? from,
     LatLng to, {
+    Aboard? aboard,
     int? at,
     required double speed,
   }) async {
+    // On board, only the vehicle's id leaves the device
+    final origin = aboard != null
+        ? 'veh=${aboard.veh}'
+        : 'from=${from!.latitude},${from.longitude}';
     final answer = await _call(
       'GET',
-      '/api/plan?from=${from.latitude},${from.longitude}'
+      '/api/plan?$origin'
           '&to=${to.latitude},${to.longitude}&speed=$speed'
           '${at == null ? '' : '&at=$at'}',
     ) as Map<String, dynamic>;

@@ -13,7 +13,6 @@ class Config:
     fast: bool = True           # keep a short half-life term for live traffic
     incremental: bool = True    # report a cell crossing while it is in progress
     unit: str = "cell"          # what a travel time is learned per: cell|section
-    vehicle_offset: str = "off"    # scale the ETA by this vehicle: off|flat|decay
     eta: str = "model"          # how a prediction is formed: model|lateness
     learn: str = "online"       # the estimator: online|table|table-live|knn|median
     knn: int = 10               # crossings the knn estimator keeps per unit
@@ -113,16 +112,6 @@ VARIANTS = [
                 "alone beats the full model and coarsening to sections alone "
                 "does not, so this asks whether the one gain survives the other "
                 "change. It does not: the pair scores worse than either."),
-    replace(FULL, name="vehicle-offset", vehicle_offset="flat",
-            doc="The full road model, then scaled by how fast this particular "
-                "vehicle has been running against it. Asks whether anything is "
-                "left in the vehicle after the road is accounted for."),
-    replace(FULL, name="offset-decay", vehicle_offset="decay",
-            doc="The same vehicle correction, but faded out along the path "
-                "instead of applied flat. A vehicle's speed ratio is measured "
-                "to persist about 4.5 minutes, so each leg of the trip is "
-                "corrected only by what is left of that ratio by the time the "
-                "vehicle gets there."),
     replace(FULL, name="table", learn="table", unit="section", corridor=False,
             doc="No online learning at all: one pace and one hold per section "
                 "per hour of the day, fitted during the warmup and then frozen. "

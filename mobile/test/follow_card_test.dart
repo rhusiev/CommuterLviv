@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:commuterlviv/src/api.dart';
+import 'package:commuterlviv/src/eta.dart';
 import 'package:commuterlviv/src/follow_card.dart';
 import 'package:commuterlviv/src/here.dart';
 import 'package:commuterlviv/src/live.dart';
@@ -102,7 +103,11 @@ class FakeHere extends Here {
   }
 }
 
-Future<FakeHere> pump(WidgetTester tester, {required bool away}) async {
+Future<FakeHere> pump(
+  WidgetTester tester, {
+  required bool away,
+  Journey? following,
+}) async {
   SharedPreferences.setMockInitialValues({});
   FlutterSecureStorage.setMockInitialValues({});
   final api = await Api.open();
@@ -112,7 +117,7 @@ Future<FakeHere> pump(WidgetTester tester, {required bool away}) async {
       home: Scaffold(
         body: FollowCard(
           catalog: catalog,
-          journey: journey,
+          journey: following ?? journey,
           live: Live(api, onRenewed: () {}),
           here: here,
           away: away,
@@ -174,5 +179,65 @@ void main() {
     final here = await pump(tester, away: false);
     await travel(tester, here);
     expect(here.notices, isEmpty);
+  });
+
+  testWidgets('a tap on the card lists every step, the one under way marked', (
+    tester,
+  ) async {
+    final here = await pump(tester, away: false);
+    here.move(0, 100);
+    await tester.pump();
+    expect(find.text(txt.walkTo('Stop 0')), findsOneWidget);
+
+    await tester.tap(find.byTooltip(txt.showSteps));
+    await tester.pump();
+
+    expect(find.text('${clockTime(0)} - ${clockTime(0)}'), findsNWidgets(3));
+    expect(find.text('Stop 0 → Stop 1'), findsOneWidget);
+    expect(find.text(txt.walkHome), findsOneWidget);
+    final marked = tester.widget<Container>(
+      find.byKey(const ValueKey(('step', 0))),
+    );
+    expect(marked.decoration, isNotNull);
+    final rest = tester.widget<Container>(
+      find.byKey(const ValueKey(('step', 1))),
+    );
+    expect(rest.decoration, isNull);
+
+    await tester.tap(find.byTooltip(txt.hideSteps));
+    await tester.pump();
+    expect(find.text('Stop 0 → Stop 1'), findsNothing);
+  });
+
+  testWidgets('a step at a stop or on a route the catalog lacks still lists', (
+    tester,
+  ) async {
+    Leg unknown(Leg l) => Leg(
+      kind: l.kind,
+      dep: l.dep,
+      arr: l.arr,
+      a: l.a,
+      b: l.kind == 'ride' ? -1 : l.b,
+      route: l.kind == 'ride' ? -1 : l.route,
+      pts: l.pts,
+    );
+    await pump(
+      tester,
+      away: false,
+      following: Journey(
+        dep: journey.dep,
+        arr: journey.arr,
+        rides: journey.rides,
+        live: journey.live,
+        confidence: journey.confidence,
+        legs: [for (final l in journey.legs) unknown(l)],
+      ),
+    );
+
+    await tester.tap(find.byTooltip(txt.showSteps));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Stop 0 → '), findsOneWidget);
   });
 }

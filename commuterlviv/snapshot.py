@@ -18,13 +18,17 @@ import time
 
 import numpy as np
 
-from . import gtfs
+from . import gtfs, layover
 from .model import PaceModel
 
 PATH = gtfs.DATA / "model.npz"
 UNIT = ("cf", "cs", "cd")       # per unit, beside the profile's `pr`
 CORR = ("rf", "rs", "rd")       # per corridor
 LENGTH_TOL = 0.01               # a shape longer or shorter than this has moved
+LAYOVER = "layover."            # before each of `layover.FIELDS`
+STANDS = "layover.rows"         # the minutes of stands its departure model learns from
+PASSED = "boost.rows"           # the passed stops the ETA correction learns from
+PASSED_ROUTES = "boost.routes"  # the route ids its rows number
 
 
 def supported(model):
@@ -64,6 +68,11 @@ def export(model, t=None):
         out[f"{name}.mean"] = e.mean.copy()
         out[f"{name}.w"] = e.w.copy()
         out[f"{name}.t"] = e.t.copy()
+    for name, a in model.layovers.export().items():
+        out[LAYOVER + name] = a
+    out[STANDS] = model.layovers.training()
+    out[PASSED] = model.boost.training()
+    out[PASSED_ROUTES] = np.array(model.boost.routes)
     return out
 
 
@@ -72,6 +81,12 @@ def restore(model, data):
     was taken, or None if none of it fits this model."""
     if not supported(model) or str(data["variant"]) != model.cfg.name:
         return None
+    if all(LAYOVER + k in data for k in layover.FIELDS):
+        model.layovers.restore(*(data[LAYOVER + k] for k in layover.FIELDS))
+    if STANDS in data:
+        model.layovers.restore_rows(data[STANDS])
+    if PASSED in data and PASSED_ROUTES in data:
+        model.boost.restore_rows(data[PASSED], [str(r) for r in data[PASSED_ROUTES]])
     net = model.net
     src, dst = [], []
     base = 0

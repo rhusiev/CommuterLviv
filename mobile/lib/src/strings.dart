@@ -85,6 +85,9 @@ class Strings {
     required this.plannerPreparing,
     required this.stopsAhead,
     required this.vehicleGone,
+    required this.onIt,
+    required this.onItHint,
+    required this.aboard,
     required this.now,
     required this.oneMinute,
     required this.plan,
@@ -122,6 +125,8 @@ class Strings {
     required this.noBackup,
     required this.moreBackups,
     required this.scheduleWhy,
+    required this.terminusPart,
+    required this.terminusWhy,
     required this.quietWhy,
     required this.wholeWalk,
     required this.planHint,
@@ -132,6 +137,8 @@ class Strings {
     required this.walkTo,
     required this.walkHome,
     required this.waitAt,
+    required this.showSteps,
+    required this.hideSteps,
     required this.dueIn,
     required this.offAt,
     required this.offSoon,
@@ -234,6 +241,9 @@ class Strings {
   final String plannerPreparing;
   final String stopsAhead;
   final String vehicleGone;
+  final String onIt;
+  final String onItHint;
+  final String aboard;
   final String now;
   final String oneMinute;
   final String plan;
@@ -271,6 +281,8 @@ class Strings {
   final String noBackup;
   final String Function(int more) moreBackups;
   final String scheduleWhy;
+  final String terminusPart;
+  final String terminusWhy;
   final String quietWhy;
   final String wholeWalk;
   final String planHint;
@@ -281,6 +293,8 @@ class Strings {
   final String Function(String stop) walkTo;
   final String walkHome;
   final String Function(String stop) waitAt;
+  final String showSteps;
+  final String hideSteps;
   final String Function(String when) dueIn;
   final String Function(String stop) offAt;
   final String Function(String stop) offSoon;
@@ -419,6 +433,8 @@ const _en = Strings(
   moreBackups: _enMoreBackups,
   scheduleWhy:
       'No vehicle tracked for this ride yet - the time is from the timetable',
+  terminusPart: 'Next trip',
+  terminusWhy: 'The vehicle has not set off on this trip yet - the time is estimated from when this line usually leaves its terminus',
   quietWhy: 'Timetabled, but nothing on this route has been seen for an hour. It may not be running.',
   wholeWalk: 'Walk the whole way',
   planHint:
@@ -431,6 +447,8 @@ const _en = Strings(
   walkTo: _enWalkTo,
   walkHome: 'Walk to the door',
   waitAt: _enWaitAt,
+  showSteps: 'Show every step of the journey',
+  hideSteps: 'Hide the steps',
   dueIn: _enDueIn,
   offAt: _enOffAt,
   offSoon: _enOffSoon,
@@ -451,6 +469,9 @@ const _en = Strings(
   shortDay: _enShortDay,
   stopsAhead: 'Stops ahead',
   vehicleGone: 'This one is no longer being tracked',
+  onIt: "I'm on it",
+  onItHint: 'Plan a journey starting on board this vehicle',
+  aboard: 'On board',
   now: 'Now',
   oneMinute: '1 min',
   minutes: _enMinutes,
@@ -599,6 +620,8 @@ const _uk = Strings(
   moreBackups: _ukMoreBackups,
   scheduleWhy:
       'Для цієї поїздки ще не відстежується транспорт - час із розкладу',
+  terminusPart: 'Наступний рейс',
+  terminusWhy: 'Транспорт ще не вирушив у цей рейс - час оцінено за тим, коли ця лінія зазвичай рушає з кінцевої',
   quietWhy: 'За розкладом курсує, але транспорту цього маршруту не видно вже годину. Можливо, він не їздить.',
   wholeWalk: 'Пішки весь шлях',
   planHint: 'Торкніться «Звідки» чи «Куди», щоб шукати, вибрати збережене місце або вказати на мапі.',
@@ -609,6 +632,8 @@ const _uk = Strings(
   walkTo: _ukWalkTo,
   walkHome: 'Ідіть до місця призначення',
   waitAt: _ukWaitAt,
+  showSteps: 'Показати всі кроки поїздки',
+  hideSteps: 'Сховати кроки',
   dueIn: _ukDueIn,
   offAt: _ukOffAt,
   offSoon: _ukOffSoon,
@@ -629,6 +654,9 @@ const _uk = Strings(
   shortDay: _ukShortDay,
   stopsAhead: 'Наступні зупинки',
   vehicleGone: 'Цей транспорт більше не відстежується',
+  onIt: 'Я в ньому',
+  onItHint: 'Спланувати поїздку, починаючи в цьому транспорті',
+  aboard: 'У транспорті',
   now: 'Зараз',
   oneMinute: '1 хв',
   minutes: _ukMinutes,

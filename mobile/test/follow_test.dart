@@ -113,6 +113,17 @@ Seen vehicle(int id, double east, {int onRoute = route}) {
   return Seen(id: id, route: onRoute, lat: p.latitude, lon: p.longitude);
 }
 
+/// [j] from its first ride on, begun on board or not
+Journey fromRide(Journey j, {required bool aboard}) => Journey(
+  dep: j.dep,
+  arr: j.arr,
+  rides: j.rides,
+  live: j.live,
+  confidence: j.confidence,
+  legs: j.legs.sublist(1),
+  aboard: aboard,
+);
+
 /// Walks the first leg to the stop
 Trip atStop(Journey j) {
   final trip = Trip(j);
@@ -340,6 +351,26 @@ void main() {
     final p = trip.east(2000, 8, 25);
     expect(p.stage.kind, StageKind.walk);
     expect(p.passed, isTrue);
+  });
+
+  test(
+    'a journey begun on board starts riding its vehicle, then walks the rest',
+    () {
+      final trip = Trip(fromRide(journey(), aboard: true));
+      var p = trip.fix(at(0, 200), [vehicle(planned, 0)]);
+      expect(
+        (p.stage.kind, p.stage.leg, p.stage.veh),
+        (StageKind.ride, 0, planned),
+      );
+      trip.east(0, 8, 250, seen: (x) => [vehicle(planned, math.min(x, 2000))]);
+      p = trip.east(2000, 0, 10);
+      expect((p.stage.kind, p.stage.leg), (StageKind.walk, 1));
+    },
+  );
+
+  test('a journey not begun on board waits for its first ride', () {
+    final trip = Trip(fromRide(journey(), aboard: false));
+    expect(trip.fix(at(0, 200)).stage.kind, StageKind.wait);
   });
 
   test('a journey without lines cannot be followed', () {

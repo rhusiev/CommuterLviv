@@ -325,15 +325,17 @@ class Backup {
   final int option;
 }
 
-/// What a ride rests on: a vehicle being tracked, the timetable on a route that
-/// is running, or the timetable on one nothing has been seen running on.
-enum Confidence { live, schedule, quiet }
+/// What a ride rests on: a vehicle being tracked, one on a trip it is yet to set
+/// off on, the timetable on a route that is running, or the timetable on one
+/// nothing has been seen running on.
+enum Confidence { live, terminus, schedule, quiet }
 
 /// Absent is a leg that rests on nothing in particular - a walk, or a server
 /// from before this field. An unknown word reads as the timetable rather than
 /// as a promise of a tracked vehicle.
 Confidence confidenceOf(Object? word) => switch (word) {
   null || 'live' => Confidence.live,
+  'terminus' => Confidence.terminus,
   'quiet' => Confidence.quiet,
   _ => Confidence.schedule,
 };
@@ -347,6 +349,7 @@ class Journey {
     required this.confidence,
     required this.legs,
     this.backup = 0,
+    this.aboard = false,
   });
 
   factory Journey.fromJson(Map<String, dynamic> j) => Journey(
@@ -356,6 +359,7 @@ class Journey {
     live: j['live'] as bool,
     confidence: confidenceOf(j['confidence']),
     backup: j['backup'] as int? ?? 0,
+    aboard: j['aboard'] as bool? ?? false,
     legs: [
       for (final l in j['legs'] as List)
         Leg.fromJson(l as Map<String, dynamic>),
@@ -376,8 +380,19 @@ class Journey {
   final int backup;
   final List<Leg> legs;
 
+  /// Starts on board the vehicle the search was made from.
+  final bool aboard;
+
   int get walking =>
       legs.where((l) => l.walking).fold(0, (s, l) => s + l.arr - l.dep);
+}
+
+/// A vehicle to plan from as though on board, with its route if known.
+class Aboard {
+  const Aboard(this.veh, this.route);
+
+  final int veh;
+  final int? route;
 }
 
 /// What the options are sorted by. The whole walk goes last wherever changes

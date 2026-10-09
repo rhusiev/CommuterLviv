@@ -79,6 +79,10 @@ class _HomeScreenState extends State<HomeScreen> {
   /// The planner option drawn on the map, only while planning
   Journey? _journey;
   LatLng? _from;
+
+  /// The journey starts on board this vehicle, in place of `_from`; only
+  /// while planning, as the vehicle goes on without the planner
+  Aboard? _aboard;
   LatLng? _to;
   End? _picking;
   bool _folded = false;
@@ -294,6 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _onRoute = true;
       _tab = 0;
       _planning = false;
+      _aboard = null;
       _journey = null;
     });
     _push();
@@ -337,6 +342,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _following = journey;
       _planning = false;
+      _aboard = null;
       _picking = null;
       _folded = false;
       _journey = null;
@@ -511,6 +517,15 @@ class _HomeScreenState extends State<HomeScreen> {
           Navigator.pop(context);
           _openRoute(route);
         },
+        onAboard: (from) {
+          Navigator.pop(context);
+          setState(() {
+            _aboard = from;
+            _from = null;
+            if (_wantHere == End.from) _wantHere = null;
+          });
+          _pickTab(2);
+        },
       ),
     );
   }
@@ -547,6 +562,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _at(End which, LatLng at) {
     if (which == End.from) {
       _from = at;
+      _aboard = null;
     } else {
       _to = at;
     }
@@ -773,12 +789,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   api: widget.api,
                   catalog: catalog,
                   from: _from,
+                  aboard: _aboard,
                   to: _to,
                   picking: _picking,
                   onPick: (which) => setState(() => _picking = which),
                   folded: _folded,
                   onFold: (folded) => setState(() => _folded = folded),
                   onSwap: () => setState(() {
+                    if (_aboard != null) return;
                     final was = _from;
                     _from = _to;
                     _to = was;
@@ -787,13 +805,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   onStop: (stop) => _openStop(stop, fly: true),
                   onLine: _openRoute,
                   places: _sets?.places ?? const [],
-                  onPlace: (end, at) => setState(() {
-                    if (end == End.from) {
-                      _from = at;
-                    } else {
-                      _to = at;
-                    }
-                  }),
+                  onPlace: (end, at) => setState(() => _at(end, at)),
                   onSave: _savePlace,
                   onShow: (journey) {
                     setState(() => _journey = journey);
@@ -844,6 +856,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _planning = i == 2;
       _onRoute = i == 3;
       if (!_planning) {
+        _aboard = null;
         _picking = null;
         _folded = false;
         _journey = null;

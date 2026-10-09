@@ -24,6 +24,7 @@ import 'walk_speed.dart';
 /// on one that is.
 (String, String)? legNote(Confidence confidence) => switch (confidence) {
   Confidence.live => null,
+  Confidence.terminus => (txt.terminusPart, txt.terminusWhy),
   Confidence.schedule => (txt.schedulePart, txt.scheduleWhy),
   Confidence.quiet => (txt.quietPart, txt.quietWhy),
 };
@@ -34,6 +35,7 @@ class JourneyPanel extends StatefulWidget {
     required this.api,
     required this.catalog,
     required this.from,
+    this.aboard,
     required this.to,
     required this.picking,
     required this.onPick,
@@ -53,6 +55,10 @@ class JourneyPanel extends StatefulWidget {
   final Api api;
   final Catalog catalog;
   final LatLng? from;
+
+  /// The journey starts on board this vehicle, in place of [from]; it leaves
+  /// now, so there is no time to leave at
+  final Aboard? aboard;
   final LatLng? to;
 
   /// The end waiting on a tap on the map; the panel folds out of its way
@@ -114,6 +120,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
   void didUpdateWidget(JourneyPanel old) {
     super.didUpdateWidget(old);
     if (old.from != widget.from ||
+        old.aboard != widget.aboard ||
         old.to != widget.to ||
         old.catalog != widget.catalog) {
       _forget();
@@ -189,14 +196,21 @@ class _JourneyPanelState extends State<JourneyPanel> {
 
   Future<void> _search() async {
     final from = widget.from;
+    final aboard = widget.aboard;
     final to = widget.to;
-    if (from == null || to == null) return;
+    if ((from == null && aboard == null) || to == null) return;
     setState(() {
       _busy = true;
       _failed = null;
     });
     try {
-      final got = await widget.api.plan(from, to, at: _at, speed: _speed);
+      final got = await widget.api.plan(
+        from,
+        to,
+        aboard: aboard,
+        at: aboard == null ? _at : null,
+        speed: _speed,
+      );
       if (!mounted) return;
       setState(() {
         _options = got.options;
@@ -297,7 +311,8 @@ class _JourneyPanelState extends State<JourneyPanel> {
   );
 
   Widget _open(BuildContext context) {
-    final ready = widget.from != null && widget.to != null;
+    final aboard = widget.aboard;
+    final ready = (widget.from != null || aboard != null) && widget.to != null;
     final ranked = _prefer.ranked(_options ?? const []);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
@@ -313,7 +328,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
               ),
               const Spacer(),
               IconButton(
-                onPressed: widget.onSwap,
+                onPressed: aboard == null ? widget.onSwap : null,
                 icon: const Icon(Icons.swap_vert),
                 tooltip: txt.swap,
               ),
@@ -328,6 +343,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
             EndField(
               end: end,
               at: end == End.from ? widget.from : widget.to,
+              aboard: end == End.from ? aboard : null,
               api: widget.api,
               catalog: widget.catalog,
               onPick: () => widget.onPick(end),
@@ -342,20 +358,22 @@ class _JourneyPanelState extends State<JourneyPanel> {
             ),
           Row(
             children: [
-              RowLabel(text: txt.departAt, icon: Icons.schedule),
-              Tooltip(
-                message: txt.leaveOn,
-                child: ActionChip(
-                  label: Text(_dayName(_leaving)),
-                  onPressed: _pickDay,
+              if (aboard == null) ...[
+                RowLabel(text: txt.departAt, icon: Icons.schedule),
+                Tooltip(
+                  message: txt.leaveOn,
+                  child: ActionChip(
+                    label: Text(_dayName(_leaving)),
+                    onPressed: _pickDay,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              InputChip(
-                label: Text(_at == null ? txt.now : clockTime(_at!)),
-                onPressed: _pickTime,
-                onDeleted: _at == null ? null : () => _leave(null),
-              ),
+                const SizedBox(width: 8),
+                InputChip(
+                  label: Text(_at == null ? txt.now : clockTime(_at!)),
+                  onPressed: _pickTime,
+                  onDeleted: _at == null ? null : () => _leave(null),
+                ),
+              ],
               const Spacer(),
               PopupMenuButton<Prefer>(
                 icon: const Icon(Icons.sort),

@@ -74,8 +74,9 @@ class Buf:
 
 
 class Result:
-    def __init__(self, t0):
+    def __init__(self, t0, keep=True):
         self.t0 = t0
+        self.keep = keep     # the ETAs, positions and passings; else only the model learns
         self.buf = Buf()
         self.truth = {}      # (veh_idx, trip_idx, run, stop_i) -> crossing time
         self.gap = {}        # same key -> width of the interpolated interval
@@ -86,9 +87,8 @@ class Result:
 
 
 def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
-        progress=None, model=None, cfg=None):
+        progress=None, model=None, cfg=None, keep=True):
     model = model or build(net, cfg)
-    offset = {} if model.cfg.vehicle_offset != "off" else None
     tracks = {}
     runs = {}
     closed = []
@@ -115,10 +115,10 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
             t_start = float(ts)
             # on the absolute grid, so epochs line up with the recorded feeds'
             next_epoch = np.ceil(t_start / epoch) * epoch
-            res = Result(t_start)
+            res = Result(t_start, keep)
         while ts >= next_epoch:
             _flush(model, res, tracks, runs, closed, next_epoch, veh_idx,
-                   trip_idx, emit=next_epoch - t_start >= warmup, offset=offset)
+                   trip_idx, emit=next_epoch - t_start >= warmup)
             next_epoch += epoch
             if progress and res.epochs % progress == 0:
                 print(f"  t+{(next_epoch - t_start) / 60:5.0f} min  "
@@ -129,6 +129,7 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
             tr = tracks[veh] = track.Track(veh, runs.get(veh, 0))
         done, passings = track.observe(tr, net, float(ts), lat, lon,
                                        speed, odo, trip)
+        model.layovers.follow(veh, tr)
         if done:
             base = model.shape_base[tr.shape_id]
             closed.extend((base + c.i, c, veh) for c in done)
@@ -136,8 +137,9 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
             vi = _idx(veh_idx, res.veh_ids, veh)
             ti = _idx(trip_idx, res.trip_ids, tr.trip)
             for i, t, gap in passings:
+                model.boost.passed(veh, tr, i, t, gap)
                 k = (vi, ti, tr.run, i)
-                if k not in res.truth:
+                if res.keep and k not in res.truth:
                     res.truth[k] = t
                     res.gap[k] = gap
 
@@ -148,7 +150,7 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
                      "so a window inside the nightly shutdown is empty by "
                      "construction rather than by any fault of the recording.")
     _flush(model, res, tracks, runs, closed, next_epoch, veh_idx, trip_idx,
-           emit=True, offset=offset)
+           emit=True)
     return model, res
 
 
@@ -160,7 +162,7 @@ def _idx(m, names, key):
     return i
 
 
-def drain(model, tracks, closed, now, offset):
+def drain(model, tracks, closed, now):
     """Hand the epoch's cell crossings, finished and in progress, to the model."""
     parts = [(gi, c, veh, True) for gi, c, veh in closed]
     if model.cfg.incremental:
@@ -173,47 +175,11 @@ def drain(model, tracks, closed, now, offset):
     idx = np.array([p[0] for p in parts])
     exp = model.expected(idx)
     rows = [c.take(e, final) for (_, c, _, final), e in zip(parts, exp)]
-    if offset is not None:
-        _residuals(parts, rows, exp, offset, now)
     keep = np.array([r is not None for r in rows])
     if not keep.any():
         return
     a = np.array([r for r in rows if r is not None], dtype=float)
     model.observe(idx[keep], a[:, 0], a[:, 1], a[:, 2], a[:, 3], now)
-
-
-def _residuals(parts, rows, exp, offset, now, forget=0.9):
-    """How fast each vehicle has been running against the road model, as two
-    decaying sums so the ratio favours its recent crossings."""
-    for (_, _, veh, _), r, e in zip(parts, rows, exp):
-        if r is None:
-            continue
-        d, pace, hold, w = r
-        if w <= 0.0:
-            continue
-        obs, ex, _ = offset.get(veh, (0.0, 0.0, -np.inf))
-        offset[veh] = (obs * forget + (d * pace + hold) * w,
-                       ex * forget + e * w, now)
-
-
-def _ratio(offset, veh, k=60.0):
-    """The vehicle's ratio, shrunk towards 1 until it has earned some weight."""
-    obs, ex, _ = offset.get(veh, (0.0, 0.0, -np.inf))
-    return (obs + k) / (ex + k) if ex > 0.0 else 1.0
-
-
-def _factor(offset, veh, lo=0.6, hi=1.7):
-    """The ratio as the ETA may use it, bounded: a vehicle just off a terminus
-    would otherwise scale the whole trip by 3."""
-    return float(np.clip(_ratio(offset, veh), lo, hi))
-
-
-def _fade(dt, f, tau=300.0):
-    """Apply a vehicle's speed ratio leg by leg, decaying with lead time: full
-    ratio for the next stop, none of it for the far end."""
-    inc = np.diff(dt, prepend=0.0)
-    mid = dt - 0.5 * inc          # lead time at the middle of each leg
-    return np.cumsum(inc * (1.0 + (f - 1.0) * np.exp(-mid / tau)))
 
 
 def _lateness_eta(tr, s_now):
@@ -251,7 +217,7 @@ def believed(tr, now):
     return min(tr.s + tr.v * min(now - tr.ts, EXTRAP), tr.shape.length)
 
 
-def etas(model, tr, veh, now, offset):
+def etas(model, tr, now):
     """This vehicle's remaining stops within the horizon, as of `now`.
 
     Returns `(next_stop, believed distance, seconds to each stop from next_stop
@@ -266,34 +232,49 @@ def etas(model, tr, veh, now, offset):
         dt = _lateness_eta(tr, s_now)
     else:
         dt = model.time_between(tr.shape_id, s_now, tr.sdist[i:])
-        if model.cfg.vehicle_offset != "off":
-            f = _factor(offset, veh)
-            dt = (_fade(dt, f) if model.cfg.vehicle_offset == "decay"
-                  else dt * f)
     k = np.nonzero(dt <= HORIZON)[0]
     return (i, s_now, dt, k) if len(k) else None
 
 
-def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True,
-           offset=None):
+def all_etas(model, asked, now):
+    """`etas` for each `(veh, track)` of `asked`, in order, as the model's
+    learned correction (`boost`) has them."""
+    got = [etas(model, tr, now) for _, tr in asked]
+    model.boost.correct(now, list(zip(asked, got)), model.time_between)
+    return got
+
+
+def _stands(model, tracks, got, now):
+    """The vehicles in at the end of their trip with nothing ahead in `got`,
+    noted standing for their next one as `Live` notes them."""
+    running = {tr.trip for tr in tracks.values()}
+    for veh, tr in tracks.items():
+        if got.get(veh) is None and tr.ts is not None and now - tr.ts <= STALE:
+            came = model.layovers.came(veh, tr.trip)
+            if came is not None:
+                model.layovers.stand_after(tr.trip, came, now, running)
+    model.layovers.foretell(now)
+
+
+def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True):
     # set before the drain, so the first scored epoch is past any training
     model.emitting = emit
-    drain(model, tracks, closed, now, offset)
+    drain(model, tracks, closed, now)
     res.epochs += 1
     prune(tracks, runs, now)
     if not emit:
         return
     model.refresh(now)
     ep = int(now - res.t0)
-    for veh, tr in tracks.items():
-        if not predictable(tr, now):
-            continue
-        # numbered before the model is consulted, so variants replaying the same
-        # recording agree on event numbering
-        vi = _idx(veh_idx, res.veh_ids, veh)
-        ti = _idx(trip_idx, res.trip_ids, tr.trip)
-        got = etas(model, tr, veh, now, offset)
-        if got is None:
+    asked = [(veh, tr) for veh, tr in tracks.items() if predictable(tr, now)]
+    # numbered before the model is consulted, so variants replaying the same
+    # recording agree on event numbering
+    idx = [(_idx(veh_idx, res.veh_ids, veh), _idx(trip_idx, res.trip_ids, tr.trip))
+           for veh, tr in asked]
+    etas = all_etas(model, asked, now)
+    _stands(model, tracks, dict(zip((veh for veh, _ in asked), etas)), now)
+    for (veh, tr), (vi, ti), got in zip(asked, idx, etas):
+        if got is None or not res.keep:
             continue
         i, s_now, dt, k = got
         res.pos.append((ep, vi, ti, tr.run, s_now))

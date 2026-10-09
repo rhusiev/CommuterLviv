@@ -188,9 +188,16 @@ class _Sample {
 /// Every leg must carry its line; an older service sends none
 bool followable(Journey j) => j.legs.every((l) => l.pts.isNotEmpty);
 
-Stage start(Journey j) => j.legs.first.kind == 'ride'
-    ? const Stage(StageKind.wait, 0)
-    : const Stage(StageKind.walk, 0);
+/// A journey begun on board starts on its ride, the rest walking or waiting
+Stage start(Journey j) {
+  final first = j.legs.firstOrNull;
+  if (first == null || first.kind != 'ride') {
+    return const Stage(StageKind.walk, 0);
+  }
+  return j.aboard
+      ? Stage(StageKind.ride, 0, first.veh)
+      : const Stage(StageKind.wait, 0);
+}
 
 class Follower {
   /// [catalog] places the stops a ride calls at; without it, or without them,

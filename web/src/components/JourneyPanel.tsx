@@ -17,9 +17,11 @@ import { Icon, type IconName } from "./Icon";
 import { RouteBadge } from "./RouteBadge";
 import { Speed } from "./Speed";
 import { StopSearch } from "./StopSearch";
-import type { Catalog, Confidence, Journey, Leg, Place } from "../lib/types";
+import type { Aboard, Catalog, Confidence, Journey, Leg, Place } from "../lib/types";
 
 export type Point = { lat: number; lon: number };
+/** Where a journey starts: a point, or on board a vehicle */
+export type Origin = Point | Aboard;
 
 type End = "from" | "to";
 
@@ -33,6 +35,11 @@ const RESTS: Record<
     word: t.schedulePart,
     tone: "text-slate-500",
     why: t.scheduleWhy,
+  },
+  terminus: {
+    word: t.terminusPart,
+    tone: "text-slate-500",
+    why: t.terminusWhy,
   },
   quiet: { word: t.quietPart, tone: "text-amber-400", why: t.quietWhy },
 };
@@ -71,7 +78,7 @@ export function JourneyPanel({
   onFold,
 }: {
   catalog: Catalog;
-  from: Point | null;
+  from: Origin | null;
   to: Point | null;
   /** The end waiting on a click on the map; the panel folds out of its way */
   picking: End | null;
@@ -119,6 +126,18 @@ export function JourneyPanel({
   const [speed, setSpeed] = useState(heldSpeed);
   /** What the points picked by name were called, so they keep reading so */
   const names = useRef(new Map<string, string>());
+  // Options found for other ends are not these ends' options
+  useEffect(() => {
+    setOptions(null);
+    setFailed(null);
+    setReport(null);
+    setReportSaid(null);
+    held.current = { id: null, built: new Map(), from: new Map() };
+    setShown(null);
+    onShow(null);
+  }, [from, to, onShow]);
+  const aboard = from && "veh" in from ? from : null;
+  const start = from && !("veh" in from) ? from : null;
 
   const search = async () => {
     if (!from || !to) return;
@@ -128,10 +147,11 @@ export function JourneyPanel({
     setReportSaid(null);
     show(null);
     try {
+      // On board is now: the vehicle is tracked only as it goes
       const got = await api.plan(
-        [from.lat, from.lon],
+        "veh" in from ? { veh: from.veh } : [from.lat, from.lon],
         [to.lat, to.lon],
-        at,
+        aboard ? null : at,
         speed,
       );
       setOptions(got.options);
@@ -241,10 +261,11 @@ export function JourneyPanel({
   /** Where the plan's `i`-th option is listed, counting from 1 */
   const place = (i: number) => order.indexOf(options![i]!) + 1;
 
-  const field = (which: End, point: Point | null) => (
+  const field = (which: End, point: Point | null, on: Aboard | null = null) => (
     <Field
       end={which}
       point={point}
+      aboard={on}
       name={point && names.current.get(key(point))}
       catalog={catalog}
       onPick={() => onPick(which)}
@@ -270,10 +291,10 @@ export function JourneyPanel({
           <Icon name="down" className="size-4" />
         </button>
       </div>
-      {field("from", from)}
+      {field("from", start, aboard)}
       {field("to", to)}
 
-      <div className="flex items-center gap-2">
+      <div className={`flex items-center gap-2 ${aboard ? "hidden" : ""}`}>
         <Label text={t.leaveAt} icon="clock" />
         <input
           type="datetime-local"
@@ -315,8 +336,9 @@ export function JourneyPanel({
         />
         <button
           onClick={onSwap}
+          disabled={aboard !== null}
           title={t.swap}
-          className="btn-quiet px-2"
+          className="btn-quiet px-2 disabled:text-slate-600"
         >
           <Icon name="swap" />
         </button>
@@ -420,6 +442,7 @@ function Label({ text, icon }: { text: string; icon: IconName }) {
 function Field({
   end,
   point,
+  aboard,
   name,
   catalog,
   onPick,
@@ -430,6 +453,8 @@ function Field({
 }: {
   end: End;
   point: Point | null;
+  /** The vehicle it is on board of, in place of a point */
+  aboard: Aboard | null;
   /** What it was called when picked by name */
   name: string | null | undefined;
   catalog: Catalog;
@@ -513,12 +538,17 @@ function Field({
             className="flex w-full min-w-0 items-center gap-2 rounded-md bg-raised/70 px-2 py-1.5 text-left text-sm hover:bg-raised"
           >
             <Icon name="search" className="size-4 shrink-0 text-slate-500" />
+            {aboard && catalog.routes[aboard.route ?? -1] && (
+              <RouteBadge route={catalog.routes[aboard.route!]!} className="shrink-0 px-1.5 text-xs" />
+            )}
             <span className="truncate">
-              {known?.name ??
-                name ??
-                (point
-                  ? `${point.lat.toFixed(4)}, ${point.lon.toFixed(4)}`
-                  : t.findStop)}
+              {aboard
+                ? t.aboard
+                : (known?.name ??
+                  name ??
+                  (point
+                    ? `${point.lat.toFixed(4)}, ${point.lon.toFixed(4)}`
+                    : t.findStop))}
             </span>
           </button>
         )}

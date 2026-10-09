@@ -21,6 +21,7 @@ class VehicleCard extends StatefulWidget {
     required this.veh,
     required this.onStop,
     required this.onRoute,
+    required this.onAboard,
   });
 
   final Api api;
@@ -30,6 +31,9 @@ class VehicleCard extends StatefulWidget {
   final void Function(int stop) onStop;
 
   final void Function(int route) onRoute;
+
+  /// Plans a journey from on board it
+  final void Function(Aboard from) onAboard;
 
   @override
   State<VehicleCard> createState() => _VehicleCardState();
@@ -135,6 +139,19 @@ class _VehicleCardState extends State<VehicleCard> {
                   },
                 ),
               ),
+            if (calls != null && calls.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: Tooltip(
+                  message: txt.onItHint,
+                  child: FilledButton.tonal(
+                    onPressed: () => widget.onAboard(Aboard(widget.veh, at)),
+                    child: Text(txt.onIt),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

@@ -72,7 +72,7 @@ BACKUP_WINDOW = 1800.0
 NEAR_TIE = 300.0
 
 # weakest first, so `min` over this order is the weakest ground a journey stands on
-CONFIDENCE = ("quiet", "schedule", "live")
+CONFIDENCE = ("quiet", "schedule", "terminus", "live")
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,9 +87,17 @@ class Leg:
     veh: int | None = None
     live: bool = False
 
-    # "live" is a vehicle being tracked, "schedule" is the timetable on a route
-    # that is running, "quiet" is the timetable on one nothing has been seen on
+    # "live" is a vehicle being tracked, "terminus" one boarded on a trip it is
+    # yet to set off on, "schedule" is the timetable on a route that is running,
+    # "quiet" is the timetable on one nothing has been seen on
     confidence: str = "live"
+
+
+@dataclass(frozen=True, slots=True)
+class Aboard:
+    """An origin on board a tracked vehicle rather than at a point; `veh` is
+    its id as the arrivals hold it."""
+    veh: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,16 +139,20 @@ class Journey:
     legs: tuple[Leg, ...]
     # per leg, the other ways to the door from where it boards
     backups: tuple[tuple[Backup, ...], ...] = ()
+    # its first leg is the vehicle already being ridden
+    aboard: bool = False
 
     @property
     def backup(self):
         """How many ways back up the weakest ride, for the ranking to prefer.
         One catching that ride's own vehicle further along is no help when it
-        does not come, so it does not count."""
+        does not come, so it does not count. A ride already on board needs
+        none."""
         return min((sum(i not in b.planned for b in backs)
                     for i, (leg, backs) in enumerate(zip(self.legs,
                                                          self.backups))
-                    if leg.kind == "ride"), default=0)
+                    if leg.kind == "ride" and not (i == 0 and self.aboard)),
+                   default=0)
 
     @property
     def dep(self):
@@ -207,15 +219,17 @@ class Pattern:
 
 class LiveTrip:
     """One tracked vehicle dressed as a single-trip pattern; its times are
-    absolute unix seconds, not seconds since midnight."""
+    absolute unix seconds, not seconds since midnight. From `turns` on it runs
+    the trips after the one it is on (`Live._next_trips`)."""
 
-    __slots__ = ("route", "veh", "stops", "times")
+    __slots__ = ("route", "veh", "stops", "times", "turns")
 
-    def __init__(self, route, veh, stops, times):
+    def __init__(self, route, veh, stops, times, turns=math.inf):
         self.route = route
         self.veh = veh
         self.stops = np.asarray(stops, dtype=np.int32)
         self.times = np.asarray(times, dtype=np.float64)
+        self.turns = turns
 
 
 class Timetable:
@@ -412,7 +426,7 @@ def live_trips(tt, arrivals, catalog, now, horizon=replay.HORIZON):
         return trips, covered
     for veh in np.unique(arrivals.eta["veh"]):
         rows = arrivals.of(int(veh))
-        stops, times = [], []
+        stops, times, turns = [], [], math.inf
         for r in rows:
             when = float(r["t"])
             if when < now or when > now + horizon:
@@ -423,6 +437,8 @@ def live_trips(tt, arrivals, catalog, now, horizon=replay.HORIZON):
                 continue
             stops.append(i)
             times.append(when)
+            if r["planned"]:
+                turns = min(turns, when)
         if len(stops) < 2:
             continue
         route = catalog.routes[int(rows[0]["route"])]
@@ -430,7 +446,7 @@ def live_trips(tt, arrivals, catalog, now, horizon=replay.HORIZON):
             _run_on(tt, route, stops, times)
         for i, when in zip(stops, times):
             covered[(i, route)] = max(covered.get((i, route), -math.inf), when)
-        trips.append(LiveTrip(route, int(veh), stops, times))
+        trips.append(LiveTrip(route, int(veh), stops, times, turns))
     return trips, covered
 
 
@@ -497,19 +513,38 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
 
     Somebody slower or faster on foot than `walk.SPEED` is searched for with
     `walk` and `transfers` paced to them.
-    """
-    walked, seen = _walk_through(walk, origin, dest)
-    limit = walked if walked is not None else TRANSFER_CAP * walk.pace
-    access = _at_stops(seen, transfers.node, limit)
-    egress = _at_stops(_reach(walk, walk.attach(*dest), limit), transfers.node,
-                       limit)
-    if not access or not egress:
-        return _only_walking(walked, now)
 
+    An `Aboard` origin is searched as getting off at the vehicle's next stop
+    when it gets there, with the stops in reach of that one, and each journey
+    found is then ridden there on it (`_on`). One the planner no longer sees
+    running gets none.
+    """
     sod, midnight = _seconds_since_midnight(now)
     tt = tt.on(midnight)
     live, covered = ([], {}) if arrivals is None else \
         live_trips(tt, arrivals, catalog, now)
+    if isinstance(origin, Aboard):
+        trip = next((x for x in live if x.veh == origin.veh), None)
+        if trip is None:
+            return []
+        u, start = int(trip.stops[0]), float(trip.times[0])
+        walked, _ = _walk_through(walk, (float(tt.lat[u]), float(tt.lon[u])),
+                                  dest)
+    else:
+        trip, start = None, now
+        walked, seen = _walk_through(walk, origin, dest)
+    limit = walked if walked is not None else TRANSFER_CAP * walk.pace
+    if trip is None:
+        access = _at_stops(seen, transfers.node, limit)
+    else:
+        # bounded as a search from that stop is, then the ride there added
+        access = {**dict(transfers.near(u, limit)), u: 0.0}
+        walked = None if walked is None else walked + start - now
+    egress = _at_stops(_reach(walk, walk.attach(*dest), limit), transfers.node,
+                       limit)
+    if not access or not egress:
+        return [] if trip else _only_walking(walked, now)
+
     trust = (route_confidence(tt, live, sod)
              if assess and arrivals is not None else {})
     paced = [c * walk.pace for c in WALK_CAPS]
@@ -518,12 +553,17 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
     for quiet in (False, True):
         hops, trips = _connections(tt, live, trust, now, midnight, hi, quiet)
         hops = _corridor(hops, transfers, egress, caps[0],
-                         [(u, now + t) for u, t in access.items()], hi)
+                         [(u, start + t) for u, t in access.items()], hi)
         scan = _Profile(hops, trips, trust, transfers, egress, caps, rounds,
                         covered)
-        found = scan.options(access, now)
-        found = _rank(scan.backed(found + scan.near(access, now, found)) +
-                      _only_walking(walked, now), keep, walked)
+        found = scan.options(access, start)
+        found = scan.backed(found + scan.near(access, start, found))
+        if trip is None:
+            found += _only_walking(walked, now)
+        else:
+            found = _on(tt, trip, found + _off_first(trip, egress), now)
+        # a ride slower than walking is still worth it when already on it
+        found = _rank(found, keep, walked if trip is None else None)
         if quiet or any(j.rides for j in found) or \
                 "quiet" not in trust.values():
             return _listed(found)
@@ -552,6 +592,73 @@ def _walk_through(walk, origin, dest, ceiling=LONGEST_WALK):
         if limit >= ceiling:
             return None, seen
         limit = min(limit * 2, ceiling)
+
+
+def _off_first(trip, egress):
+    """Getting off at the vehicle's next stop and walking from there, as a
+    journey found from that stop: `_on` rides it there."""
+    u, t = int(trip.stops[0]), float(trip.times[0])
+    if u not in egress:
+        return []
+    return [Journey((Leg("walk", t, t, -1, u),
+                     Leg("walk", t, t + egress[u], u, -1)))]
+
+
+def _on(tt, trip, found, now):
+    """Journeys found from getting off `trip` at its next stop, each starting
+    with the walk from there, as ridden there on `trip` from `now` instead. A
+    first ride on `trip` itself is staying on, so the two are one ride; any
+    other is a change, and one boarded too soon for it is dropped. Riding needs
+    the stop before to start from; a vehicle standing at its first stop has
+    none, and its journeys start at that stop."""
+    u, at = int(trip.stops[0]), float(trip.times[0])
+    before = _before(tt, trip)
+    out = []
+    for j in found:
+        first, rest = j.legs[0], j.legs[1:]
+        backs = j.backups[1:]
+        if first.b != u:
+            rest, backs = (Leg("walk", at, first.arr, u, first.b), *rest), \
+                ((), *backs)
+        on = None if before is None else Leg(
+            "ride", now, at, before, u, trip.route, trip.veh, True,
+            "terminus" if at >= trip.turns else "live")
+        if rest and rest[0].kind == "ride" and rest[0].veh == trip.veh:
+            on = dataclasses.replace(rest[0], dep=now,
+                                     a=rest[0].a if before is None else before)
+            rest, backs = rest[1:], backs[1:]
+        elif _rushed(rest, at):
+            continue
+        legs = rest if on is None else (on, *rest)
+        if not legs:
+            continue
+        # nobody on board needs another way to get on it
+        backs = backs if on is None else ((), *backs)
+        out.append(Journey(legs, backs if j.backups else (), on is not None))
+    return out
+
+
+def _rushed(legs, at):
+    """Whether the first ride of `legs`, after getting off at `at`, leaves
+    sooner than a change allows."""
+    k = next((i for i, leg in enumerate(legs) if leg.kind == "ride"), None)
+    if k is None:
+        return False
+    ready = legs[k - 1].arr if k else at
+    return legs[k].dep < ready + CHANGE
+
+
+def _before(tt, trip):
+    """The stop `trip` called at before its next one, from a pattern of its
+    route running the same two stops after it next, or None."""
+    if len(trip.stops) < 2:
+        return None
+    u, v = trip.stops[0], trip.stops[1]
+    for pat in tt.by_route.get(trip.route, ()):
+        hit = np.flatnonzero((pat.stops[1:-1] == u) & (pat.stops[2:] == v))
+        if len(hit):
+            return int(pat.stops[hit[0]])
+    return None
 
 
 def _only_walking(walked, now):
@@ -602,7 +709,7 @@ class _Profile:
                 continue
             door, how = tuple(door), tuple(how)
             stay[t] = self.via[c] = door, how
-            route, veh = trips[t]
+            route, veh, _ = trips[t]
             if veh is not None or d > covered.get((u, route), -math.inf):
                 self._board(u, d, c, door)
 
@@ -674,10 +781,13 @@ class _Profile:
 
     def ride(self, c, e):
         dep_s, arr_s, dep_t, arr_t, trip_of = self.hops
-        route, veh = self.trips[trip_of[c]]
+        route, veh, turns = self.trips[trip_of[c]]
+        if veh is None:
+            confidence = self.trust.get(route, "schedule")
+        else:
+            confidence = "terminus" if dep_t[c] >= turns else "live"
         return Leg("ride", dep_t[c], arr_t[e], dep_s[c], arr_s[e], route, veh,
-                   veh is not None, "live" if veh is not None
-                   else self.trust.get(route, "schedule"))
+                   veh is not None, confidence)
 
     def options(self, access, now):
         """For each slot, the soonest door arrival from a stop the origin
@@ -918,7 +1028,8 @@ def _corridor(hops, transfers, egress, cap, starts, hi):
 def _connections(tt, live, trust, now, midnight, hi, quiet):
     """Every hop between consecutive stops leaving at `now` or later and
     arriving by `hi`, latest first, as lists of (from, to, departure, arrival,
-    trip), with each trip's (route, vehicle) - the timetable's have none.
+    trip), with each trip's (route, vehicle, `LiveTrip.turns`) - the
+    timetable's have no vehicle.
     Routes nothing has been seen on only with `quiet`. Ties keep a trip's
     later hop first, which a hop of no running time needs."""
     parts, trips = [], []
@@ -929,10 +1040,10 @@ def _connections(tt, live, trust, now, midnight, hi, quiet):
         rows = np.flatnonzero((times[:, 0] <= hi) & (times[:, -1] >= now))
         if len(rows):
             parts.append(_hops(pat.stops, times[rows], len(trips)))
-            trips += [(pat.route, None)] * len(rows)
+            trips += [(pat.route, None, math.inf)] * len(rows)
     for trip in live:
         parts.append(_hops(trip.stops, trip.times[None], len(trips)))
-        trips.append((trip.route, trip.veh))
+        trips.append((trip.route, trip.veh, trip.turns))
     if not parts:
         return ([],) * 5, trips
     cols = [np.concatenate(x) for x in zip(*parts)]

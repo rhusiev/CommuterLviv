@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["*_test.py"]
+addopts = "-q"
+# s; a socket the service stopped answering would otherwise block for ever
+timeout = 120

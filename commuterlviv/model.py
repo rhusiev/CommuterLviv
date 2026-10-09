@@ -21,7 +21,7 @@ import zoneinfo
 
 import numpy as np
 
-from . import config
+from . import boost, config, layover
 
 PACE_CLIP = (0.020, 2.0)     # s/m: 180 km/h .. 1.8 km/h while actually rolling
 HOLD_CLIP = (0.0, 240.0)     # s standing per crossing
@@ -186,6 +186,8 @@ class BaseModel:
         self._prior_t = None
         self._per_cell = self.prior[0] * self.cell_len
         self.emitting = False   # set by the replay: is this epoch being scored
+        self.layovers = layover.Layovers(net, TZ)
+        self.boost = boost.Boost(net, TZ)
 
     def _level(self, prior):
         """The one number a whole prior array is worth: its length-weighted mean.

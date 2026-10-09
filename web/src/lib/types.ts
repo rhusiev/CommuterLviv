@@ -49,9 +49,10 @@ export type Call = { stop: number; route: number; t: number };
 
 export type VehicleStops = { t: number; veh: number; stops: Call[] };
 
-/** What a ride rests on: a tracked vehicle, the timetable, or the timetable on
- * a line nothing has been seen running on lately */
-export type Confidence = "live" | "schedule" | "quiet";
+/** What a ride rests on: a tracked vehicle, a tracked vehicle on a trip it is
+ * yet to set off on, the timetable, or the timetable on a line nothing has been
+ * seen running on lately */
+export type Confidence = "live" | "terminus" | "schedule" | "quiet";
 
 /** `a` and `b` are catalog stop indexes, or -1 for the door at either end; a
  * walk has no route. `live` marks a tracked vehicle rather than a timetable. */
@@ -97,7 +98,12 @@ export type Journey = {
   confidence: Confidence;
   backup: number;
   legs: Leg[];
+  /** Starts on board the vehicle the search was made from */
+  aboard?: boolean;
 };
+
+/** A vehicle to plan from as though on board, with its route if known */
+export type Aboard = { veh: number; route: number | null };
 
 /** `report` names the search for `api.report` and `api.backup`, for half an
  * hour */

@@ -7,15 +7,23 @@ This does not write `feed.db` - the collector owns it - so the two poll the same
 endpoint independently.
 """
 import asyncio
+import multiprocessing
+import os
 import sqlite3
 import time
+from concurrent.futures import ProcessPoolExecutor
 
-from .. import collect, replay, snapshot
+from .. import boost, collect, layover, replay, snapshot
 from .state import Live
 
 WARM_HOURS = 2.0         # of recorded history replayed at most, if it is fresh
 WARM_MAX_AGE = 900.0     # s: older than this and the recording is not "now"
 SAVE_EVERY = 600.0       # s between snapshots of the model
+FIT_EVERY = 6 * 3600.0   # s between refits of the learned models
+DAY_S = 86400.0
+BACKFILL_S = 3 * DAY_S   # of recording learned from when the learned models lack rows
+BACKFILL_WARMUP_S = DAY_S    # replayed before that, so the rows are a warm model's
+BACKFILL_NICE = 10
 
 
 class Service:
@@ -29,6 +37,7 @@ class Service:
         self.errors = 0
         self.polls = 0
         self._seen = {}
+        self.refit = asyncio.Event()   # set to fit now rather than at the next `FIT_EVERY`
 
     async def start(self, hub):
         self.hub = hub
@@ -38,9 +47,11 @@ class Service:
             self.log("no model snapshot; learning from scratch" if since is None
                      else f"model snapshot from {time.time() - since:.0f}s ago")
         await asyncio.to_thread(self.warm, since=since)
-        tasks = [self.poll_loop(), self.epoch_loop()]
+        tasks = [self.poll_loop(), self.epoch_loop(), self.fit_loop()]
         if self.persist:
             tasks.append(self.save_loop())
+            if self.short():
+                tasks.append(self.backfill(cold=since is None))
         return [asyncio.create_task(t) for t in tasks]
 
     def warm(self, live=None, db=None, since=None):
@@ -70,6 +81,42 @@ class Service:
                  f"recording in {time.time() - t0:.1f}s")
         return True
 
+    def short(self):
+        """Has a learned model fewer rows than it needs to be fitted?"""
+        model = self.live.model
+        return (len(model.boost.training()) < boost.NEED_ROWS
+                or len(model.layovers.training()) < layover.NEED_ROWS)
+
+    async def backfill(self, cold, db=None, t_to=None):
+        """Learn the rows the learned models lack from the recording up to
+        `t_to` - and, if the model is `cold`, everything else a model learns
+        from it - in a process of its own, so the live epochs keep their CPU.
+        A fresh start fits after minutes rather than after a day of rows."""
+        t_to = t_to or time.time()
+        t_from = t_to - BACKFILL_S - BACKFILL_WARMUP_S
+        t0 = time.time()
+        spawn = multiprocessing.get_context("spawn")
+        try:
+            with ProcessPoolExecutor(1, mp_context=spawn) as pool:
+                data = await asyncio.get_running_loop().run_in_executor(
+                    pool, _learn, self.live.net, self.set.cfg, db or replay.DB,
+                    t_from, t_to, BACKFILL_WARMUP_S, self.set.epoch)
+        except Exception as exc:
+            self.log("backfill failed", repr(exc)[:200])
+            return
+        async with self.lock:
+            model = self.live.model
+            if cold:
+                snapshot.restore(model, data)
+            else:
+                model.boost.restore_rows(data[snapshot.PASSED],
+                                         [str(r) for r in data[snapshot.PASSED_ROUTES]])
+                model.layovers.restore_rows(data[snapshot.STANDS])
+        self.log(f"backfilled {len(data[snapshot.PASSED])} passed stops and "
+                 f"{len(data[snapshot.STANDS])} minutes of stands in "
+                 f"{time.time() - t0:.0f}s")
+        self.refit.set()
+
     async def save_loop(self):
         while True:
             await asyncio.sleep(SAVE_EVERY)
@@ -82,6 +129,34 @@ class Service:
         async with self.lock:
             data = await asyncio.to_thread(snapshot.export, self.live.model)
         await asyncio.to_thread(snapshot.save, data)
+
+    async def fit_loop(self):
+        """Refit the learned models on start and every `FIT_EVERY`: the
+        terminus departures (`layover.fit`) and the ETA correction
+        (`boost.fit`), and again whenever `refit` is set."""
+        while True:
+            self.refit.clear()
+            await self._fit("layovers", layover.fit, "terminus model", "minutes of stands")
+            await self._fit("boost", boost.fit, "ETA correction", "passed stops")
+            try:
+                await asyncio.wait_for(self.refit.wait(), FIT_EVERY)
+            except TimeoutError:
+                pass
+
+    async def _fit(self, part, fit, name, rows_are):
+        """Refit the model's `part` by `fit` on its `training()` rows,
+        outside the lock: a fit takes seconds of CPU."""
+        try:
+            async with self.lock:
+                learner = getattr(self.live.model, part)
+                rows = learner.training()
+            fitted = await asyncio.to_thread(fit, rows)
+            if fitted is not None:
+                async with self.lock:
+                    learner.model = fitted
+                self.log(f"{name} fitted on {len(rows)} {rows_are}")
+        except Exception as exc:
+            self.log(f"{name} fit failed", repr(exc)[:200])
 
     def swap(self, live):
         """Onto a new city, primed with a poll and an epoch so it is not
@@ -156,3 +231,14 @@ class Service:
 
     def health(self):
         return {**self.live.health(), "polls": self.polls, "errors": self.errors}
+
+
+def _learn(net, cfg, db, t_from, t_to, warmup, epoch):
+    """What a fresh model learns from the recording between `t_from` and
+    `t_to`, as a snapshot; noting rows only `warmup` s past its first fix. Runs
+    in `Service.backfill`'s process."""
+    os.nice(BACKFILL_NICE)
+    model = replay.build(net, cfg)
+    replay.run(net, t_from=t_from, t_to=t_to, epoch=epoch, db=db, model=model,
+               warmup=warmup, keep=False)
+    return snapshot.export(model)

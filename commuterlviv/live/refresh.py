@@ -117,6 +117,8 @@ async def renew(s, log):
         await asyncio.to_thread(s.svc.swap, live)
         install(s, items)
         s.planner = planner
+    # the new model holds the old one's rows but nothing fitted on them
+    s.svc.refit.set()
     await s.hub.renew(live)
     log(f"refresh: now serving {len(live.cat.routes)} routes, "
         f"{len(live.cat.stops)} stops")
