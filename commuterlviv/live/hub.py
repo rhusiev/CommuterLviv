@@ -118,6 +118,7 @@ class Hub:
         live = self.live
         client = Client(ws, user_id, live)
         self.clients.add(client)
+        tasks = []
         try:
             await ws.send_text(json.dumps({
                 "type": "hello", "variant": live.variant,
@@ -129,14 +130,16 @@ class Hub:
             # cannot leave a socket that reads fine and never updates
             tasks = [asyncio.create_task(self._read(client)),
                      asyncio.create_task(self._push(client))]
-            done, pending = await asyncio.wait(
+            done, _ = await asyncio.wait(
                 tasks, return_when=asyncio.FIRST_COMPLETED)
-            for t in pending:
-                t.cancel()
-            await asyncio.gather(*pending, return_exceptions=True)
             for t in done:
                 t.result()
         finally:
+            # also when the connection itself is cancelled mid-wait, which
+            # would otherwise leave both halves running on a dead socket
+            for t in tasks:
+                t.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
             self.clients.discard(client)
 
     async def _read(self, client):
