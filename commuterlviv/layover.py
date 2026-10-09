@@ -130,6 +130,14 @@ class Layovers:
         self._asked.setdefault(trip, []).append((now, f))
         self._batch.append((trip, soonest, f))
 
+    def stand_after(self, trip, ready, now, running):
+        """A vehicle in at the end of `trip` since `ready` stands for the trip
+        it runs next, unless that one is already `running`."""
+        trip = self.net.trip_next.get(trip)
+        if trip is not None and trip not in running:
+            sched = clock(self.net.trip_stops[trip][2][0], now, self.tz)
+            self.stand(trip, sched, ready, now)
+
     def foretell(self, now):
         """Time this epoch's stands in one go - a model's call costs ~5 ms
         however few rows it is given."""
@@ -206,9 +214,10 @@ class Layovers:
         return np.concatenate([self._rows[at:], self._rows[:at]])
 
     def restore_rows(self, rows):
-        """Rows from `training`, if they are of this version's `FEATURES`."""
+        """Rows from `training`, if they are of this version's `FEATURES`, taken
+        as older than any this one has written itself."""
         if rows.ndim == 2 and rows.shape[1] == self._rows.shape[1]:
-            rows = rows[-ROWS:]
+            rows = np.concatenate([rows, self.training()])[-ROWS:]
             self._rows[:len(rows)] = rows
             self._wrote = len(rows)
 

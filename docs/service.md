@@ -46,7 +46,8 @@ after it got there.
 That rule is the fallback. Every minute a vehicle stands in early, the service
 also notes what the rule's two halves said, how long ago and how far ahead of
 the timetable the route last left that terminus, the timetable's gap to it,
-the hour, and how long the vehicle has stood; once the vehicle leaves, each of
+the hour, and how long the vehicle has stood, and a replay of the recording
+notes the same (`replay._stands`); once the vehicle leaves, each of
 those minutes is labelled with how long was really left. A gradient-boosted
 model (scikit-learn's `HistGradientBoostingRegressor`) is fitted on start,
 every 6 hours (`FIT_EVERY`) and after a feed swap, in a worker thread, on
@@ -497,6 +498,17 @@ two hours of recording cannot replay.
    restart are learned again.
 3. Every weight carries the time it was earned and decays from that stamp, so
    an old snapshot needs no expiry: it fades back to the timetable on its own.
+4. If the terminus model or the ETA correction has too few rows to be fitted
+   (`Service.short`) - no snapshot, or one from before they were kept - the
+   service learns them from the recording instead of waiting a day of service
+   for them (`Service.backfill`). A process of its own, at a lower priority,
+   replays the last 4 days into a fresh model, noting rows past the first day
+   of them (`BACKFILL_S`, `BACKFILL_WARMUP_S`), and hands back its snapshot.
+   The live model takes its rows, put before the ones it has noted itself
+   since the start, and, if it started with no snapshot, everything else the
+   fresh model learned, and both models are fitted again. On the recording to
+   2026-10-07 that was 228 000 passed stops, about 25 minutes of one core and
+   375 MB at most; until it ends the uncorrected model and the rule answer.
 
 A missing or unreadable snapshot is not an error - the model starts from the
 timetable, as it did before the file existed, and the log says so. The
@@ -505,10 +517,8 @@ snapshot is about 95 MB, and only the per-cell online models
 turnarounds at its termini and the minutes of stands its departure model
 learns from ([trips after this one](#trips-after-this-one)) and the passed
 stops the ETA correction learns from
-([seconds to each stop, corrected](#seconds-to-each-stop-corrected)), which a
-snapshot from before they were kept simply lacks: they are then learned again
-as vehicles come in, and the uncorrected model and the rule answer until there
-are enough. The fitted models are not kept: they are fitted again on start.
+([seconds to each stop, corrected](#seconds-to-each-stop-corrected)). The
+fitted models are not kept: they are fitted again on start.
 
 ## Accounts and registration
 

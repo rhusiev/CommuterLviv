@@ -213,7 +213,7 @@ class Live:
             w = self._wire(veh)
             came = self.model.layovers.came(veh, tr.trip)
             if got is None and came is not None:
-                self._stand(tr.trip, came, now, running)
+                self.model.layovers.stand_after(tr.trip, came, now, running)
                 standing.append((tr.trip, came, ri, w))
                 continue
             if got is None:
@@ -244,15 +244,6 @@ class Live:
             si = self.cat.stop_i.get(stops[j])
             if si is not None:
                 rows.append((si, ri, w, t, planned))
-
-    def _stand(self, trip, came, now, running):
-        """A vehicle in at the end of `trip` since `came`, for `layover` to
-        time its next trip with the others standing this epoch."""
-        trip = self.net.trip_next.get(trip)
-        if trip is not None and trip not in running:
-            sched = self.net.trip_stops[trip][2][0]
-            self.model.layovers.stand(trip, layover.clock(sched, now, pace.TZ),
-                                      came, now)
 
     def _next_trips(self, rows, trip, ends, now, ri, w, running):
         """The trips this vehicle runs after the one it is on, within the

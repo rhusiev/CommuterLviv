@@ -74,8 +74,9 @@ class Buf:
 
 
 class Result:
-    def __init__(self, t0):
+    def __init__(self, t0, keep=True):
         self.t0 = t0
+        self.keep = keep     # the ETAs, positions and passings; else only the model learns
         self.buf = Buf()
         self.truth = {}      # (veh_idx, trip_idx, run, stop_i) -> crossing time
         self.gap = {}        # same key -> width of the interpolated interval
@@ -86,7 +87,7 @@ class Result:
 
 
 def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
-        progress=None, model=None, cfg=None):
+        progress=None, model=None, cfg=None, keep=True):
     model = model or build(net, cfg)
     offset = {} if model.cfg.vehicle_offset != "off" else None
     tracks = {}
@@ -115,7 +116,7 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
             t_start = float(ts)
             # on the absolute grid, so epochs line up with the recorded feeds'
             next_epoch = np.ceil(t_start / epoch) * epoch
-            res = Result(t_start)
+            res = Result(t_start, keep)
         while ts >= next_epoch:
             _flush(model, res, tracks, runs, closed, next_epoch, veh_idx,
                    trip_idx, emit=next_epoch - t_start >= warmup, offset=offset)
@@ -139,7 +140,7 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
             for i, t, gap in passings:
                 model.boost.passed(veh, tr, i, t, gap)
                 k = (vi, ti, tr.run, i)
-                if k not in res.truth:
+                if res.keep and k not in res.truth:
                     res.truth[k] = t
                     res.gap[k] = gap
 
@@ -284,6 +285,18 @@ def all_etas(model, asked, now, offset):
     return got
 
 
+def _stands(model, tracks, got, now):
+    """The vehicles in at the end of their trip with nothing ahead in `got`,
+    noted standing for their next one as `Live` notes them."""
+    running = {tr.trip for tr in tracks.values()}
+    for veh, tr in tracks.items():
+        if got.get(veh) is None and tr.ts is not None and now - tr.ts <= STALE:
+            came = model.layovers.came(veh, tr.trip)
+            if came is not None:
+                model.layovers.stand_after(tr.trip, came, now, running)
+    model.layovers.foretell(now)
+
+
 def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True,
            offset=None):
     # set before the drain, so the first scored epoch is past any training
@@ -300,8 +313,10 @@ def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True,
     # recording agree on event numbering
     idx = [(_idx(veh_idx, res.veh_ids, veh), _idx(trip_idx, res.trip_ids, tr.trip))
            for veh, tr in asked]
-    for (veh, tr), (vi, ti), got in zip(asked, idx, all_etas(model, asked, now, offset)):
-        if got is None:
+    etas = all_etas(model, asked, now, offset)
+    _stands(model, tracks, dict(zip((veh for veh, _ in asked), etas)), now)
+    for (veh, tr), (vi, ti), got in zip(asked, idx, etas):
+        if got is None or not res.keep:
             continue
         i, s_now, dt, k = got
         res.pos.append((ep, vi, ti, tr.run, s_now))

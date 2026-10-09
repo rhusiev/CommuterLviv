@@ -121,13 +121,15 @@ class Boost:
 
     def restore_rows(self, rows, routes):
         """Rows from `training`, if they are of this version's `FEATURES`, their
-        "route" renumbered from `routes`, the `routes` they were noted under."""
+        "route" renumbered from `routes`, the `routes` they were noted under.
+        They are taken as older than any this one has noted itself."""
         if rows.ndim == 2 and rows.shape[1] == self._rows.shape[1]:
             rows = rows[-ROWS:].copy()
             col = FEATURES.index("route")
             now = np.array([self._route.get(r, (np.nan,))[0] for r in routes] + [np.nan])
             was = np.nan_to_num(rows[:, col], nan=len(routes)).astype(np.int64)
             rows[:, col] = now[np.clip(was, 0, len(routes))]
+            rows = np.concatenate([rows, self.training()])[-ROWS:]
             self._rows[:len(rows)] = rows
             self._wrote = len(rows)
 
