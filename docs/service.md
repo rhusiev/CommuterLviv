@@ -139,17 +139,28 @@ scaled by the same pace, so a slower walker is offered the same stops, each
 further away in time. Both clients keep a usual speed on the
 device (the account menu) and step it per search beside the departure time.
 
+The graph holds the ways OpenStreetMap lets somebody walk (`WALKABLE`), and
+every stop platform, whether it is tagged `highway=platform` or only by its
+transit role (`railway=platform`, `public_transport=platform`). A platform is
+where somebody waiting at a stop stands, and often the only way drawn on that
+side of the street: without it, a point on the platform steps onto whatever is
+nearest instead - in one reported search a car park's aisle, which joined the
+streets 200 m away and made a stop 13 m off a 5-minute walk.
+
 Walks are Dijkstra on that graph, scipy's (`scipy.sparse.csgraph.dijkstra`),
 about ten times faster than one in Python. A point steps onto the graph
 at the nearest point of the nearest footpath edge with a node within 150 m
 (`Walk.attach`), and the search starts from both ends of that edge, each with
-the walk to it already spent. Only edges on the largest connected piece of the
-graph count: OpenStreetMap has hundreds of small pieces drawn apart from the
-streets - a plaza, a platform, a courtyard - and a point or a stop stepping onto
-one could walk nowhere. In Lviv's graph 4286 of 239922 nodes, and 17 of the 1071
-stops' nearest edges, are on such pieces. Joining the point to every node in reach instead
-would let a walk cut straight across a block to any of them. Two points on the
-same edge are also joined along it, which the graph alone cannot see. The walk from the origin that finds
+the walk to it already spent. A stop steps on the same way, from its pole
+(`Walk.stands`), so somebody standing at a stop and the stop itself are on the
+same edge; the nearest node instead can be across the road. Only edges on the
+largest connected piece of the graph count: OpenStreetMap has hundreds of small
+pieces drawn apart from the streets - a plaza, a platform, a courtyard - and a
+point or a stop stepping onto one could walk nowhere. In Lviv's graph 4447 of
+240985 nodes, and 24 of the 1071 stops' nearest edges, are on such pieces.
+Joining the point to every node in reach instead would let a walk cut straight
+across a block to any of them. Two points on the same edge are also joined
+along it, which the graph alone cannot see. The walk from the origin that finds
 the whole walk also gives the walks to the stops near the origin, so a search
 walks twice - from each end - in about 50 ms.
 
@@ -423,9 +434,11 @@ OpenStreetMap plus elevation and can be copied between hosts; `transfers.npz`
 indexes stops by the catalog it was built against and must be rebuilt wherever
 `network.pkl` differs. It also records what it was built from: the walking model
 (`model`, such as `1.25 m/s, Tobler slopes`), a digest of the footpath graph and of
-which part of it is walked on (`graph`) and one of the catalog's stops (`stops`). The service rebuilds it when
+which part of it is walked on (`graph`) and one of the catalog's stops (`stops`),
+and the edge each stop steps onto (`at_*`). The service rebuilds it when
 any of the three is not what it holds - about 8 s, written beside the old file
-and swapped in. A file from before the digests has none, so it is rebuilt once. Without them the service still starts, logs why, and
+and swapped in. A file from before the digests, or from before stops stepped
+onto edges, lacks them, so it is rebuilt once. Without them the service still starts, logs why, and
 `/api/plan` answers 503 - the map and the arrivals do not depend on it.
 
 ## Route shapes
@@ -446,7 +459,8 @@ without a restart (`commuterlviv/live/refresh.py`):
 
 1. Every night at 03:30 Kyiv time (`CHECK_AT`), after the last tram and before
    the first, it wakes up. Nobody is riding, so nobody notices what follows.
-2. If `walk.npz` is over 30 days old (`WALK_EVERY`), the footpaths are fetched
+2. If `walk.npz` is over 30 days old (`WALK_EVERY`), or was fetched asking for
+   other ways than the code asks for now (`walk.KIND`), the footpaths are fetched
    from Overpass again, heights and all, into `walk.next.npz`. A graph with
    under 90% of the old one's nodes is taken as a broken answer and dropped;
    otherwise it replaces the old file.
