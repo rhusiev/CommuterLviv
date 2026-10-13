@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
-import 'eta.dart';
+import 'journey_tags.dart';
 import 'map_theme.dart';
 import 'models.dart';
 
@@ -29,18 +29,8 @@ class JourneyLayer extends StatelessWidget {
       for (final leg in journey.legs)
         if (leg.pts.length > 1) leg,
     ];
-    // Timestamps only, one pill per stop; durations stay in the planner's
-    // list. A third and further time on one spot joins the stack.
-    final groups = <_Group>[];
-    for (final leg in legs) {
-      _at(groups, leg.pts.first).on.add(leg.dep);
-      _at(groups, leg.pts.last).off.add(leg.arr);
-    }
-    final tags = <_Tag>[
-      for (final g in groups) ...[
-        _Tag(g.point, g.text, true),
-        for (final extra in g.extras) _Tag(g.point, clockTime(extra), true),
-      ],
+    final tags = [
+      for (final tag in journeyTags(legs)) _Tag(tag.point, tag.text, true),
     ];
     return Stack(
       children: [
@@ -74,45 +64,6 @@ class JourneyLayer extends StatelessWidget {
     final route = catalog.routes[i];
     return routeColour(route.short, route.type);
   }
-}
-
-/// One stop's worth of times: every alighting and boarding within 25 m, which
-/// is one stop at every zoom. [text] reads off → on for a change, or the one
-/// time when there is only it; [extras] holds a third and further time, which
-/// the stack draws as its own pill on the same spot.
-class _Group {
-  _Group(this.point);
-
-  final LatLng point;
-  final List<int> off = [];
-  final List<int> on = [];
-
-  String get text {
-    if (off.isNotEmpty && on.isNotEmpty && off.last != on.first) {
-      return '${clockTime(off.last)} → ${clockTime(on.first)}';
-    }
-    return clockTime(off.isNotEmpty ? off.last : on.first);
-  }
-
-  Iterable<int> get extras sync* {
-    for (var i = 0; i + 1 < off.length; i++) {
-      yield off[i];
-    }
-    for (var i = 1; i < on.length; i++) {
-      yield on[i];
-    }
-  }
-}
-
-/// The group [at] belongs to, opening one when it stands alone.
-_Group _at(List<_Group> groups, LatLng at) {
-  const near = Distance();
-  for (final g in groups) {
-    if (near(g.point, at) < 25) return g;
-  }
-  final opened = _Group(at);
-  groups.add(opened);
-  return opened;
 }
 
 /// One pill before placing: where it wants to sit, what it says, how loudly.
