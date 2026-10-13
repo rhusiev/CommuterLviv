@@ -46,19 +46,36 @@ WALKABLE = {
     "footway", "path", "pedestrian", "steps", "living_street", "residential",
     "service", "unclassified", "tertiary", "secondary", "primary",
     "tertiary_link", "secondary_link", "primary_link", "track", "road",
-    "crossing", "corridor",
+    "crossing", "corridor", "platform",
 }
+# a stop's platform tagged only by its transit role, which is just as walkable:
+# somebody standing on one is waiting right at the stop
+PLATFORMS = ('["railway"="platform"]', '["public_transport"="platform"]')
 
 MARGIN = 0.02   # degrees around the stops' bounding box, about 2 km
+
+
+def _selectors():
+    kinds = "|".join(sorted(WALKABLE))
+    return (f'["highway"~"^({kinds})$"]', *PLATFORMS)
+
+
+# which ways a graph was fetched as, so one fetched before a change to them is
+# refetched rather than kept for a month
+KIND = hashlib.blake2b("\n".join(_selectors()).encode(),
+                       digest_size=8).hexdigest()
 
 
 def query(bbox):
     """The Overpass query for one bounding box; `>` pulls the nodes in too."""
     south, west, north, east = bbox
-    kinds = "|".join(sorted(WALKABLE))
+    ways = "\n".join(f'  way{sel}["foot"!="no"]["access"!="private"]'
+                      f"({south},{west},{north},{east});"
+                      for sel in _selectors())
     return f"""[out:json][timeout:180];
-way["highway"~"^({kinds})$"]["foot"!="no"]["access"!="private"]
-   ({south},{west},{north},{east});
+(
+{ways}
+);
 (._;>;);
 out skel qt;"""
 
@@ -176,7 +193,7 @@ def save(path=CACHE, raw=None):
     lat, lon, to, w, start = compile_graph(raw)
     path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(path, lat=lat, lon=lon, to=to, cost=w, start=start,
-                        built=np.array([time.time()]))
+                        built=np.array([time.time()]), kind=np.array(KIND))
     return path
 
 
@@ -200,12 +217,12 @@ def renew(path=CACHE, keep=0.9):
 
 
 def age(path=CACHE):
-    """Seconds since the graph was fetched; one saved before that was noted
-    is as old as its file."""
+    """Seconds since the graph was fetched; one fetched as other ways than
+    `KIND`, or before that was noted, is due now."""
     with np.load(path) as z:
-        built = float(z["built"][0]) if "built" in z.files else \
-            path.stat().st_mtime
-    return time.time() - built
+        if "kind" not in z.files or str(z["kind"]) != KIND:
+            return math.inf
+        return time.time() - float(z["built"][0])
 
 
 def climbed(path=CACHE):
@@ -245,6 +262,47 @@ class Spot(NamedTuple):
             return math.inf
         t = other.t if other.u == self.u else 1 - other.t
         return self.off + other.off + self.edge * abs(self.t - t)
+
+
+STAND_TYPES = (float, float, np.int64, np.int64, float, float, float)
+
+
+class Stands(NamedTuple):
+    """Where each of many points steps onto the footpaths: `Spot`'s fields as
+    arrays, with `u` -1 for a point off the graph."""
+    lat: np.ndarray
+    lon: np.ndarray
+    u: np.ndarray
+    v: np.ndarray
+    t: np.ndarray
+    edge: np.ndarray
+    off: np.ndarray
+
+    def spot(self, i):
+        """The `i`th point's `Spot`, or None off the graph."""
+        if self.u[i] < 0:
+            return None
+        return Spot(*(f[i].item() for f in self))
+
+    def paced(self, pace):
+        """The same points for somebody walking `pace` times as long."""
+        return self._replace(edge=self.edge * pace, off=self.off * pace)
+
+    def read(self, seen, spot=None):
+        """Seconds to each point, from a `Walk.reach` that started at `spot`:
+        through whichever end of its edge is nearer, or along the edge itself
+        when it is the spot's own. inf off the graph and out of reach."""
+        on = self.u >= 0
+        u, v = np.where(on, self.u, 0), np.where(on, self.v, 0)
+        out = np.minimum(seen[u] + self.off + self.edge * self.t,
+                         seen[v] + self.off + self.edge * (1 - self.t))
+        out[~on] = math.inf
+        if spot is not None:
+            shared = on & (((self.u == spot.u) & (self.v == spot.v))
+                           | ((self.u == spot.v) & (self.v == spot.u)))
+            for i in np.flatnonzero(shared).tolist():
+                out[i] = min(out[i], spot.along(self.spot(i)))
+        return out
 
 
 def _main_network(to, start):
@@ -336,6 +394,13 @@ class Walk:
               float(self.lon[a] + f * (self.lon[b] - self.lon[a])))
         return Spot(*at, a, b, f, float(self.secs[e[j]]),
                     self.flat(metres(lat, lon, *at)))
+
+    def stands(self, lat, lon, within=150.0):
+        """`attach` for each of many points, as `Stands`."""
+        spots = [self.attach(float(a), float(o), within) for a, o in zip(lat, lon)]
+        on = [s or Spot(math.nan, math.nan, -1, -1, 0.0, 0.0, 0.0) for s in spots]
+        fields = list(zip(*on)) or [()] * len(Stands._fields)
+        return Stands(*(np.array(f, dtype=d) for f, d in zip(fields, STAND_TYPES)))
 
     def reach(self, sources, limit_s, prev=False):
         """Seconds of walking from the nearest source to every node, inf past

@@ -17,8 +17,8 @@ import { sample, type Live } from "../lib/live";
 import type { Pace } from "../lib/traffic";
 import { build, colour, R, type Sprites } from "../lib/sprites";
 import { t } from "../lib/i18n";
+import { journeyTags } from "../lib/tags";
 import { ink, styleUrl, type Theme } from "../lib/theme";
-import { clock } from "../lib/eta";
 import type { Catalog, Journey, Place, Shapes } from "../lib/types";
 import { MOVING_FLAG, STALE_FLAG } from "../lib/wire";
 import { Icon } from "./Icon";
@@ -634,42 +634,6 @@ export function MapCanvas({
       </button>
     </div>
   );
-}
-
-/** One pill per stop of the picked journey: getting off and getting on share
- * a pill reading off → on. Stops within 25 m are one stop, at every zoom. */
-function journeyTags(legs: Journey["legs"]): { lat: number; lon: number; text: string }[] {
-  type Group = { lat: number; lon: number; off: number[]; on: number[] };
-  const groups: Group[] = [];
-  const at = (lat: number, lon: number): Group => {
-    for (const g of groups) {
-      if (Math.abs(lat - g.lat) * 111320 < 25 && Math.abs(lon - g.lon) * 71770 < 25) return g;
-    }
-    const g: Group = { lat, lon, off: [], on: [] };
-    groups.push(g);
-    return g;
-  };
-  for (const leg of legs) {
-    const pts = leg.pts!;
-    const s = pts[0]!;
-    const e = pts[pts.length - 1]!;
-    at(s[0], s[1]).on.push(leg.dep);
-    at(e[0], e[1]).off.push(leg.arr);
-  }
-  const out: { lat: number; lon: number; text: string }[] = [];
-  for (const g of groups) {
-    const off = Math.max(...g.off);
-    const on = Math.min(...g.on);
-    if (g.off.length && g.on.length && off !== on) {
-      out.push({ lat: g.lat, lon: g.lon, text: `${clock(off)} → ${clock(on)}` });
-    } else {
-      out.push({ lat: g.lat, lon: g.lon, text: clock(g.off.length ? off : on) });
-    }
-    for (const extra of [...g.off.slice(0, -1), ...g.on.slice(1)]) {
-      out.push({ lat: g.lat, lon: g.lon, text: clock(extra) });
-    }
-  }
-  return out;
 }
 
 /** Journey tags, each stepped aside until it clears the ones already drawn.
