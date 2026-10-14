@@ -210,6 +210,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
         aboard: aboard,
         at: aboard == null ? _at : null,
         speed: _speed,
+        hurry: widget.api.hurrySpeed,
       );
       if (!mounted) return;
       setState(() {
@@ -630,6 +631,15 @@ class _Option extends StatelessWidget {
                         : txt.changeCount(changes),
                     style: material.Theme.of(context).textTheme.bodySmall,
                   ),
+                  if (journey.hurry)
+                    Tooltip(
+                      message: txt.hurryHint,
+                      child: Text(
+                        ' · ${txt.hurry}',
+                        style: material.Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: Colors.amberAccent),
+                      ),
+                    ),
                   if (journey.rides > 0 && journey.backup > 0)
                     InkWell(
                       onTap: () => showBackups(

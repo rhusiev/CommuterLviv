@@ -100,6 +100,8 @@ export type Journey = {
   legs: Leg[];
   /** Starts on board the vehicle the search was made from */
   aboard?: boolean;
+  /** Its first ride is caught only by hurrying to it */
+  hurry?: boolean;
 };
 
 /** A vehicle to plan from as though on board, with its route if known */

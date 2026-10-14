@@ -63,7 +63,8 @@ origins in `COMMUTERLVIV_ORIGINS`. Everything it downloads or learns lives in
   by arrival, each ride marked live, timetabled or on a vehicle's next trip,
   with the backups behind each ride should you miss it. Sort by fastest, less
   walking, fewer changes or most backups, set your walking speed, or plan for
-  later. An answer that looks
+  later. A bus you would just miss is offered as one to hurry for, and you can
+  set how fast you would hurry. An answer that looks
   wrong can be reported, and is kept with the live data it ran on. Follow an
   option and it tells you what to do next as you go - which stop to walk to,
   when the vehicle is due, where to get off - from where you are, which stays

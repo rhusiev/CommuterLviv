@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { lang, setLang, t } from "../lib/i18n";
-import { heldSpeed, holdSpeed } from "../lib/walking";
+import { HURRY_KMH, heldHurry, heldSpeed, holdHurry, holdSpeed } from "../lib/walking";
 import { Speed } from "./Speed";
 
 /** Everything that belongs to the account rather than to the map. Signing out
@@ -13,6 +13,11 @@ type Props = {
 
 export function AccountMenu(p: Props) {
   const [speed, setSpeed] = useState(heldSpeed);
+  const [hurry, setHurry] = useState(heldHurry);
+  const keepHurry = (v: number | null) => {
+    setHurry(v);
+    holdHurry(v);
+  };
   return (
     <div className="flex flex-col gap-1">
       <p className="truncate px-2 py-1 text-sm font-medium text-slate-200">{p.username}</p>
@@ -43,6 +48,24 @@ export function AccountMenu(p: Props) {
         />
       </div>
       <p className="px-2 text-xs text-slate-500">{t.walkSpeedHint}</p>
+      <h2 className="mt-1 px-2 text-xs uppercase tracking-wide text-slate-500">
+        {t.hurrySpeed}
+      </h2>
+      <div className="flex items-center gap-2 px-1">
+        {hurry === null ? (
+          <button onClick={() => keepHurry(Math.max(speed, HURRY_KMH.min))} className="btn-quiet px-2 text-sm">
+            {t.hurryOn}
+          </button>
+        ) : (
+          <>
+            <Speed kmh={hurry} onKmh={keepHurry} range={HURRY_KMH} />
+            <button onClick={() => keepHurry(null)} className="btn-quiet px-2 text-sm">
+              {t.hurryOff}
+            </button>
+          </>
+        )}
+      </div>
+      <p className="px-2 text-xs text-slate-500">{t.hurrySpeedHint}</p>
       <hr className="my-1 border-hair" />
       <button
         onClick={p.onOut}

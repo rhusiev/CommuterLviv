@@ -109,17 +109,20 @@ export const api = {
     call(`/api/vehicle?veh=${veh}`),
   /** `at` in unix seconds leaves at that time instead of now; a future one has
    * no vehicles to see, so every leg comes back on the timetable. `speed` is
-   * how fast you walk on the level, in km/h. From `{ veh }` the journey
+   * how fast you walk on the level, in km/h, and `hurry` how fast you would
+   * to catch a bus, null for not at all. From `{ veh }` the journey
    * starts on board that vehicle, and only its id leaves the device */
   plan: (
     from: [number, number] | { veh: number },
     to: [number, number],
     at: number | null,
     speed: number,
+    hurry: number | null,
   ): Promise<Plan> =>
     call(
       `/api/plan?${"veh" in from ? `veh=${from.veh}` : `from=${from[0]},${from[1]}`}` +
         `&to=${to[0]},${to[1]}&speed=${speed}` +
+        (hurry ? `&hurry=${hurry}` : "") +
         (at ? `&at=${Math.round(at)}` : ""),
     ),
   /** Keeps the search `id` names, with what it ran on, for a look at why it

@@ -92,8 +92,13 @@ Map<String, Object> _ride(
   'backups': backups,
 };
 
-Map<String, Object> _journey(Map<String, Object> ride, {int backup = 0}) => {
+Map<String, Object> _journey(
+  Map<String, Object> ride, {
+  int backup = 0,
+  bool hurry = false,
+}) => {
   'dep': 0,
+  'hurry': hurry,
   'arr': (ride['arr']! as int) + 60,
   'rides': 1,
   'live': true,
@@ -138,6 +143,7 @@ Future<HttpServer> _serve(List<Uri> asked) async {
               ],
             ),
             backup: 1,
+            hurry: true,
           ),
         ],
       },
@@ -209,6 +215,31 @@ void main() {
   ) async {
     await pump(tester, prefs: {'commuterlviv.walk': 30.0});
     expect(find.text(txt.kmh(walkKmh.usual)), findsOneWidget);
+  });
+
+  testWidgets('a hurrying speed is sent once set, and flags an option', (
+    tester,
+  ) async {
+    final faked = HttpOverrides.current;
+    HttpOverrides.global = null;
+    addTearDown(() => HttpOverrides.global = faked);
+    final asked = <Uri>[];
+    final server = (await tester.runAsync(() => _serve(asked)))!;
+    addTearDown(() => server.close(force: true));
+    await pump(
+      tester,
+      prefs: {'commuterlviv.hurry': 9.0},
+      server: 'http://${server.address.host}:${server.port}',
+      catalog: _twoLines,
+      from: const LatLng(49.84, 24.03),
+      to: const LatLng(49.81, 24.05),
+    );
+
+    await tester.tap(find.text(txt.findRoute));
+    await _until(tester, () => tester.any(find.text(' · ${txt.hurry}')));
+
+    expect(asked.single.queryParameters['hurry'], '9.0');
+    expect(find.text(' · ${txt.hurry}'), findsOneWidget);
   });
 
   testWidgets('an end offers where I am and the map before a search', (

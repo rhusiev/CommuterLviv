@@ -8,6 +8,7 @@ This is also where `plan.py`'s stop numbering is translated into the catalog's,
 which is what the wire uses.
 """
 import asyncio
+import dataclasses
 import time
 from itertools import zip_longest
 
@@ -18,6 +19,7 @@ from .. import network, plan, replay, walk as footpaths
 from . import geometry
 
 DETAIL = 4.0    # m a drawn leg may stray from the real line
+HURRIED = 1     # the leg a hurried journey hurries to: the ride after its first walk
 
 
 class Planner:
@@ -42,11 +44,13 @@ class Planner:
             return None
         return cls(tt, walk, transfers, cat)
 
-    def search(self, origin, dest, arrivals, now=None, speed=None):
+    def search(self, origin, dest, arrivals, now=None, speed=None,
+               hurry=None):
         """Ranked journeys, on the wire, and as `plan` found them. Call it
         from a worker thread: a city-wide search is half a second of Python.
         `speed` is how fast the traveller walks on the level, in km/h,
-        `walk.SPEED` by default.
+        `walk.SPEED` by default, and `hurry` how fast they would rather walk
+        than miss a bus, `speed` by default.
 
         A `now` in the future still gets the vehicles being tracked: the search
         keeps only their arrivals that lie ahead of it, so a trip starting in
@@ -56,12 +60,12 @@ class Planner:
         """
         now = time.time() if now is None else now
         found = self.journeys(origin, dest, arrivals, now, speed,
-                              now <= time.time() + replay.HORIZON)
-        path, between = self._drawing(origin, dest, arrivals, speed)
+                              now <= time.time() + replay.HORIZON, hurry)
+        path, between = self._drawing(origin, dest, arrivals, speed, hurry)
         return {"t": now,
                 "options": [self.wire(j, path, between) for j in found]}, found
 
-    def backup(self, origin, dest, arrivals, speed, j, leg, n):
+    def backup(self, origin, dest, arrivals, speed, hurry_kmh, j, leg, n):
         """Journey `j` taking the `n`-th backup of its `leg`-th leg as sent,
         on the wire as an option is: its legs up to the stop that one boards,
         then the backup's. None when `j` has no such backup."""
@@ -70,20 +74,32 @@ class Planner:
         backs = self._sent(j.backups[leg])
         if not 0 <= n < len(backs):
             return None
-        way = plan.Journey((*j.legs[:leg], *backs[n].legs()), j.backups[:leg],
-                           j.aboard and leg > 0)
-        return self.wire(way, *self._drawing(origin, dest, arrivals, speed))
+        kept = j.legs[:leg]
+        hurry = j.hurry and leg > HURRIED
+        if j.hurry and not hurry:
+            # the next bus needs no hurrying to
+            walk = kept[0]
+            kept = (dataclasses.replace(
+                walk, arr=walk.dep + (walk.arr - walk.dep) /
+                _hurry(speed, hurry_kmh)), *kept[1:])
+        way = plan.Journey((*kept, *backs[n].legs()), j.backups[:leg],
+                           j.aboard and leg > 0, hurry)
+        return self.wire(way, *self._drawing(origin, dest, arrivals, speed,
+                                             hurry_kmh))
 
-    def _drawing(self, origin, dest, arrivals, speed):
+    def _drawing(self, origin, dest, arrivals, speed, hurry=None):
         """What `wire` draws legs and lists the stops of rides with."""
         walk = self._paced(speed)[0]
+        # a hurried walk is shorter in time than the usual one along it
+        stretch = 1.0 / _hurry(speed, hurry)
         # options share their first and last walks, so each is drawn once
         paths = {}
 
         def path(leg):
             key = (leg.kind, leg.route, leg.a, leg.b)
             if key not in paths:
-                paths[key] = self._path(leg, origin, dest, arrivals, walk)
+                paths[key] = self._path(leg, origin, dest, arrivals, walk,
+                                        stretch)
             return paths[key]
 
         def between(leg):
@@ -91,11 +107,13 @@ class Planner:
 
         return path, between
 
-    def journeys(self, origin, dest, arrivals, now, speed, assess):
-        """`plan.journeys` for somebody walking at `speed`."""
+    def journeys(self, origin, dest, arrivals, now, speed, assess, hurry=None):
+        """`plan.journeys` for somebody walking at `speed`, and at `hurry` to
+        catch a bus."""
         walk, transfers = self._paced(speed)
         return plan.journeys(self.tt, walk, transfers, origin, dest, now,
-                             arrivals=arrivals, catalog=self.cat, assess=assess)
+                             arrivals=arrivals, catalog=self.cat, assess=assess,
+                             hurry=_hurry(speed, hurry))
 
     def _paced(self, speed):
         if speed is None:
@@ -107,13 +125,21 @@ class Planner:
         """`j` as sent; without `path`, its legs are not drawn, and without
         `between` its rides do not say where they call on the way. One
         starting on board says it is already being ridden."""
+        legs = j.legs
+        if j.hurry:
+            # at the stop as the bus leaves, should GRACE be what catches it
+            walk, ride = legs[0], legs[HURRIED]
+            legs = (dataclasses.replace(walk, arr=min(walk.arr, ride.dep)),
+                    *legs[1:])
         out = {"dep": int(j.dep), "arr": int(j.arr), "rides": j.rides,
                "live": j.live, "confidence": j.confidence,
                "backup": j.backup,
                "legs": [self._leg(x, path, between, b) for x, b in
-                        zip_longest(j.legs, j.backups, fillvalue=())]}
+                        zip_longest(legs, j.backups, fillvalue=())]}
         if j.aboard:
             out["aboard"] = True
+        if j.hurry:
+            out["hurry"] = True
         return out
 
     def _leg(self, leg, path, between, backups):
@@ -152,16 +178,17 @@ class Planner:
         s = self.tt.net.stops[self.tt.stops[i]]
         return s["lat"], s["lon"]
 
-    def _path(self, leg, origin, dest, arrivals, walk):
+    def _path(self, leg, origin, dest, arrivals, walk, stretch=1.0):
         """Where the leg goes: the footpath walked, or the stretch of the
-        route's line between boarding and alighting."""
+        route's line between boarding and alighting. A walk may have been
+        timed up to `stretch` times faster than `walk` goes."""
         return geometry.points(geometry.simplify(
-            self._line(leg, origin, dest, arrivals, walk), DETAIL))
+            self._line(leg, origin, dest, arrivals, walk, stretch), DETAIL))
 
-    def _line(self, leg, origin, dest, arrivals, walk):
+    def _line(self, leg, origin, dest, arrivals, walk, stretch=1.0):
         a, b = self._where(leg.a, origin), self._where(leg.b, dest)
         if leg.kind == "walk":
-            limit = (leg.arr - leg.dep) * 1.5 + 60.0
+            limit = (leg.arr - leg.dep) * stretch * 1.5 + 60.0
             return network.to_xy(*np.array(walk.path(a, b, limit)).T)
         stretch = self._stretch(leg.route, leg.a, leg.b)
         if stretch is not None:
@@ -285,3 +312,10 @@ async def arrange(state, net, cat, log):
         state.preparing = False
     if state.planner:
         log("planner: ready")
+
+
+def _hurry(speed, hurry):
+    """The share of the walk's time at `speed` it takes at `hurry`, both km/h
+    or None for the usual."""
+    usual = footpaths.SPEED * 3.6 if speed is None else speed
+    return 1.0 if hurry is None else min(usual / hurry, 1.0)

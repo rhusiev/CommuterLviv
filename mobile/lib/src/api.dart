@@ -231,7 +231,8 @@ class Api {
 
   /// Door to door, ranked by arrival. Half a second on the server, so ask once
   /// per search. [at] is unix seconds, up to 30 days ahead; null is now.
-  /// [speed] is how fast you walk on the level, in km/h. [report] is the id
+  /// [speed] is how fast you walk on the level, in km/h, and [hurry] how fast
+  /// you would to catch a bus, null for not at all. [report] is the id
   /// to [reportPlan] this search by, while the server still holds it.
   Future<({List<Journey> options, String? report})> plan(
     LatLng? from,
@@ -239,6 +240,7 @@ class Api {
     Aboard? aboard,
     int? at,
     required double speed,
+    double? hurry,
   }) async {
     // On board, only the vehicle's id leaves the device
     final origin = aboard != null
@@ -248,6 +250,7 @@ class Api {
       'GET',
       '/api/plan?$origin'
           '&to=${to.latitude},${to.longitude}&speed=$speed'
+          '${hurry == null ? '' : '&hurry=$hurry'}'
           '${at == null ? '' : '&at=$at'}',
     ) as Map<String, dynamic>;
     return (
@@ -394,6 +397,16 @@ class Api {
   );
 
   Future<void> setWalkSpeed(double kmh) => _keep('walk', kmh);
+
+  /// The pace a search hurries to the first stop at, in km/h; null is off.
+  double? get hurrySpeed => _setting<double?>(
+    'hurry',
+    null,
+    (v) => v != null && v >= hurryKmh.min && v <= hurryKmh.max,
+  );
+
+  Future<void> setHurrySpeed(double? kmh) =>
+      kmh == null ? _prefs.remove('commuterlviv.hurry') : _keep('hurry', kmh);
 
   /// Pinned stops, by feed id, kept server-side so phone and browser agree.
   Future<List<String>> pins() async {

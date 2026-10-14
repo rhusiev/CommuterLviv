@@ -113,6 +113,10 @@ class Strings {
     required this.leaveOn,
     required this.walkSpeed,
     required this.walkSpeedHint,
+    required this.hurrySpeed,
+    required this.hurrySpeedHint,
+    required this.hurry,
+    required this.hurryHint,
     required this.slower,
     required this.faster,
     required this.alsoOptionHint,
@@ -269,6 +273,10 @@ class Strings {
   final String leaveOn;
   final String walkSpeed;
   final String walkSpeedHint;
+  final String hurrySpeed;
+  final String hurrySpeedHint;
+  final String hurry;
+  final String hurryHint;
   final String slower;
   final String faster;
   final String alsoOptionHint;
@@ -420,6 +428,10 @@ const _en = Strings(
   leaveOn: 'Leave on',
   walkSpeed: 'Walking speed',
   walkSpeedHint: 'On flat ground - hills are taken into account',
+  hurrySpeed: 'Hurrying speed',
+  hurrySpeedHint: 'How fast you would walk to catch a bus. Off, only a bus you would miss by seconds is offered as one to hurry for',
+  hurry: 'Hurry',
+  hurryHint: 'Only hurrying to the first stop catches this bus',
   slower: 'Slower',
   faster: 'Faster',
   alsoOptionHint: 'This way is also among the options',
@@ -607,6 +619,10 @@ const _uk = Strings(
   leaveOn: 'Виїзд',
   walkSpeed: 'Швидкість ходьби',
   walkSpeedHint: 'По рівному - схили враховано',
+  hurrySpeed: 'Швидкість, коли поспішаєте',
+  hurrySpeedHint: 'Як швидко ви йшли б, щоб встигнути на автобус. Вимкнено - пропонуємо поспішити лише на той, що ви пропустили б на секунди',
+  hurry: 'Поспішіть',
+  hurryHint: 'На цей автобус встигнете, лише якщо поспішите до першої зупинки',
   slower: 'Повільніше',
   faster: 'Швидше',
   alsoOptionHint: 'Цей шлях є і серед варіантів',

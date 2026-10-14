@@ -11,7 +11,7 @@ import {
   ranked,
   type Prefer,
 } from "../lib/prefer";
-import { heldSpeed } from "../lib/walking";
+import { heldHurry, heldSpeed } from "../lib/walking";
 import { Backups, type WayPick } from "./Backups";
 import { Icon, type IconName } from "./Icon";
 import { RouteBadge } from "./RouteBadge";
@@ -153,6 +153,7 @@ export function JourneyPanel({
         [to.lat, to.lon],
         aboard ? null : at,
         speed,
+        heldHurry(),
       );
       setOptions(got.options);
       setReport(got.report ?? null);
@@ -609,6 +610,14 @@ function Option({
             : changes === 0
               ? t.noChange
               : t.changeCount(changes)}
+          {journey.hurry && (
+            <>
+              {" · "}
+              <span title={t.hurryHint} className="text-amber-400">
+                {t.hurry}
+              </span>
+            </>
+          )}
           {journey.rides > 0 && journey.backup > 0 && (
             <>
               {" · "}
