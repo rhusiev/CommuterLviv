@@ -41,7 +41,18 @@ DAY = 86400.0
 # quadratic in it; the search's own limit is the pure walk
 TRANSFER_CAP = 900.0
 
-CHANGE = 60.0   # s of slack per change, over and above the walk
+# s of slack a change needs over and above the walk, by how far ahead it is:
+# the forecasts of both vehicles miss by more the further out they are. Measured
+# on a replay of 2026-09-16..21 (docs/service.md): each is where fewer than 1 in
+# 10 changes between two tracked vehicles broke (1 in 10 is chosen, not
+# derived), at the middle of its band of 0-2/2-5/5-10/10-15/15-20/20-30/30-45
+# min ahead, and read between them
+CHANGE_AHEAD = (60.0, 210.0, 450.0, 750.0, 1050.0, 1500.0, 2250.0)
+CHANGE_SLACK = (90.0, 120.0, 180.0, 240.0, 300.0, 360.0, 420.0)
+# the same, per whole second ahead, for the scan's inner loop; past the last
+# band the slack stays at its last
+_SLACK_BY_S = np.interp(np.arange(int(CHANGE_AHEAD[-1]) + 1), CHANGE_AHEAD,
+                        CHANGE_SLACK).tolist()
 
 ROUNDS = 3      # rides per journey; a fourth round costs as much as the first three
 
@@ -568,7 +579,7 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
         hops = _corridor(hops, transfers, egress, caps[0],
                          [(u, start + t) for u, t in soonest.items()], hi)
         scan = _Profile(hops, trips, trust, transfers, egress, caps, rounds,
-                        covered)
+                        covered, now)
         found = scan.options(access, start)
         more = scan.near(access, start, found)
         if trip is None:
@@ -644,7 +655,7 @@ def _on(tt, trip, found, now):
             on = dataclasses.replace(rest[0], dep=now,
                                      a=rest[0].a if before is None else before)
             rest, backs = rest[1:], backs[1:]
-        elif _rushed(rest, at):
+        elif _rushed(rest, at, now):
             continue
         legs = rest if on is None else (on, *rest)
         if not legs:
@@ -655,14 +666,19 @@ def _on(tt, trip, found, now):
     return out
 
 
-def _rushed(legs, at):
+def change_slack(ahead):
+    """Seconds of slack a change `ahead` s from now needs (`CHANGE_SLACK`)."""
+    return _SLACK_BY_S[min(max(int(ahead), 0), len(_SLACK_BY_S) - 1)]
+
+
+def _rushed(legs, at, now):
     """Whether the first ride of `legs`, after getting off at `at`, leaves
     sooner than a change allows."""
     k = next((i for i, leg in enumerate(legs) if leg.kind == "ride"), None)
     if k is None:
         return False
     ready = legs[k - 1].arr if k else at
-    return legs[k].dep < ready + CHANGE
+    return legs[k].dep < ready + change_slack(ready - now)
 
 
 def _before(tt, trip):
@@ -704,11 +720,13 @@ class _Profile:
     boarding.
 
     Tracked vehicles ride at their predictions, and a scheduled departure a
-    tracked vehicle is running is not boarded.
+    tracked vehicle is running is not boarded. A change needs the slack its
+    time ahead of `now` does (`change_slack`).
     """
 
     def __init__(self, hops, trips, trust, transfers, egress, caps, rounds,
-                 covered):
+                 covered, now):
+        self.now = now
         self.hops, self.trips, self.trust = hops, trips, trust
         self.transfers, self.egress = transfers, egress
         self.caps, self.rounds = caps, rounds
@@ -719,7 +737,7 @@ class _Profile:
         self.via = {}
         # stop -> latest first: -departure, (door, hop)
         self.deps, self.profile = {}, {}
-        self.steps = {}     # stop -> (seconds to board, stop, walked, caps allowing it)
+        self.steps = {}     # stop -> (walked, stop, caps allowing it)
         self.boards = []    # every (stop, departure, hop) boarded
         self.beside = {}    # stop -> see `_beside`
         for c, (u, v, d, a, t) in enumerate(zip(*hops)):
@@ -751,9 +769,11 @@ class _Profile:
         rounds, deps, profile = self.rounds, self.deps, self.profile
         if (steps := self.steps.get(v)) is None:
             steps = self.steps[v] = sorted(
-                (x + CHANGE, w, x, sum(x <= y for y in self.caps))
+                (x, w, sum(x <= y for y in self.caps))
                 for w, x in [(v, 0.0), *self.transfers.near(v, self.caps[0])])
-        for x, w, walk, ok in steps:
+        slack = change_slack(a - self.now)
+        for walk, w, ok in steps:
+            x = walk + slack
             # a slot of a shorter cap is never ahead of a longer one's
             if a + x >= door[(ok - 1) * rounds + 1]:
                 break
