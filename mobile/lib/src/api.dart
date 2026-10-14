@@ -378,6 +378,13 @@ class Api {
 
   Future<void> setFollowAway(bool on) => _keep('followAway', on);
 
+  /// The journey followed, as `Followed` keeps it; null while none is
+  String? get followed => _setting<String?>('following', null);
+
+  Future<void> setFollowed(String? json) => json == null
+      ? _prefs.remove('commuterlviv.following')
+      : _keep('following', json);
+
   /// Null means the phone's own, which is what `main` falls back to.
   String? get language => _setting<String?>('lang', null);
 

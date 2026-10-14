@@ -3,6 +3,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math' show max;
 
 import 'package:flutter/material.dart' hide Theme;
 import 'package:flutter/material.dart' as material show Theme;
@@ -18,6 +19,8 @@ import 'strings.dart';
 import 'theme.dart';
 
 const _mPerKm = 1000;
+const _kmhPerMps = 3.6;
+const _msPerS = 1000;
 
 /// Short distances are said to this many metres
 const _stepM = 10;
@@ -37,8 +40,13 @@ class FollowCard extends StatefulWidget {
     required this.journey,
     required this.live,
     required this.here,
+    required this.walkSpeed,
+    required this.hurrySpeed,
     required this.away,
+    required this.onMoved,
+    required this.onSearch,
     required this.onEnd,
+    this.stage,
   });
 
   final Catalog catalog;
@@ -46,8 +54,21 @@ class FollowCard extends StatefulWidget {
   final Live live;
   final Here here;
 
+  /// In km/h; [hurrySpeed] is null while hurrying is off
+  final double walkSpeed;
+  final double? hurrySpeed;
+
+  /// Where on the journey to start from, as held from an earlier run
+  final Stage? stage;
+
   /// Whether to go on with the app off the screen, on a notification
   final bool away;
+
+  /// The follower moved on to another stage
+  final void Function(Stage) onMoved;
+
+  /// Another way is asked for, from where the follower is
+  final void Function(Stage) onSearch;
   final VoidCallback onEnd;
 
   @override
@@ -55,8 +76,10 @@ class FollowCard extends StatefulWidget {
 }
 
 class _FollowCardState extends State<FollowCard> {
-  late Follower _follower = Follower(widget.journey, widget.catalog);
+  late Follower _follower = _start();
   Progress? _progress;
+  var _watch = Watch();
+  Catch _caught = const Catch(CatchKind.ok);
 
   /// Every step of the journey is listed
   bool _steps = false;
@@ -65,8 +88,8 @@ class _FollowCardState extends State<FollowCard> {
   /// is not sent on
   String? _noticed;
 
-  /// The moments already sounded for: getting off soon, past the stop,
-  /// arrived - each once per leg
+  /// The moments already sounded for: getting off soon, past the stop, the
+  /// next ride caught only by hurrying or missed, arrived - each once per leg
   final _alerted = <String>{};
 
   @override
@@ -82,8 +105,10 @@ class _FollowCardState extends State<FollowCard> {
   void didUpdateWidget(FollowCard old) {
     super.didUpdateWidget(old);
     if (old.journey != widget.journey) {
-      _follower = Follower(widget.journey, widget.catalog);
+      _follower = _start();
       _progress = null;
+      _watch = Watch();
+      _caught = const Catch(CatchKind.ok);
       _noticed = null;
       _alerted.clear();
     }
@@ -104,6 +129,19 @@ class _FollowCardState extends State<FollowCard> {
     widget.live.removeListener(_redraw);
     if (widget.away) _goAway(false);
     super.dispose();
+  }
+
+  Follower _start() => Follower(widget.journey, widget.catalog, widget.stage);
+
+  /// Whether the next ride to board is still caught, from the latest arrivals
+  void _judge() {
+    final mps = widget.walkSpeed / _kmhPerMps;
+    final hurryMps = max(widget.hurrySpeed ?? 0, widget.walkSpeed) / _kmhPerMps;
+    int? due(int stop, int veh) =>
+        widget.live.arrivals[stop]?.where((a) => a.veh == veh).firstOrNull?.t;
+    final now = DateTime.now().millisecondsSinceEpoch / _msPerS;
+    final reach = _follower.reach(due, now, mps, hurryMps);
+    _caught = _watch.update(reach, _follower.progress.stage, now);
   }
 
   void _goAway(bool on) {
@@ -132,22 +170,38 @@ class _FollowCardState extends State<FollowCard> {
     if (!widget.away || progress == null) return;
     final said = _said(progress);
     final leg = progress.stage.leg;
-    final moment = switch (progress) {
-      Progress(stage: Stage(kind: StageKind.arrived)) => 'arrived',
-      Progress(passed: true) => 'passed $leg',
-      Progress(soon: true) => 'soon $leg',
-      _ => null,
-    };
-    final alert = moment != null && _alerted.add(moment);
-    final text = '${said.head}\n${said.line}';
+    final caught = _caught;
+    // Getting off soon is when a change ahead needing hurrying shows up
+    final moments = [
+      ?switch (progress) {
+        Progress(stage: Stage(kind: StageKind.arrived)) => 'arrived',
+        Progress(passed: true) => 'passed $leg',
+        Progress(soon: true) => 'soon $leg',
+        _ => null,
+      },
+      ?switch (caught.kind) {
+        CatchKind.ok => null,
+        CatchKind.hurry => 'hurry ${caught.leg} ${caught.riding}',
+        CatchKind.missed => 'missed ${caught.leg}',
+      },
+    ];
+    var alert = false;
+    for (final m in moments) {
+      alert = _alerted.add(m) || alert;
+    }
+    final line = [
+      if (said.line.isNotEmpty) said.line,
+      ?_catchSaid(widget.catalog, widget.journey, caught),
+    ].join('\n');
+    final text = '${said.head}\n$line';
     if (!alert && text == _noticed) return;
     _noticed = text;
-    unawaited(widget.here.notice(said.head, said.line, alert: alert));
+    unawaited(widget.here.notice(said.head, line, alert: alert));
   }
 
   /// The arrivals moved on, so the times said are redrawn.
   void _redraw() {
-    setState(() {});
+    setState(_judge);
     _notice();
   }
 
@@ -168,8 +222,9 @@ class _FollowCardState extends State<FollowCard> {
       final p = sample(v, now);
       seen.add(Seen(id: id, route: v.route, lat: p.lat, lon: p.lon));
     }
-    setState(
-      () => _progress = _follower.update(
+    final at = _follower.progress.stage;
+    setState(() {
+      _progress = _follower.update(
         Fix(
           lat: fix.point.latitude,
           lon: fix.point.longitude,
@@ -177,8 +232,11 @@ class _FollowCardState extends State<FollowCard> {
           t: fix.t,
         ),
         seen,
-      ),
-    );
+      );
+      _judge();
+    });
+    final stage = _follower.progress.stage;
+    if (stage != at) widget.onMoved(stage);
     _notice();
   }
 
@@ -244,6 +302,17 @@ class _FollowCardState extends State<FollowCard> {
                       ),
               ],
             ),
+            if (!done && _caught.kind != CatchKind.ok)
+              _CatchRow(
+                said: _catchSaid(widget.catalog, widget.journey, _caught)!,
+                missed: _caught.kind == CatchKind.missed,
+                action: _caught.kind == CatchKind.missed
+                    ? txt.planAgain
+                    : _caught.riding
+                    ? txt.findAnother
+                    : null,
+                onTap: () => widget.onSearch(_follower.progress.stage),
+              ),
             if (_steps)
               _Steps(
                 catalog: widget.catalog,
@@ -252,6 +321,63 @@ class _FollowCardState extends State<FollowCard> {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The next ride to board caught only by hurrying, or missed, or null when
+/// it is caught. Hurrying is urged only on foot; on a ride it is a warning.
+String? _catchSaid(Catalog catalog, Journey journey, Catch caught) {
+  if (caught.kind == CatchKind.ok) return null;
+  final leg = journey.legs[caught.leg];
+  final route = _routeOf(catalog, leg.route)?.short ?? '';
+  final stop = _stopName(catalog, leg.a);
+  if (caught.kind == CatchKind.missed) {
+    return '${txt.noLonger}: ${txt.missedRide(route, stop)}';
+  }
+  return caught.riding
+      ? txt.hurryAhead(route, stop)
+      : txt.hurryNow(route, countdown(caught.dep.round()));
+}
+
+/// What the watch on the next connection says, with a way to find another
+/// where there is one to offer
+class _CatchRow extends StatelessWidget {
+  const _CatchRow({
+    required this.said,
+    required this.missed,
+    required this.action,
+    required this.onTap,
+  });
+
+  final String said;
+  final bool missed;
+  final String? action;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = material.Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.only(top: 8),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: hair)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              said,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: missed ? theme.colorScheme.error : Colors.amber,
+              ),
+            ),
+          ),
+          if (action case final action?)
+            TextButton(onPressed: onTap, child: Text(action)),
+        ],
       ),
     );
   }

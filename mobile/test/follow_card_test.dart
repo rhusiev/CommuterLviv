@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:commuterlviv/src/api.dart';
 import 'package:commuterlviv/src/eta.dart';
+import 'package:commuterlviv/src/follow.dart' show Stage, StageKind;
 import 'package:commuterlviv/src/follow_card.dart';
 import 'package:commuterlviv/src/here.dart';
 import 'package:commuterlviv/src/live.dart';
@@ -53,6 +54,35 @@ final journey = Journey(
     ),
   ],
 );
+
+/// Far enough ahead that walking to the stop at any pace catches the ride
+const _aheadS = 3600;
+
+/// [journey] with its ride leaving [_aheadS] from now, so it is caught
+Journey caught() {
+  final dep = DateTime.now().millisecondsSinceEpoch ~/ 1000 + _aheadS;
+  return Journey(
+    dep: journey.dep,
+    arr: journey.arr,
+    rides: journey.rides,
+    live: journey.live,
+    confidence: journey.confidence,
+    legs: [
+      for (final l in journey.legs)
+        l.kind == 'ride'
+            ? Leg(
+                kind: l.kind,
+                dep: dep,
+                arr: dep,
+                a: l.a,
+                b: l.b,
+                route: l.route,
+                pts: l.pts,
+              )
+            : l,
+    ],
+  );
+}
 
 final catalog = Catalog(
   routes: const [
@@ -107,6 +137,7 @@ Future<FakeHere> pump(
   WidgetTester tester, {
   required bool away,
   Journey? following,
+  void Function(Stage)? onSearch,
 }) async {
   SharedPreferences.setMockInitialValues({});
   FlutterSecureStorage.setMockInitialValues({});
@@ -120,7 +151,11 @@ Future<FakeHere> pump(
           journey: following ?? journey,
           live: Live(api, onRenewed: () {}),
           here: here,
+          walkSpeed: walkKmh.usual,
+          hurrySpeed: null,
           away: away,
+          onMoved: (_) {},
+          onSearch: onSearch ?? (_) {},
           onEnd: () {},
         ),
       ),
@@ -159,9 +194,27 @@ Future<void> travel(WidgetTester tester, FakeHere here) async {
 void main() {
   testWidgets('away, the notification sounds once to get off and once on '
       'arrival', (tester) async {
-    final here = await pump(tester, away: true);
+    final here = await pump(tester, away: true, following: caught());
     await travel(tester, here);
     expect(here.alerts, [txt.offSoon('Stop 1'), txt.arrived]);
+  });
+
+  testWidgets('a ride that will be missed sounds once and offers another '
+      'search', (tester) async {
+    final searched = <Stage>[];
+    final here = await pump(tester, away: true, onSearch: searched.add);
+    for (var n = 0.0; n <= 100; n += 25) {
+      here.move(0, n);
+      await tester.pump();
+    }
+
+    expect(here.alerts, [txt.walkTo('Stop 0')]);
+    expect(
+      find.text('${txt.noLonger}: ${txt.missedRide('7', 'Stop 0')}'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text(txt.planAgain));
+    expect(searched.single.kind, StageKind.walk);
   });
 
   testWidgets('away, a fix that changes nothing said is not sent on', (

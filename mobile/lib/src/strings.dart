@@ -149,6 +149,12 @@ class Strings {
     required this.toGo,
     required this.passedStop,
     required this.offTheWay,
+    required this.hurryNow,
+    required this.hurryAhead,
+    required this.noLonger,
+    required this.missedRide,
+    required this.findAnother,
+    required this.planAgain,
     required this.followAway,
     required this.followAwayHint,
     required this.followChannel,
@@ -310,6 +316,15 @@ class Strings {
   final String passedStop;
   final String offTheWay;
 
+  /// What the watch on the next connection says: hurry while walking to it,
+  /// a change ahead that needs hurrying, or a ride that will be missed
+  final String Function(String route, String left) hurryNow;
+  final String Function(String route, String stop) hurryAhead;
+  final String noLonger;
+  final String Function(String route, String stop) missedRide;
+  final String findAnother;
+  final String planAgain;
+
   /// The switch that keeps a journey followed with the app off the screen
   final String followAway;
   final String followAwayHint;
@@ -467,6 +482,12 @@ const _en = Strings(
   toGo: _enToGo,
   passedStop: 'You have passed your stop',
   offTheWay: 'You are off the planned way',
+  hurryNow: _enHurryNow,
+  hurryAhead: _enHurryAhead,
+  noLonger: 'This journey no longer works',
+  missedRide: _enMissedRide,
+  findAnother: 'Find another way',
+  planAgain: 'Search again',
   followAway: 'Follow with the app closed',
   followAwayHint: 'Follows with the screen off and shows the next step in a notification. Your location stays on this phone.',
   followChannel: 'Journey being followed',
@@ -518,6 +539,12 @@ String _enWaitAt(String stop) => 'Wait at $stop';
 String _enDueIn(String when) => 'Due: $when';
 String _enOffAt(String stop) => 'Get off at $stop';
 String _enOffSoon(String stop) => 'Get ready to get off at $stop';
+String _enHurryNow(String route, String left) =>
+    'Hurry: $route leaves in $left';
+String _enHurryAhead(String route, String stop) =>
+    '$route at $stop is caught only by hurrying';
+String _enMissedRide(String route, String stop) =>
+    '$route at $stop will be missed';
 String _enToGo(String distance) => '$distance to go';
 String _enMetres(int m) => '$m m';
 String _enKm(double km) => '${km.toStringAsFixed(1)} km';
@@ -656,6 +683,12 @@ const _uk = Strings(
   toGo: _ukToGo,
   passedStop: 'Ви проїхали свою зупинку',
   offTheWay: 'Ви зійшли з запланованого шляху',
+  hurryNow: _ukHurryNow,
+  hurryAhead: _ukHurryAhead,
+  noLonger: 'Цей шлях більше не працює',
+  missedRide: _ukMissedRide,
+  findAnother: 'Знайти інший шлях',
+  planAgain: 'Шукати знову',
   followAway: 'Супровід із закритим застосунком',
   followAwayHint: 'Супроводжує з вимкненим екраном і показує наступний крок у сповіщенні. Де ви є, лишається на цьому телефоні.',
   followChannel: 'Поїздка, яку супроводжують',
@@ -708,6 +741,12 @@ String _ukWaitAt(String stop) => 'Чекайте на зупинці $stop';
 String _ukDueIn(String when) => 'Прибуде: $when';
 String _ukOffAt(String stop) => 'Виходьте на зупинці $stop';
 String _ukOffSoon(String stop) => 'Готуйтеся виходити на зупинці $stop';
+String _ukHurryNow(String route, String left) =>
+    'Поспішіть: $route відходить через $left';
+String _ukHurryAhead(String route, String stop) =>
+    'На $route на зупинці $stop встигнете, лише якщо поспішите';
+String _ukMissedRide(String route, String stop) =>
+    'На $route на зупинці $stop не встигнете';
 String _ukToGo(String distance) => 'Ще $distance';
 String _ukMetres(int m) => '$m м';
 String _ukKm(double km) => '${km.toStringAsFixed(1).replaceAll('.', ',')} км';
