@@ -28,12 +28,15 @@ Future<void> pump(
   Aboard? aboard,
   LatLng? to,
   void Function(Journey? journey)? onShow,
+  bool ask = false,
+  VoidCallback? onAsked,
 }) async {
   SharedPreferences.setMockInitialValues(prefs);
   FlutterSecureStorage.setMockInitialValues({});
   final api = await Api.open();
   if (server != null) await api.setBase(server);
   var folded = false;
+  var asking = ask;
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
@@ -57,6 +60,11 @@ Future<void> pump(
             onPlace: (_, _) {},
             onShow: onShow ?? (_) {},
             onFollow: (_) {},
+            ask: asking,
+            onAsked: () => setState(() {
+              asking = false;
+              onAsked?.call();
+            }),
           ),
         ),
       ),
@@ -92,8 +100,13 @@ Map<String, Object> _ride(
   'backups': backups,
 };
 
-Map<String, Object> _journey(Map<String, Object> ride, {int backup = 0}) => {
+Map<String, Object> _journey(
+  Map<String, Object> ride, {
+  int backup = 0,
+  bool hurry = false,
+}) => {
   'dep': 0,
+  'hurry': hurry,
   'arr': (ride['arr']! as int) + 60,
   'rides': 1,
   'live': true,
@@ -138,6 +151,7 @@ Future<HttpServer> _serve(List<Uri> asked) async {
               ],
             ),
             backup: 1,
+            hurry: true,
           ),
         ],
       },
@@ -209,6 +223,31 @@ void main() {
   ) async {
     await pump(tester, prefs: {'commuterlviv.walk': 30.0});
     expect(find.text(txt.kmh(walkKmh.usual)), findsOneWidget);
+  });
+
+  testWidgets('a hurrying speed is sent once set, and flags an option', (
+    tester,
+  ) async {
+    final faked = HttpOverrides.current;
+    HttpOverrides.global = null;
+    addTearDown(() => HttpOverrides.global = faked);
+    final asked = <Uri>[];
+    final server = (await tester.runAsync(() => _serve(asked)))!;
+    addTearDown(() => server.close(force: true));
+    await pump(
+      tester,
+      prefs: {'commuterlviv.hurry': 9.0},
+      server: 'http://${server.address.host}:${server.port}',
+      catalog: _twoLines,
+      from: const LatLng(49.84, 24.03),
+      to: const LatLng(49.81, 24.05),
+    );
+
+    await tester.tap(find.text(txt.findRoute));
+    await _until(tester, () => tester.any(find.text(' · ${txt.hurry}')));
+
+    expect(asked.single.queryParameters['hurry'], '9.0');
+    expect(find.text(' · ${txt.hurry}'), findsOneWidget);
   });
 
   testWidgets('an end offers where I am and the map before a search', (
@@ -426,5 +465,38 @@ void main() {
     expect(asked.single.path, '/api/plan');
     expect(asked.single.queryParameters.keys.toSet(), {'veh', 'to', 'speed'});
     expect(asked.single.queryParameters['veh'], '12');
+  });
+
+  testWidgets('a search asked for runs once, as soon as both ends are set', (
+    tester,
+  ) async {
+    final faked = HttpOverrides.current;
+    HttpOverrides.global = null;
+    addTearDown(() => HttpOverrides.global = faked);
+    final asked = <Uri>[];
+    var told = 0;
+    final server = (await tester.runAsync(() => _serve(asked)))!;
+    addTearDown(() => server.close(force: true));
+    Future<void> ask(LatLng? to) => pump(
+      tester,
+      server: 'http://${server.address.host}:${server.port}',
+      catalog: _twoLines,
+      aboard: const Aboard(12, 1),
+      to: to,
+      ask: true,
+      onAsked: () => told++,
+    );
+
+    await ask(null);
+    await _until(tester, () => asked.isNotEmpty);
+    expect(asked, isEmpty);
+    expect(told, 0);
+
+    await ask(const LatLng(49.81, 24.05));
+    await _until(tester, () => asked.isNotEmpty);
+    await _until(tester, () => asked.length > 1);
+
+    expect(asked.single.path, '/api/plan');
+    expect(told, 1);
   });
 }

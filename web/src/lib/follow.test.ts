@@ -1,5 +1,16 @@
 import { describe, expect, test } from "vitest";
-import { Follower, followable, type Progress, type Seen } from "./follow";
+import {
+  Follower,
+  GRACE_S,
+  Watch,
+  followable,
+  judge,
+  type Due,
+  type Progress,
+  type Reach,
+  type Seen,
+  type Stage,
+} from "./follow";
 import type { Catalog, Journey } from "./types";
 
 const LAT0 = 49.84;
@@ -309,5 +320,173 @@ describe("follow", () => {
         legs: [{ kind: "walk", dep: 0, arr: 0, a: -1, b: -1 }],
       }),
     ).toBe(false);
+  });
+});
+
+/** The second ride's route and vehicle, and when it is timetabled to leave */
+const NEXT_ROUTE = 9;
+const NEXT = 52;
+const NEXT_DEP = 1000;
+/** Metres a second: walking, and hurrying at twice that */
+const MPS = 1;
+const HURRY_MPS = 2 * MPS;
+
+/** The journey above, but from the end of the ride 200 m on north to a stop
+ * on route 9, 2 km east on it and 200 m back south to the door */
+const changing = (): Journey => {
+  const j = journey();
+  return {
+    ...j,
+    rides: 2,
+    legs: [
+      ...j.legs.slice(0, 2),
+      { kind: "walk", dep: 0, arr: 0, a: 2, b: 4, pts: [at(2000, 200), at(2000, 400)] },
+      {
+        kind: "ride",
+        dep: NEXT_DEP,
+        arr: 0,
+        a: 4,
+        b: 5,
+        route: NEXT_ROUTE,
+        veh: NEXT,
+        pts: [at(2000, 400), at(4000, 400)],
+      },
+      { kind: "walk", dep: 0, arr: 0, a: 5, b: -1, pts: [at(4000, 400), at(4000, 200)] },
+    ],
+  };
+};
+
+/** The predictions: each stop's vehicle and when it gets there */
+const predicted =
+  (...says: [stop: number, veh: number, t: number][]): Due =>
+  (stop, veh) =>
+    says.find(([s, v]) => s === stop && v === veh)?.[2];
+
+const riding: Stage = { kind: "ride", leg: 1, veh: PLANNED };
+
+/** Reach `late` seconds after the vehicle leaves at the usual pace, and
+ * `hurriedLate` at the hurrying one */
+const reach = (late: number, hurriedLate = late, live = true): Reach => ({
+  leg: 3,
+  dep: NEXT_DEP,
+  live,
+  usual: NEXT_DEP + late,
+  hurried: NEXT_DEP + hurriedLate,
+});
+
+describe("the next connection", () => {
+  test("walking to the stop is timed from the metres left", () => {
+    const trip = new Trip(changing());
+    trip.fix(at(0, 50));
+
+    const r = trip.follower.reach(predicted(), 0, MPS, HURRY_MPS)!;
+
+    expect(r.leg).toBe(1);
+    expect(r.usual).toBeCloseTo(150);
+    expect(r.hurried).toBeCloseTo(75);
+    expect(r.live).toBe(false);
+  });
+
+  test("on a ride the change is timed from when the vehicle ridden gets off", () => {
+    const off = 700;
+    const follower = new Follower(changing(), catalog, riding);
+
+    const r = follower.reach(predicted([2, PLANNED, off], [4, NEXT, 950]), 0, MPS, HURRY_MPS)!;
+
+    expect(r).toMatchObject({ leg: 3, dep: 950, live: true });
+    expect(r.usual).toBeCloseTo(off + 200);
+    expect(r.hurried).toBeCloseTo(off + 100);
+  });
+
+  test("an untracked next ride goes by its timetable", () => {
+    const follower = new Follower(changing(), catalog, riding);
+
+    const r = follower.reach(predicted([2, PLANNED, 0]), 0, MPS, HURRY_MPS)!;
+
+    expect(r.dep).toBe(NEXT_DEP);
+    expect(r.live).toBe(false);
+  });
+
+  test("nothing is said while waiting, or riding a vehicle not known", () => {
+    const due = predicted([2, PLANNED, 0]);
+
+    for (const stage of [
+      { kind: "wait", leg: 1 },
+      { kind: "ride", leg: 1, veh: null },
+      { kind: "ride", leg: 3, veh: NEXT },
+    ] as Stage[]) {
+      expect(new Follower(changing(), catalog, stage).reach(due, 0, MPS, HURRY_MPS)).toBeNull();
+    }
+  });
+
+  test("a resumed journey starts where it was", () => {
+    expect(new Follower(changing(), catalog, riding).progress.stage).toEqual(riding);
+  });
+
+  test("on time, by hurrying, by the grace of a tracked vehicle, or missed", () => {
+    expect(judge(reach(0))).toBe("ok");
+    expect(judge(reach(1, 0))).toBe("hurry");
+    expect(judge(reach(30, 0))).toBe("hurry");
+    expect(judge(reach(30, GRACE_S))).toBe("hurry");
+    expect(judge(reach(30, GRACE_S, false))).toBe("missed");
+    expect(judge(reach(30, GRACE_S + 1))).toBe("missed");
+  });
+
+  test("a worse word waits until it has held, a better one does not", () => {
+    const watch = new Watch();
+    // Far enough ahead for its prediction to still be jumpy
+    const now = NEXT_DEP - 600;
+
+    expect(watch.update(reach(30), riding, now).kind).toBe("ok");
+    expect(watch.update(reach(30), riding, now + 5).kind).toBe("ok");
+    expect(watch.update(reach(30), riding, now + 10)).toEqual({
+      kind: "missed",
+      leg: 3,
+      dep: NEXT_DEP,
+      riding: true,
+    });
+    expect(watch.update(reach(0), riding, now + 11).kind).toBe("ok");
+  });
+
+  test("one jumpy prediction is not news", () => {
+    const watch = new Watch();
+    const now = NEXT_DEP - 600;
+
+    watch.update(reach(30), riding, now);
+    watch.update(reach(0), riding, now + 5);
+
+    expect(watch.update(reach(30), riding, now + 10).kind).toBe("ok");
+  });
+
+  test("close to leaving a worse word is said at once", () => {
+    expect(new Watch().update(reach(30), riding, NEXT_DEP - 60).kind).toBe("missed");
+  });
+
+  test("hurrying is urged on foot, and only warned of on a ride", () => {
+    const now = NEXT_DEP - 60;
+    const walking: Stage = { kind: "walk", leg: 2 };
+
+    expect(new Watch().update(reach(30, 0), riding, now)).toMatchObject({ riding: true });
+    expect(new Watch().update(reach(30, 0), walking, now)).toMatchObject({ riding: false });
+  });
+
+  test("a word about one ride is not said of the next", () => {
+    const watch = new Watch();
+    const now = NEXT_DEP - 60;
+    const hurry = watch.update(reach(30, 0), { kind: "walk", leg: 2 }, now);
+    // A change further on, far enough ahead for its prediction to be jumpy
+    const later = NEXT_DEP + 600;
+    const after: Reach = { leg: 5, dep: later, live: true, usual: later + 30, hurried: later + 30 };
+
+    expect(hurry.kind).toBe("hurry");
+    expect(watch.update(after, { kind: "ride", leg: 3, veh: NEXT }, now + 1).kind).toBe("ok");
+  });
+
+  test("waiting at the stop of a missed ride still has it missed", () => {
+    const watch = new Watch();
+    watch.update(reach(30), { kind: "walk", leg: 2 }, NEXT_DEP - 60);
+
+    expect(watch.update(null, { kind: "wait", leg: 3 }, NEXT_DEP).kind).toBe("missed");
+    expect(watch.update(null, { kind: "ride", leg: 3, veh: NEXT }, NEXT_DEP).kind).toBe("ok");
   });
 });

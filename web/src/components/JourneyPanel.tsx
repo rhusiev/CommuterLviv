@@ -11,7 +11,7 @@ import {
   ranked,
   type Prefer,
 } from "../lib/prefer";
-import { heldSpeed } from "../lib/walking";
+import { heldHurry, heldSpeed } from "../lib/walking";
 import { Backups, type WayPick } from "./Backups";
 import { Icon, type IconName } from "./Icon";
 import { RouteBadge } from "./RouteBadge";
@@ -74,6 +74,8 @@ export function JourneyPanel({
   onPlaces,
   onShow,
   onFollow,
+  ask,
+  onAsked,
   folded,
   onFold,
 }: {
@@ -93,6 +95,9 @@ export function JourneyPanel({
   /** The option picked to be drawn on the map, or null once none is */
   onShow: (j: Journey | null) => void;
   onFollow: (j: Journey) => void;
+  /** Search as soon as both ends are set, which `onAsked` then says is done */
+  ask: boolean;
+  onAsked: () => void;
   /** Folded down to a strip, the map and the option on it in view */
   folded: boolean;
   onFold: (folded: boolean) => void;
@@ -136,6 +141,13 @@ export function JourneyPanel({
     setShown(null);
     onShow(null);
   }, [from, to, onShow]);
+  useEffect(() => {
+    if (!ask || !from || !to) return;
+    onAsked();
+    void search();
+    // Only a new ask or new ends search; `search` reads the rest as it is
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ask, from, to]);
   const aboard = from && "veh" in from ? from : null;
   const start = from && !("veh" in from) ? from : null;
 
@@ -153,6 +165,7 @@ export function JourneyPanel({
         [to.lat, to.lon],
         aboard ? null : at,
         speed,
+        heldHurry(),
       );
       setOptions(got.options);
       setReport(got.report ?? null);
@@ -609,6 +622,14 @@ function Option({
             : changes === 0
               ? t.noChange
               : t.changeCount(changes)}
+          {journey.hurry && (
+            <>
+              {" · "}
+              <span title={t.hurryHint} className="text-amber-400">
+                {t.hurry}
+              </span>
+            </>
+          )}
           {journey.rides > 0 && journey.backup > 0 && (
             <>
               {" · "}

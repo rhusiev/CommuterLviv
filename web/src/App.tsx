@@ -17,6 +17,7 @@ import {
   api,
   ApiError,
   catalog as fetchCatalog,
+  catalogTag,
   shapes as fetchShapes,
 } from "./lib/api";
 import { useIndex, usePositions } from "./lib/catalog";
@@ -24,6 +25,9 @@ import { saved } from "./lib/places";
 import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from "./lib/theme";
 import { RAMP, useTraffic } from "./lib/traffic";
 import { readUrl, writeUrl, type UrlState } from "./lib/url";
+import type { Stage } from "./lib/follow";
+import { heldFollowed, holdFollowed, type Followed } from "./lib/followed";
+import { hereOnce } from "./lib/position";
 import { useFollow } from "./lib/useFollow";
 import { takeRenewed, useLive } from "./lib/useLive";
 import type { Catalog, Journey, Me, Place, RouteSet, Shapes } from "./lib/types";
@@ -71,8 +75,13 @@ export function App() {
   const boarded = useRef(0);
   const [to, setTo] = useState<Point | null>(null);
   const [journey, setJourney] = useState<Journey | null>(null);
-  /** Being travelled: it keeps the map, whichever tab is open */
-  const [following, setFollowing] = useState<Journey | null>(null);
+  /** Being travelled: it keeps the map, whichever tab is open, and a reload */
+  const [followed, setFollowed] = useState<Followed | null>(null);
+  const following = followed?.journey ?? null;
+  /** Where a journey followed before the page loaded had got to */
+  const resumed = useRef<Stage | undefined>(undefined);
+  /** The planner is to search as soon as both ends are set */
+  const [ask, setAsk] = useState(false);
   const [picking, setPicking] = useState<"from" | "to" | null>(null);
   const [folded, setFolded] = useState(false);
   const [panel, setPanel] = useState(false);
@@ -163,6 +172,17 @@ export function App() {
   }, [cat, me]);
 
   useEffect(() => {
+    const tag = catalogTag();
+    if (!cat || !tag) return;
+    const held = heldFollowed(tag, Date.now() / 1000);
+    if (!held) return;
+    resumed.current = held.stage;
+    setFollowed(held);
+    // Once, when the catalog arrives
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cat]);
+
+  useEffect(() => {
     if (!cat || opened.route === null) return;
     const i = cat.routes.findIndex((r) => r.id === opened.route);
     if (i >= 0) setRoute(i);
@@ -203,7 +223,9 @@ export function App() {
     setFocus({ lat: s.lat, lon: s.lon });
   };
 
-  const drawn = following ?? (tab === "plan" ? journey : null);
+  // The planner's option while one is shown, so another way can be weighed
+  // against the one followed
+  const drawn = (tab === "plan" ? journey : null) ?? following;
 
   /** While a journey is shown, only its rides are on the map */
   const journeyRoutes = useMemo(() => {
@@ -270,7 +292,30 @@ export function App() {
   }, [live, cat, watched]);
 
   // Here rather than in its card, which a change of tab unmounts
-  const progress = useFollow(following, live, cat ?? undefined);
+  const { progress, caught } = useFollow(following, live, cat ?? undefined, resumed.current);
+
+  const follow = (next: Followed | null) => {
+    resumed.current = undefined;
+    holdFollowed(next);
+    setFollowed(next);
+  };
+
+  /** Plans the rest of the way: from on board the vehicle ridden, else from
+   *  where you are, which is asked for only now */
+  const searchAgain = () => {
+    if (!followed || progress === null || progress === "denied") return;
+    const { stage } = progress;
+    setTo(followed.to);
+    if (stage.kind === "ride" && stage.veh !== null) {
+      boarded.current += 1;
+      setFrom({ veh: stage.veh, route: followed.journey.legs[stage.leg]!.route ?? null });
+    } else {
+      setFrom(null);
+      useHere("from");
+    }
+    setAsk(true);
+    setTab("plan");
+  };
 
   /** Only the stops of the routes on the map are drawn or clickable */
   const stops = useMemo(() => {
@@ -300,7 +345,8 @@ export function App() {
    * not turn the map's dot off */
   const useHere = (which: "from" | "to") => {
     const asked = boarded.current;
-    navigator.geolocation?.getCurrentPosition(
+    if (!navigator.geolocation) return;
+    hereOnce({ enableHighAccuracy: true, timeout: 10_000 }).then(
       (pos) => {
         const at = { lat: pos.coords.latitude, lon: pos.coords.longitude };
         // A fix asked for before getting on board is no longer the start
@@ -308,7 +354,6 @@ export function App() {
         else if (asked === boarded.current) setFrom(at);
       },
       () => setNotice(t.noLocation),
-      { enableHighAccuracy: true, timeout: 10_000 },
     );
   };
 
@@ -573,9 +618,11 @@ export function App() {
             onHere={useHere}
             onShow={setJourney}
             onFollow={(j) => {
-              setFollowing(j);
+              follow({ journey: j, to: to!, tag: catalogTag() ?? "" });
               setTab("map");
             }}
+            ask={ask}
+            onAsked={() => setAsk(false)}
             folded={folded}
             onFold={setFolded}
             onLine={openRoute}
@@ -686,7 +733,9 @@ export function App() {
               journey={following}
               live={live}
               progress={progress}
-              onEnd={() => setFollowing(null)}
+              caught={caught}
+              onSearch={searchAgain}
+              onEnd={() => follow(null)}
             />
           )}
         </div>

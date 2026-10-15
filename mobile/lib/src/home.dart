@@ -2,6 +2,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart' hide Theme;
 import 'package:flutter/material.dart' as material show Theme;
@@ -11,7 +12,9 @@ import 'package:vector_map_tiles/vector_map_tiles.dart';
 
 import '../main.dart' show tick;
 import 'api.dart';
+import 'follow.dart' show Stage, StageKind;
 import 'follow_card.dart';
+import 'followed.dart';
 import 'here.dart';
 import 'journey_panel.dart';
 import 'live.dart';
@@ -87,9 +90,14 @@ class _HomeScreenState extends State<HomeScreen> {
   End? _picking;
   bool _folded = false;
 
-  /// The journey being followed, from Follow on an option until it is ended.
-  /// It outlives the planner, and while it lasts it is what the map draws
-  Journey? _following;
+  /// The journey being followed, from Follow on an option until it is ended,
+  /// arrived or replaced. It outlives the planner and a restart, and while it
+  /// lasts it is what the map draws
+  Followed? _followed;
+  Journey? get _following => _followed?.journey;
+
+  /// The planner is to search as soon as both ends are set
+  bool _ask = false;
 
   /// Which end is waiting on a fix that has been asked for but not arrived.
   End? _wantHere;
@@ -139,6 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ..addAll(catalog.routesAt(active?.routes ?? const []));
       });
       _push();
+      _resume();
       await _carryOldPins(catalog, sets.pins);
     } on ApiError catch (e) {
       if (e.unauthorised) {
@@ -183,10 +192,12 @@ class _HomeScreenState extends State<HomeScreen> {
       _onRoute &= route != null;
       _stop = null;
       _journey = null;
-      _following = null;
+      // Its stop and route positions are the old catalog's
+      _followed = null;
       _shapes = null;
     });
     _tracking.stop();
+    unawaited(widget.api.setFollowed(null));
     _push();
     if (_allLines || _onRoute) unawaited(_geometry());
     ScaffoldMessenger.of(context)
@@ -339,8 +350,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _follow(Journey journey) {
+    final followed = Followed(
+      journey: journey,
+      to: _to!,
+      tag: widget.api.catalogTag ?? '',
+    );
+    unawaited(widget.api.setFollowed(jsonEncode(followed)));
     setState(() {
-      _following = journey;
+      _followed = followed;
       _planning = false;
       _aboard = null;
       _picking = null;
@@ -353,9 +370,52 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _endFollow() {
-    setState(() => _following = null);
+    setState(() => _followed = null);
+    unawaited(widget.api.setFollowed(null));
     _tracking.stop();
     _push();
+  }
+
+  /// Picks up the journey followed before the app was closed, if it still is
+  void _resume() {
+    final tag = widget.api.catalogTag;
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final held = tag == null
+        ? null
+        : Followed.held(widget.api.followed, tag, now);
+    if (held == null) return;
+    setState(() => _followed = held);
+    _push();
+    unawaited(_here.start());
+    _tracking.start();
+  }
+
+  /// Notes how far along the journey is; arrived, it is no longer kept
+  void _moved(Stage stage) {
+    final next = _followed?.at(stage);
+    if (next != null) _followed = next;
+    unawaited(widget.api.setFollowed(next == null ? null : jsonEncode(next)));
+  }
+
+  /// Plans the rest of the way: from on board the vehicle ridden, else from
+  /// where you are. The journey is followed until another is.
+  void _searchAgain(Stage stage) {
+    final followed = _followed;
+    if (followed == null) return;
+    final veh = stage.kind == StageKind.ride ? stage.veh : null;
+    setState(() {
+      _to = followed.to;
+      _from = null;
+      _aboard = veh == null
+          ? null
+          : Aboard(veh, followed.journey.legs[stage.leg].route);
+      _ask = true;
+      _tab = 0;
+      _planning = true;
+      _onRoute = false;
+    });
+    _push();
+    if (veh == null) unawaited(_hereFor(End.from));
   }
 
   Future<void> _loadStyle() async {
@@ -741,7 +801,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             journey: _following!,
                             live: live,
                             here: _here,
+                            walkSpeed: widget.api.walkSpeed,
+                            hurrySpeed: widget.api.hurrySpeed,
+                            stage: _followed!.stage,
                             away: _followAway,
+                            onMoved: _moved,
+                            onSearch: _searchAgain,
                             onEnd: _endFollow,
                           ),
                         ),
@@ -812,6 +877,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     _push();
                   },
                   onFollow: _follow,
+                  ask: _ask,
+                  onAsked: () => setState(() => _ask = false),
                 ),
               ),
             ),

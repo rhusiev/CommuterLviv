@@ -18,6 +18,7 @@ VEH = 3
 TO_NEXT_S = 50.0
 # further from it than any walk is capped at
 FAR_S = plan.TRANSFER_CAP + 60.0
+AHEAD_S = 1800.0    # a change half an hour from now
 
 
 @pytest.fixture
@@ -76,17 +77,30 @@ def test_a_ride_already_on_board_does_not_weigh_on_the_backups():
     assert dataclasses.replace(backed, aboard=False).backup == 0
 
 
+SOON = plan.change_slack(0)
+LATER = plan.change_slack(AHEAD_S)
+
+
 @pytest.mark.parametrize("legs, rushed", [
-    ([("ride", NOW + plan.CHANGE - 1)], True),
-    ([("ride", NOW + plan.CHANGE)], False),
-    ([("walk", NOW + 30), ("ride", NOW + 30 + plan.CHANGE - 1)], True),
-    ([("walk", NOW + 30), ("ride", NOW + 30 + plan.CHANGE)], False),
+    ([("ride", NOW + SOON - 1)], True),
+    ([("ride", NOW + SOON)], False),
+    ([("walk", NOW + 30), ("ride", NOW + 30 + plan.change_slack(30) - 1)], True),
+    ([("walk", NOW + 30), ("ride", NOW + 30 + plan.change_slack(30))], False),
+    ([("walk", NOW + AHEAD_S), ("ride", NOW + AHEAD_S + LATER - 1)], True),
+    ([("walk", NOW + AHEAD_S), ("ride", NOW + AHEAD_S + LATER)], False),
     ([("walk", NOW + 30)], False),
 ])
 def test_a_change_off_the_vehicle_aboard_takes_the_change_slack(legs, rushed):
     built = [plan.Leg(kind, t, t, 0, 1) for kind, t in legs]
 
-    assert plan._rushed(built, NOW) is rushed
+    assert plan._rushed(built, NOW, NOW) is rushed
+
+
+def test_a_change_further_ahead_needs_more_slack():
+    assert SOON == plan.CHANGE_SLACK[0]
+    assert plan.change_slack(-60) == SOON
+    assert SOON < plan.change_slack(plan.CHANGE_AHEAD[2]) < LATER
+    assert plan.change_slack(10 * AHEAD_S) == plan.CHANGE_SLACK[-1]
 
 
 def test_a_way_not_on_the_vehicle_aboard_does_not_say_it_is_ridden(planner):
@@ -135,3 +149,25 @@ def test_a_vehicle_nobody_tracks_has_no_journeys(planner):
 ])
 def test_the_plan_endpoint_reads_the_origin(query, origin):
     assert app._origin(query) == origin
+
+
+class _NoWalks:
+    def near(self, i, limit):
+        return iter(())
+
+
+@pytest.mark.parametrize("ahead_s", [0.0, AHEAD_S])
+@pytest.mark.parametrize("short_s, rides", [(1, 0), (0, 2)])
+def test_the_scan_changes_only_with_the_slack_its_time_ahead_needs(
+        ahead_s, short_s, rides):
+    off = NOW + TO_NEXT_S + ahead_s
+    on = off + plan.change_slack(off - NOW) - short_s
+    # one trip 0 -> 1 and another 1 -> 2, the door at stop 2
+    hops = ([1, 0], [2, 1], [on, NOW], [on + TO_NEXT_S, off], [1, 0])
+    trips = {0: ("a", None, None), 1: ("b", None, None)}
+    scan = plan._Profile(hops, trips, {}, _NoWalks(), {2: 0.0}, (FAR_S,), 2, {},
+                         NOW)
+
+    found = scan.options({0: 0.0}, NOW)
+
+    assert [j.rides for j, _ in found] == ([rides] if rides else [])
