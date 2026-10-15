@@ -260,20 +260,23 @@ one from which the door is still reachable in time. That keeps about a fifth of
 them. Quiet routes are left out of the scan; it runs a second time with them
 only when no option rides without them.
 
-A change needs slack over and above the walk between the two stops, and more
-the further ahead it is (`change_slack`): 90 s for one up to a minute away,
-read in between the points of `CHANGE_AHEAD`/`CHANGE_SLACK`, up to 420 s
-from about 37 min out. Both rides' times are forecasts, and the forecasts miss by
-more the further out they are. The figures come from a replay of 2026-09-16..21
-on a model warmed on the 7 days before and refitted after each day: every 10 min
-of it, tracked vehicles reaching a stop were paired with tracked vehicles of
+A change needs slack over and above the walk between the two stops, and more the
+further ahead it is (`change_slack`): 60 s for one up to a minute away, read in
+between the points of `CHANGE_AHEAD`/`CHANGE_SLACK`, up to 300 s from about 37
+min out. Both rides' times are forecasts, and the forecasts miss by more the
+further out they are. The figures come from a replay of 2026-09-16..21 on a
+model warmed on the 7 days before and refitted after each day: every 10 min of
+it, tracked vehicles reaching a stop were paired with tracked vehicles of
 another route leaving it or a stop within a 5 min walk, and a change counted as
 broken when the true crossings left less than the walk. Each point is the slack
-from which fewer than 1 change in 10 broke (a chosen target, not a derived one), in a band of 0-2, 2-5, 5-10, 10-15,
-15-20, 20-30 and 30-45 min ahead, placed at the band's middle. The flat 60 s it
-replaces broke 11% of changes 0-2 min ahead, 26% 5-10 min and 38% 30-45 min, and a
-broken change cost a median 13-14 min to the next vehicle of the route. The
-figures moved by at most 30 s from one day to the next. Changes onto a timetabled
+from which at most 15% of changes broke (a chosen target, not a derived one), in
+a band of 0-2, 2-5, 5-10, 10-15, 15-20, 20-30 and 30-45 min ahead, placed at the
+band's middle. The flat 60 s it replaces broke 11% of changes 0-2 min ahead, 26%
+5-10 min and 38% 30-45 min, and a broken change cost a median 13-14 min to the
+next vehicle of the route. The figures moved by at most 30 s from one day to the
+next. Searched on the timetable alone, the soonest arrival came 3.1 min later on
+average than with the flat 60 s, and later at all in 43% of searches; a target
+of 10% would have cost 4.1 min and 5% 6.0 min. Changes onto a timetabled
 departure, or onto the next trip of a tracked vehicle still at its terminus,
 were not measured; they take the same slack.
 

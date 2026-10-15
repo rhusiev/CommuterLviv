@@ -43,12 +43,12 @@ TRANSFER_CAP = 900.0
 
 # s of slack a change needs over and above the walk, by how far ahead it is:
 # the forecasts of both vehicles miss by more the further out they are. Measured
-# on a replay of 2026-09-16..21 (docs/service.md): each is where fewer than 1 in
-# 10 changes between two tracked vehicles broke (1 in 10 is chosen, not
-# derived), at the middle of its band of 0-2/2-5/5-10/10-15/15-20/20-30/30-45
-# min ahead, and read between them
+# on a replay of 2026-09-16..21 (docs/service.md): each is where at most 15% of
+# changes between two tracked vehicles broke (15% is chosen, not derived), at
+# the middle of its band of 0-2/2-5/5-10/10-15/15-20/20-30/30-45 min ahead, and
+# read between them
 CHANGE_AHEAD = (60.0, 210.0, 450.0, 750.0, 1050.0, 1500.0, 2250.0)
-CHANGE_SLACK = (90.0, 120.0, 180.0, 240.0, 300.0, 360.0, 420.0)
+CHANGE_SLACK = (60.0, 90.0, 150.0, 180.0, 210.0, 270.0, 300.0)
 # the same, per whole second ahead, for the scan's inner loop; past the last
 # band the slack stays at its last
 _SLACK_BY_S = np.interp(np.arange(int(CHANGE_AHEAD[-1]) + 1), CHANGE_AHEAD,
