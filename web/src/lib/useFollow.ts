@@ -13,23 +13,27 @@ const OK: Catch = { kind: "ok" };
  * time left counts down. Chosen, not derived */
 const JUDGE_EVERY_MS = 1000;
 
+type Here = { lat: number; lon: number };
+
 /** Follows `journey` from the device's own fixes until it is null: null until
  * the first fix, "denied" once the browser refuses them - a fix it could not
- * get is only waited out. The fixes go nowhere but the follower. `catalog`
- * places the stops a ride calls at; `stage` resumes where it was. With each fix,
- * each word of arrivals and each `JUDGE_EVERY_MS` it says whether the next ride
- * is still caught. */
+ * get is only waited out. The fixes go nowhere but the follower and `here`,
+ * where the last one put you. `catalog` places the stops a ride calls at;
+ * `stage` resumes where it was. With each fix, each word of arrivals and each
+ * `JUDGE_EVERY_MS` it says whether the next ride is still caught. */
 export function useFollow(
   journey: Journey | null,
   live: Live,
   catalog: Catalog | undefined,
   stage?: Stage,
-): { progress: Progress | "denied" | null; caught: Catch } {
+): { progress: Progress | "denied" | null; caught: Catch; here: Here | null } {
   const [progress, setProgress] = useState<Progress | "denied" | null>(null);
   const [caught, setCaught] = useState<Catch>(OK);
+  const [here, setHere] = useState<Here | null>(null);
   useEffect(() => {
     setProgress(null);
     setCaught(OK);
+    setHere(null);
     if (!journey) return;
     const follower = new Follower(journey, catalog, stage);
     const watch = new Watch();
@@ -59,6 +63,7 @@ export function useFollow(
           seen,
         );
         setProgress(got);
+        setHere({ lat: latitude, lon: longitude });
         if (got.stage !== at) holdStage((at = got.stage));
         judge();
       },
@@ -78,5 +83,5 @@ export function useFollow(
     // `stage` only starts the follower, which then moves on from it
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [journey, live, catalog]);
-  return { progress, caught };
+  return { progress, caught, here };
 }

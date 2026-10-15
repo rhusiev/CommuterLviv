@@ -291,7 +291,7 @@ export function App() {
   }, [live, cat, watched]);
 
   // Here rather than in its card, which a change of tab unmounts
-  const { progress, caught } = useFollow(following, live, cat ?? undefined, resumed.current);
+  const { progress, caught, here } = useFollow(following, live, cat ?? undefined, resumed.current);
 
   const follow = (next: Followed | null) => {
     resumed.current = undefined;
@@ -300,17 +300,18 @@ export function App() {
   };
 
   /** Plans the rest of the way: from on board the vehicle ridden, else from
-   *  where you are, which is asked for only now */
+   *  where the follower's last fix put you, which leaves only now */
   const searchAgain = () => {
-    if (!followed || progress === null || progress === "denied") return;
+    if (!followed || progress === null || progress === "denied" || !here) return;
     const { stage } = progress;
     setTo(followed.to);
     if (stage.kind === "ride" && stage.veh !== null) {
       boarded.current += 1;
       setFrom({ veh: stage.veh, route: followed.journey.legs[stage.leg]!.route ?? null });
     } else {
-      setFrom(null);
-      useHere("from");
+      // Not asked for anew: a browser watching the position may not answer a
+      // second ask until it moves
+      setFrom(here);
     }
     setAsk(true);
     setTab("plan");

@@ -91,7 +91,7 @@ second, so a held word is not left waiting for the next fix. Hurrying is urged
 only on foot. On a ride the card warns ahead that the change will need it, with
 "Find another way". A missed ride says the journey no longer works, with
 "Search again". Either search asks for the same destination from on board the
-vehicle ridden, sending only its id, or else from where you are, located only on
+vehicle ridden, sending only its id, or else from where you are, sent only on
 that tap. It runs on its own, and the journey stays followed until another
 option is followed. Waiting at the stop, where the vehicle is in sight, nothing
 new is said - a ride already missed stays missed, the one there being a later
