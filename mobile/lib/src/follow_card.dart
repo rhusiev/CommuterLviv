@@ -5,6 +5,7 @@ library;
 import 'dart:async';
 import 'dart:math' show max;
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart' hide Theme;
 import 'package:flutter/material.dart' as material show Theme;
 
@@ -24,6 +25,11 @@ const _msPerS = 1000;
 
 /// Short distances are said to this many metres
 const _stepM = 10;
+
+/// How often the next connection is judged again when no fix or arrivals
+/// prompt it, so a word [Watch] holds back is said when its hold ends and the
+/// time left counts down. Chosen, not derived
+const _judgeEvery = Duration(seconds: 1);
 
 /// The steps list scrolls past this height
 const _stepsMaxHeight = 256.0;
@@ -92,11 +98,14 @@ class _FollowCardState extends State<FollowCard> {
   /// next ride caught only by hurrying or missed, arrived - each once per leg
   final _alerted = <String>{};
 
+  late final Timer _tick;
+
   @override
   void initState() {
     super.initState();
     widget.here.addListener(_fixArrived);
     widget.live.addListener(_redraw);
+    _tick = Timer.periodic(_judgeEvery, (_) => _redraw());
     _fixArrived();
     if (widget.away) _goAway(true);
   }
@@ -125,6 +134,7 @@ class _FollowCardState extends State<FollowCard> {
 
   @override
   void dispose() {
+    _tick.cancel();
     widget.here.removeListener(_fixArrived);
     widget.live.removeListener(_redraw);
     if (widget.away) _goAway(false);
@@ -139,7 +149,7 @@ class _FollowCardState extends State<FollowCard> {
     final hurryMps = max(widget.hurrySpeed ?? 0, widget.walkSpeed) / _kmhPerMps;
     int? due(int stop, int veh) =>
         widget.live.arrivals[stop]?.where((a) => a.veh == veh).firstOrNull?.t;
-    final now = DateTime.now().millisecondsSinceEpoch / _msPerS;
+    final now = clock.now().millisecondsSinceEpoch / _msPerS;
     final reach = _follower.reach(due, now, mps, hurryMps);
     _caught = _watch.update(reach, _follower.progress.stage, now);
   }
@@ -199,7 +209,7 @@ class _FollowCardState extends State<FollowCard> {
     unawaited(widget.here.notice(said.head, line, alert: alert));
   }
 
-  /// The arrivals moved on, so the times said are redrawn.
+  /// The arrivals or the time moved on, so the times said are redrawn.
   void _redraw() {
     setState(_judge);
     _notice();

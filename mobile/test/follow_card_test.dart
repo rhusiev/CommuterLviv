@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -58,9 +59,19 @@ final journey = Journey(
 /// Far enough ahead that walking to the stop at any pace catches the ride
 const _aheadS = 3600;
 
+/// Under the 160 s the walk to the stop takes, and more than the 120 s within
+/// which `Watch` says a worse word at once
+const _missedAheadS = 150;
+
+/// `Watch` holds a worse word back 10 s
+const _heldS = 10;
+
 /// [journey] with its ride leaving [_aheadS] from now, so it is caught
-Journey caught() {
-  final dep = DateTime.now().millisecondsSinceEpoch ~/ 1000 + _aheadS;
+Journey caught() => leaving(_aheadS);
+
+/// [journey] with its ride leaving [aheadS] from now
+Journey leaving(int aheadS) {
+  final dep = clock.now().millisecondsSinceEpoch ~/ 1000 + aheadS;
   return Journey(
     dep: journey.dep,
     arr: journey.arr,
@@ -215,6 +226,24 @@ void main() {
     );
     await tester.tap(find.text(txt.planAgain));
     expect(searched.single.kind, StageKind.walk);
+  });
+
+  testWidgets('a word held back is said once its hold ends, with no fix to '
+      'prompt it', (tester) async {
+    final here = await pump(
+      tester,
+      away: false,
+      following: leaving(_missedAheadS),
+    );
+    here.move(0, 0);
+    await tester.pump();
+    final missed = find.text(
+      '${txt.noLonger}: ${txt.missedRide('7', 'Stop 0')}',
+    );
+
+    expect(missed, findsNothing);
+    await tester.pump(const Duration(seconds: _heldS + 1));
+    expect(missed, findsOneWidget);
   });
 
   testWidgets('away, a fix that changes nothing said is not sent on', (

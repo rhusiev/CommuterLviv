@@ -86,15 +86,16 @@ timetable when it is not tracked: caught at the usual pace, caught only by
 hurrying - or, for a tracked vehicle, within `GRACE_S` (10 s) of it, as the
 planner does - or missed. Predictions jump, so `Watch` says a worse word only
 once it has held for 10 s, or at once within 120 s of leaving; a better word is
-said at once. Hurrying is urged only on foot. On a ride the card warns ahead
-that the change will need it, with "Find another way". A missed ride says the
-journey no longer works, with "Search again". Either search asks for the same
-destination from on board the vehicle ridden, sending only its id, or else
-from where you are, located only on that tap. It runs on its own, and the
-journey stays followed until another option is followed. Waiting at the stop,
-where the vehicle is in sight, nothing new is said - a ride already missed
-stays missed, the one there being a later one. Nor is anything said while the
-vehicle ridden is not known.
+said at once. It judges again with each fix, each word of arrivals and every
+second, so a held word is not left waiting for the next fix. Hurrying is urged
+only on foot. On a ride the card warns ahead that the change will need it, with
+"Find another way". A missed ride says the journey no longer works, with
+"Search again". Either search asks for the same destination from on board the
+vehicle ridden, sending only its id, or else from where you are, located only on
+that tap. It runs on its own, and the journey stays followed until another
+option is followed. Waiting at the stop, where the vehicle is in sight, nothing
+new is said - a ride already missed stays missed, the one there being a later
+one. Nor is anything said while the vehicle ridden is not known.
 
 A followed journey is kept on the device, with the destination, how far along
 it was and the catalog's ETag, and is picked up again after a reload or a
