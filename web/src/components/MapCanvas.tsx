@@ -14,6 +14,7 @@ import {
 } from "../lib/geo";
 import { sync } from "../lib/layers";
 import { sample, type Live } from "../lib/live";
+import { watchHere } from "../lib/position";
 import type { Pace } from "../lib/traffic";
 import { build, colour, R, type Sprites } from "../lib/sprites";
 import { t } from "../lib/i18n";
@@ -581,7 +582,7 @@ export function MapCanvas({
     if (!tracking) return;
     // Only the first fix moves the camera
     let first = true;
-    const watch = navigator.geolocation.watchPosition(
+    return watchHere(
       (pos) => {
         const { latitude, longitude, accuracy } = pos.coords;
         here.current = { lat: latitude, lon: longitude, accuracy };
@@ -600,9 +601,7 @@ export function MapCanvas({
         here.current = null;
         setLocating("denied");
       },
-      { enableHighAccuracy: true, maximumAge: 10000 },
     );
-    return () => navigator.geolocation.clearWatch(watch);
   }, [tracking]);
 
   return (

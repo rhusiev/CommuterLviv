@@ -27,6 +27,7 @@ import { RAMP, useTraffic } from "./lib/traffic";
 import { readUrl, writeUrl, type UrlState } from "./lib/url";
 import type { Stage } from "./lib/follow";
 import { heldFollowed, holdFollowed, type Followed } from "./lib/followed";
+import { hereOnce } from "./lib/position";
 import { useFollow } from "./lib/useFollow";
 import { takeRenewed, useLive } from "./lib/useLive";
 import type { Catalog, Journey, Me, Place, RouteSet, Shapes } from "./lib/types";
@@ -291,7 +292,7 @@ export function App() {
   }, [live, cat, watched]);
 
   // Here rather than in its card, which a change of tab unmounts
-  const { progress, caught, here } = useFollow(following, live, cat ?? undefined, resumed.current);
+  const { progress, caught } = useFollow(following, live, cat ?? undefined, resumed.current);
 
   const follow = (next: Followed | null) => {
     resumed.current = undefined;
@@ -300,18 +301,17 @@ export function App() {
   };
 
   /** Plans the rest of the way: from on board the vehicle ridden, else from
-   *  where the follower's last fix put you, which leaves only now */
+   *  where you are, which is asked for only now */
   const searchAgain = () => {
-    if (!followed || progress === null || progress === "denied" || !here) return;
+    if (!followed || progress === null || progress === "denied") return;
     const { stage } = progress;
     setTo(followed.to);
     if (stage.kind === "ride" && stage.veh !== null) {
       boarded.current += 1;
       setFrom({ veh: stage.veh, route: followed.journey.legs[stage.leg]!.route ?? null });
     } else {
-      // Not asked for anew: a browser watching the position may not answer a
-      // second ask until it moves
-      setFrom(here);
+      setFrom(null);
+      useHere("from");
     }
     setAsk(true);
     setTab("plan");
@@ -345,7 +345,8 @@ export function App() {
    * not turn the map's dot off */
   const useHere = (which: "from" | "to") => {
     const asked = boarded.current;
-    navigator.geolocation?.getCurrentPosition(
+    if (!navigator.geolocation) return;
+    hereOnce({ enableHighAccuracy: true, timeout: 10_000 }).then(
       (pos) => {
         const at = { lat: pos.coords.latitude, lon: pos.coords.longitude };
         // A fix asked for before getting on board is no longer the start
@@ -353,7 +354,6 @@ export function App() {
         else if (asked === boarded.current) setFrom(at);
       },
       () => setNotice(t.noLocation),
-      { enableHighAccuracy: true, timeout: 10_000 },
     );
   };
 
