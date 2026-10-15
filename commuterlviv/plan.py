@@ -71,6 +71,11 @@ BACKUP_WINDOW = 1800.0
 # other beats it - whichever comes first. Chosen, not derived
 NEAR_TIE = 300.0
 
+# s a tracked vehicle may leave before somebody walking to it gets there and
+# still be caught, waving to its driver. Caught only by hurrying, all the
+# same: better to hurry than to count on the driver. Chosen, not derived
+GRACE = 10.0
+
 # weakest first, so `min` over this order is the weakest ground a journey stands on
 CONFIDENCE = ("quiet", "schedule", "terminus", "live")
 
@@ -141,6 +146,8 @@ class Journey:
     backups: tuple[tuple[Backup, ...], ...] = ()
     # its first leg is the vehicle already being ridden
     aboard: bool = False
+    # its first ride is caught only by hurrying to it (`_Profile.hurrying`)
+    hurry: bool = False
 
     @property
     def backup(self):
@@ -504,7 +511,7 @@ def _at_stops(seen, stands, limit, spot=None):
 
 
 def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
-             catalog=None, rounds=ROUNDS, keep=8, assess=True):
+             catalog=None, rounds=ROUNDS, keep=8, assess=True, hurry=1.0):
     """Ranked journeys from `origin` to `dest` (both (lat, lon)) leaving at
     `now`, which may be in the future: the vehicles being tracked are still
     used, for as far ahead as their predictions reach.
@@ -514,7 +521,10 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
     on the road now are the ones that would carry it.
 
     Somebody slower or faster on foot than `walk.SPEED` is searched for with
-    `walk` and `transfers` paced to them.
+    `walk` and `transfers` paced to them. `hurry` is the share of that walk's
+    time the walk to the first stop takes when they hurry, 1 for not at all;
+    the departures only hurrying catches are options of their own
+    (`_Profile.hurrying`).
 
     An `Aboard` origin is searched as getting off at the vehicle's next stop
     when it gets there, with the stops in reach of that one, and each journey
@@ -552,14 +562,18 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
     paced = [c * walk.pace for c in WALK_CAPS]
     caps = (limit, *(c for c in paced if c < limit))
     hi = now + (walked if walked is not None else LONGEST_WALK) + BACKUP_WINDOW
+    soonest = access if trip else _quickest(access, hurry)
     for quiet in (False, True):
         hops, trips = _connections(tt, live, trust, now, midnight, hi, quiet)
         hops = _corridor(hops, transfers, egress, caps[0],
-                         [(u, start + t) for u, t in access.items()], hi)
+                         [(u, start + t) for u, t in soonest.items()], hi)
         scan = _Profile(hops, trips, trust, transfers, egress, caps, rounds,
                         covered)
         found = scan.options(access, start)
-        found = scan.backed(found + scan.near(access, start, found))
+        more = scan.near(access, start, found)
+        if trip is None:
+            more += scan.hurrying(access, hurry, start, found)
+        found = scan.backed(found + more)
         if trip is None:
             found += _only_walking(walked, now)
         else:
@@ -671,7 +685,13 @@ def _only_walking(walked, now):
 
 
 def _score(j):
-    return j.arr, -j.backup, j.rides, j.walking
+    return j.arr, -j.backup, j.rides, j.walking, j.hurry
+
+
+def _quickest(access, hurry):
+    """`access`, stop -> seconds walked, as soon as hurrying and waving to the
+    driver (GRACE) could get there."""
+    return {u: max(t * hurry - GRACE, 0.0) for u, t in access.items()}
 
 
 class _Profile:
@@ -810,6 +830,27 @@ class _Profile:
             if (u, way) not in found:
                 found[(u, way)] = self._journey(u, t, now, way), way
         return list(found.values())
+
+    def hurrying(self, access, hurry, now, found):
+        """The options only hurrying to the first stop catches, as `options`
+        gives them: read at the stops reached at `hurry` times the walk of
+        `access`, and GRACE sooner, then kept where the first ride leaves
+        before the usual walk gets there. One that only GRACE catches must
+        ride a tracked vehicle, the only kind known to the second. Each walks
+        to its stop at the hurried pace, so a little after the ride leaves for
+        one GRACE catches."""
+        taken = {way for _, way in found}
+        out = []
+        for j, way in self.options(_quickest(access, hurry), now):
+            walk, ride, *rest = j.legs
+            quick = now + access[walk.b] * hurry
+            if way in taken or ride.dep >= now + access[walk.b] or \
+                    ride.dep < quick and ride.confidence != "live":
+                continue
+            walk = dataclasses.replace(walk, arr=quick)
+            out.append((dataclasses.replace(j, legs=(walk, ride, *rest),
+                                            hurry=True), way))
+        return out
 
     def near(self, access, now, found):
         """Per option of `found`, soonest first, a near tie of it (`_near`) as

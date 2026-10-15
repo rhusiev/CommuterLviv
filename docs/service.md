@@ -138,6 +138,10 @@ scaled by it, which costs about a millisecond. The walk caps below
 scaled by the same pace, so a slower walker is offered the same stops, each
 further away in time. Both clients keep a usual speed on the
 device (the account menu) and step it per search beside the departure time.
+`&hurry=<km/h>`, from 0.5 to 12 (`HURRY_KMH`, a brisk run, chosen, not
+derived), is how fast they would walk to the first stop to catch a bus; see
+hurry options below. Both clients keep it beside the usual speed, off until
+set, and send it only then.
 
 The graph holds the ways OpenStreetMap lets somebody walk (`WALKABLE`), and
 every stop platform, whether it is tagged `highway=platform` or only by its
@@ -316,6 +320,21 @@ option or another near tie rides, since that is no other way should the vehicle
 be late, and it is not a bus waited for with rides added, as for backups. А10
 at 13:55 to the door at 14:13 is listed beside Тр38 at 13:56 to the door at
 14:11 this way.
+
+A bus that leaves the first stop just before somebody walking there arrives is
+an option too, flagged `hurry: true` (`_Profile.hurrying`): one caught at the
+`hurry` pace, or a tracked vehicle missed by at most 10 s (`GRACE`, chosen,
+not derived), which a driver waits for when waved to. Only a tracked vehicle
+is known to the second, so a timetabled one is never caught by waving. The
+options are read once more at the stops as reached that much sooner, from the
+same scan; `journeys` takes the pace as `hurry`, the share of the usual walk's
+time hurrying takes. Hurrying is the last criterion of the front, so a hurry
+option never pushes out a calm one, and only the walk to the first stop is
+hurried. That walk is sent at the hurried pace, ending as the bus leaves when
+only waving catches it. A backup of a hurry option's first ride walks at the
+usual pace. From [49.8187, 24.0310] at 20:09 at 5.5 km/h, westbound А16 left
+Енергетична 7 s before the walk got there and reached the door at 20:33; the
+calm option, А16 the other way and a change to А41, at 20:43.
 
 The server's order is the fastest first. Both clients re-sort the same options
 by a preset - fastest, less walking, fewer changes, most backups - picked from

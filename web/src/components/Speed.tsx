@@ -2,9 +2,17 @@ import { t } from "../lib/i18n";
 import { WALK_KMH } from "../lib/walking";
 import { Icon } from "./Icon";
 
-/** A walking speed, a step at a time */
-export function Speed({ kmh, onKmh }: { kmh: number; onKmh: (kmh: number) => void }) {
-  const { min, max, step } = WALK_KMH;
+/** A walking speed, a step at a time, within `range` */
+export function Speed({
+  kmh,
+  onKmh,
+  range = WALK_KMH,
+}: {
+  kmh: number;
+  onKmh: (kmh: number) => void;
+  range?: { min: number; max: number; step: number };
+}) {
+  const { min, max, step } = range;
   return (
     <span className="flex items-center gap-1">
       <button onClick={() => onKmh(kmh - step)} disabled={kmh <= min} title={t.slower} className="btn-quiet px-2 disabled:opacity-40">

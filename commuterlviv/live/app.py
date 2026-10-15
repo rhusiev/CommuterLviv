@@ -388,9 +388,11 @@ def _departure(raw):
 
 
 WALK_KMH = (0.5, 8.0)   # walking speeds a search takes, on the level
+# hurrying speeds it takes: a brisk run at most. Chosen, not derived
+HURRY_KMH = (WALK_KMH[0], 12.0)
 
 
-def _speed(raw):
+def _kmh(raw, name, bounds):
     """(km/h or None, complaint)."""
     if not raw:
         return None, None
@@ -398,9 +400,9 @@ def _speed(raw):
         kmh = float(raw)
     except ValueError:
         kmh = math.nan
-    lo, hi = WALK_KMH
+    lo, hi = bounds
     if not lo <= kmh <= hi:
-        return None, f"speed must be between {lo:g} and {hi:g} km/h"
+        return None, f"{name} must be between {lo:g} and {hi:g} km/h"
     return kmh, None
 
 
@@ -423,7 +425,10 @@ async def journey(request, session):
         return error(why)
     if at is not None and isinstance(origin, plan.Aboard):
         return error("On board, a journey leaves now, so it takes no at")
-    speed, why = _speed(request.query_params.get("speed"))
+    speed, why = _kmh(request.query_params.get("speed"), "speed", WALK_KMH)
+    if why:
+        return error(why)
+    hurry, why = _kmh(request.query_params.get("hurry"), "hurry", HURRY_KMH)
     if why:
         return error(why)
     # refused rather than queued when every worker is busy: a queue of
@@ -437,7 +442,7 @@ async def journey(request, session):
     try:
         async with app.planning:
             found, ways = await asyncio.to_thread(planner.search, origin, dest,
-                                                  arrivals, at, speed)
+                                                  arrivals, at, speed, hurry)
     except Exception as exc:
         # answered as JSON on purpose: an unhandled exception leaves Starlette
         # with a plain-text 500, which every client reads as a JSON.parse
@@ -446,8 +451,8 @@ async def journey(request, session):
         return error("Could not plan that journey", 500)
     rid = app.recent.hold(session["user_id"], {
         "from": origin, "to": dest, "t": found["t"], "asked": asked,
-        "speed": speed, "arrivals": arrivals, "cat": live.cat, "answer": found,
-        "journeys": ways})
+        "speed": speed, "hurry": hurry, "arrivals": arrivals, "cat": live.cat,
+        "answer": found, "journeys": ways})
     return JSONResponse({**found, "report": rid})
 
 
@@ -475,7 +480,7 @@ async def backup(request, session):
         async with app.planning:
             found = await asyncio.to_thread(
                 planner.backup, held["from"], held["to"], held["arrivals"],
-                held["speed"], held["journeys"][option], leg, n)
+                held["speed"], held["hurry"], held["journeys"][option], leg, n)
     except Exception as exc:
         # as JSON for the same reason as a failed search's
         log("backup failed:", repr(exc)[:200])

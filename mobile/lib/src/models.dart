@@ -286,6 +286,10 @@ class Leg {
 /// assumed until you say, which is also the service's own.
 const walkKmh = (min: 0.5, max: 8.0, step: 0.5, usual: 4.5);
 
+/// How fast you would walk to catch a bus, in km/h: up to a brisk run, which
+/// is also the service's limit. Off until you say.
+final hurryKmh = (min: walkKmh.min, max: 12.0);
+
 class Backup {
   const Backup({
     required this.rides,
@@ -350,6 +354,7 @@ class Journey {
     required this.legs,
     this.backup = 0,
     this.aboard = false,
+    this.hurry = false,
   });
 
   factory Journey.fromJson(Map<String, dynamic> j) => Journey(
@@ -360,6 +365,7 @@ class Journey {
     confidence: confidenceOf(j['confidence']),
     backup: j['backup'] as int? ?? 0,
     aboard: j['aboard'] as bool? ?? false,
+    hurry: j['hurry'] as bool? ?? false,
     legs: [
       for (final l in j['legs'] as List)
         Leg.fromJson(l as Map<String, dynamic>),
@@ -382,6 +388,9 @@ class Journey {
 
   /// Starts on board the vehicle the search was made from.
   final bool aboard;
+
+  /// Its first ride is caught only by hurrying to it.
+  final bool hurry;
 
   int get walking =>
       legs.where((l) => l.walking).fold(0, (s, l) => s + l.arr - l.dep);

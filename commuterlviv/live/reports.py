@@ -83,7 +83,8 @@ def write(search, note, user, folder=DIR):
     meta = {"version": __version__, "user": str(user), "note": note,
             "reported": time.time(), "catalog": cat.tag,
             "stops": cat.stops, "routes": cat.routes,
-            **{k: search[k] for k in ("to", "t", "asked", "speed", "answer")},
+            **{k: search[k] for k in ("to", "t", "asked", "speed", "hurry",
+                                    "answer")},
             "from": _sent(search["from"])}
     stamp = datetime.datetime.now(plan.TZ).strftime("%Y%m%d-%H%M%S")
     path = folder / f"{stamp}-{uuid.uuid4().hex[:6]}.npz"
@@ -126,14 +127,18 @@ def main(argv):
     planner = journeys.Planner(tt, walk, transfers, r["cat"])
     print(f"reported {_stamp(r['reported'])} by user {r['user']} on "
           f"v{r['version']}, here v{__version__}")
+    # reports from before hurrying was asked about hold no `hurry`
+    hurry = r.get("hurry")
     print(f"from {r['from']} to {r['to']}, leaving {_stamp(r['t'])}, "
-          f"walking {r['speed'] or 'at the usual'} km/h")
+          f"walking {r['speed'] or 'at the usual'} km/h"
+          + (f", hurrying {hurry} km/h" if hurry else ""))
     if r["note"]:
         print(f"note: {r['note']}")
     if r["catalog"] != Catalog(net).tag:
         print("the feed has changed since: stops and trips may differ")
     found = planner.journeys(r["from"], r["to"], r["arrivals"], r["t"],
-                             r["speed"], r["t"] <= r["asked"] + replay.HORIZON)
+                             r["speed"], r["t"] <= r["asked"] + replay.HORIZON,
+                             hurry)
     for title, options in (("served", r["answer"]["options"]),
                            ("here", [planner.wire(j) for j in found])):
         print(f"\n== {title}: {len(options)} options")
@@ -152,7 +157,8 @@ def _show(options, cat, net):
 
     for o in options:
         print(f"\n{plan._clock(o['dep'])} -> {plan._clock(o['arr'])}, "
-              f"{o['rides']} rides, {o['backup']} backups")
+              f"{o['rides']} rides, {o['backup']} backups"
+              + (", hurrying" if o.get("hurry") else ""))
         for leg in o["legs"]:
             if leg["kind"] == "walk":
                 print(f"  walk {(leg['arr'] - leg['dep']) / 60:.0f} min to "

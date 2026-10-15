@@ -11,10 +11,18 @@ import 'models.dart';
 import 'strings.dart';
 
 class SpeedStepper extends StatelessWidget {
-  const SpeedStepper({super.key, required this.kmh, required this.onChanged});
+  const SpeedStepper({
+    super.key,
+    required this.kmh,
+    required this.onChanged,
+    this.max,
+  });
 
   final double kmh;
   final ValueChanged<double> onChanged;
+
+  /// The fastest it steps to, [walkKmh]'s by default.
+  final double? max;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -36,7 +44,7 @@ class SpeedStepper extends StatelessWidget {
         ),
       ),
       IconButton(
-        onPressed: kmh >= walkKmh.max
+        onPressed: kmh >= (max ?? walkKmh.max)
             ? null
             : () => onChanged(kmh + walkKmh.step),
         icon: const Icon(Icons.add),
@@ -46,7 +54,8 @@ class SpeedStepper extends StatelessWidget {
   );
 }
 
-/// The usual walking speed, kept the moment it is stepped.
+/// The usual walking speed, and the hurrying one, kept the moment either is
+/// stepped.
 class WalkSpeedSheet extends StatefulWidget {
   const WalkSpeedSheet({super.key, required this.api});
 
@@ -58,6 +67,12 @@ class WalkSpeedSheet extends StatefulWidget {
 
 class _WalkSpeedSheetState extends State<WalkSpeedSheet> {
   late double _kmh = widget.api.walkSpeed;
+  late double? _hurry = widget.api.hurrySpeed;
+
+  void _keepHurry(double? kmh) {
+    setState(() => _hurry = kmh);
+    unawaited(widget.api.setHurrySpeed(kmh));
+  }
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -79,6 +94,18 @@ class _WalkSpeedSheetState extends State<WalkSpeedSheet> {
           ),
           Text(
             txt.walkSpeedHint,
+            textAlign: TextAlign.center,
+            style: material.Theme.of(context).textTheme.bodySmall,
+          ),
+          SwitchListTile(
+            title: Text(txt.hurrySpeed),
+            value: _hurry != null,
+            onChanged: (on) => _keepHurry(on ? _kmh : null),
+          ),
+          if (_hurry case final hurry?)
+            SpeedStepper(kmh: hurry, max: hurryKmh.max, onChanged: _keepHurry),
+          Text(
+            txt.hurrySpeedHint,
             textAlign: TextAlign.center,
             style: material.Theme.of(context).textTheme.bodySmall,
           ),
