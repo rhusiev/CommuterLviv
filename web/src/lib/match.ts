@@ -4,6 +4,9 @@
 
 const WORD = /[\p{L}\p{N}]+/gu;
 
+/** Letters typed before a query is looked up at all */
+export const MIN_TYPED = 2;
+
 /** Case, accents and apostrophes gone, so й matches и and ʼ is not typed */
 export const fold = (s: string) =>
   s

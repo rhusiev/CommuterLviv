@@ -1,6 +1,7 @@
-/// Stops by name, scanned on every keystroke, and addresses and shops from the
-/// service a quarter of a second after the typing stops. Stops come first: they
-/// are the thing the app is for, and they are already in hand.
+/// Saved places and stops by name, scanned on every keystroke, and addresses
+/// and shops from the service a quarter of a second after the typing stops.
+/// Saved places come first, as the ones meant most often, then stops: they are
+/// the thing the app is for, and both are already in hand.
 library;
 
 import 'dart:async';
@@ -16,9 +17,6 @@ import 'strings.dart';
 
 /// How long the typing has to stop before the service is asked.
 const searchDebounce = Duration(milliseconds: 250);
-
-/// Below this every prefix matches half the city, so nothing is asked.
-const _shortest = 2;
 
 /// What the search came back with: a stop in the catalog, or a point on it.
 sealed class Hit {
@@ -42,12 +40,14 @@ class StopSearch extends SearchDelegate<Hit?> {
   StopSearch({
     required this.api,
     required this.catalog,
+    required this.places,
     required this.onSave,
     this.idle,
   }) : super(searchFieldLabel: txt.findStop);
 
   final Api api;
   final Catalog catalog;
+  final List<Place> places;
   final void Function(String name, LatLng at) onSave;
 
   /// What an empty query shows, given a way to close the search with nothing
@@ -75,6 +75,7 @@ class StopSearch extends SearchDelegate<Hit?> {
       : _Results(
           api: api,
           catalog: catalog,
+          places: places,
           query: query.trim(),
           onPick: (hit) => close(context, hit),
           onSave: onSave,
@@ -85,6 +86,7 @@ class _Results extends StatefulWidget {
   const _Results({
     required this.api,
     required this.catalog,
+    required this.places,
     required this.query,
     required this.onPick,
     required this.onSave,
@@ -92,6 +94,7 @@ class _Results extends StatefulWidget {
 
   final Api api;
   final Catalog catalog;
+  final List<Place> places;
   final String query;
   final void Function(Hit hit) onPick;
   final void Function(String name, LatLng at) onSave;
@@ -130,7 +133,7 @@ class _ResultsState extends State<_Results> {
     setState(() {
       _found = const [];
       _failed = false;
-      _busy = widget.query.length >= _shortest;
+      _busy = widget.query.length >= minTyped;
     });
     if (_busy) _timer = Timer(searchDebounce, () => unawaited(_ask()));
   }
@@ -181,7 +184,10 @@ class _ResultsState extends State<_Results> {
           : catalog.stops[a.$2].name.length - catalog.stops[b.$2].name.length,
     );
     final stops = [for (final (_, i) in scored) i];
+    final mine = matching(widget.places, widget.query);
     final rows = <Object>[
+      if (mine.isNotEmpty) txt.places,
+      ...mine,
       if (stops.isNotEmpty) txt.foundStops,
       ...stops,
       if (_found.isNotEmpty) txt.foundPlaces,
@@ -223,6 +229,14 @@ class _ResultsState extends State<_Results> {
                   onSave: () => _save(s.name, LatLng(s.lat, s.lon)),
                 );
               }
+              if (row is Place) {
+                return _Row(
+                  icon: Icons.star,
+                  title: row.name,
+                  under: '',
+                  onTap: () => widget.onPick(PlaceHit(row.at, row.name)),
+                );
+              }
               final p = row as Found;
               return _Row(
                 icon: Icons.place_outlined,
@@ -245,14 +259,16 @@ class _Row extends StatelessWidget {
     required this.title,
     required this.under,
     required this.onTap,
-    required this.onSave,
+    this.onSave,
   });
 
   final IconData icon;
   final String title;
   final String under;
   final VoidCallback onTap;
-  final VoidCallback onSave;
+
+  /// Null for a place already saved
+  final VoidCallback? onSave;
 
   @override
   Widget build(BuildContext context) => ListTile(
@@ -262,10 +278,12 @@ class _Row extends StatelessWidget {
         ? null
         : Text(under, overflow: TextOverflow.ellipsis),
     onTap: onTap,
-    trailing: IconButton(
-      icon: const Icon(Icons.star_outline),
-      tooltip: txt.savePlace,
-      onPressed: onSave,
-    ),
+    trailing: onSave == null
+        ? null
+        : IconButton(
+            icon: const Icon(Icons.star_outline),
+            tooltip: txt.savePlace,
+            onPressed: onSave,
+          ),
   );
 }

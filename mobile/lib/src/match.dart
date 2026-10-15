@@ -5,6 +5,12 @@ library;
 
 import 'dart:math' show min;
 
+import 'models.dart';
+
+/// Letters typed before a query is looked up at all: below this every prefix
+/// matches half the city.
+const minTyped = 2;
+
 final _word = RegExp(r'[\p{L}\p{N}]+', unicode: true);
 
 /// What Unicode decomposition would fold, by hand: Dart has no NFKD.
@@ -55,4 +61,19 @@ int score(List<String> query, List<String> name) {
     total += s;
   }
   return total;
+}
+
+/// The saved [places] whose names answer [query], best first and shorter names
+/// first among equals, as stops are ranked.
+List<Place> matching(List<Place> places, String query) {
+  final q = words(query);
+  if (q.join().length < minTyped) return const [];
+  final scored = [
+    for (final p in places)
+      if (score(q, words(p.name)) case final s when s > 0) (s, p),
+  ];
+  scored.sort(
+    (a, b) => a.$1 != b.$1 ? b.$1 - a.$1 : a.$2.name.length - b.$2.name.length,
+  );
+  return [for (final (_, p) in scored) p];
 }

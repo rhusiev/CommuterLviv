@@ -1,8 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:latlong2/latlong.dart';
+
 import 'package:commuterlviv/src/match.dart';
+import 'package:commuterlviv/src/models.dart';
 
 int of(String q, String name) => score(words(q), words(name));
+
+List<String> names(String q, List<String> saved) => [
+  for (final p in matching([
+    for (final n in saved) Place(name: n, at: const LatLng(49.84, 24.03)),
+  ], q))
+    p.name,
+];
 
 void main() {
   test('words match in any order, by prefix', () {
@@ -26,5 +36,23 @@ void main() {
       of('стрийсь', 'Стрийська'),
       greaterThan(of('стрийска', 'Стрийська')),
     );
+  });
+
+  test('saved places match the way stops are matched', () {
+    expect(names('роб', ['Дім', 'Робота']), ['Робота']);
+    expect(names('мами д', ['Дім мами', 'Дім']), ['Дім мами']);
+  });
+
+  test('saved places: closer matches first, shorter names among equals', () {
+    expect(names('спорт', ['Спортзал біля роботи', 'Спортзал', 'Спорт']), [
+      'Спорт',
+      'Спортзал',
+      'Спортзал біля роботи',
+    ]);
+    expect(names('hone', ['Phone shop', 'Home']), ['Phone shop', 'Home']);
+  });
+
+  test('saved places wait for a second letter', () {
+    expect(names('д', ['Дім']), isEmpty);
   });
 }

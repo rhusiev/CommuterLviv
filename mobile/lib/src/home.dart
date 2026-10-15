@@ -636,6 +636,7 @@ class _HomeScreenState extends State<HomeScreen> {
       delegate: StopSearch(
         api: widget.api,
         catalog: catalog,
+        places: _sets?.places ?? const [],
         onSave: _savePlace,
       ),
     );

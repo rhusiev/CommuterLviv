@@ -194,7 +194,8 @@ endpoint and no model - the browser and the phone see the same city, the same
 route sets and the same predictions, and the same journey planner behind the
 third choice in the tab pill. Both also carry the same three views added since:
 a saved list where a place can be renamed or dropped, a search that finds
-addresses and shops as well as stop names, traffic drawn over the streets
+addresses and shops as well as stop names, with matching saved places above
+both, traffic drawn over the streets
 the model can see, and following a journey as you travel it.
 
 ```sh

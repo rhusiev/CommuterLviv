@@ -1,9 +1,10 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { metres } from "../lib/geo";
-import { score, words } from "../lib/match";
+import { MIN_TYPED, score, words } from "../lib/match";
+import { matching } from "../lib/places";
 import { hereOnce, type NoFix } from "../lib/position";
-import type { Catalog, Found } from "../lib/types";
+import type { Catalog, Found, Place } from "../lib/types";
 import { t } from "../lib/i18n";
 
 const LIMIT = 8;
@@ -14,23 +15,25 @@ const NEAR = 2000;
 /** A keystroke within this cancels the request the one before it started */
 const SETTLE = 250;
 
-/** Stops are the catalog in memory and answer instantly; places are a request,
- * so they arrive under the stops rather than reordering what is already there. */
-type Row = { stop: number; away?: number } | { place: Found };
+/** Saved places and stops are in memory and answer instantly; places are a
+ * request, so they arrive under the stops rather than reordering what is
+ * already there. */
+type Row = { saved: Place } | { stop: number; away?: number } | { place: Found };
 
-const isStop = (r: Row): r is { stop: number; away?: number } => "stop" in r;
+type Section = { title: string; rows: Row[] };
 
 type Props = {
   catalog: Catalog;
   onGo: (stop: number) => void;
-  onPlace: (place: Found) => void;
+  onPlace: (place: Place) => void;
+  places: Place[];
   onSave: (name: string, lat: number, lon: number) => void;
   /** Set when the search stands in for a field: it opens focused, offers
    *  `idle` until something is typed, and asks to be dismissed when done */
   inline?: { placeholder: string; idle: ReactNode; onDismiss: () => void };
 };
 
-export function StopSearch({ catalog, onGo, onPlace, onSave, inline }: Props) {
+export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: Props) {
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const [near, setNear] = useState<{ stop: number; away: number }[] | null>(null);
@@ -42,7 +45,7 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, inline }: Props) {
   const names = useMemo(() => catalog.stops.map((s) => words(s.name)), [catalog]);
   const hits = useMemo(() => {
     const q = words(query);
-    if (q.join("").length < 2) return [];
+    if (q.join("").length < MIN_TYPED) return [];
     const scored: [number, number][] = [];
     names.forEach((name, i) => {
       const s = score(q, name);
@@ -52,10 +55,11 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, inline }: Props) {
     scored.sort(([a, i], [b, j]) => b - a || catalog.stops[i]!.name.length - catalog.stops[j]!.name.length);
     return scored.slice(0, LIMIT).map(([, i]) => i);
   }, [catalog, names, query]);
+  const mine = useMemo(() => matching(places, query).slice(0, LIMIT), [places, query]);
 
   useEffect(() => {
     const q = query.trim();
-    if (near !== null || q.length < 2) {
+    if (near !== null || q.length < MIN_TYPED) {
       setFound([]);
       return;
     }
@@ -123,10 +127,25 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, inline }: Props) {
     return () => document.removeEventListener("pointerdown", away);
   }, []);
 
-  const rows: Row[] =
+  const sections: Section[] = (
     near === null
-      ? [...hits.map((stop) => ({ stop })), ...found.map((place) => ({ place }))]
-      : near.map((h) => ({ stop: h.stop, away: h.away }));
+      ? [
+          { title: t.places, rows: mine.map((saved) => ({ saved })) },
+          { title: t.stopHits, rows: hits.map((stop) => ({ stop })) },
+          { title: t.placeHits, rows: found.map((place) => ({ place })) },
+        ]
+      : [{ title: t.stopHits, rows: near.map((h) => ({ stop: h.stop, away: h.away })) }]
+  ).filter((s) => s.rows.length > 0);
+  const rows = sections.flatMap((s) => s.rows);
+  // Named only once the list holds more than one kind of thing
+  const headings = new Map<number, string>();
+  if (sections.length > 1) {
+    let at = 0;
+    for (const s of sections) {
+      headings.set(at, s.title);
+      at += s.rows.length;
+    }
+  }
 
   const clear = () => {
     setQuery("");
@@ -138,8 +157,8 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, inline }: Props) {
 
   const go = (row: Row | undefined) => {
     if (!row) return;
-    if (isStop(row)) onGo(row.stop);
-    else onPlace(row.place);
+    if ("stop" in row) onGo(row.stop);
+    else onPlace("saved" in row ? row.saved : row.place);
     clear();
   };
 
@@ -185,16 +204,10 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, inline }: Props) {
       {rows.length > 0 && (
         <ul className="panel absolute inset-x-0 top-full z-30 mt-2 overflow-hidden p-1">
           {rows.map((row, n) => {
-            // Named only once the list holds both kinds of thing
-            const heading =
-              found.length === 0 || near !== null
-                ? null
-                : n === 0 && hits.length > 0
-                  ? t.stopHits
-                  : n === hits.length
-                    ? t.placeHits
-                    : null;
-            const it = isStop(row)
+            const heading = headings.get(n);
+            const it = "saved" in row
+              ? { ...row.saved, where: "" }
+              : "stop" in row
               ? {
                   ...catalog.stops[row.stop]!,
                   where:
@@ -209,7 +222,7 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, inline }: Props) {
               : row.place;
             return (
               <li key={n}>
-                {heading !== null && (
+                {heading !== undefined && (
                   <p className="px-2.5 pb-0.5 pt-1.5 text-xs uppercase tracking-wide text-slate-500">
                     {heading}
                   </p>
@@ -230,13 +243,17 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, inline }: Props) {
                     <span className="truncate">{it.name}</span>
                     <span className="ml-2 text-xs text-slate-500">{it.where}</span>
                   </button>
-                  <button
-                    onClick={() => onSave(it.name, it.lat, it.lon)}
-                    title={t.savePlace}
-                    className="shrink-0 px-2 py-1.5 text-sm text-slate-500 hover:text-accent"
-                  >
-                    ☆
-                  </button>
+                  {"saved" in row ? (
+                    <span className="shrink-0 px-2 py-1.5 text-sm text-accent">★</span>
+                  ) : (
+                    <button
+                      onClick={() => onSave(it.name, it.lat, it.lon)}
+                      title={t.savePlace}
+                      className="shrink-0 px-2 py-1.5 text-sm text-slate-500 hover:text-accent"
+                    >
+                      ☆
+                    </button>
+                  )}
                 </div>
               </li>
             );
