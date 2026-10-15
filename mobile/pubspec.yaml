@@ -51,6 +51,9 @@ dependencies:
   # credit link to openstreetmap.org/copyright wherever the medium has links,
   # and a phone does
   url_launcher: ^6.3.2
+  # The time the follow card judges the next connection at, which a widget
+  # test can move on. `flutter_test` already depends on it
+  clock: ^1.1.2
 
 dev_dependencies:
   flutter_test:

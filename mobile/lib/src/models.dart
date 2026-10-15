@@ -278,10 +278,25 @@ class Leg {
   final List<Backup> backups;
 
   bool get walking => kind == 'walk';
+
+  /// As [Leg.fromJson] reads it, without the backups
+  Map<String, Object?> toJson() => {
+    'kind': kind,
+    'dep': dep,
+    'arr': arr,
+    'a': a,
+    'b': b,
+    'route': route,
+    'veh': veh,
+    'live': live,
+    'confidence': confidence.name,
+    'pts': [
+      for (final p in pts) [p.latitude, p.longitude],
+    ],
+    'stops': stops,
+  };
 }
 
-/// Another way to the door from where a ride boards: the rides it takes, the
-/// first leaving from there, and when it reaches the door
 /// How fast you walk on the level, in km/h: the steps offered, and what is
 /// assumed until you say, which is also the service's own.
 const walkKmh = (min: 0.5, max: 8.0, step: 0.5, usual: 4.5);
@@ -290,6 +305,8 @@ const walkKmh = (min: 0.5, max: 8.0, step: 0.5, usual: 4.5);
 /// is also the service's limit. Off until you say.
 final hurryKmh = (min: walkKmh.min, max: 12.0);
 
+/// Another way to the door from where a ride boards: the rides it takes, the
+/// first leaving from there, and when it reaches the door
 class Backup {
   const Backup({
     required this.rides,
@@ -394,6 +411,19 @@ class Journey {
 
   int get walking =>
       legs.where((l) => l.walking).fold(0, (s, l) => s + l.arr - l.dep);
+
+  /// As [Journey.fromJson] reads it, without the legs' backups
+  Map<String, Object?> toJson() => {
+    'dep': dep,
+    'arr': arr,
+    'rides': rides,
+    'live': live,
+    'confidence': confidence.name,
+    'backup': backup,
+    'aboard': aboard,
+    'hurry': hurry,
+    'legs': [for (final l in legs) l.toJson()],
+  };
 }
 
 /// A vehicle to plan from as though on board, with its route if known.

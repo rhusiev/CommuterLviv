@@ -1,6 +1,7 @@
 """The web app in a real browser against the real service: an account created
 through the sign-in screen, a stop found by name, the bus on its board, and a
-journey planned from on board it and followed.
+journey planned from on board it and followed, and one followed on foot that
+misses its bus searched again.
 
 Needs the built web app (`npm run build` in `web/`), Playwright for Python and a
 Chromium. Skipped when any of them is missing."""
@@ -40,6 +41,11 @@ TILE_PX = 512            # maplibre's world is this many pixels across at zoom 0
 STEP_PX = 8
 SCAN_PX = 120
 CENTRE = city._point(city.LENGTH / 2)
+# Slow enough that riding beats walking the whole line: the side street takes
+# 360 s, in time for the bus's next lap, which the plan rides. Chosen
+WALK_KMH = 3
+END = city._point(city.LENGTH)
+MISSED_S = 60            # the bus left this long before the page loaded
 
 
 def _chromium():
@@ -231,3 +237,44 @@ def test_a_journey_planned_on_board_is_followed_from_the_ride(page):
     expect(steps.first).to_contain_text(re.compile(r"\d\d:\d\d - \d\d:\d\d.*Stop \d → Stop 2"))
     expect(steps.last).to_contain_text("Walk to the door")
     expect(page.locator("li[aria-current=step]")).to_contain_text("→")
+
+
+def _a_ride_from_the_door(page):
+    """A journey planned from the door to the end of the line that rides the
+    bus, as the service plans it, with the catalog it belongs to."""
+    tag = page.evaluate("fetch('/api/catalog').then(r => r.headers.get('ETag'))")
+    lat, lon = streets.DOOR
+    plan = page.evaluate(
+        f"fetch('/api/plan?from={lat},{lon}&to={END[0]},{END[1]}"
+        f"&speed={WALK_KMH}').then(r => r.json())")
+    journey = next((o for o in plan["options"]
+                    if any(leg["kind"] == "ride" for leg in o["legs"])), None)
+    assert journey is not None, plan
+    return journey, tag
+
+
+def test_a_missed_bus_is_searched_again_from_the_last_fix(page):
+    _register(page, "late")
+    expect = playwright.expect
+    page.get_by_role("button", name="Routes").click()
+    page.get_by_role("button", name="1", exact=True).click()
+    expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
+    journey, tag = _a_ride_from_the_door(page)
+    ride = next(leg for leg in journey["legs"] if leg["kind"] == "ride")
+    ride["dep"] = time.time() - MISSED_S
+    ride.pop("veh", None)
+    held = {"journey": journey, "to": {"lat": END[0], "lon": END[1]}, "tag": tag}
+    page.evaluate("v => localStorage.setItem('commuterlviv.following', v)",
+                  json.dumps(held))
+    page.context.set_geolocation(
+        {"latitude": streets.DOOR[0], "longitude": streets.DOOR[1]})
+    page.reload()
+
+    again = page.get_by_role("button", name="Search again")
+    expect(again).to_be_visible(timeout=SEE_MS)
+    # The map and the follower watch the position already; asked again, the
+    # browser would not answer until it moved
+    with page.expect_request(lambda r: "/api/plan?from=" in r.url) as asked:
+        again.click()
+    lat, lon = asked.value.url.split("from=")[1].split("&")[0].split(",")
+    assert (float(lat), float(lon)) == pytest.approx(streets.DOOR)

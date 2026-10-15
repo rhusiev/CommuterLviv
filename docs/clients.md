@@ -77,15 +77,46 @@ each walk, each wait of a minute or more (`WAIT_MIN_S`) at a stop, and each
 ride with its route and its two stops, the step under way marked. The rows are
 built by `rows()` in `web/src/lib/legs.ts`, ported to `mobile/lib/src/legs.dart`.
 
+The card also watches the next ride to board. `Follower.reach` times when you
+get to its stop: on foot, from the metres left at the usual walking speed and
+at the hurrying one (the usual, if hurrying is off); on a ride, from when the
+vehicle ridden is predicted at the stop to get off at, plus the walks to the
+next ride. `judge` sets that against the vehicle's predicted arrival, or the
+timetable when it is not tracked: caught at the usual pace, caught only by
+hurrying - or, for a tracked vehicle, within `GRACE_S` (10 s) of it, as the
+planner does - or missed. Predictions jump, so `Watch` says a worse word only
+once it has held for 10 s, or at once within 120 s of leaving; a better word is
+said at once. It judges again with each fix, each word of arrivals and every
+second, so a held word is not left waiting for the next fix. Hurrying is urged
+only on foot. On a ride the card warns ahead that the change will need it, with
+"Find another way". A missed ride says the journey no longer works, with
+"Search again". Either search asks for the same destination from on board the
+vehicle ridden, sending only its id, or else from where you are, sent only on
+that tap. It runs on its own, and the journey stays followed until another
+option is followed. Waiting at the stop, where the vehicle is in sight, nothing
+new is said - a ride already missed stays missed, the one there being a later
+one. Nor is anything said while the vehicle ridden is not known.
+
+A followed journey is kept on the device, with the destination, how far along
+it was and the catalog's ETag, and is picked up again after a reload or a
+restart (`web/src/lib/followed.ts`, `mobile/lib/src/followed.dart`). It goes
+when it is ended, arrived or replaced, on another catalog, whose stop and route
+positions it would misread, and 2 h past its arrival (chosen, not derived). On
+the phone, a catalog renewed while the app runs drops it too.
+
 By default it follows only while the app is on screen. The app has a setting,
 off until turned on, to go on with the screen off: on Android a foreground
 service keeps the location updates running behind an ongoing notification that
 repeats the card, on iOS the location updates run in the background, and both
-sound an alert once when it is time to get off, when the stop is passed and on
-arrival. Neither asks for background location: the updates were started while
+sound an alert once when it is time to get off, when the stop is passed, when
+the next ride is caught only by hurrying or will be missed, and on arrival. Neither asks for background location: the updates were started while
 the app was open, which the while-in-use grant covers. A browser cannot locate
 with the page hidden, so the web card offers only to keep the screen on
-(the Screen Wake Lock API) for as long as the journey is followed.
+(the Screen Wake Lock API) for as long as the journey is followed. The web
+map's dot, the follower and every ask for where you are share one position
+watch (`web/src/lib/position.ts`). A browser already watching may not answer a
+second watch or ask until the device moves, so whoever comes later is handed
+the last fix - as the app's one `Here` does.
 
 One palette, two clients. `web/src/app.css` declares five colours, two radii and
 one shadow in a Tailwind `@theme` block, and `mobile/lib/src/theme.dart` repeats

@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { metres } from "../lib/geo";
 import { score, words } from "../lib/match";
+import { hereOnce, type NoFix } from "../lib/position";
 import type { Catalog, Found } from "../lib/types";
 import { t } from "../lib/i18n";
 
@@ -88,7 +89,7 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, inline }: Props) {
       return;
     }
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
+    hereOnce({ enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }).then(
       (pos) => {
         setLocating(false);
         const me = { lat: pos.coords.latitude, lon: pos.coords.longitude };
@@ -100,11 +101,10 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, inline }: Props) {
         setNear(close);
         if (close.length === 0) setWhy(t.nothingNear);
       },
-      (err) => {
+      (no: NoFix) => {
         setLocating(false);
-        setWhy(err.code === err.PERMISSION_DENIED ? "location refused" : "no location fix");
+        setWhy(no === "refused" ? "location refused" : "no location fix");
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
     );
   };
 

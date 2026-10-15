@@ -7,6 +7,10 @@
 /// looks exactly like sitting in it, so a ride counts as boarded only once the
 /// fixes move along the ride's line faster than anyone walks. Only then is the
 /// vehicle picked: the one of the leg's route keeping pace with the fixes.
+///
+/// Ahead of every ride still to board, the fixes and the predictions say
+/// whether it is still caught: walking to its stop at the usual pace, only by
+/// hurrying - now, or off the ride before it - or not at all.
 library;
 
 import 'dart:math' as math;
@@ -49,12 +53,78 @@ enum StageKind { walk, wait, ride, arrived }
 class Stage {
   const Stage(this.kind, [this.leg = -1, this.veh]);
 
+  factory Stage.fromJson(Map<String, dynamic> j) => Stage(
+    StageKind.values.byName(j['kind'] as String),
+    j['leg'] as int? ?? -1,
+    j['veh'] as int?,
+  );
+
   final StageKind kind;
   final int leg;
 
   /// The wire id of the vehicle ridden, null while none keeps pace
   final int? veh;
+
+  Map<String, Object?> toJson() => {'kind': kind.name, 'leg': leg, 'veh': veh};
+
+  @override
+  bool operator ==(Object other) =>
+      other is Stage &&
+      other.kind == kind &&
+      other.leg == leg &&
+      other.veh == veh;
+
+  @override
+  int get hashCode => Object.hash(kind, leg, veh);
 }
+
+/// When a vehicle gets to a stop, unix seconds, while the predictions say
+typedef Due = int? Function(int stop, int veh);
+
+/// When the next ride to board leaves, and when the device gets to its stop
+/// at the usual and at the hurrying pace, all unix seconds. [live]: [dep] is a
+/// prediction for a tracked vehicle, not the timetable.
+class Reach {
+  const Reach({
+    required this.leg,
+    required this.dep,
+    required this.live,
+    required this.usual,
+    required this.hurried,
+  });
+
+  final int leg;
+  final double dep;
+  final bool live;
+  final double usual;
+  final double hurried;
+}
+
+enum CatchKind { ok, hurry, missed }
+
+/// The next ride to board, on time or not: [riding] warns ahead of a change
+/// from the ride under way, which hurrying cannot help yet
+class Catch {
+  const Catch(this.kind, [this.leg = -1, this.dep = 0, this.riding = false]);
+
+  final CatchKind kind;
+  final int leg;
+  final double dep;
+  final bool riding;
+}
+
+/// A tracked vehicle missed by this little is still caught: the driver waits
+/// for somebody waving or running. `GRACE` in `commuterlviv/plan.py`.
+const graceS = 10.0;
+
+/// A worse word on the connection holds this long before it is said: two of
+/// the service's five-second frames, so one jumpy prediction is not news.
+/// Chosen, not derived.
+const _holdS = 10.0;
+
+/// Closer to leaving than this a prediction is good to some 22 s
+/// (docs/service.md), so a worse word is said at once
+const _nearS = 120.0;
 
 class Progress {
   const Progress({
@@ -201,8 +271,9 @@ Stage start(Journey j) {
 
 class Follower {
   /// [catalog] places the stops a ride calls at; without it, or without them,
-  /// getting ready goes by [_soonM].
-  Follower(Journey journey, [Catalog? catalog]) : _legs = journey.legs {
+  /// getting ready goes by [_soonM]. [stage] resumes a journey followed before.
+  Follower(Journey journey, [Catalog? catalog, Stage? stage])
+    : _legs = journey.legs {
     final o = _legs.first.pts.first;
     _lat0 = o.latitude;
     _lon0 = o.longitude;
@@ -218,10 +289,10 @@ class Follower {
     _ready = [
       for (final (i, l) in _legs.indexed) _readyAt(l, _lines[i], catalog),
     ];
-    _stage = start(journey);
+    _stage = stage ?? start(journey);
     _last = Progress(
       stage: _stage,
-      left: _lines.first.length,
+      left: _stage.kind == StageKind.arrived ? 0 : _lines[_stage.leg].length,
       astray: false,
       passed: false,
       soon: false,
@@ -260,6 +331,45 @@ class Follower {
     if (catalog == null || stops == null) return line.length - _soonM;
     final s = catalog.stops[stops.isEmpty ? leg.a : stops.last];
     return line.project(_at(s.lat, s.lon)).s - _arriveM;
+  }
+
+  /// When the next ride to board leaves and when the device gets to its stop,
+  /// at [mps] and at [hurryMps] metres a second. Null with no ride ahead,
+  /// while waiting at its stop - the vehicle is in sight there - and while the
+  /// vehicle ridden is not known or not predicted to the stop to get off at.
+  Reach? reach(Due due, double now, double mps, double hurryMps) {
+    final stage = _stage;
+    if (stage.kind == StageKind.wait || stage.kind == StageKind.arrived) {
+      return null;
+    }
+    var r = -1;
+    for (var k = stage.leg + 1; k < _legs.length && r < 0; k++) {
+      if (_legs[k].kind == 'ride') r = k;
+    }
+    if (r < 0) return null;
+    var from = now;
+    var walk = 0.0;
+    if (stage.kind == StageKind.walk) {
+      walk = _last.left;
+    } else {
+      final off = stage.veh == null
+          ? null
+          : due(_legs[stage.leg].b, stage.veh!);
+      if (off == null) return null;
+      from = off.toDouble();
+    }
+    for (var k = stage.leg + 1; k < r; k++) {
+      walk += _lines[k].length;
+    }
+    final next = _legs[r];
+    final tracked = next.veh == null ? null : due(next.a, next.veh!);
+    return Reach(
+      leg: r,
+      dep: (tracked ?? next.dep).toDouble(),
+      live: tracked != null,
+      usual: from + walk / mps,
+      hurried: from + walk / hurryMps,
+    );
   }
 
   /// Takes a fix and the vehicles drawn at its time, and says where on the
@@ -464,4 +574,60 @@ double _median(List<double> xs) {
   final s = [...xs]..sort();
   final m = s.length >> 1;
   return s.length.isOdd ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/// Caught at the usual pace; else at the hurrying one, or for a tracked
+/// vehicle within [graceS] of it; else missed
+CatchKind judge(Reach r) {
+  if (r.usual <= r.dep) return CatchKind.ok;
+  return r.hurried <= r.dep || (r.live && r.hurried - graceS <= r.dep)
+      ? CatchKind.hurry
+      : CatchKind.missed;
+}
+
+const _ok = Catch(CatchKind.ok);
+
+/// What to say of the next connection, steadied: a better word is said at
+/// once, a worse one only once it has held for [_holdS], or at once within
+/// [_nearS] of leaving
+class Watch {
+  Catch _said = _ok;
+
+  /// A worse word than the one said, and since when it has held
+  ({CatchKind kind, int leg, double since})? _coming;
+
+  /// [reach] is the follower's answer at [stage], [now] unix seconds
+  Catch update(Reach? reach, Stage stage, double now) {
+    final said = _said;
+    if (reach == null) {
+      // Waiting at the stop of a connection missed still has it missed: the
+      // vehicle there is a later one
+      final missed =
+          said.kind == CatchKind.missed &&
+          stage.kind == StageKind.wait &&
+          stage.leg == said.leg;
+      _said = missed ? said : _ok;
+      _coming = null;
+      return _said;
+    }
+    if (said.kind != CatchKind.ok && said.leg != reach.leg) _said = _ok;
+    final kind = judge(reach);
+    final word = kind == CatchKind.ok
+        ? _ok
+        : Catch(kind, reach.leg, reach.dep, stage.kind == StageKind.ride);
+    if (kind.index <= _said.kind.index) {
+      _said = word;
+      _coming = null;
+      return word;
+    }
+    final coming = _coming;
+    if (coming == null || coming.kind != kind || coming.leg != reach.leg) {
+      _coming = (kind: kind, leg: reach.leg, since: now);
+    }
+    if (now - _coming!.since >= _holdS || reach.dep - now <= _nearS) {
+      _said = word;
+      _coming = null;
+    }
+    return _said;
+  }
 }

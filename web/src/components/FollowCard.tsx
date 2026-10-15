@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { canKeepAwake, heldAwake, holdAwake, useAwake } from "../lib/awake";
 import { clock, countdown } from "../lib/eta";
-import type { Progress, Stage } from "../lib/follow";
+import type { Catch, Progress, Stage } from "../lib/follow";
 import { t } from "../lib/i18n";
 import { current, rows, type Row } from "../lib/legs";
 import type { Live } from "../lib/live";
@@ -15,12 +15,18 @@ export function FollowCard({
   journey,
   live,
   progress,
+  caught,
+  onSearch,
   onEnd,
 }: {
   catalog: Catalog;
   journey: Journey;
   live: Live;
   progress: Progress | "denied" | null;
+  /** Whether the next ride to board is still caught */
+  caught: Catch;
+  /** Plans the rest of the way again; the journey is followed until another is */
+  onSearch: () => void;
   onEnd: () => void;
 }) {
   const done = progress !== null && progress !== "denied" && progress.stage.kind === "arrived";
@@ -72,12 +78,51 @@ export function FollowCard({
           {done ? t.ok : t.endFollow}
         </button>
       </div>
+      {caught.kind !== "ok" && !done && (
+        <CatchLine catalog={catalog} journey={journey} caught={caught} onSearch={onSearch} />
+      )}
       {steps && (
         <Steps
           catalog={catalog}
           journey={journey}
           stage={progress !== null && progress !== "denied" ? progress.stage : null}
         />
+      )}
+    </div>
+  );
+}
+
+/** The next ride to board caught only by hurrying, or missed. Hurrying is
+ *  urged only on foot; on a ride it is a warning, with another way offered */
+function CatchLine({
+  catalog,
+  journey,
+  caught,
+  onSearch,
+}: {
+  catalog: Catalog;
+  journey: Journey;
+  caught: Exclude<Catch, { kind: "ok" }>;
+  onSearch: () => void;
+}) {
+  const leg = journey.legs[caught.leg]!;
+  const route = leg.route === undefined ? "" : (catalog.routes[leg.route]?.short ?? "");
+  const stop = stopName(catalog, leg.a);
+  const missed = caught.kind === "missed";
+  const said = missed
+    ? `${t.noLonger}: ${t.missedRide(route, stop)}`
+    : caught.riding
+      ? t.hurryAhead(route, stop)
+      : t.hurryNow(route, countdown(caught.dep));
+  return (
+    <div className="mt-2 flex items-center gap-2 border-t border-raised pt-2">
+      <p className={`min-w-0 flex-1 text-xs ${missed ? "text-rose-300" : "text-amber-300"}`}>
+        {said}
+      </p>
+      {(missed || caught.riding) && (
+        <button onClick={onSearch} className="btn shrink-0">
+          {missed ? t.planAgain : t.findAnother}
+        </button>
       )}
     </div>
   );

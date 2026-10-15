@@ -4,6 +4,8 @@ library;
 
 export 'end_field.dart' show End;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart' hide Theme;
 import 'package:flutter/material.dart' as material show Theme;
 import 'package:latlong2/latlong.dart';
@@ -50,6 +52,8 @@ class JourneyPanel extends StatefulWidget {
     required this.onPlace,
     required this.onShow,
     required this.onFollow,
+    required this.ask,
+    required this.onAsked,
   });
 
   final Api api;
@@ -81,6 +85,10 @@ class JourneyPanel extends StatefulWidget {
   /// The option picked to be drawn on the map, or null once none is
   final void Function(Journey? journey) onShow;
   final void Function(Journey journey) onFollow;
+
+  /// Search as soon as both ends are set, once, then say so through [onAsked]
+  final bool ask;
+  final VoidCallback onAsked;
 
   @override
   State<JourneyPanel> createState() => _JourneyPanelState();
@@ -116,6 +124,15 @@ class _JourneyPanelState extends State<JourneyPanel> {
   /// km/h on the level, starting from the one kept as the usual.
   late double _speed = widget.api.walkSpeed;
 
+  /// A search asked for is waiting for the frame to end
+  bool _asking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _askIfReady();
+  }
+
   @override
   void didUpdateWidget(JourneyPanel old) {
     super.didUpdateWidget(old);
@@ -125,6 +142,22 @@ class _JourneyPanelState extends State<JourneyPanel> {
         old.catalog != widget.catalog) {
       _forget();
     }
+    _askIfReady();
+  }
+
+  bool get _ready =>
+      (widget.from != null || widget.aboard != null) && widget.to != null;
+
+  /// Searching changes the parent's state, which a build may not do
+  void _askIfReady() {
+    if (!widget.ask || _asking) return;
+    _asking = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _asking = false;
+      if (!mounted || !widget.ask || !_ready) return;
+      widget.onAsked();
+      unawaited(_search());
+    });
   }
 
   void _forget() {
@@ -313,7 +346,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
 
   Widget _open(BuildContext context) {
     final aboard = widget.aboard;
-    final ready = (widget.from != null || aboard != null) && widget.to != null;
+    final ready = _ready;
     final ranked = _prefer.ranked(_options ?? const []);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),

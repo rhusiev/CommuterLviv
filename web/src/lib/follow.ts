@@ -6,7 +6,11 @@
  * Boarding is the step that has to be right. Standing at a stop beside a tram
  * looks exactly like sitting in it, so a ride counts as boarded only once the
  * fixes move along the ride's line faster than anyone walks. Only then is the
- * vehicle picked: the one of the leg's route keeping pace with the fixes. */
+ * vehicle picked: the one of the leg's route keeping pace with the fixes.
+ *
+ * Ahead of every ride still to board, the fixes and the predictions say
+ * whether it is still caught: walking to its stop at the usual pace, only by
+ * hurrying - now, or off the ride before it - or not at all. */
 
 import type { Catalog, Journey, Leg } from "./types";
 
@@ -33,6 +37,31 @@ export type Progress = {
   /** On the ride, past its last stop before the one to get off at */
   soon: boolean;
 };
+
+/** When a vehicle gets to a stop, Unix seconds, while the predictions say */
+export type Due = (stop: number, veh: number) => number | undefined;
+
+/** When the next ride to board leaves, and when the device gets to its stop at
+ * the usual and at the hurrying pace, all Unix seconds. `live`: `dep` is a
+ * prediction for a tracked vehicle, not the timetable. */
+export type Reach = { leg: number; dep: number; live: boolean; usual: number; hurried: number };
+
+/** The next ride to board, on time or not: `riding` warns ahead of a change
+ * from the ride under way, which hurrying cannot help yet */
+export type Catch =
+  | { kind: "ok" }
+  | { kind: "hurry" | "missed"; leg: number; dep: number; riding: boolean };
+
+/** A tracked vehicle missed by this little is still caught: the driver waits
+ * for somebody waving or running. `GRACE` in `commuterlviv/plan.py`. */
+export const GRACE_S = 10;
+/** A worse word on the connection holds this long before it is said: two of
+ * the service's five-second frames, so one jumpy prediction is not news.
+ * Chosen, not derived. */
+const HOLD_S = 10;
+/** Closer to leaving than this a prediction is good to some 22 s
+ * (docs/service.md), so a worse word is said at once */
+const NEAR_S = 120;
 
 /** A fix vaguer than this says nothing about which side of a tram it is on */
 const MAX_ACCURACY_M = 50;
@@ -148,16 +177,17 @@ export class Follower {
   private last: Progress;
 
   /** `catalog` places the stops a ride calls at; without it, or without them,
-   * getting ready goes by `SOON_M`. */
-  constructor(journey: Journey, catalog?: Catalog) {
+   * getting ready goes by `SOON_M`. `stage` resumes a journey followed before. */
+  constructor(journey: Journey, catalog?: Catalog, stage?: Stage) {
     this.legs = journey.legs;
     const [lat0, lon0] = this.legs[0]?.pts?.[0] ?? [0, 0];
     this.at = plane(lat0, lon0);
     this.lines = this.legs.map((l) => new Line((l.pts ?? []).map(([lat, lon]) => this.at(lat, lon))));
     this.routes = new Set(this.legs.flatMap((l) => (l.route === undefined ? [] : [l.route])));
     this.ready = this.legs.map((l, i) => this.readyAt(l, this.lines[i]!, catalog));
-    this.stage = start(journey);
-    this.last = { stage: this.stage, left: this.lines[0]?.length ?? 0, astray: false, passed: false, soon: false };
+    this.stage = stage ?? start(journey);
+    const left = this.stage.kind === "arrived" ? 0 : (this.lines[this.stage.leg]?.length ?? 0);
+    this.last = { stage: this.stage, left, astray: false, passed: false, soon: false };
   }
 
   /** Reaching the stop before the one to get off at - the boarding stop, for a
@@ -170,6 +200,35 @@ export class Follower {
 
   get progress() {
     return this.last;
+  }
+
+  /** When the next ride to board leaves and when the device gets to its stop,
+   * at `mps` and at `hurryMps` metres a second. Null with no ride ahead, while
+   * waiting at its stop - the vehicle is in sight there - and while the vehicle
+   * ridden is not known or not predicted to the stop to get off at. */
+  reach(due: Due, now: number, mps: number, hurryMps: number): Reach | null {
+    const stage = this.stage;
+    if (stage.kind === "wait" || stage.kind === "arrived") return null;
+    const r = this.legs.findIndex((l, k) => k > stage.leg && l.kind === "ride");
+    if (r < 0) return null;
+    let from = now;
+    let walk = 0;
+    if (stage.kind === "walk") walk = this.last.left;
+    else {
+      const off = stage.veh === null ? undefined : due(this.legs[stage.leg]!.b, stage.veh);
+      if (off === undefined) return null;
+      from = off;
+    }
+    for (let k = stage.leg + 1; k < r; k++) walk += this.lines[k]!.length;
+    const next = this.legs[r]!;
+    const tracked = next.veh == null ? undefined : due(next.a, next.veh);
+    return {
+      leg: r,
+      dep: tracked ?? next.dep,
+      live: tracked !== undefined,
+      usual: from + walk / mps,
+      hurried: from + walk / hurryMps,
+    };
   }
 
   /** Takes a fix and the vehicles drawn at its time, and says where on the
@@ -352,4 +411,53 @@ function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b);
   const m = s.length >> 1;
   return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+}
+
+/** Caught at the usual pace; else at the hurrying one, or for a tracked vehicle
+ * within `GRACE_S` of it; else missed */
+export function judge(r: Reach): "ok" | "hurry" | "missed" {
+  if (r.usual <= r.dep) return "ok";
+  return r.hurried <= r.dep || (r.live && r.hurried - GRACE_S <= r.dep) ? "hurry" : "missed";
+}
+
+const OK: Catch = { kind: "ok" };
+const WORSE = { ok: 0, hurry: 1, missed: 2 } as const;
+
+/** What to say of the next connection, steadied: a better word is said at
+ * once, a worse one only once it has held for `HOLD_S`, or at once within
+ * `NEAR_S` of leaving */
+export class Watch {
+  private said: Catch = OK;
+  /** A worse word than the one said, and since when it has held */
+  private coming: { kind: "hurry" | "missed"; leg: number; since: number } | null = null;
+
+  /** `reach` is the follower's answer at `stage`, `now` Unix seconds */
+  update(reach: Reach | null, stage: Stage, now: number): Catch {
+    const said = this.said;
+    if (reach === null) {
+      // Waiting at the stop of a connection missed still has it missed: the
+      // vehicle there is a later one
+      const missed = said.kind === "missed" && stage.kind === "wait" && stage.leg === said.leg;
+      this.said = missed ? said : OK;
+      this.coming = null;
+      return this.said;
+    }
+    if (said.kind !== "ok" && said.leg !== reach.leg) this.said = OK;
+    const kind = judge(reach);
+    const word: Catch =
+      kind === "ok" ? OK : { kind, leg: reach.leg, dep: reach.dep, riding: stage.kind === "ride" };
+    if (kind === "ok" || WORSE[kind] <= WORSE[this.said.kind]) {
+      this.said = word;
+      this.coming = null;
+      return word;
+    }
+    if (this.coming?.kind !== kind || this.coming.leg !== reach.leg) {
+      this.coming = { kind, leg: reach.leg, since: now };
+    }
+    if (now - this.coming.since >= HOLD_S || reach.dep - now <= NEAR_S) {
+      this.said = word;
+      this.coming = null;
+    }
+    return this.said;
+  }
 }
