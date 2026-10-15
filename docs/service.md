@@ -182,8 +182,8 @@ only its id leaves the device. It is searched as getting off at the vehicle's
 next stop when the vehicle gets there, the stops a short walk from that one
 included, and every journey found is then ridden there on it (`plan.Aboard`,
 `_on`). Staying on is one ride from now. Getting off for another vehicle is a
-change like any other, so a departure sooner than `CHANGE` (60 s) after getting
-off is dropped. When the door is in walking reach of the next stop, one more
+change like any other, so a departure sooner after getting off than the change
+needs (`change_slack`, below) is dropped. When the door is in walking reach of the next stop, one more
 option gets off there and walks. The ride there starts at the stop before the
 next one, taken from a pattern of the route that runs the next two predicted
 stops one after the other. A vehicle standing at its first stop has none, and
@@ -245,8 +245,8 @@ ride at all, and a scheduled departure a tracked vehicle is running is not
 boarded.
 
 Options and backups come from the same scan (`_Profile`), so a backup is
-never a way the search itself would not take: up to `ROUNDS` rides, the minute
-every change allows (`CHANGE`), and every walk - to the door and between stops
+never a way the search itself would not take: up to `ROUNDS` rides, the slack
+every change needs (`change_slack`), and every walk - to the door and between stops
 - under the same caps (`WALK_CAPS`, below). The scan runs backwards from the
 door over every hop of every trip between now and the latest arrival that
 counts: the whole walk, or `LONGEST_WALK` (4 h) when there is none, plus
@@ -259,6 +259,26 @@ leaving a stop no sooner than it can be reached from the origin, and reaching
 one from which the door is still reachable in time. That keeps about a fifth of
 them. Quiet routes are left out of the scan; it runs a second time with them
 only when no option rides without them.
+
+A change needs slack over and above the walk between the two stops, and more the
+further ahead it is (`change_slack`): 60 s for one up to a minute away, read in
+between the points of `CHANGE_AHEAD`/`CHANGE_SLACK`, up to 300 s from about 37
+min out. Both rides' times are forecasts, and the forecasts miss by more the
+further out they are. The figures come from a replay of 2026-09-16..21 on a
+model warmed on the 7 days before and refitted after each day: every 10 min of
+it, tracked vehicles reaching a stop were paired with tracked vehicles of
+another route leaving it or a stop within a 5 min walk, and a change counted as
+broken when the true crossings left less than the walk. Each point is the slack
+from which at most 15% of changes broke (a chosen target, not a derived one), in
+a band of 0-2, 2-5, 5-10, 10-15, 15-20, 20-30 and 30-45 min ahead, placed at the
+band's middle. The flat 60 s it replaces broke 11% of changes 0-2 min ahead, 26%
+5-10 min and 38% 30-45 min, and a broken change cost a median 13-14 min to the
+next vehicle of the route. The figures moved by at most 30 s from one day to the
+next. Searched on the timetable alone, the soonest arrival came 3.1 min later on
+average than with the flat 60 s, and later at all in 43% of searches; a target
+of 10% would have cost 4.1 min and 5% 6.0 min. Changes onto a timetabled
+departure, or onto the next trip of a tracked vehicle still at its terminus,
+were not measured; they take the same slack.
 
 A backup that rides exactly what one of the listed options rides carries that
 option's index in the server's list (`option`, -1 otherwise), and both clients
