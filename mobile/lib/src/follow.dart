@@ -15,6 +15,8 @@ library;
 
 import 'dart:math' as math;
 
+import 'package:latlong2/latlong.dart';
+
 import 'models.dart';
 
 class Fix {
@@ -82,13 +84,16 @@ class Stage {
 typedef Due = int? Function(int stop, int veh);
 
 /// When the next ride to board leaves, and when the device gets to its stop
-/// at the usual and at the hurrying pace, all unix seconds. [live]: [dep] is a
-/// prediction for a tracked vehicle, not the timetable.
+/// at the usual and at the hurrying pace, all unix seconds: setting off on foot
+/// at [from] for the [walk] metres there. [live]: [dep] is a prediction for a
+/// tracked vehicle, not the timetable.
 class Reach {
   const Reach({
     required this.leg,
     required this.dep,
     required this.live,
+    required this.from,
+    required this.walk,
     required this.usual,
     required this.hurried,
   });
@@ -96,6 +101,8 @@ class Reach {
   final int leg;
   final double dep;
   final bool live;
+  final double from;
+  final double walk;
   final double usual;
   final double hurried;
 }
@@ -103,19 +110,38 @@ class Reach {
 enum CatchKind { ok, hurry, missed }
 
 /// The next ride to board, on time or not: [riding] warns ahead of a change
-/// from the ride under way, which hurrying cannot help yet
+/// from the ride under way, which hurrying cannot help yet. [kmh] is the pace
+/// hurrying needs ([needKmh]), null once missed.
 class Catch {
-  const Catch(this.kind, [this.leg = -1, this.dep = 0, this.riding = false]);
+  const Catch(
+    this.kind, [
+    this.leg = -1,
+    this.dep = 0,
+    this.riding = false,
+    this.kmh,
+  ]);
 
   final CatchKind kind;
   final int leg;
   final double dep;
   final bool riding;
+  final double? kmh;
 }
 
 /// A tracked vehicle missed by this little is still caught: the driver waits
 /// for somebody waving or running. `GRACE` in `commuterlviv/plan.py`.
 const graceS = 10.0;
+
+/// Seconds ahead, and the slack a change needs that far ahead: `CHANGE_AHEAD`
+/// and `CHANGE_SLACK` in `commuterlviv/plan.py`
+const _changeAhead = <double>[60, 210, 450, 750, 1050, 1500, 2250];
+const _changeSlack = <double>[60, 90, 150, 180, 210, 270, 300];
+
+/// A change is broken by either vehicle's forecast missing, a walk to a stop
+/// only by the one vehicle's, so it keeps this share of a change's slack.
+/// Chosen, not derived
+const _marginShare = 0.5;
+const _kmhPerMps = 3.6;
 
 /// A worse word on the connection holds this long before it is said: two of
 /// the service's five-second frames, so one jumpy prediction is not news.
@@ -214,6 +240,13 @@ double _dist(_XY a, _XY b) => math.sqrt(_sq(a.x - b.x) + _sq(a.y - b.y));
 
 double _sq(double v) => v * v;
 
+/// Flat metres around [lat0], [lon0], which over a city is exact enough
+_XY Function(double lat, double lon) _plane(double lat0, double lon0) {
+  final kx = _earthM * _rad * math.cos(lat0 * _rad);
+  const ky = _earthM * _rad;
+  return (lat, lon) => (x: (lon - lon0) * kx, y: (lat - lat0) * ky);
+}
+
 class _Line {
   _Line(this.xy) {
     for (var i = 1; i < xy.length; i++) {
@@ -275,9 +308,7 @@ class Follower {
   Follower(Journey journey, [Catalog? catalog, Stage? stage])
     : _legs = journey.legs {
     final o = _legs.first.pts.first;
-    _lat0 = o.latitude;
-    _lon0 = o.longitude;
-    _kx = _earthM * _rad * math.cos(_lat0 * _rad);
+    _at = _plane(o.latitude, o.longitude);
     _lines = [
       for (final l in _legs)
         _Line([for (final p in l.pts) _at(p.latitude, p.longitude)]),
@@ -300,7 +331,7 @@ class Follower {
   }
 
   final List<Leg> _legs;
-  late final double _lat0, _lon0, _kx;
+  late final _XY Function(double lat, double lon) _at;
   late final List<_Line> _lines;
   late final Set<int> _routes;
 
@@ -317,10 +348,6 @@ class Follower {
   late Progress _last;
 
   Progress get progress => _last;
-
-  /// Flat metres around the journey's start, which over a city is exact enough
-  _XY _at(double lat, double lon) =>
-      (x: (lon - _lon0) * _kx, y: (lat - _lat0) * _earthM * _rad);
 
   _Sample get _now => _history.last;
 
@@ -367,6 +394,8 @@ class Follower {
       leg: r,
       dep: (tracked ?? next.dep).toDouble(),
       live: tracked != null,
+      from: from,
+      walk: walk,
       usual: from + walk / mps,
       hurried: from + walk / hurryMps,
     );
@@ -576,6 +605,48 @@ double _median(List<double> xs) {
   return s.length.isOdd ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
+/// [xs] ascending; flat past both ends
+double _interp(double x, List<double> xs, List<double> ys) {
+  final k = xs.indexWhere((v) => v >= x);
+  if (k == 0) return ys.first;
+  if (k < 0) return ys.last;
+  final share = (x - xs[k - 1]) / (xs[k] - xs[k - 1]);
+  return ys[k - 1] + share * (ys[k] - ys[k - 1]);
+}
+
+/// Seconds to be at a stop before a vehicle forecast to leave [ahead] s from
+/// now does, so that a forecast missing the usual amount still finds it there
+double margin(double ahead) =>
+    _marginShare * _interp(ahead, _changeAhead, _changeSlack);
+
+/// The pace in km/h that walks [metres] setting off at [from] to be at the
+/// stop [margin] before [dep], forecast at [now] - or right at [dep] should the
+/// margin take more than a run (`hurryKmh.max`). Rounded up to the step speeds
+/// are set in; null with nothing to walk, or when not even that leaves any
+/// time.
+double? needKmh(double metres, double from, double dep, [double? now]) {
+  double pace(double s) => s > 0 ? metres / s * _kmhPerMps : double.infinity;
+  var kmh = pace(dep - margin(dep - (now ?? from)) - from);
+  if (kmh > hurryKmh.max) kmh = pace(dep - from);
+  if (!kmh.isFinite || kmh <= 0) return null;
+  return (kmh / hurryKmh.step).ceil() * hurryKmh.step;
+}
+
+/// Metres along [pts]
+double along(List<LatLng> pts) {
+  final o = pts.firstOrNull ?? const LatLng(0, 0);
+  final at = _plane(o.latitude, o.longitude);
+  return _Line([for (final p in pts) at(p.latitude, p.longitude)]).length;
+}
+
+/// [needKmh] of an option caught only by hurrying, as it was planned
+double? plannedKmh(Journey j) {
+  if (j.legs.length < 2) return null;
+  final [walk, ride, ...] = j.legs;
+  if (walk.kind != 'walk' || ride.kind != 'ride') return null;
+  return needKmh(along(walk.pts), walk.dep.toDouble(), ride.dep.toDouble());
+}
+
 /// Caught at the usual pace; else at the hurrying one, or for a tracked
 /// vehicle within [graceS] of it; else missed
 CatchKind judge(Reach r) {
@@ -612,9 +683,12 @@ class Watch {
     }
     if (said.kind != CatchKind.ok && said.leg != reach.leg) _said = _ok;
     final kind = judge(reach);
+    final kmh = kind == CatchKind.hurry
+        ? needKmh(reach.walk, reach.from, reach.dep, now)
+        : null;
     final word = kind == CatchKind.ok
         ? _ok
-        : Catch(kind, reach.leg, reach.dep, stage.kind == StageKind.ride);
+        : Catch(kind, reach.leg, reach.dep, stage.kind == StageKind.ride, kmh);
     if (kind.index <= _said.kind.index) {
       _said = word;
       _coming = null;

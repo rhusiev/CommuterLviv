@@ -117,6 +117,8 @@ class Strings {
     required this.hurrySpeedHint,
     required this.hurry,
     required this.hurryHint,
+    required this.hurryAt,
+    required this.paceHint,
     required this.slower,
     required this.faster,
     required this.alsoOptionHint,
@@ -283,6 +285,10 @@ class Strings {
   final String hurrySpeedHint;
   final String hurry;
   final String hurryHint;
+
+  /// Hurrying, and the [pace] that catches the bus with time to spare
+  final String Function(String pace) hurryAt;
+  final String paceHint;
   final String slower;
   final String faster;
   final String alsoOptionHint;
@@ -447,6 +453,8 @@ const _en = Strings(
   hurrySpeedHint: 'How fast you would walk to catch a bus. Off, only a bus you would miss by seconds is offered as one to hurry for',
   hurry: 'Hurry',
   hurryHint: 'Only hurrying to the first stop catches this bus',
+  hurryAt: _enHurryAt,
+  paceHint: 'Walk at least this fast to be at the stop with time to spare, in case the bus comes early',
   slower: 'Slower',
   faster: 'Faster',
   alsoOptionHint: 'This way is also among the options',
@@ -532,6 +540,8 @@ String _enPrefer(Prefer p) => switch (p) {
 };
 String _enMinutes(int m) => '$m min';
 String _enKmh(double v) => '${v.toStringAsFixed(1)} km/h';
+
+String _enHurryAt(String pace) => 'Hurry: $pace';
 String _enAlsoOption(int n) => 'Option $n';
 String _enUnreachable(String server) => 'Could not reach $server';
 String _enWalkTo(String stop) => 'Walk to $stop';
@@ -650,6 +660,8 @@ const _uk = Strings(
   hurrySpeedHint: 'Як швидко ви йшли б, щоб встигнути на автобус. Вимкнено - пропонуємо поспішити лише на той, що ви пропустили б на секунди',
   hurry: 'Поспішіть',
   hurryHint: 'На цей автобус встигнете, лише якщо поспішите до першої зупинки',
+  hurryAt: _ukHurryAt,
+  paceHint: 'Ідіть щонайменше так швидко, щоб бути на зупинці із запасом, якщо автобус прийде раніше',
   slower: 'Повільніше',
   faster: 'Швидше',
   alsoOptionHint: 'Цей шлях є і серед варіантів',
@@ -734,6 +746,8 @@ String _ukPrefer(Prefer p) => switch (p) {
 String _ukMinutes(int m) => '$m хв';
 String _ukKmh(double v) =>
     '${v.toStringAsFixed(1).replaceAll('.', ',')} км/год';
+
+String _ukHurryAt(String pace) => 'Поспішіть: $pace';
 String _ukAlsoOption(int n) => 'Варіант $n';
 String _ukUnreachable(String server) => 'Не вдалося зʼєднатися з $server';
 String _ukWalkTo(String stop) => 'Ідіть до зупинки $stop';

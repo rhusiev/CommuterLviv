@@ -11,6 +11,7 @@ import 'package:commuterlviv/src/api.dart';
 import 'package:commuterlviv/src/eta.dart';
 import 'package:commuterlviv/src/follow.dart' show Stage, StageKind;
 import 'package:commuterlviv/src/follow_card.dart';
+import 'package:commuterlviv/src/hurry_pill.dart';
 import 'package:commuterlviv/src/here.dart';
 import 'package:commuterlviv/src/live.dart';
 import 'package:commuterlviv/src/models.dart';
@@ -62,6 +63,11 @@ const _aheadS = 3600;
 /// Under the 160 s the walk to the stop takes, and more than the 120 s within
 /// which `Watch` says a worse word at once
 const _missedAheadS = 150;
+
+/// The walk to the stop takes 80 s at twice the usual pace, so a ride leaving
+/// in this long is caught only by hurrying - and said at once, being under 120 s.
+/// With the 35 s to spare this far ahead, the 200 m need 9.6 km/h
+const _hurryAheadS = 110;
 
 /// `Watch` holds a worse word back 10 s
 const _heldS = 10;
@@ -148,6 +154,7 @@ Future<FakeHere> pump(
   WidgetTester tester, {
   required bool away,
   Journey? following,
+  double? hurrySpeed,
   void Function(Stage)? onSearch,
 }) async {
   SharedPreferences.setMockInitialValues({});
@@ -163,7 +170,7 @@ Future<FakeHere> pump(
           live: Live(api, onRenewed: () {}),
           here: here,
           walkSpeed: walkKmh.usual,
-          hurrySpeed: null,
+          hurrySpeed: hurrySpeed,
           away: away,
           onMoved: (_) {},
           onSearch: onSearch ?? (_) {},
@@ -226,6 +233,22 @@ void main() {
     );
     await tester.tap(find.text(txt.planAgain));
     expect(searched.single.kind, StageKind.walk);
+  });
+
+  testWidgets('a ride caught only by hurrying says the pace it needs', (
+    tester,
+  ) async {
+    final here = await pump(
+      tester,
+      away: false,
+      hurrySpeed: 2 * walkKmh.usual,
+      following: leaving(_hurryAheadS),
+    );
+    here.move(0, 0);
+    await tester.pump();
+
+    expect(find.textContaining(txt.hurryNow('7', '')), findsOneWidget);
+    expect(find.widgetWithText(HurryPill, txt.kmh(10)), findsOneWidget);
   });
 
   testWidgets('a word held back is said once its hold ends, with no fix to '

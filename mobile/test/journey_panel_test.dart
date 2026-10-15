@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:commuterlviv/src/api.dart';
+import 'package:commuterlviv/src/hurry_pill.dart';
 import 'package:commuterlviv/src/journey_panel.dart';
 import 'package:commuterlviv/src/models.dart';
 import 'package:commuterlviv/src/strings.dart';
@@ -72,6 +73,13 @@ Future<void> pump(
   );
 }
 
+/// A walk of 45 m north: hurried to a ride leaving 60 s after it sets off, with
+/// half a minute to spare, it takes 5.4 km/h
+const _walk45m = [
+  [49.84, 24.03],
+  [49.84 + 45 / 111195, 24.03],
+];
+
 const _twoLines = Catalog(
   routes: [
     TransitRoute(id: 'r8', short: '8', long: 'A to B', type: 'tram'),
@@ -104,6 +112,7 @@ Map<String, Object> _journey(
   Map<String, Object> ride, {
   int backup = 0,
   bool hurry = false,
+  List<List<double>> walk = const [],
 }) => {
   'dep': 0,
   'hurry': hurry,
@@ -113,7 +122,7 @@ Map<String, Object> _journey(
   'confidence': 'live',
   'backup': backup,
   'legs': [
-    {'kind': 'walk', 'dep': 0, 'arr': 60, 'a': -1, 'b': 0},
+    {'kind': 'walk', 'dep': 0, 'arr': 60, 'a': -1, 'b': 0, 'pts': walk},
     ride,
     {
       'kind': 'walk',
@@ -152,6 +161,7 @@ Future<HttpServer> _serve(List<Uri> asked) async {
             ),
             backup: 1,
             hurry: true,
+            walk: _walk45m,
           ),
         ],
       },
@@ -244,10 +254,11 @@ void main() {
     );
 
     await tester.tap(find.text(txt.findRoute));
-    await _until(tester, () => tester.any(find.text(' · ${txt.hurry}')));
+    final pill = find.widgetWithText(HurryPill, txt.hurryAt(txt.kmh(5.5)));
+    await _until(tester, () => tester.any(pill));
 
     expect(asked.single.queryParameters['hurry'], '9.0');
-    expect(find.text(' · ${txt.hurry}'), findsOneWidget);
+    expect(pill, findsOneWidget);
   });
 
   testWidgets('an end offers where I am and the map before a search', (
