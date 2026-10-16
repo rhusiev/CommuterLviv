@@ -67,6 +67,11 @@ class Live extends ChangeNotifier {
   double arrivalsAt = 0;
   Connection connection = Connection.connecting;
 
+  /// Too few vehicles report for the trips the timetable has running - during
+  /// an air raid alert, say, or when the feed fails. Unknown while the socket
+  /// is down, so false then.
+  bool quiet = false;
+
   IOWebSocketChannel? _ws;
   StreamSubscription<dynamic>? _sub;
   List<int> _routes = const [];
@@ -140,6 +145,7 @@ class Live extends ChangeNotifier {
     _sub?.cancel();
     _sub = null;
     connection = _closed ? Connection.offline : Connection.connecting;
+    quiet = false;
     notifyListeners();
     if (_closed) return;
     _retry = Timer(_backoff, _connect);
@@ -176,8 +182,10 @@ class Live extends ChangeNotifier {
       }
       _send({'type': 'routes', 'routes': _routes});
       if (_stops.isNotEmpty) _send({'type': 'stops', 'stops': _stops});
+      _quiet(msg);
       return;
     }
+    if (msg['type'] == 'quiet') return _quiet(msg);
     if (msg['type'] != 'arrivals') return;
     arrivals = {
       for (final e in (msg['stops'] as Map<String, dynamic>).entries)
@@ -187,6 +195,11 @@ class Live extends ChangeNotifier {
         ],
     };
     arrivalsAt = (msg['t'] as num).toDouble();
+    notifyListeners();
+  }
+
+  void _quiet(Map<dynamic, dynamic> msg) {
+    quiet = msg['quiet'] == true;
     notifyListeners();
   }
 

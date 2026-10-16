@@ -21,6 +21,7 @@ import 'live.dart';
 import 'map_tab.dart';
 import 'map_theme.dart';
 import 'models.dart';
+import 'quiet_banner.dart';
 import 'route_badge.dart';
 import 'saved.dart';
 import 'server_dialog.dart';
@@ -912,6 +913,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 onPick: _pickTab,
               ),
             ),
+          ),
+          Positioned(
+            left: floatingGap,
+            right: floatingGap,
+            top: floatingTop(context),
+            child: QuietBanner(live: live),
           ),
           _Status(live: live),
         ],
