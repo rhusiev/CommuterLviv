@@ -1,8 +1,9 @@
 import pytest
 
 from commuterlviv import config
+from commuterlviv.live import journeys, state
 
-from . import city, postgres
+from . import city, postgres, streets
 
 
 @pytest.fixture
@@ -16,6 +17,18 @@ def net(monkeypatch, tmp_path):
 def cfg():
     """The model variant the server runs."""
     return config.BY_NAME["profile"]
+
+
+@pytest.fixture
+def live(net, cfg):
+    """A live engine over the city, as the server runs it."""
+    return state.Live(net, cfg)
+
+
+@pytest.fixture
+def planner(net, tmp_path):
+    """The journey planner over the city and its footpaths."""
+    return journeys.Planner(*streets.load(net, tmp_path), state.Catalog(net))
 
 
 @pytest.fixture

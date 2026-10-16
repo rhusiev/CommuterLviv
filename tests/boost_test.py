@@ -28,11 +28,6 @@ class _Shift:
         return np.full(len(x), self.s)
 
 
-@pytest.fixture
-def live(net, cfg):
-    return state.Live(net, cfg)
-
-
 def _ride(live, until):
     """Ride `t1` through `live`, an epoch each minute; the arrivals at `until`."""
     nxt = np.ceil(city.at(city.DEPARTS["t1"]) / live.epoch_s) * live.epoch_s

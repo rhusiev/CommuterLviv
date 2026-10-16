@@ -12,7 +12,6 @@ from commuterlviv.live.service import Service
 from . import city
 from .service import EPOCH_S, settings_for
 
-NIGHT = 23 * 3600           # s past midnight, long after the last ride
 OWN = 7.0                   # marks the rows a model noted itself
 
 
@@ -81,7 +80,7 @@ def test_a_cold_model_takes_everything_the_recording_teaches(
     svc = _service(net)
     cold = _learned(svc.live.model)
 
-    asyncio.run(svc.backfill(cold=True, db=jammed_recording, t_to=city.at(NIGHT)))
+    asyncio.run(svc.backfill(cold=True, db=jammed_recording, t_to=city.at(city.NIGHT)))
 
     got = _learned(svc.live.model)
     _same(got, _learned(_replayed(net, cfg, jammed_recording)))
@@ -99,7 +98,7 @@ def test_a_warm_model_takes_only_the_rows_and_keeps_its_own_as_newest(
     model.layovers.restore_rows(np.full((1, stands.shape[1]), OWN))
     before = _learned(model)
 
-    asyncio.run(svc.backfill(cold=False, db=jammed_recording, t_to=city.at(NIGHT)))
+    asyncio.run(svc.backfill(cold=False, db=jammed_recording, t_to=city.at(city.NIGHT)))
 
     got = _learned(model)
     replayed = _learned(_replayed(net, cfg, jammed_recording))

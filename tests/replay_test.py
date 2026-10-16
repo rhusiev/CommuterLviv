@@ -6,7 +6,6 @@ from commuterlviv import config, replay
 
 from . import city
 
-NIGHT = 23 * 3600           # s past midnight, long after the last ride
 TOO_LATE_S = 301.0          # past the replay's 300 s limit on polling delay
 
 LEARNED = 4                 # fleet rides set off before the first one judged
@@ -46,7 +45,7 @@ def test_the_model_learns_where_the_road_is_slower_than_the_timetable(
 
 def test_a_window_with_no_fixes_says_why(net, jammed_recording):
     with pytest.raises(replay.NoData, match="no usable vehicle fixes"):
-        replay.run(net, t_from=city.at(NIGHT), db=jammed_recording)
+        replay.run(net, t_from=city.at(city.NIGHT), db=jammed_recording)
 
 
 def test_fixes_polled_too_late_are_not_replayed(tmp_path, net):

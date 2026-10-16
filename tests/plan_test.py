@@ -2,14 +2,12 @@
 over the footpaths of `streets`."""
 import dataclasses
 
-import numpy as np
 import pytest
 
 from commuterlviv import plan
-from commuterlviv.live import app, journeys
-from commuterlviv.live.state import ETA, Arrivals, Catalog
+from commuterlviv.live import app
 
-from . import city, streets
+from . import city
 from .streets import DOOR, MIDDLE
 
 NOW = city.at(9 * 3600 + 600)
@@ -21,20 +19,10 @@ FAR_S = plan.TRANSFER_CAP + 60.0
 AHEAD_S = 1800.0    # a change half an hour from now
 
 
-@pytest.fixture
-def planner(net, tmp_path):
-    return journeys.Planner(*streets.load(net, tmp_path), Catalog(net))
-
-
 def _aboard(cat, first, veh=VEH, to_next=TO_NEXT_S):
     """Vehicle `veh` on its way out, at stop `first` in `to_next` s and then
     on at the timetable's pace."""
-    rows = [(cat.stop_i[f"s{i}"], cat.route_i[city.ROUTE], veh,
-             NOW + to_next + (i - first) * city.LEG_S, 0)
-            for i in range(first, city.STOPS)]
-    eta = np.sort(np.array(rows, ETA), order="stop")
-    start = np.searchsorted(eta["stop"], np.arange(len(cat.stops) + 1))
-    return Arrivals(NOW, eta, start)
+    return city.arrivals(cat, NOW, veh, first, NOW + to_next)
 
 
 def _stop(planner, i):

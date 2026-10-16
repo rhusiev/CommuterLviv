@@ -19,6 +19,7 @@ import numpy as np
 from google.transit import gtfs_realtime_pb2 as rt
 
 from commuterlviv import collect, gtfs, localtime, network, overrides
+from commuterlviv.live.state import ETA, Arrivals
 
 DAY = datetime.datetime(2026, 10, 5, tzinfo=localtime.TZ)   # a Monday
 STOPS = 5
@@ -38,6 +39,7 @@ FLEET_IDS = frozenset(trip for trip, *_ in FLEET)
 SHAPE_OF = {trip: sid for trip, sid, _ in TRIPS + FLEET}
 DEPARTS = {trip: dep for trip, _, dep in TRIPS + FLEET}
 LENGTH = GAP_M * (STOPS - 1)
+NIGHT = 23 * 3600        # s past midnight, long after the last ride
 STEPS = 400              # pieces `drive` integrates a speed over
 
 
@@ -195,3 +197,15 @@ class Feed:
         v.position.latitude, v.position.longitude = fix.lat, fix.lon
         v.position.speed, v.position.odometer = fix.speed, fix.odometer
         return msg
+
+
+def arrivals(cat, now, veh, first, at_first):
+    """The boards at `now` with vehicle `veh` on its way out alone: at stop
+    `first` at `at_first`, then on to the end of the line at the timetable's
+    pace."""
+    rows = [(cat.stop_i[f"s{i}"], cat.route_i[ROUTE], veh,
+             at_first + (i - first) * LEG_S, 0)
+            for i in range(first, STOPS)]
+    eta = np.sort(np.array(rows, ETA), order="stop")
+    start = np.searchsorted(eta["stop"], np.arange(len(cat.stops) + 1))
+    return Arrivals(now, eta, start)

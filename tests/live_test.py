@@ -33,11 +33,6 @@ def _run(live, fixes, until):
     return boards
 
 
-@pytest.fixture
-def live(net, cfg):
-    return state.Live(net, cfg)
-
-
 def _board(live, arrivals, stop):
     return arrivals.at(live.cat.stop_i[stop])
 
