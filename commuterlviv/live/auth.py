@@ -9,6 +9,7 @@ session the user has.
 """
 import asyncio
 import datetime
+from concurrent.futures import ThreadPoolExecutor
 
 from asyncpg.exceptions import UniqueViolationError
 
@@ -17,7 +18,8 @@ from . import security
 GRACE = 30.0     # s an already-rotated remember-me token stays acceptable
 ARGON2_AT_ONCE = 2  # hashes in flight; each holds `argon2` memory_cost of RAM
 
-_argon2_slots = asyncio.Semaphore(ARGON2_AT_ONCE)
+# threads start on first use; a pool, unlike a semaphore, is bound to no loop
+_argon2_pool = ThreadPoolExecutor(ARGON2_AT_ONCE, thread_name_prefix="argon2")
 
 
 def _now():
@@ -31,8 +33,7 @@ def _delta(seconds):
 async def _argon2(fn, *args):
     """Run an argon2 hash or verify on a worker thread, so a login does not
     stall every websocket for its duration."""
-    async with _argon2_slots:
-        return await asyncio.to_thread(fn, *args)
+    return await asyncio.get_running_loop().run_in_executor(_argon2_pool, fn, *args)
 
 
 async def event(pool, kind, user_id=None, ip=None, detail=None):
