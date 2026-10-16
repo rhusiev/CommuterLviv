@@ -225,7 +225,7 @@ class MedianLayer:
 
 
 class MedianModel(PaceModel):
-    """The shipped model with `MedianLayer` in place of `model.Layer`."""
+    """`PaceModel` with `MedianLayer` in place of `model.Layer`."""
 
     def _layer(self, init):
         return MedianLayer(self.nunit, self.ncorr, self.unit_corr, init,

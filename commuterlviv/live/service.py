@@ -1,8 +1,9 @@
 """The loops: poll the feed, step the model, wake the clients.
 
 Everything touching the tracker or the model runs in one worker thread behind a
-lock, to keep ~200 ms of numpy per epoch off the event loop. The feed is fetched
-outside it, so a slow upstream delays only the poll, never an epoch.
+lock, to keep ~200 ms of numpy per epoch off the event loop. The poll fetches
+the feed outside it, so a slow upstream delays only the poll, never an epoch -
+all but the first poll of a renewed city, which `swap` makes holding it.
 
 This does not write `feed.db` - the collector owns it - so the two poll the same
 endpoint independently.
@@ -84,7 +85,7 @@ class Service:
             replay.run(live.net, t_from=t_from, t_to=last,
                        db=db, model=live.model, epoch=self.set.epoch)
         except replay.NoData as exc:
-            self.log("nothing to warm from:", str(exc))
+            self.log("nothing to warm from:", brief(exc))
             return False
         self.log(f"warmed the model on {(last - t_from) / 60:.0f} min of "
                  f"recording in {time.time() - t0:.1f}s")

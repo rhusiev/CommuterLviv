@@ -68,10 +68,10 @@ VARIANTS = [
                 "corridor sooner and the cell later."),
     replace(FULL, name="tuned", k_unit=1.0, k_corr=0.5, fast_hl=7200.0,
             slow_hl=43200.0,
-            doc="The shipped model at the best value each of its four constants "
+            doc="`full` at the best value each of its four constants "
                 "found when swept alone. Every one of those sweeps moved the "
                 "same way - less shrinkage, longer memory - and the four gains "
-                "do add: this is the only variant that beats the shipped model "
+                "do add: this is the only variant that beats `full` "
                 "at every horizon out to 20 minutes. It pays for that in the "
                 "20-45 minute bucket, where trusting live evidence sooner and "
                 "forgetting it later carries the current state of the road much "
@@ -135,8 +135,8 @@ VARIANTS = [
                 "minimised by the median, which nothing else here uses."),
     replace(FULL, name="median", learn="median",
             doc="The same three layers, the same two half-lives, the same two "
-                "shrinkage constants - and a weighted median wherever the "
-                "shipped model takes a mean. MAE is minimised by the median, "
+                "shrinkage constants - and a weighted median wherever `full` "
+                "takes a mean. MAE is minimised by the median, "
                 "so if the model is optimising the wrong loss this is what it "
                 "costs. The price is memory: a median needs the last 16 "
                 "crossings of a key kept, not one running number."),
