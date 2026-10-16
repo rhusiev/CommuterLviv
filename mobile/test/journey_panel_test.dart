@@ -177,13 +177,28 @@ Future<HttpServer> _serve(List<Uri> asked) async {
   return server;
 }
 
-/// Pumps, letting the fake server answer, until [done] says so.
+const _step = Duration(milliseconds: 10);
+const _steps = 100;
+
+/// Lets the fake server answer for a [_step] of real time, then moves the
+/// clock on as far, so a dialog closing meanwhile gets to finish.
+Future<void> _pumpStep(WidgetTester tester) async {
+  await tester.runAsync(() => Future<void>.delayed(_step));
+  await tester.pump(_step);
+}
+
+/// Pumps until [done] says so; fails if it never does.
 Future<void> _until(WidgetTester tester, bool Function() done) async {
-  for (var i = 0; i < 100 && !done(); i++) {
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 10)),
-    );
-    await tester.pump();
+  for (var i = 0; i < _steps && !done(); i++) {
+    await _pumpStep(tester);
+  }
+  expect(done(), isTrue, reason: 'gave up waiting');
+}
+
+/// Pumps as long as [_until] would wait at most, for what must not come.
+Future<void> _quiet(WidgetTester tester) async {
+  for (var i = 0; i < _steps; i++) {
+    await _pumpStep(tester);
   }
 }
 
@@ -499,13 +514,13 @@ void main() {
     );
 
     await ask(null);
-    await _until(tester, () => asked.isNotEmpty);
+    await _quiet(tester);
     expect(asked, isEmpty);
     expect(told, 0);
 
     await ask(const LatLng(49.81, 24.05));
     await _until(tester, () => asked.isNotEmpty);
-    await _until(tester, () => asked.length > 1);
+    await _quiet(tester);
 
     expect(asked.single.path, '/api/plan');
     expect(told, 1);
