@@ -32,6 +32,7 @@ REMEMBER_COOKIE = "lp_remember"
 MAX_BODY = 8 * 1024
 SESSION_RECHECK = 60.0          # s between asking whether an open socket still has a session
 PLAN_WORKERS = 4                # journey searches running at once, city-wide
+MAX_ID_DIGITS = 9               # `int` raises on a long enough digit string
 NO_SUCH_SET = "No such set"     # missing, or another user's
 
 
@@ -111,7 +112,8 @@ def error(message, status=400, **extra):
 async def body(request):
     # checked before reading: buffering first would already cost the memory
     declared = request.headers.get("content-length", "")
-    if declared.isdigit() and (len(declared) > 9 or int(declared) > MAX_BODY):
+    if declared.isdecimal() and (len(declared) > MAX_ID_DIGITS
+                                 or int(declared) > MAX_BODY):
         return None, error("Request too large", 413)
     raw = b""
     async for chunk in request.stream():
@@ -318,12 +320,9 @@ async def traffic_now(request, session):
     return Response(cache.read(now), media_type="application/json")
 
 
-MAX_ID_DIGITS = 9    # `int` raises on a long enough digit string
-
-
 def _id(raw):
     """A small non-negative integer from a query parameter, or None."""
-    if raw is None or not raw.isdigit() or len(raw) > MAX_ID_DIGITS:
+    if raw is None or not raw.isdecimal() or len(raw) > MAX_ID_DIGITS:
         return None
     return int(raw)
 

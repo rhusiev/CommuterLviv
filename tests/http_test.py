@@ -115,6 +115,13 @@ def test_the_boards_show_the_bus_coming(client, feed):
     assert ahead and all(a["route"] == row["route"] for a in ahead)
 
 
+def test_an_id_of_other_digits_is_refused_rather_than_failing(client):
+    _signed_in(client, "digits")
+    # "²" is a digit to `str.isdigit` but `int` cannot read it
+    r = client.get("/api/vehicle?veh=\u00b2")
+    assert r.status_code == 400, r.text
+
+
 def test_traffic_gives_a_number_or_none_per_street_piece(client):
     _signed_in(client, "traffic")
     pieces = client.get("/api/traffic/streets").json()["lines"]
