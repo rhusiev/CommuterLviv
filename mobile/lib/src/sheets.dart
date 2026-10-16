@@ -430,10 +430,13 @@ class _RouteSheetState extends State<RouteSheet> {
     final name = await askName(context, txt.nameSet);
     if (name == null || name.isEmpty) return;
     final made = await widget.api.createSet(name, _ids);
-    await widget.api.activateSet(made.id);
-    if (!mounted) return;
-    _active = made.id;
-    await _reload();
+    try {
+      await widget.api.activateSet(made.id);
+      _active = made.id;
+    } finally {
+      // made, the set belongs in the list even if it could not be activated
+      if (mounted) await _reload();
+    }
   }
 
   Future<void> _update(RouteSet set) async {
