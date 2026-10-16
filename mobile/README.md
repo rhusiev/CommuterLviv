@@ -310,9 +310,9 @@ the time, `Now` until one is picked. They are passed as `at=<unix seconds>`. A
 time already past on today is meant for tomorrow. Below them a stepper sets
 how fast this search walks on the level, 0.5 to 8 km/h in halves, passed as
 `speed=`. It starts from the usual speed, kept on the device under
-`commuterlviv.walk` and set from `Walking speed` in the account menu; stepping
-it in the panel changes that search only. The server already slows walks
-uphill and speeds them down gentle slopes.
+`commuterlviv.walk` and set from `Walking and hurrying` in the account menu;
+stepping it in the panel changes that search only. The server already slows
+walks uphill and speeds them down gentle slopes.
 
 `GET /api/plan` answers with options ranked by arrival. A ride on a tracked
 vehicle says nothing more; one resting on the timetable says so, and one on a

@@ -111,6 +111,8 @@ class Strings {
     required this.hidePanel,
     required this.showPanel,
     required this.leaveOn,
+    required this.paces,
+    required this.pacesNow,
     required this.walkSpeed,
     required this.walkSpeedHint,
     required this.hurrySpeed,
@@ -279,6 +281,10 @@ class Strings {
   final String hidePanel;
   final String showPanel;
   final String leaveOn;
+  final String paces;
+
+  /// The usual walking speed and the hurrying one, null when hurrying is off.
+  final String Function(double walk, double? hurry) pacesNow;
   final String walkSpeed;
   final String walkSpeedHint;
   final String hurrySpeed;
@@ -447,6 +453,8 @@ const _en = Strings(
   hidePanel: 'Hide, keeping the journey on the map',
   showPanel: 'Show the journey',
   leaveOn: 'Leave on',
+  paces: 'Walking and hurrying',
+  pacesNow: _enPacesNow,
   walkSpeed: 'Walking speed',
   walkSpeedHint: 'On flat ground - hills are taken into account',
   hurrySpeed: 'Hurrying speed',
@@ -540,6 +548,8 @@ String _enPrefer(Prefer p) => switch (p) {
 };
 String _enMinutes(int m) => '$m min';
 String _enKmh(double v) => '${v.toStringAsFixed(1)} km/h';
+String _enPacesNow(double walk, double? hurry) =>
+    '${_enKmh(walk)}, ${hurry == null ? 'not hurrying' : 'hurrying ${_enKmh(hurry)}'}';
 
 String _enHurryAt(String pace) => 'Hurry: $pace';
 String _enAlsoOption(int n) => 'Option $n';
@@ -654,6 +664,8 @@ const _uk = Strings(
   hidePanel: 'Сховати, лишивши маршрут на мапі',
   showPanel: 'Показати маршрут',
   leaveOn: 'Виїзд',
+  paces: 'Ходьба і поспіх',
+  pacesNow: _ukPacesNow,
   walkSpeed: 'Швидкість ходьби',
   walkSpeedHint: 'По рівному - схили враховано',
   hurrySpeed: 'Швидкість, коли поспішаєте',
@@ -746,6 +758,8 @@ String _ukPrefer(Prefer p) => switch (p) {
 String _ukMinutes(int m) => '$m хв';
 String _ukKmh(double v) =>
     '${v.toStringAsFixed(1).replaceAll('.', ',')} км/год';
+String _ukPacesNow(double walk, double? hurry) =>
+    '${_ukKmh(walk)}, ${hurry == null ? 'без поспіху' : 'поспіх ${_ukKmh(hurry)}'}';
 
 String _ukHurryAt(String pace) => 'Поспішіть: $pace';
 String _ukAlsoOption(int n) => 'Варіант $n';

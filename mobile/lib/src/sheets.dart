@@ -228,6 +228,7 @@ class AccountSheet extends StatefulWidget {
     super.key,
     required this.server,
     required this.speed,
+    required this.hurry,
     required this.followAway,
     required this.onFollowAway,
     required this.onSaved,
@@ -241,6 +242,9 @@ class AccountSheet extends StatefulWidget {
 
   /// The usual walking speed, km/h.
   final double speed;
+
+  /// The hurrying speed, km/h, null when hurrying is off.
+  final double? hurry;
   final bool followAway;
   final ValueChanged<bool> onFollowAway;
   final VoidCallback onSaved;
@@ -276,8 +280,9 @@ class _AccountSheetState extends State<AccountSheet> {
           ),
           ListTile(
             leading: const Icon(Icons.directions_walk),
-            title: Text(txt.walkSpeed),
-            trailing: Text(txt.kmh(widget.speed)),
+            title: Text(txt.paces),
+            subtitle: Text(txt.pacesNow(widget.speed, widget.hurry)),
+            trailing: const Icon(Icons.chevron_right),
             onTap: widget.onSpeed,
           ),
           SwitchListTile(
