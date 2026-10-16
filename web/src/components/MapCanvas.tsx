@@ -88,39 +88,25 @@ const viewOf = (m: MapLibre): View => {
   return { lat: c.lat, lon: c.lng, zoom: m.getZoom() };
 };
 
-export function MapCanvas({
-  catalog,
-  live,
-  stops,
-  selected,
-  onPickStop,
-  vehicle,
-  onPickVehicle,
-  focus,
-  fit,
-  picking,
-  onPickPoint,
-  onHoldPoint,
-  marks,
-  journey,
-  locate,
-  pinned,
-  places,
-  shapes,
-  lines,
-  directed,
-  traffic,
-  theme,
-}: Props) {
+export function MapCanvas(props: Props) {
+  const {
+    catalog,
+    live,
+    focus,
+    fit,
+    locate,
+    shapes,
+    directed,
+    traffic,
+    theme,
+  } = props;
   const box = useRef<HTMLDivElement>(null);
   const under = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const sprites = useRef<Sprites | null>(null);
-  const shown = useRef(stops);
-  const pick = useRef(selected);
-  const onPick = useRef(onPickStop);
-  const onPickVeh = useRef(onPickVehicle);
-  const chosen = useRef(vehicle);
+  /** The props as of the last render, for the map's and the frame loop's
+   * handlers, which are set up once */
+  const latest = useRef(props);
   const paint = useRef(ink(theme.dark));
   const style = useRef(styleUrl(theme));
   const held = useRef<MapLibre | null>(null);
@@ -128,35 +114,13 @@ export function MapCanvas({
   /** Whether each fix centres the camera: from `locate` until a pan, and again
    * from the locate button */
   const keep = useRef(false);
-  const pickPoint = useRef(onPickPoint);
-  const holdPoint = useRef(onHoldPoint);
-  const picks = useRef(picking);
-  const pins = useRef(marks);
-  const trip = useRef(journey);
-  const kept = useRef(pinned);
-  const saved = useRef(places);
-  const geometry = useRef(shapes);
-  const drawn = useRef(lines);
   /** What the basemap's own layers draw, read again on every `styledata` */
   const beneath = useRef({ shapes, directed, traffic, dark: theme.dark });
   const [locating, setLocating] = useState<Locating>("off");
   const [ready, setReady] = useState(false);
 
-  shown.current = stops;
-  pick.current = selected;
-  onPick.current = onPickStop;
-  onPickVeh.current = onPickVehicle;
-  chosen.current = vehicle;
+  latest.current = props;
   paint.current = ink(theme.dark);
-  pickPoint.current = onPickPoint;
-  holdPoint.current = onHoldPoint;
-  picks.current = picking;
-  pins.current = marks;
-  trip.current = journey;
-  kept.current = pinned;
-  saved.current = places;
-  geometry.current = shapes;
-  drawn.current = lines;
   beneath.current = { shapes, directed, traffic, dark: theme.dark };
 
   useEffect(() => {
@@ -193,16 +157,17 @@ export function MapCanvas({
       const m = map!;
       const p = screen(viewOf(m), w, h);
       const now = performance.now();
+      const { lines, stops, selected, pinned, places, journey, marks, vehicle } = latest.current;
       const c = paint.current;
 
       g.clearRect(0, 0, w, h);
 
       // Route lines first: everything else is drawn over them
-      const geo = geometry.current;
+      const geo = latest.current.shapes;
       if (geo) {
         g.lineJoin = "round";
         g.lineCap = "round";
-        for (const i of drawn.current) {
+        for (const i of lines) {
           const shape = geo.routes[i];
           const route = catalog.routes[i];
           if (!shape || !route) continue;
@@ -224,7 +189,7 @@ export function MapCanvas({
           g.stroke(path);
           g.strokeStyle = colour(route.short, route.type);
           g.lineWidth = 3.5;
-          g.globalAlpha = drawn.current.length > 1 ? 0.75 : 1;
+          g.globalAlpha = lines.length > 1 ? 0.75 : 1;
           g.stroke(path);
           g.globalAlpha = 1;
         }
@@ -233,7 +198,7 @@ export function MapCanvas({
       if (m.getZoom() >= STOPS_ZOOM) {
         // One path for every stop: one fill and one stroke, not two per circle
         const ring = new Path2D();
-        for (const i of shown.current) {
+        for (const i of stops) {
           const s = catalog.stops[i]!;
           const x = p.x(s.lon);
           const y = p.y(s.lat);
@@ -247,7 +212,7 @@ export function MapCanvas({
         g.fill(ring);
         g.stroke(ring);
 
-        const sel = pick.current;
+        const sel = selected;
         if (sel !== null && catalog.stops[sel]) {
           const s = catalog.stops[sel]!;
           g.beginPath();
@@ -293,7 +258,7 @@ export function MapCanvas({
 
       // What the account kept, over the stops and under the journey's ends
       const ringed = new Path2D();
-      for (const i of kept.current) {
+      for (const i of pinned) {
         const s = catalog.stops[i];
         if (!s) continue;
         const x = p.x(s.lon);
@@ -311,7 +276,7 @@ export function MapCanvas({
       const named = m.getZoom() >= LABEL_ZOOM;
       g.font = "600 11px system-ui, sans-serif";
       g.textBaseline = "middle";
-      for (const place of saved.current) {
+      for (const place of places) {
         const x = p.x(place.lon);
         const y = p.y(place.lat);
         if (x < -PLACE_R || y < -PLACE_R || x > w + PLACE_R || y > h + PLACE_R) continue;
@@ -334,7 +299,7 @@ export function MapCanvas({
         g.fillText(place.name, x + PLACE_R + 8, y);
       }
 
-      const legs = trip.current?.legs.filter((l) => (l.pts?.length ?? 0) > 1) ?? [];
+      const legs = journey?.legs.filter((l) => (l.pts?.length ?? 0) > 1) ?? [];
       g.lineJoin = "round";
       g.lineCap = "round";
       for (const leg of legs) {
@@ -358,7 +323,7 @@ export function MapCanvas({
           g.stroke(path);
         }
       }
-      if (trip.current === null) for (const mark of pins.current) {
+      if (journey === null) for (const mark of marks) {
         const x = p.x(mark.lon);
         const y = p.y(mark.lat);
         g.beginPath();
@@ -408,7 +373,7 @@ export function MapCanvas({
           continue;
         }
         g.drawImage(badge, x - R, y - R, R * 2, R * 2);
-        if (id === chosen.current) {
+        if (id === vehicle) {
           g.beginPath();
           g.arc(x, y, R + 3, 0, TAU);
           g.lineWidth = 2;
@@ -468,10 +433,10 @@ export function MapCanvas({
         keep.current = false;
       });
       // Mobile browsers raise a long press as `contextmenu` too
-      map.on("contextmenu", (e) => holdPoint.current(e.lngLat.lat, e.lngLat.lng));
+      map.on("contextmenu", (e) => latest.current.onHoldPoint(e.lngLat.lat, e.lngLat.lng));
       map.on("click", (e) => {
-        if (picks.current) {
-          pickPoint.current(e.lngLat.lat, e.lngLat.lng);
+        if (latest.current.picking) {
+          latest.current.onPickPoint(e.lngLat.lat, e.lngLat.lng);
           return;
         }
         const p = screen(viewOf(map!), w, h);
@@ -489,14 +454,14 @@ export function MapCanvas({
           }
         }
         if (veh !== null) {
-          onPickVeh.current(veh);
-          onPick.current(null);
+          latest.current.onPickVehicle(veh);
+          latest.current.onPickStop(null);
           return;
         }
 
         let best: number | null = null;
         let bestD = HIT * HIT;
-        for (const i of shown.current) {
+        for (const i of latest.current.stops) {
           const s = catalog.stops[i]!;
           const dx = p.x(s.lon) - e.point.x;
           const dy = p.y(s.lat) - e.point.y;
@@ -506,8 +471,8 @@ export function MapCanvas({
             best = i;
           }
         }
-        onPickVeh.current(null);
-        onPick.current(best);
+        latest.current.onPickVehicle(null);
+        latest.current.onPickStop(best);
       });
       map.on("render", draw);
       // Every style swap throws the sources and layers away and leaves this the
