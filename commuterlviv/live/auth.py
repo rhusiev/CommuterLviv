@@ -7,6 +7,7 @@ Remember-me is the series-and-token scheme with constant-time comparisons; a
 spent token coming back is treated as theft and drops the series and every
 session the user has.
 """
+import asyncio
 import datetime
 
 from asyncpg.exceptions import UniqueViolationError
@@ -14,6 +15,9 @@ from asyncpg.exceptions import UniqueViolationError
 from . import security
 
 GRACE = 30.0     # s an already-rotated remember-me token stays acceptable
+ARGON2_AT_ONCE = 2  # hashes in flight; each holds `argon2` memory_cost of RAM
+
+_argon2_slots = asyncio.Semaphore(ARGON2_AT_ONCE)
 
 
 def _now():
@@ -22,6 +26,13 @@ def _now():
 
 def _delta(seconds):
     return datetime.timedelta(seconds=seconds)
+
+
+async def _argon2(fn, *args):
+    """Run an argon2 hash or verify on a worker thread, so a login does not
+    stall every websocket for its duration."""
+    async with _argon2_slots:
+        return await asyncio.to_thread(fn, *args)
 
 
 async def event(pool, kind, user_id=None, ip=None, detail=None):
@@ -47,7 +58,7 @@ async def register(pool, ph, username, password, code=None, mode="code"):
     if mode == "closed":
         return None, "registration is closed"
 
-    hashed = ph.hash(password)
+    hashed = await _argon2(ph.hash, password)
     async with pool.acquire() as con:
         async with con.transaction():
             if mode == "code":
@@ -75,14 +86,15 @@ async def login(pool, ph, username, password):
         "SELECT id, password_hash, disabled FROM users WHERE lower(username) = $1",
         name)
     if row is None:
-        security.burn(ph)
+        await _argon2(security.burn, ph)
         return None
-    ok, rehash = security.verify(ph, row["password_hash"], password)
+    ok, rehash = await _argon2(
+        security.verify, ph, row["password_hash"], password)
     if not ok or row["disabled"]:
         return None
     if rehash:
         await pool.execute("UPDATE users SET password_hash = $2 WHERE id = $1",
-                           row["id"], ph.hash(password))
+                           row["id"], await _argon2(ph.hash, password))
     await pool.execute("UPDATE users SET last_login = now() WHERE id = $1", row["id"])
     return row["id"]
 
@@ -94,16 +106,17 @@ async def change_password(pool, ph, user_id, old, new, keep_session=None):
         "SELECT username, password_hash FROM users WHERE id = $1", user_id)
     if row is None:
         return "no such user"
-    ok, _ = security.verify(ph, row["password_hash"], old)
+    ok, _ = await _argon2(security.verify, ph, row["password_hash"], old)
     if not ok:
         return "the current password is wrong"
     why = security.check_password(new, row["username"])
     if why:
         return why
+    hashed = await _argon2(ph.hash, new)
     async with pool.acquire() as con:
         async with con.transaction():
             await con.execute("UPDATE users SET password_hash = $2 WHERE id = $1",
-                              user_id, ph.hash(new))
+                              user_id, hashed)
             await con.execute("DELETE FROM remember_tokens WHERE user_id = $1",
                               user_id)
             await con.execute(
