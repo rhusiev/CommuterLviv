@@ -53,7 +53,7 @@ class Settings:
 
 
 def load():
-    variant = _env("VARIANT", "slow-day")
+    variant = _env("VARIANT", "profile")
     if variant not in config.BY_NAME:
         raise RuntimeError(f"{ENV}VARIANT={variant!r} is not one of "
                            f"{', '.join(config.BY_NAME)}")
