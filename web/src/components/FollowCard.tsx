@@ -56,7 +56,7 @@ export function FollowCard({
             {progress === null ? (
               <p className="text-slate-400">{t.locating}</p>
             ) : progress === "denied" ? (
-              <p className="text-rose-300">{t.noLocation}</p>
+              <p className="text-rose-300">{t.noFix.refused}</p>
             ) : (
               <Step catalog={catalog} journey={journey} live={live} progress={progress} />
             )}

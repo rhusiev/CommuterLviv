@@ -587,7 +587,7 @@ export function MapCanvas(props: Props) {
             setLocating("waiting");
           }
         }}
-        title={locating === "denied" ? t.noLocation : t.whereAmI}
+        title={locating === "denied" ? t.noFix.refused : t.whereAmI}
         className={`fab absolute right-3 top-19 z-10 ${
           locating === "denied"
             ? "text-slate-600"

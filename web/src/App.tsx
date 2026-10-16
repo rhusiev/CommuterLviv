@@ -28,7 +28,7 @@ import { RAMP, useTraffic } from "./lib/traffic";
 import { readUrl, writeUrl, type UrlState } from "./lib/url";
 import type { Stage } from "./lib/follow";
 import { heldFollowed, holdFollowed, type Followed } from "./lib/followed";
-import { hereOnce } from "./lib/position";
+import { hereOnce, type NoFix } from "./lib/position";
 import { useFollow } from "./lib/useFollow";
 import { takeRenewed, useLive } from "./lib/useLive";
 import type { Catalog, Journey, Me, Place, RouteSet, Shapes } from "./lib/types";
@@ -357,7 +357,7 @@ export function App() {
         if (which === "to") setTo(at);
         else if (asked === boarded.current) setFrom(at);
       },
-      () => setNotice(t.noLocation),
+      (why: NoFix) => setNotice(t.noFix[why]),
     );
   };
 

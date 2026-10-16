@@ -249,6 +249,8 @@ class Strings {
   final String zoomIn;
   final String zoomOut;
   final String whereAmI;
+
+  /// Location refused or switched off: the phone does not say which to the app.
   final String noLocation;
 
   /// The service moved to new routes and timetables while the app was open.
@@ -431,7 +433,7 @@ const _en = Strings(
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
   whereAmI: 'Where I am',
-  noLocation: 'Location is not available',
+  noLocation: "Location is off or not allowed for the app - turn it on in the phone's settings",
   renewed: "The city's routes and timetables were updated",
   quiet:
       'Few vehicles are reporting where they are - possibly an air raid alert. '
@@ -645,7 +647,7 @@ const _uk = Strings(
   zoomIn: 'Наблизити',
   zoomOut: 'Віддалити',
   whereAmI: 'Де я',
-  noLocation: 'Місцеперебування недоступне',
+  noLocation: 'Геолокацію вимкнено або не дозволено застосунку - увімкніть її в налаштуваннях телефона',
   renewed: 'Маршрути й розклади міста оновилися',
   quiet:
       'Мало транспорту передає, де він є - можливо, через повітряну тривогу. '

@@ -305,3 +305,13 @@ def test_a_missed_bus_is_searched_again_from_the_last_fix(page):
         again.click()
     lat, lon = asked.value.url.split("from=")[1].split("&")[0].split(",")
     assert (float(lat), float(lon)) == pytest.approx(streets.DOOR)
+
+
+def test_a_refused_location_says_how_to_allow_it(page):
+    _register(page, "hidden")
+    page.context.clear_permissions()
+
+    page.get_by_title("Stops near me").click()
+
+    playwright.expect(page.get_by_text(
+        "Location is blocked for this page")).to_be_visible(timeout=SEE_MS)

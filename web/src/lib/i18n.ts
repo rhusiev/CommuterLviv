@@ -1,6 +1,8 @@
 /** Ukrainian and English, chosen once per load. `t` is read at module level
  * rather than through a context, so changing the language reloads the page. */
 
+import type { NoFix } from "./position";
+
 export type Lang = "uk" | "en";
 
 const key = "commuterlviv.lang";
@@ -43,7 +45,10 @@ const en = {
   nothingNear: "No stop within 2 km of where you are",
   away: (m: number) => `${m} m`,
   whereAmI: "Where I am",
-  noLocation: "Location is not available",
+  noFix: {
+    refused: "Location is blocked for this page - allow it in the browser's site settings",
+    none: "Could not tell where you are - try again",
+  } satisfies Record<NoFix, string>,
   stopsAhead: "Stops ahead",
   vehicleGone: "This one is no longer being tracked",
   onIt: "I'm on it",
@@ -216,7 +221,10 @@ const uk: Strings = {
   nothingNear: "Немає зупинки ближче ніж за 2 км",
   away: (m: number) => `${m} м`,
   whereAmI: "Де я",
-  noLocation: "Місцеперебування недоступне",
+  noFix: {
+    refused: "Місцеперебування заблоковане для цієї сторінки - дозвольте його в налаштуваннях сайту в браузері",
+    none: "Не вдалося визначити, де ви - спробуйте ще раз",
+  },
   stopsAhead: "Наступні зупинки",
   vehicleGone: "Цей транспорт більше не відстежується",
   onIt: "Я в ньому",
