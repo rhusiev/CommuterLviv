@@ -8,7 +8,8 @@ const EASE = 1200;
 
 /** The text frames worth reading; everything else on the socket is binary */
 type Message =
-  | { type: "hello"; catalog?: string }
+  | { type: "hello"; catalog?: string; quiet?: boolean }
+  | { type: "quiet"; quiet: boolean }
   | { type: "arrivals"; t: number; stops: Record<string, Arrival[]> };
 
 type Vehicle = {
@@ -37,6 +38,10 @@ export class Live {
   arrivals: Record<string, Arrival[]> = {};
   arrivalsAt = 0;
   connection: Connection = "connecting";
+  /** Too few vehicles report for the trips the timetable has running - during
+   * an air raid alert, say, or when the feed fails. Unknown while the socket is
+   * down, so false then */
+  quiet = false;
 
   private ws: WebSocket | null = null;
   private routes: number[] = [];
@@ -45,7 +50,12 @@ export class Live {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private closed = false;
   private listeners = new Set<() => void>();
-  private snapshot = { connection: "connecting" as Connection, arrivalsAt: 0, count: 0 };
+  private snapshot = {
+    connection: "connecting" as Connection,
+    arrivalsAt: 0,
+    count: 0,
+    quiet: false,
+  };
 
   subscribe = (fn: () => void) => {
     this.listeners.add(fn);
@@ -61,6 +71,7 @@ export class Live {
       connection: this.connection,
       arrivalsAt: this.arrivalsAt,
       count: this.vehicles.size,
+      quiet: this.quiet,
     };
     for (const fn of this.listeners) fn();
   }
@@ -113,6 +124,7 @@ export class Live {
       if (this.ws !== ws) return;
       this.ws = null;
       this.connection = this.closed ? "offline" : "connecting";
+      this.quiet = false;
       this.changed();
       if (!this.closed) {
         this.timer = setTimeout(() => this.connect(), this.backoff);
@@ -139,6 +151,11 @@ export class Live {
       }
       this.send({ type: "routes", routes: this.routes });
       if (this.stops.length) this.send({ type: "stops", stops: this.stops });
+      this.quiet = msg.quiet ?? false;
+      this.changed();
+    } else if (msg.type === "quiet") {
+      this.quiet = msg.quiet;
+      this.changed();
     } else if (msg.type === "arrivals") {
       this.arrivals = msg.stops;
       this.arrivalsAt = msg.t;
