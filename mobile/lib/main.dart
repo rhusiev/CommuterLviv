@@ -1,11 +1,7 @@
 /// Lviv's buses, on a phone.
 library;
 
-import 'dart:io' show Platform;
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import 'src/api.dart';
 import 'src/home.dart';
@@ -24,8 +20,6 @@ Future<void> main() async {
   );
   runApp(CommuterLvivApp(api: api));
 }
-
-bool get _cupertino => !kIsWeb && Platform.isIOS;
 
 class CommuterLvivApp extends StatefulWidget {
   const CommuterLvivApp({super.key, required this.api});
@@ -94,13 +88,4 @@ class _Splash extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       const Scaffold(body: Center(child: CircularProgressIndicator.adaptive()));
-}
-
-/// Haptics for actions that move the camera.
-void tick() {
-  if (_cupertino) {
-    HapticFeedback.selectionClick();
-  } else {
-    HapticFeedback.lightImpact();
-  }
 }

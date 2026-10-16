@@ -10,11 +10,11 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:vector_map_tiles/vector_map_tiles.dart';
 
-import '../main.dart' show tick;
 import 'api.dart';
 import 'follow.dart' show Stage, StageKind;
 import 'follow_card.dart';
 import 'followed.dart';
+import 'haptics.dart';
 import 'here.dart';
 import 'journey_panel.dart';
 import 'live.dart';
