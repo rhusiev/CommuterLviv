@@ -7,7 +7,8 @@ import datetime
 import zoneinfo
 
 TZ = zoneinfo.ZoneInfo("Europe/Kyiv")
-DAY_S = 86400.0
+HOUR_S = 3600.0
+DAY_S = 24 * HOUR_S
 
 
 def midnight(now, tz=None):

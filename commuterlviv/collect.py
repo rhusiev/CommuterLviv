@@ -23,7 +23,7 @@ import requests
 from google.transit import gtfs_realtime_pb2
 
 from .gtfs import BASE, DATA, table
-from .localtime import DAY_S
+from .localtime import DAY_S, HOUR_S
 from .logs import brief, log
 
 DB = os.path.join(DATA, "feed.db")
@@ -33,6 +33,7 @@ BATCH_S = 2.0            # how often the writer commits
 CHECKPOINT_S = 300.0     # how often the write-ahead log is folded back in
 HEARTBEAT_S = 300.0
 BACKOFF_MAX = 120.0      # s between attempts at a feed that keeps failing
+PRUNE_EVERY_S = HOUR_S   # between deletions of rows older than --keep-days
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -325,7 +326,7 @@ def heartbeat(min_free_gb, keep_days):
                 f"can still be closed cleanly")
             stop_flag.set()
             return
-        if keep_days and time.time() - last_prune > 3600:
+        if keep_days and time.time() - last_prune > PRUNE_EVERY_S:
             try:
                 prune(keep_days)
             except sqlite3.Error as exc:
@@ -372,7 +373,7 @@ def main(argv=None):
         t.start()
     log(f"collecting into {DB}, {shutil.disk_usage(DATA).free / 2**30:.1f}G free")
 
-    deadline = time.time() + args.hours * 3600 if args.hours else None
+    deadline = time.time() + args.hours * HOUR_S if args.hours else None
     while not stop_flag.wait(1.0):
         if deadline and time.time() > deadline:
             break

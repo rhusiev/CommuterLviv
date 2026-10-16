@@ -26,6 +26,7 @@ FIT_EVERY = 6 * 3600.0   # s between refits of the learned models
 BACKFILL_S = 3 * localtime.DAY_S   # of recording learned from when models lack rows
 BACKFILL_WARMUP_S = localtime.DAY_S  # replayed first, so the rows are a warm model's
 BACKFILL_NICE = 10
+SEEN_MAX = 100_000       # vehicles' last timestamps kept before starting over
 
 
 class Service:
@@ -78,7 +79,7 @@ class Service:
             self.log("recording is stale; nothing to replay")
             return False
         t0 = time.time()
-        t_from = max(last - WARM_HOURS * 3600, since or 0.0)
+        t_from = max(last - WARM_HOURS * localtime.HOUR_S, since or 0.0)
         try:
             replay.run(live.net, t_from=t_from, t_to=last,
                        db=db, model=live.model, epoch=self.set.epoch)
@@ -218,7 +219,7 @@ class Service:
             if self.live.fix(key, v.timestamp, p.latitude, p.longitude,
                              p.speed, p.odometer, v.trip.trip_id or None):
                 n += 1
-        if len(self._seen) > 100_000:
+        if len(self._seen) > SEEN_MAX:
             self._seen.clear()
         self.live.poll_done()
         return n

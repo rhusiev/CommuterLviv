@@ -248,11 +248,12 @@ class BaseModel:
             if len(dd) < 2:
                 continue
             by_slot = {}
+            slot_s = localtime.DAY_S / SLOTS
             for t in trips:
                 sched = self.net.trip_stops[t][2]
                 dt = np.diff(sched)
                 if np.ptp(dt) > 1.0:
-                    by_slot.setdefault(int(sched[0] // 3600) % SLOTS, []).append(dt)
+                    by_slot.setdefault(int(sched[0] // slot_s) % SLOTS, []).append(dt)
             if not by_slot:
                 continue
             last = self.net.shapes[sid].cells - 1

@@ -8,12 +8,14 @@ from pathlib import Path
 
 import requests
 
+from .localtime import DAY_S
+
 BASE = "https://track.ua-gis.com/gtfs/lviv"
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 ZIP = DATA / "static.zip"
 PREV = DATA / "static.prev.zip"     # the feed a new one replaced, until it is kept
-MAX_AGE = 24 * 3600
+MAX_AGE = DAY_S      # s a downloaded feed is used before fetching again
 
 LAT_M = 111320.0
 
