@@ -499,6 +499,7 @@ function Field({
             }}
             onPlace={(p) => onPlace({ lat: p.lat, lon: p.lon }, p.name)}
             onSave={(n, lat, lon) => onSave(n, { lat, lon })}
+            places={places}
             inline={{
               placeholder: END[end].label,
               onDismiss: () => setOpen(false),

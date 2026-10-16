@@ -178,6 +178,21 @@ def test_a_new_user_finds_a_stop_and_sees_the_bus_coming(page):
         timeout=SEE_MS)
 
 
+def test_a_saved_place_is_offered_above_the_stops_it_matches(page):
+    _register(page, "saver")
+    search = page.get_by_placeholder("Find a stop or a place")
+    search.fill("Stop 4")
+    page.get_by_title("Save this place").first.click()
+
+    search.fill("stop 4")
+    rows = page.locator("ul li")
+    expect = playwright.expect
+    expect(rows.first).to_contain_text("Saved places")
+    expect(rows.first).to_contain_text("Stop 4")
+    expect(rows.first.get_by_title("Save this place")).to_have_count(0)
+    expect(rows.nth(1)).to_contain_text("Stops")
+
+
 def test_picking_the_route_puts_its_bus_on_the_map(page):
     _register(page, "watcher")
     expect = playwright.expect
