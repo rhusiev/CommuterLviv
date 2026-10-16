@@ -44,6 +44,12 @@ void main() {
     expect(Followed.held(kept(followed), '"city-2"', arr), isNull);
   });
 
+  test('is none when what is stored is not a journey', () {
+    for (final junk in ['{not json', 'null', '{"tag":"\\"city-1\\""}']) {
+      expect(Followed.held(junk, tag, arr), isNull);
+    }
+  });
+
   test('is dropped hours after it should have arrived', () {
     const hoursS = 3 * 3600;
 
