@@ -1,8 +1,10 @@
 """The live service over the made-up city: its settings, and the outside world
 it talks to replaced by the city's own feed or by nothing."""
+import datetime
+import time
 import uuid
 
-from commuterlviv import collect, replay
+from commuterlviv import collect, model, plan, replay
 from commuterlviv.live import journeys, settings
 
 from . import city
@@ -11,6 +13,11 @@ FAST_ARGON2 = {"time_cost": 1, "memory_cost": 8 * 1024, "parallelism": 1}
 POLL_S = 0.5
 EPOCH_S = 1.0
 PASSWORD = "a long enough password"
+# The city's timetable runs only in the morning. The service times a bus's next
+# trips from their nearest timetabled start (`layover.clock`), which at night is
+# tomorrow's, so it would plan no ride on the bus. Noon is chosen
+NOON_S = 12 * 3600
+DAY_S = 24 * 3600
 
 
 def username(name):
@@ -29,9 +36,21 @@ def settings_for(database, origin):
         places_url="", poll_veh=POLL_S, epoch=EPOCH_S, dev=False, argon2=FAST_ARGON2)
 
 
+def _noon():
+    """A fixed-offset zone in which it is noon now."""
+    offset = (NOON_S - time.time() % DAY_S) % DAY_S
+    if offset > DAY_S / 2:
+        offset -= DAY_S
+    return datetime.timezone(datetime.timedelta(seconds=offset))
+
+
 def isolate(monkeypatch, tmp_path):
-    """Feed the service the city's bus, with no recording to warm up from and
-    no journey planner; the feed, to know when the bus set off."""
+    """Feed the service the city's bus, at noon whatever the hour, with no
+    recording to warm up from and no journey planner; the feed, to know when the
+    bus set off."""
+    zone = _noon()
+    monkeypatch.setattr(model, "TZ", zone)
+    monkeypatch.setattr(plan, "TZ", zone)
     feed = city.Feed()
     monkeypatch.setattr(collect, "rt", feed)
     monkeypatch.setattr(replay, "DB", str(tmp_path / "no-recording.db"))
