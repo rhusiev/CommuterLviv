@@ -9,11 +9,13 @@ import json
 
 from asyncpg.exceptions import UniqueViolationError
 
+from . import hub
+
 MAX_SETS = 32
 MAX_ROUTES = 64
 MAX_NAME = 40
 
-MAX_PINS = 63   # one under hub.MAX_STOPS, so pins plus the open card always fit
+MAX_PINS = hub.MAX_STOPS - 1   # so pins plus the open card always fit
 
 MAX_PLACES = 24
 
