@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { metres } from "../lib/geo";
 import { MIN_TYPED, score, words } from "../lib/match";
 import { matching } from "../lib/places";
-import { hereOnce, type NoFix } from "../lib/position";
+import { hereOnce } from "../lib/position";
 import type { Catalog, Found, Place } from "../lib/types";
 import { t } from "../lib/i18n";
 
@@ -105,9 +105,9 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
         setNear(close);
         if (close.length === 0) setWhy(t.nothingNear);
       },
-      (no: NoFix) => {
+      () => {
         setLocating(false);
-        setWhy(no === "refused" ? "location refused" : "no location fix");
+        setWhy(t.noLocation);
       },
     );
   };
