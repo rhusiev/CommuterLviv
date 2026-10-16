@@ -67,4 +67,6 @@ def server():
         _wait(url, runner)
         yield url
     finally:
-        subprocess.run([runner, "rm", "-f", name], capture_output=True, check=False)
+        # -v: the image's data directory is an anonymous volume, kept otherwise
+        subprocess.run([runner, "rm", "-f", "-v", name], capture_output=True,
+                       check=False)
