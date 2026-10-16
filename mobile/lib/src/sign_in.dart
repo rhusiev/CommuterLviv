@@ -81,9 +81,9 @@ class _SignInScreenState extends State<SignInScreen> {
       TextInput.finishAutofillContext();
       widget.onIn(name);
     } on ApiError catch (e) {
-      setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.message);
     } on Exception {
-      setState(() => _error = txt.unreachable(widget.api.base));
+      if (mounted) setState(() => _error = txt.unreachable(widget.api.base));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
