@@ -18,7 +18,7 @@ A release is `dev` merged into `main`. Deploy from `main`.
 
 It needs nothing but the checkout: the versions agree (see below), ruff
 finds no syntax errors or undefined names, the package imports, the Python
-tests pass, the web app typechecks, passes its tests and builds, and
+tests pass, the web app typechecks, passes eslint and its tests and builds, and
 `flutter analyze` and `flutter test` pass. A missing toolchain is reported and
 stepped over rather than failing the run.
 

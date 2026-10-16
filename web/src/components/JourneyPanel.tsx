@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { api, ApiError } from "../lib/api";
 import { stopName } from "../lib/catalog";
 import { clock, mins } from "../lib/eta";
@@ -153,13 +153,6 @@ export function JourneyPanel({
     setShown(null);
     onShow(null);
   }, [from, to, onShow]);
-  useEffect(() => {
-    if (!ask || !from || !to) return;
-    onAsked();
-    void search();
-    // Only a new ask or new ends search; `search` reads the rest as it is
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ask, from, to]);
   const aboard = from && "veh" in from ? from : null;
   const start = from && !("veh" in from) ? from : null;
 
@@ -195,6 +188,15 @@ export function JourneyPanel({
       setBusy(false);
     }
   };
+
+  // Only a new ask or new ends search; `search` reads the rest as it is
+  const searchAsked = useEffectEvent(() => {
+    onAsked();
+    void search();
+  });
+  useEffect(() => {
+    if (ask && from && to) searchAsked();
+  }, [ask, from, to]);
 
   const sendReport = async () => {
     const id = report;

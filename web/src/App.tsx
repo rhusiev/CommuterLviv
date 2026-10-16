@@ -182,8 +182,6 @@ export function App() {
     if (!held) return;
     resumed.current = held.stage;
     setFollowed(held);
-    // Once, when the catalog arrives
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cat]);
 
   useEffect(() => {
@@ -315,7 +313,7 @@ export function App() {
       setFrom({ veh: stage.veh, route: followed.journey.legs[stage.leg]!.route ?? null });
     } else {
       setFrom(null);
-      useHere("from");
+      hereFor("from");
     }
     setAsk(true);
     setTab("plan");
@@ -347,7 +345,7 @@ export function App() {
 
   /** Asked separately from the map's own locate button, so a refusal here does
    * not turn the map's dot off */
-  const useHere = (which: "from" | "to") => {
+  const hereFor = (which: "from" | "to") => {
     const asked = boarded.current;
     if (!navigator.geolocation) return;
     hereOnce({ enableHighAccuracy: true, timeout: 10_000 }).then(
@@ -613,7 +611,7 @@ export function App() {
               setFrom(to);
               setTo(from);
             }}
-            onHere={useHere}
+            onHere={hereFor}
             onShow={setJourney}
             onFollow={(j) => {
               follow({ journey: j, to: to!, tag: catalogTag() ?? "" });

@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { Live, sample, type Vehicle } from "./live";
 
-/** The socket the client opened, to be spoken through */
-let socket: FakeSocket;
-
 class FakeSocket {
+  /** The socket the client opened last, to be spoken through */
+  static last: FakeSocket;
   static OPEN = 1;
   readyState = FakeSocket.OPEN;
   binaryType = "";
@@ -14,7 +13,7 @@ class FakeSocket {
   onerror: (() => void) | null = null;
 
   constructor() {
-    socket = this;
+    FakeSocket.last = this;
   }
 
   send() {}
@@ -40,15 +39,15 @@ describe("the vehicles going quiet", () => {
   });
 
   test("is taken from the hello, then from each change the service sends", () => {
-    socket.say({ type: "hello", quiet: true });
+    FakeSocket.last.say({ type: "hello", quiet: true });
     expect(live.getSnapshot().quiet).toBe(true);
 
-    socket.say({ type: "quiet", quiet: false });
+    FakeSocket.last.say({ type: "quiet", quiet: false });
     expect(live.getSnapshot().quiet).toBe(false);
   });
 
   test("is not known once the socket is down", () => {
-    socket.say({ type: "hello", quiet: true });
+    FakeSocket.last.say({ type: "hello", quiet: true });
     live.close();
 
     expect(live.getSnapshot().quiet).toBe(false);

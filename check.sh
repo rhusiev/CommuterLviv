@@ -81,10 +81,11 @@ fi
 step "python: the package imports"
 run import . python3 -c "import commuterlviv.live.app, commuterlviv.cli"
 
-step "web: types, tests and build"
+step "web: types, lint, tests and build"
 if command -v npm >/dev/null; then
   [ -d "$root/web/node_modules" ] || run npm-ci web npm ci
   run typecheck web npm run typecheck
+  run lint web npm run lint
   run vitest web npm test
   run build web npm run build
 else
