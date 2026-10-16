@@ -14,6 +14,6 @@ export function writeJson(key: string, value: unknown) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    // Kept in memory for this page only
+    // Lost: the next load reads what was there before
   }
 }

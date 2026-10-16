@@ -212,9 +212,8 @@ export function MapCanvas(props: Props) {
         g.fill(ring);
         g.stroke(ring);
 
-        const sel = selected;
-        if (sel !== null && catalog.stops[sel]) {
-          const s = catalog.stops[sel]!;
+        if (selected !== null && catalog.stops[selected]) {
+          const s = catalog.stops[selected]!;
           g.beginPath();
           g.arc(p.x(s.lon), p.y(s.lat), STOP_R + 4, 0, TAU);
           g.lineWidth = 2;
