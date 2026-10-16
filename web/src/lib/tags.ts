@@ -1,12 +1,11 @@
 import { clock } from "./eta";
+import { metres } from "./geo";
 import type { Leg } from "./types";
 
 export type Tag = { lat: number; lon: number; text: string };
 
 /** Times within this far of each other share a pill: one stop at every zoom */
 const SAME_STOP_M = 25;
-const M_PER_DEGREE_LAT = 111320;
-const M_PER_DEGREE_LON = 71770; // at Lviv's latitude
 /** A shorter walk gets no times of its own: somebody standing at the stop
  *  would read it as a walk from a minute to the same minute */
 export const SHORT_WALK_S = 60;
@@ -19,11 +18,7 @@ export function journeyTags(legs: Leg[]): Tag[] {
   const groups: Group[] = [];
   const at = (lat: number, lon: number): Group => {
     for (const g of groups) {
-      if (
-        Math.abs(lat - g.lat) * M_PER_DEGREE_LAT < SAME_STOP_M &&
-        Math.abs(lon - g.lon) * M_PER_DEGREE_LON < SAME_STOP_M
-      )
-        return g;
+      if (metres(g, { lat, lon }) < SAME_STOP_M) return g;
     }
     const g: Group = { lat, lon, off: [], on: [] };
     groups.push(g);
