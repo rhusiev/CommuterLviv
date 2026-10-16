@@ -23,13 +23,16 @@ import requests
 
 from .. import __version__, gtfs, localtime, walk
 from ..mapidx import search as mapidx
+from . import wire
 
 INDEX = gtfs.DATA / "lviv-search.sqlite"
 INDEX_EVERY = 30 * localtime.DAY_S  # s between index refetches
 
-# the city's box, also what the footpath graph covers
-SOUTH, NORTH, WEST, EAST = 49.7, 50.05, 23.8, 24.25
-CENTRE = (49.8419, 24.0315)
+# the city's box: the one the map frames can place a vehicle in, so a place
+# outside it is past the end of every line
+SOUTH, WEST = wire.LAT0, wire.LON0
+NORTH, EAST = wire.LAT0 + wire.DLAT, wire.LON0 + wire.DLON
+CENTRE = (49.8419, 24.0315)  # Rynok Square, where both clients' maps open
 
 TTL = localtime.DAY_S
 ENTRIES = 2000          # a day of queries from a city-sized audience

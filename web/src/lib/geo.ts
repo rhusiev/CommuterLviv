@@ -2,20 +2,26 @@
  * to the pixel or the vehicles drive beside the streets. */
 
 import { readJson, writeJson } from "./storage";
+import { BOX } from "./wire";
 
-export const CENTRE = { lat: 49.842, lon: 24.032 };
+/** Rynok Square, which the server's place search also ranks from */
+export const CENTRE = { lat: 49.8419, lon: 24.0315 };
 export const MIN_ZOOM = 11;
 export const MAX_ZOOM = 18;
 /** Below this the stop circles are more clutter than information */
 export const STOPS_ZOOM = 13.4;
 
-/** The same box `wire.py` quantises positions in */
-export const BOUNDS: [number, number, number, number] = [
-  CENTRE.lon - 0.45,
-  CENTRE.lat - 0.3,
-  CENTRE.lon + 0.45,
-  CENTRE.lat + 0.3,
-];
+/** How far the map pans past the box vehicles can be in, as a share of the
+ * box: enough to bring its edge to the middle of a wide screen */
+const PAN_ROOM = 0.5;
+
+/** Where the map can be panned, as `[west, south, east, north]` */
+export const BOUNDS = ((): [number, number, number, number] => {
+  const [west, south, east, north] = BOX;
+  const lon = (east - west) * PAN_ROOM;
+  const lat = (north - south) * PAN_ROOM;
+  return [west - lon, south - lat, east + lon, north + lat];
+})();
 
 export type View = { lat: number; lon: number; zoom: number };
 
