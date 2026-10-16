@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { Live } from "./live";
+import { Live, sample, type Vehicle } from "./live";
 
 /** The socket the client opened, to be spoken through */
 let socket: FakeSocket;
@@ -52,5 +52,33 @@ describe("the vehicles going quiet", () => {
     live.close();
 
     expect(live.getSnapshot().quiet).toBe(false);
+  });
+});
+
+/** Long past any slide */
+const LATER_MS = 60_000;
+
+const moving = (t0: number): Vehicle => ({
+  route: 0,
+  flags: 0,
+  lat0: 49.8,
+  lon0: 24.0,
+  lat1: 49.9,
+  lon1: 24.1,
+  h0: 0,
+  h1: 0,
+  t0,
+});
+
+describe("sample", () => {
+  test("starts a vehicle just reported where it was, on the clock reports are stamped with", () => {
+    const [lat, lon] = sample(moving(performance.now()));
+    expect(lat).toBeCloseTo(49.8, 2);
+    expect(lon).toBeCloseTo(24.0, 2);
+  });
+
+  test("ends the slide at the vehicle's new position", () => {
+    const [lat, lon] = sample(moving(0), LATER_MS);
+    expect([lat, lon]).toEqual([49.9, 24.1]);
   });
 });

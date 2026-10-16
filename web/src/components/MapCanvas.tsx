@@ -474,9 +474,8 @@ export function MapCanvas({
         // Vehicles first: they are drawn over the stops
         let veh: number | null = null;
         let vehD = R * R;
-        const now = Date.now() / 1000;
         for (const [id, v] of live.vehicles) {
-          const [lat, lon] = sample(v, now);
+          const [lat, lon] = sample(v);
           const dx = p.x(lon) - e.point.x;
           const dy = p.y(lat) - e.point.y;
           const d = dx * dx + dy * dy;
