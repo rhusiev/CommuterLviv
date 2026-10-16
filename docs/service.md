@@ -599,7 +599,9 @@ two hours of recording cannot replay.
    positions in one build of the feed, so it carries what each meant - shape
    id, cell count and length per unit, the corridor key per corridor, the
    route ids the passed stops were noted under - and only what still matches
-   is read back.
+   is read back. The learned models' rows and the turnarounds hold no shape
+   and are always read back, so even with no shape left that matches, the
+   snapshot's time stands and step 2 does not note its rows a second time.
 2. It then replays the recording from the later of the snapshot's time and two
    hours ago (`WARM_HOURS`), so the minutes between the last save and the
    restart are learned again.

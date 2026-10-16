@@ -78,7 +78,11 @@ def export(model, t=None):
 
 def restore(model, data):
     """Copy what still applies into a fresh model. Returns the time the state
-    was taken, or None if none of it fits this model."""
+    was taken, or None if it is another model's.
+
+    The training rows and turnarounds hold no shape, so they are restored even
+    when no shape fits any more: the recording they came from must then not
+    be replayed into them again, which a None would have the caller do."""
     if not supported(model) or str(data["variant"]) != model.cfg.name:
         return None
     if all(LAYOVER + k in data for k in layover.FIELDS):
@@ -96,9 +100,8 @@ def restore(model, data):
             src.append(np.arange(base, base + cells))
             dst.append(model.shape_base[sid] + np.arange(cells))
         base += int(cells)
-    if not src:
-        return None
-    unit = np.concatenate(src), np.concatenate(dst)
+    unit = ((np.concatenate(src), np.concatenate(dst)) if src
+            else (np.empty(0, dtype=int),) * 2)
 
     held, now = data["corridors"], _corridors(net)
     at = np.minimum(np.searchsorted(held, now), len(held) - 1)
