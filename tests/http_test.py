@@ -136,6 +136,25 @@ def test_an_unsafe_request_needs_the_csrf_token(client):
     assert client.get("/api/catalog").status_code == 401
 
 
+def test_renaming_a_set_onto_another_is_refused_and_a_missing_one_not_found(client):
+    headers = _signed_in(client, "sets")
+    made = [client.post("/api/sets", headers=headers,
+                        json={"name": name, "routes": [city.ROUTE]}).json()
+            for name in ("home", "work")]
+    missing = "00000000-0000-0000-0000-000000000000"
+
+    clash = client.put(f"/api/sets/{made[0]['id']}", headers=headers,
+                       json={"name": "work", "routes": [city.ROUTE]})
+    gone = client.put(f"/api/sets/{missing}", headers=headers,
+                      json={"name": "gym", "routes": [city.ROUTE]})
+    renamed = client.put(f"/api/sets/{made[0]['id']}", headers=headers,
+                         json={"name": "gym", "routes": [city.ROUTE]})
+
+    assert clash.status_code == 400
+    assert gone.status_code == 404
+    assert renamed.status_code == 200 and renamed.json()["name"] == "gym"
+
+
 def test_the_socket_says_hello_then_draws_the_bus_and_its_board(client):
     _signed_in(client, "socket")
     last = _last_stop(client)

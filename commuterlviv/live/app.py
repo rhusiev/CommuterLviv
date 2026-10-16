@@ -32,6 +32,7 @@ REMEMBER_COOKIE = "lp_remember"
 MAX_BODY = 8 * 1024
 SESSION_RECHECK = 60.0          # s between asking whether an open socket still has a session
 PLAN_WORKERS = 4                # journey searches running at once, city-wide
+NO_SUCH_SET = "No such set"     # missing, or another user's
 
 
 def _address(raw):
@@ -594,7 +595,7 @@ async def one_set(request, session):
     uid, sid = session["user_id"], request.path_params["sid"]
     if request.method == "DELETE":
         return (JSONResponse({"ok": True}) if await prefs.delete(app.pool, sid, uid)
-                else error("No such set", 404))
+                else error(NO_SUCH_SET, 404))
     data, bad = await body(request)
     if bad:
         return bad
@@ -603,8 +604,9 @@ async def one_set(request, session):
     if why:
         return error(why)
     row, why = await prefs.update(app.pool, sid, uid, *ok)
-    return error(why, 404 if why == "no such set" else 400) if why \
-        else JSONResponse(row)
+    if why:
+        return error(why)
+    return JSONResponse(row) if row else error(NO_SUCH_SET, 404)
 
 
 async def active(request, session):
@@ -616,9 +618,9 @@ async def active(request, session):
     try:
         sid = uuidlib.UUID(sid) if sid else None
     except (ValueError, AttributeError, TypeError):
-        return error("No such set", 404)
+        return error(NO_SUCH_SET, 404)
     if not await prefs.activate(app.pool, session["user_id"], sid):
-        return error("No such set", 404)
+        return error(NO_SUCH_SET, 404)
     return JSONResponse({"ok": True})
 
 

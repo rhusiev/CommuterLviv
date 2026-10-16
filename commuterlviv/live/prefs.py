@@ -152,6 +152,7 @@ async def create(pool, user_id, name, routes):
 
 
 async def update(pool, set_id, user_id, name, routes):
+    """The renamed set, or None if the user has no such set; and why not."""
     try:
         row = await pool.fetchrow(
             "UPDATE route_sets SET name = $3, routes = $4, updated_at = now() "
@@ -159,7 +160,7 @@ async def update(pool, set_id, user_id, name, routes):
             set_id, user_id, name, routes)
     except UniqueViolationError:
         return None, "a set with that name already exists"
-    return (as_json(row), None) if row else (None, "no such set")
+    return (as_json(row) if row else None), None
 
 
 async def delete(pool, set_id, user_id):
