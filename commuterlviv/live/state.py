@@ -21,7 +21,7 @@ import numpy as np
 from .. import layover, localtime, network, replay, track
 
 VEH = np.dtype([("id", "u2"), ("route", "u2"), ("lat", "f8"), ("lon", "f8"),
-                ("heading", "u2"), ("flags", "u1"), ("run", "u2")])
+                ("heading", "u2"), ("flags", "u1")])
 # `planned`: the vehicle has yet to start this trip, so the time is anchored on
 # the timetable's departure from its first stop rather than on where it is
 ETA = np.dtype([("stop", "u2"), ("route", "u2"), ("veh", "u2"), ("t", "i4"),
@@ -62,8 +62,6 @@ class Catalog:
         self.stop_i = {s: i for i, s in enumerate(self.stops)}
         self.stop_routes = [sorted(self.route_i[r] for r in serving[s]
                                    if r in self.route_i) for s in self.stops]
-        self.lat = np.array([net.stops[s]["lat"] for s in self.stops])
-        self.lon = np.array([net.stops[s]["lon"] for s in self.stops])
         self.net = net
 
     @functools.cached_property
@@ -183,8 +181,7 @@ class Live:
             moving = self._moving(tr)
             s = self._believed(tr, now, moving)
             rows[n] = (self._wire(veh), ri, *self._latlon(tr, s),
-                       self._heading(tr, s), self._flags(tr, now, moving),
-                       tr.run % 65536)
+                       self._heading(tr, s), self._flags(tr, now, moving))
             n += 1
         self.positions = Positions(now, rows[:n])
         return self.positions
