@@ -23,6 +23,7 @@ import requests
 from google.transit import gtfs_realtime_pb2
 
 from .gtfs import BASE, DATA, table
+from .localtime import DAY_S
 
 DB = os.path.join(DATA, "feed.db")
 
@@ -294,7 +295,7 @@ def prune(keep_days):
 
     Shrinks the file only if the database was created with auto_vacuum on.
     """
-    cutoff = time.time() - keep_days * 86400
+    cutoff = time.time() - keep_days * DAY_S
     db = sqlite3.connect(DB, timeout=60)
     try:
         for t, col in (("veh", "poll_ts"), ("pred", "poll_ts"),

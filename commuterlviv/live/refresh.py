@@ -14,7 +14,7 @@ from .. import gtfs, localtime, network, snapshot, walk as footpaths
 from . import geocode, geometry, journeys, state, traffic
 
 CHECK_AT = datetime.time(3, 30)     # local: after the last tram, before the first
-WALK_EVERY = 30 * 86400.0           # s between footpath refetches
+WALK_EVERY = 30 * localtime.DAY_S  # s between footpath refetches
 SHRINK = 0.5    # of the routes a new feed may keep before it is taken as broken
 
 

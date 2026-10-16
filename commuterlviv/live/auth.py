@@ -172,7 +172,7 @@ async def issue_remember(pool, user_id, days, ip=None, agent=None):
     await pool.execute(
         "INSERT INTO remember_tokens(series, user_id, token_hash, expires_at, "
         "ip, user_agent) VALUES($1,$2,$3,$4,$5,$6)",
-        series, user_id, token_hash, _now() + _delta(days * 86400), ip,
+        series, user_id, token_hash, _now() + datetime.timedelta(days=days), ip,
         (agent or "")[:300])
     return f"{series_raw}.{token_raw}"
 
@@ -219,7 +219,7 @@ async def consume_remember(pool, raw, days, ip=None):
                 "rotated_at = now(), last_used_at = now(), expires_at = $4 "
                 "WHERE series = $1",
                 series, fresh_hash, row["token_hash"],
-                _now() + _delta(days * 86400))
+                _now() + datetime.timedelta(days=days))
     return row["user_id"], f"{series_raw}.{fresh_raw}"
 
 

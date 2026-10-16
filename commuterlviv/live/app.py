@@ -20,7 +20,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
 
-from .. import __version__, network, plan
+from .. import __version__, localtime, network, plan
 from . import (auth, db, geocode, hub, journeys, prefs, refresh, reports,
                security, service, settings)
 
@@ -96,7 +96,7 @@ class Guard:
 
     def set_remember(self, resp, raw):
         resp.set_cookie(self.name(REMEMBER_COOKIE), raw,
-                        max_age=int(self.set.remember_days * 86400), path="/",
+                        max_age=int(self.set.remember_days * localtime.DAY_S), path="/",
                         httponly=True, samesite="lax",
                         secure=self.set.secure_cookies)
 
@@ -374,6 +374,7 @@ def _origin(q):
 
 
 PLAN_AHEAD_DAYS = 30
+PLAN_PAST_S = 3600.0    # s in the past an `at` may still be
 
 
 def _departure(raw):
@@ -386,7 +387,7 @@ def _departure(raw):
     except ValueError:
         return None, "at must be a unix time in seconds"
     now = time.time()
-    if at < now - 3600 or at > now + PLAN_AHEAD_DAYS * 86400:
+    if at < now - PLAN_PAST_S or at > now + PLAN_AHEAD_DAYS * localtime.DAY_S:
         return None, f"at must be within the next {PLAN_AHEAD_DAYS} days"
     return at, None
 
