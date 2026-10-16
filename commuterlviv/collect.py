@@ -24,6 +24,7 @@ from google.transit import gtfs_realtime_pb2
 
 from .gtfs import BASE, DATA, table
 from .localtime import DAY_S
+from .logs import brief, log
 
 DB = os.path.join(DATA, "feed.db")
 
@@ -67,10 +68,6 @@ stats = collections.Counter()
 stats_lock = threading.Lock()
 
 
-def log(*a):
-    print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), *a, flush=True)
-
-
 def count(**kw):
     with stats_lock:
         stats.update(kw)
@@ -111,7 +108,7 @@ def writer():
                 pending.clear()
                 return
             except sqlite3.Error as exc:
-                log("write failed", repr(exc)[:200])
+                log("write failed", brief(exc))
                 count(write_errors=1)
                 try:
                     if db is not None:
@@ -144,7 +141,7 @@ def writer():
                 db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                 db.execute("PRAGMA incremental_vacuum")
             except sqlite3.Error as exc:
-                log("checkpoint failed", repr(exc)[:200])
+                log("checkpoint failed", brief(exc))
             last_ckpt = now
     if db is not None:
         db.close()
@@ -163,11 +160,11 @@ def poll_loop(feed, period, once):
             fails = 0
         except Exception as exc:
             emit("poll", (t0, feed, 0, 0, int((time.time() - t0) * 1000),
-                          repr(exc)[:200]))
+                          brief(exc)))
             count(**{f"{feed}_errors": 1})
             fails += 1
             if fails in (1, 5) or fails % 50 == 0:
-                log(f"{feed} error x{fails}", repr(exc)[:150])
+                log(f"{feed} error x{fails}", brief(exc))
         wait = min(period * 2 ** min(fails, 16), BACKOFF_MAX) if fails else period
         stop_flag.wait(max(0.5, wait - (time.time() - t0)))
 
@@ -279,7 +276,7 @@ def collect_lad(period, limit):
                 count(lad_rows=len(rows), lad_polls=1)
             except Exception as exc:
                 emit("poll", (t0, "lad", 0, 0, int((time.time() - t0) * 1000),
-                              repr(exc)[:200]))
+                              brief(exc)))
                 count(lad_errors=1)
             stop_flag.wait(max(0.05, gap - (time.time() - t0)))
         stop_flag.wait(max(0.5, period - (time.time() - cycle)))
@@ -332,7 +329,7 @@ def heartbeat(min_free_gb, keep_days):
             try:
                 prune(keep_days)
             except sqlite3.Error as exc:
-                log("prune failed", repr(exc)[:200])
+                log("prune failed", brief(exc))
             last_prune = time.time()
 
 

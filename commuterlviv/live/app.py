@@ -21,6 +21,7 @@ from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
 
 from .. import __version__, localtime, network, plan
+from ..logs import brief, log
 from . import (auth, db, geocode, hub, journeys, prefs, refresh, reports,
                security, service, settings)
 
@@ -40,10 +41,6 @@ def _address(raw):
         return str(ipaddress.ip_address(raw))
     except ValueError:
         return None
-
-
-def log(*a):
-    print(time.strftime("%Y-%m-%d %H:%M:%S"), *a, flush=True)
 
 
 class Guard:
@@ -458,7 +455,7 @@ async def journey(request, session):
         # answered as JSON on purpose: an unhandled exception leaves Starlette
         # with a plain-text 500, which every client reads as a JSON.parse
         # failure rather than as what went wrong
-        log("plan failed:", repr(exc)[:200])
+        log("plan failed:", brief(exc))
         return error("Could not plan that journey", 500)
     rid = app.recent.hold(session["user_id"], {
         "from": origin, "to": dest, "t": found["t"], "asked": asked,
@@ -494,7 +491,7 @@ async def backup(request, session):
                 held["speed"], held["hurry"], held["journeys"][option], leg, n)
     except Exception as exc:
         # as JSON for the same reason as a failed search's
-        log("backup failed:", repr(exc)[:200])
+        log("backup failed:", brief(exc))
         return error("Could not draw that way", 500)
     if found is None:
         return error("That search has no such backup", 404)
@@ -538,7 +535,7 @@ async def places_near(request, session):
     try:
         found = await asyncio.to_thread(app.geocoder.find, q[:120])
     except Exception as exc:
-        log("geocode:", repr(exc)[:200])
+        log("geocode:", brief(exc))
         return error("Place search is unavailable", status=502)
     return JSONResponse({"places": found})
 
@@ -775,4 +772,4 @@ async def sweeper(pool, every=3600.0):
         try:
             await auth.sweep(pool)
         except Exception as exc:
-            log("sweep failed", repr(exc)[:200])
+            log("sweep failed", brief(exc))

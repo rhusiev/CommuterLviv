@@ -15,6 +15,7 @@ import time
 from concurrent.futures import ProcessPoolExecutor
 
 from .. import boost, collect, layover, localtime, replay, snapshot
+from ..logs import brief
 from . import quiet
 from .state import Live
 
@@ -66,10 +67,10 @@ class Service:
             last = con.execute("SELECT max(veh_ts) FROM veh").fetchone()[0]
             con.close()
         except sqlite3.Error as exc:
-            self.log("no recording to warm from:", repr(exc)[:120])
+            self.log("no recording to warm from:", brief(exc))
             return False
         if not last or time.time() - last > WARM_MAX_AGE:
-            self.log("recording is stale; starting the model cold")
+            self.log("recording is stale; nothing to replay")
             return False
         t0 = time.time()
         t_from = max(last - WARM_HOURS * 3600, since or 0.0)
@@ -77,7 +78,7 @@ class Service:
             replay.run(live.net, t_from=t_from, t_to=last,
                        db=db, model=live.model, epoch=self.set.epoch)
         except replay.NoData as exc:
-            self.log("nothing to warm from:", str(exc)[:120])
+            self.log("nothing to warm from:", str(exc))
             return False
         self.log(f"warmed the model on {(last - t_from) / 60:.0f} min of "
                  f"recording in {time.time() - t0:.1f}s")
@@ -104,7 +105,7 @@ class Service:
                     pool, _learn, self.live.net, self.set.cfg, db or replay.DB,
                     t_from, t_to, BACKFILL_WARMUP_S, self.set.epoch)
         except Exception as exc:
-            self.log("backfill failed", repr(exc)[:200])
+            self.log("backfill failed", brief(exc))
             return
         async with self.lock:
             model = self.live.model
@@ -125,7 +126,7 @@ class Service:
             try:
                 await self.save()
             except Exception as exc:
-                self.log("model snapshot failed", repr(exc)[:200])
+                self.log("model snapshot failed", brief(exc))
 
     async def save(self):
         async with self.lock:
@@ -158,7 +159,7 @@ class Service:
                     learner.model = fitted
                 self.log(f"{name} fitted on {len(rows)} {rows_are}")
         except Exception as exc:
-            self.log(f"{name} fit failed", repr(exc)[:200])
+            self.log(f"{name} fit failed", brief(exc))
 
     def swap(self, live):
         """Onto a new city, primed with a poll and an epoch so it is not
@@ -169,7 +170,7 @@ class Service:
             self.fold(self.fetch())
             live.epoch()
         except Exception as exc:
-            self.log("first poll of the new city failed", repr(exc)[:200])
+            self.log("first poll of the new city failed", brief(exc))
 
     async def poll_loop(self):
         fails = 0
@@ -190,7 +191,7 @@ class Service:
                 self.errors += 1
                 fails += 1
                 if fails in (1, 5) or fails % 50 == 0:
-                    self.log(f"poll error x{fails}", repr(exc)[:200])
+                    self.log(f"poll error x{fails}", brief(exc))
             wait = min(self.set.poll_veh * 2 ** min(fails, 8),
                        collect.BACKOFF_MAX) if fails else self.set.poll_veh
             await asyncio.sleep(max(0.5, wait - (time.time() - t0)))
@@ -234,7 +235,7 @@ class Service:
                 self.hub.publish(epoch=True)
             except Exception as exc:
                 self.errors += 1
-                self.log("epoch error", repr(exc)[:200])
+                self.log("epoch error", brief(exc))
             took = time.time() - t
             if took > step / 2:
                 self.log(f"epoch took {took:.1f}s of a {step:.0f}s budget")
