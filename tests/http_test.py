@@ -115,6 +115,16 @@ def test_the_boards_show_the_bus_coming(client, feed):
     assert ahead and all(a["route"] == row["route"] for a in ahead)
 
 
+def test_traffic_gives_a_number_or_none_per_street_piece(client):
+    _signed_in(client, "traffic")
+    pieces = client.get("/api/traffic/streets").json()["lines"]
+
+    now = client.get("/api/traffic").json()
+
+    assert len(now["ratio"]) == len(pieces)
+    assert all(r is None or r > 0 for r in now["ratio"])
+
+
 def test_an_unsafe_request_needs_the_csrf_token(client):
     headers = _signed_in(client, "csrf")
 

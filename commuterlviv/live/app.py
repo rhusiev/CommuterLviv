@@ -313,8 +313,12 @@ async def traffic_streets(request, session):
 async def traffic_now(request, session):
     """How each of those is running against its timetable, now."""
     app = request.app.state
-    return Response(app.traffic_cache.read(time.time()),
-                    media_type="application/json")
+    cache, now = app.traffic_cache, time.time()
+    if not cache.fresh(now):
+        # an epoch rewrites the model's arrays in a worker thread
+        async with app.svc.lock:
+            await asyncio.to_thread(cache.read, now)
+    return Response(cache.read(now), media_type="application/json")
 
 
 async def arrivals(request, session):
