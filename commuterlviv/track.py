@@ -103,6 +103,14 @@ def observe(tr, net, ts, lat, lon, speed, odometer, trip):
     xy = to_xy(np.array([lat]), np.array([lon]))[0]
 
     z_s, lat_err = tr.snap(xy, gap)
+    if tr.s is not None and lat_err > MAX_LATERAL:
+        d, e = candidates(tr.shape, xy)
+        if e[0] <= MAX_LATERAL:
+            # on the shape, but nowhere the track could have got to: it has lost
+            # the vehicle - its fixes froze and came back, odometer and all, as
+            # through an air raid alert - and is as stale as after a gap
+            tr.reset(trip, net, ts)
+            z_s, lat_err = float(d[0]), float(e[0])
     odo_m = odometer * 1000.0
     u = None if (tr.odo is None or odo_m < tr.odo) else odo_m - tr.odo
     tr.odo = odo_m
