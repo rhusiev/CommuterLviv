@@ -570,13 +570,10 @@ class _Folded extends StatelessWidget {
                   child: Row(
                     children: [
                       for (final leg in j.legs)
-                        if (!leg.walking)
+                        if (catalog.routeAt(leg.route) case final route?)
                           Padding(
                             padding: const EdgeInsets.only(right: 4),
-                            child: RouteBadge(
-                              route: catalog.routes[leg.route!],
-                              fontSize: 11,
-                            ),
+                            child: RouteBadge(route: route, fontSize: 11),
                           ),
                     ],
                   ),
@@ -794,14 +791,12 @@ class _LegRow extends StatelessWidget {
               SizedBox(width: 44, child: Text(clockTime(leg.dep))),
               // Inside a row that opens the stop, so the badge takes its own
               // taps
-              InkWell(
-                onTap: () => onLine(leg.route!),
-                borderRadius: BorderRadius.circular(6),
-                child: RouteBadge(
-                  route: catalog.routes[leg.route!],
-                  fontSize: 11,
+              if (catalog.routeAt(leg.route) case final route?)
+                InkWell(
+                  onTap: () => onLine(leg.route!),
+                  borderRadius: BorderRadius.circular(6),
+                  child: RouteBadge(route: route, fontSize: 11),
                 ),
-              ),
               const SizedBox(width: 8),
             ],
             Expanded(child: Text(where, overflow: TextOverflow.ellipsis)),

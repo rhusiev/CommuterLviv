@@ -123,11 +123,12 @@ class _BackupsState extends State<_Backups> {
                           for (final (i, r) in chain.indexed) ...[
                             if (i > 0)
                               const Icon(Icons.chevron_right, size: 16),
-                            RouteBadge(
-                              route: catalog.routes[r.route!],
-                              fontSize: 11,
-                              outline: planned.elementAtOrNull(i) ?? false,
-                            ),
+                            if (catalog.routeAt(r.route) case final route?)
+                              RouteBadge(
+                                route: route,
+                                fontSize: 11,
+                                outline: planned.elementAtOrNull(i) ?? false,
+                              ),
                           ],
                         ],
                       ),

@@ -11,6 +11,7 @@ import 'package:commuterlviv/src/api.dart';
 import 'package:commuterlviv/src/hurry_pill.dart';
 import 'package:commuterlviv/src/journey_panel.dart';
 import 'package:commuterlviv/src/models.dart';
+import 'package:commuterlviv/src/route_badge.dart';
 import 'package:commuterlviv/src/strings.dart';
 
 import 'real_server.dart';
@@ -136,9 +137,9 @@ Map<String, Object> _journey(
   ],
 };
 
-/// Answers a search with one option backed by a ride that is no option of its
-/// own, and that ride's way when asked for it, noting the asks.
-Future<HttpServer> _serve(List<Uri> asked) async {
+/// Answers a search with one option, riding [route], backed by a ride that is
+/// no option of its own, and that ride's way when asked for it, noting the asks.
+Future<HttpServer> _serve(List<Uri> asked, {int route = 0}) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   final later = _ride(1, 900);
   server.listen((req) {
@@ -150,7 +151,7 @@ Future<HttpServer> _serve(List<Uri> asked) async {
         'options': [
           _journey(
             _ride(
-              0,
+              route,
               60,
               backups: [
                 {
@@ -432,6 +433,31 @@ void main() {
     expect(shown.last?.legs[1].route, 1);
     expect(shown.last?.legs[1].dep, 900);
     expect(find.text(txt.findRoute), findsNothing);
+  });
+
+  testWidgets('a ride on a line the catalog lacks is shown without its badge', (
+    tester,
+  ) async {
+    allowRealHttp();
+    final server = (await tester.runAsync(() => _serve([], route: -1)))!;
+    addTearDown(() => server.close(force: true));
+    await pump(
+      tester,
+      server: 'http://${server.address.host}:${server.port}',
+      catalog: _twoLines,
+      from: const LatLng(49.84, 24.03),
+      to: const LatLng(49.81, 24.05),
+    );
+
+    await tester.tap(find.text(txt.findRoute));
+    final backups = find.text('· ${txt.backupCount(1)}');
+    await pumpUntil(tester, () => backups.evaluate().isNotEmpty);
+    await tester.tap(backups);
+    await tester.pumpAndSettle();
+
+    // the backup rides line 3; the planned ride's line is unknown
+    expect(find.widgetWithText(RouteBadge, '3'), findsWidgets);
+    expect(find.widgetWithText(RouteBadge, '8'), findsNothing);
   });
 
   testWidgets('on board, a search sends the vehicle alone and leaves now', (
