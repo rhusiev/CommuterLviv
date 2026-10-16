@@ -180,6 +180,15 @@ and never `/api` or `/ws`, because a minute-old arrival time is worse than none
 and a cached session would lie about who is signed in. Offline it opens and says
 the service is not answering, which is the truth: the times come from the socket.
 
+When the service says the vehicles have gone quiet - too few reporting for the
+trips the timetable has under way, see
+[the service](service.md#when-the-vehicles-go-quiet) - an amber banner over the
+map says that few vehicles are reporting, possibly because of an air raid alert,
+and that positions and arrival times may be missing or off. It says "possibly":
+a failing feed looks the same. Closing it hides it until the vehicles report
+again and go quiet anew, and it is never shown while the socket is down, when
+the service cannot say either way.
+
 The language is Ukrainian, with English for a browser that asks for it;
 `web/src/lib/i18n.ts` holds both dictionaries and the picker is in the route
 panel. Changing it reloads the page; the phone app, which shares the same keys,
@@ -205,7 +214,8 @@ third choice in the tab pill. Both also carry the same three views added since:
 a saved list where a place can be renamed or dropped, a search that finds
 addresses and shops as well as stop names, with matching saved places above
 both, traffic drawn over the streets
-the model can see, and following a journey as you travel it.
+the model can see, following a journey as you travel it, and the banner that
+warns when the vehicles go quiet.
 
 ```sh
 cd mobile && flutter pub get
