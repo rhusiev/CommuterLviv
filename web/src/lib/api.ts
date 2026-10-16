@@ -1,3 +1,4 @@
+import { readJson, writeJson } from "./storage";
 import type {
   Arrivals,
   Call,
@@ -143,8 +144,7 @@ const tags = new Map<string, string>();
 /** Cached in local storage against the service's ETag: the usual request comes
  * back 304 with no body. */
 async function held<T>(path: string, key: string): Promise<T> {
-  const stored = localStorage.getItem(key);
-  const had = stored ? (JSON.parse(stored) as { tag: string; data: T }) : null;
+  const had = readJson<{ tag: string; data: T }>(key);
   const res = await fetch(BASE + path, {
     credentials: "include",
     headers: had ? { "If-None-Match": had.tag } : {},
@@ -158,11 +158,7 @@ async function held<T>(path: string, key: string): Promise<T> {
   const tag = res.headers.get("ETag");
   if (tag) {
     tags.set(key, tag);
-    try {
-      localStorage.setItem(key, JSON.stringify({ tag, data }));
-    } catch {
-      // A full quota only costs a refetch
-    }
+    writeJson(key, { tag, data });
   }
   return data;
 }

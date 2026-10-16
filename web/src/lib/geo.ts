@@ -1,6 +1,8 @@
 /** Web Mercator, because the basemap is: the overlay has to agree with MapLibre
  * to the pixel or the vehicles drive beside the streets. */
 
+import { readJson, writeJson } from "./storage";
+
 export const CENTRE = { lat: 49.842, lon: 24.032 };
 export const MIN_ZOOM = 11;
 export const MAX_ZOOM = 18;
@@ -57,22 +59,10 @@ export function metres(a: { lat: number; lon: number }, b: { lat: number; lon: n
 const VIEW_KEY = "commuterlviv.view";
 
 export function loadView(): View {
-  try {
-    const raw = localStorage.getItem(VIEW_KEY);
-    if (raw) {
-      const v = JSON.parse(raw) as View;
-      if (typeof v.zoom === "number" && typeof v.lat === "number") return v;
-    }
-  } catch {
-    // A corrupt stored view is not worth a blank page
-  }
-  return START;
+  const v = readJson<View>(VIEW_KEY);
+  return typeof v?.zoom === "number" && typeof v.lat === "number" ? v : START;
 }
 
 export function saveView(v: View) {
-  try {
-    localStorage.setItem(VIEW_KEY, JSON.stringify(v));
-  } catch {
-    // The view simply will not survive a reload
-  }
+  writeJson(VIEW_KEY, v);
 }

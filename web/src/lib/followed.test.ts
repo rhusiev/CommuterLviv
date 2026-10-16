@@ -42,6 +42,14 @@ describe("the journey followed", () => {
     expect(heldFollowed('"city-2"', ARR)).toBeNull();
   });
 
+  test("is none when what is stored is not a journey", () => {
+    for (const junk of ["{not json", "null", '{"tag":"\\"city-1\\""}']) {
+      kept.set("commuterlviv.following", junk);
+
+      expect(heldFollowed(TAG, ARR)).toBeNull();
+    }
+  });
+
   test("is dropped hours after it should have arrived", () => {
     holdFollowed(followed);
 
