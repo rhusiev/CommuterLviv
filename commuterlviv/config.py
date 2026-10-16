@@ -1,5 +1,6 @@
-"""The model's approaches as switches: `full` ships, each variant differs from
-it in one place. Run with `python3 -m commuterlviv experiment`."""
+"""The model's approaches as switches: each variant differs from `full` in one
+place. The service runs the one `COMMUTERLVIV_VARIANT` names, and
+`replay.run(cfg=...)` scores any of them offline."""
 from dataclasses import dataclass, replace
 
 
@@ -29,7 +30,7 @@ class Config:
     prof_hl: float = 0.0
 
 
-FULL = Config("full", "The model as it ships: everything below turned on.")
+FULL = Config("full", "Every switch below turned on.")
 
 VARIANTS = [
     FULL,
