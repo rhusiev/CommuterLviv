@@ -27,7 +27,9 @@ export type View = { lat: number; lon: number; zoom: number };
 
 export const START: View = { ...CENTRE, zoom: 14.3 };
 
-/** MapLibre's tiles are 512 px, so a zoom of z spans 512 * 2^z pixels */
+/** MapLibre's tiles are 512 px, so a zoom of z spans 512 * 2^z pixels - the
+ * scale the app's 256 px tiles reach at z + 1, which its thresholds allow for
+ * (`webZoomOffset`) */
 const TILE = 512;
 
 export const mercX = (lon: number) => (lon + 180) / 360;

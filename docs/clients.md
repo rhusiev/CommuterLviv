@@ -238,7 +238,11 @@ The shape of the code is the shape of the web app's, for the same reason. Every
 vehicle and every stop is one `CustomPaint` repainted from a `Ticker`, not four
 hundred widgets; positions are eased between the five-second frames; and the
 route badge for each route is laid out once into a `ui.Paragraph` and drawn
-thereafter, which is what the offscreen badge canvases do in the browser.
+thereafter, which is what the offscreen badge canvases do in the browser. The
+two maps count zoom differently - flutter_map's tiles are 256 px, MapLibre's
+512 - so where the app starts drawing stops and place names, and how close it
+comes in on a place, are the web's levels plus one (`webZoomOffset`): both do it
+at the same ground scale.
 
 It is built to be publishable on F-Droid, which is why it is Flutter and not
 Expo: F-Droid builds from source and takes no proprietary SDK, so there is no
