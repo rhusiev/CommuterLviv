@@ -121,7 +121,7 @@ def test_the_ring_keeps_the_newest_rows_oldest_first(monkeypatch, net, n):
     width = len(layover.FEATURES) + 1
 
     for k in range(n):
-        lay._add(np.full(width, k))
+        lay._rows.add(np.full(width, k))
 
     assert lay.training()[:, 0].tolist() == list(range(max(0, n - RING_ROWS), n))
 

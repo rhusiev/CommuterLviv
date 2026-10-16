@@ -23,7 +23,7 @@ import datetime
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingRegressor
 
-from . import localtime
+from . import localtime, ring
 from .track import GAP_RESET
 
 TURN = 120.0        # s at least between reaching a terminus and leaving it
@@ -65,8 +65,7 @@ class Layovers:
         self.tz = tz
         self.seen = {}       # (route, first stop) -> deque of (waited, s ahead)
         self.last = {}       # (route, first stop) -> (departure, timetabled) of its latest
-        self._rows = np.zeros((ROWS, len(FEATURES) + 1), dtype=np.float32)
-        self._wrote = 0      # rows ever written; the ring keeps the last `ROWS`
+        self._rows = ring.Ring(ROWS, len(FEATURES) + 1)
         self.model = None
         self._on = {}        # veh -> [trip, been away from its end, time in, last fix]
         self._out = {}       # veh -> (timetabled departure, in early), until it leaves
@@ -110,7 +109,7 @@ class Layovers:
         if early:
             self.see(key, dep - sched > -WAITED, sched - dep)
         for t, f in self._asked.pop(trip, ()):
-            self._add((*f, dep - t))
+            self._rows.add((*f, dep - t))
         for k in [k for k, got in self._asked.items() if got[-1][0] < dep - PENDING]:
             del self._asked[k]
 
@@ -210,25 +209,16 @@ class Layovers:
         for r, st, w, a in zip(route, stop, waited, ahead):
             self.see((str(r), str(st)), w, a)
 
-    def _add(self, row):
-        self._rows[self._wrote % ROWS] = row
-        self._wrote += 1
-
     def training(self):
         """A copy of the rows to `fit` on, oldest first: `FEATURES` and the
         seconds that were left."""
-        if self._wrote < ROWS:
-            return self._rows[:self._wrote].copy()
-        at = self._wrote % ROWS
-        return np.concatenate([self._rows[at:], self._rows[:at]])
+        return self._rows.oldest_first()
 
     def restore_rows(self, rows):
         """Rows from `training`, if they are of this version's `FEATURES`, taken
         as older than any this one has written itself."""
-        if rows.ndim == 2 and rows.shape[1] == self._rows.shape[1]:
-            rows = np.concatenate([rows, self.training()])[-ROWS:]
-            self._rows[:len(rows)] = rows
-            self._wrote = len(rows)
+        if rows.ndim == 2 and rows.shape[1] == self._rows.width:
+            self._rows.put_before(rows)
 
 
 def fit(rows):

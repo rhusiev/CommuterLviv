@@ -15,7 +15,7 @@ import datetime
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingRegressor
 
-from . import localtime, recent
+from . import localtime, recent, ring
 
 # the rows learned from: of the ETAs of an epoch every SAMPLE_S, a KEEP share,
 # labelled when the vehicle passes the stop. Lviv has ~460 000 such ETAs a day
@@ -58,8 +58,7 @@ class Boost:
         self.routes = sorted(net.routes)   # what the "route" feature numbers
         self._route = {r: (i, TYPES.index(net.routes[r]["type"]))
                        for i, r in enumerate(self.routes)}
-        self._rows = np.zeros((ROWS, len(FEATURES) + 1), dtype=np.float32)
-        self._wrote = 0      # rows ever written; the ring keeps the last `ROWS`
+        self._rows = ring.Ring(ROWS, len(FEATURES) + 1)
         self.model = None
         self._asked = {}     # (veh, trip, run, stop index) -> [(time, features)]
         self._pick = np.random.default_rng(0)
@@ -128,30 +127,24 @@ class Boost:
         if gap > MAX_GAP_S:
             return
         for at, f in asked:
-            self._rows[self._wrote % ROWS] = (*f, t - at - f[0])
-            self._wrote += 1
+            self._rows.add((*f, t - at - f[0]))
 
     def training(self):
         """A copy of the rows to `fit` on, oldest first: `FEATURES` and how
         many seconds later than the model the stop was passed."""
-        if self._wrote < ROWS:
-            return self._rows[:self._wrote].copy()
-        at = self._wrote % ROWS
-        return np.concatenate([self._rows[at:], self._rows[:at]])
+        return self._rows.oldest_first()
 
     def restore_rows(self, rows, routes):
         """Rows from `training`, if they are of this version's `FEATURES`, their
         "route" renumbered from `routes`, the `routes` they were noted under.
         They are taken as older than any this one has noted itself."""
-        if rows.ndim == 2 and rows.shape[1] == self._rows.shape[1]:
+        if rows.ndim == 2 and rows.shape[1] == self._rows.width:
             rows = rows[-ROWS:].copy()
             col = FEATURES.index("route")
             now = np.array([self._route.get(r, (np.nan,))[0] for r in routes] + [np.nan])
             was = np.nan_to_num(rows[:, col], nan=len(routes)).astype(np.int64)
             rows[:, col] = now[np.clip(was, 0, len(routes))]
-            rows = np.concatenate([rows, self.training()])[-ROWS:]
-            self._rows[:len(rows)] = rows
-            self._wrote = len(rows)
+            self._rows.put_before(rows)
 
 
 def fit(rows):
