@@ -26,6 +26,16 @@ export type Origin = Point | Aboard;
 
 type End = "from" | "to";
 
+/** A key per journey that follows it through re-ranking: an option keeps its
+ *  own state when a backup taken is ranked in above it */
+const keys = new WeakMap<Journey, number>();
+let nextKey = 0;
+function keyOf(j: Journey) {
+  let k = keys.get(j);
+  if (k === undefined) keys.set(j, (k = nextKey++));
+  return k;
+}
+
 /** What a ride not on a tracked vehicle rests on, how loudly to say so, and why
  *  it matters */
 const RESTS: Record<
@@ -367,9 +377,9 @@ export function JourneyPanel({
       )}
 
       {options &&
-        order.map((j, i) => (
+        order.map((j) => (
           <Option
-            key={i}
+            key={keyOf(j)}
             journey={j}
             shown={j === shown}
             onShow={() => show(j)}
