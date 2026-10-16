@@ -641,6 +641,7 @@ class _HomeScreenState extends State<HomeScreen> {
         catalog: catalog,
         places: _sets?.places ?? const [],
         onSave: _savePlace,
+        here: _here,
       ),
     );
     if (hit == null || !mounted) return;

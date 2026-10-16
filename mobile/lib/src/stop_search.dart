@@ -1,7 +1,8 @@
 /// Saved places and stops by name, scanned on every keystroke, and addresses
 /// and shops from the service a quarter of a second after the typing stops.
 /// Saved places come first, as the ones meant most often, then stops: they are
-/// the thing the app is for, and both are already in hand.
+/// the thing the app is for, and both are already in hand. With nothing typed,
+/// it offers the stops nearest the phone.
 library;
 
 import 'dart:async';
@@ -10,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'api.dart';
+import 'here.dart';
 import 'match.dart';
 import 'models.dart';
 import 'sheets.dart' show askName;
@@ -17,6 +19,25 @@ import 'strings.dart';
 
 /// How long the typing has to stop before the service is asked.
 const searchDebounce = Duration(milliseconds: 250);
+
+/// Metres: past this the phone is not near a stop, and likely not in the city.
+const nearM = 2000.0;
+
+/// How many of the nearest stops are listed.
+const nearCount = 8;
+
+/// The stops within [nearM] of [at], nearest first, each with its metres.
+List<(int, double)> nearest(Catalog catalog, LatLng at) {
+  const distance = Distance();
+  final stops = catalog.stops;
+  final near = [
+    for (var i = 0; i < stops.length; i++)
+      if (distance(at, LatLng(stops[i].lat, stops[i].lon)) case final m
+          when m <= nearM)
+        (i, m),
+  ]..sort((a, b) => a.$2.compareTo(b.$2));
+  return near.take(nearCount).toList();
+}
 
 /// What the search came back with: a stop in the catalog, or a point on it.
 sealed class Hit {
@@ -43,6 +64,7 @@ class StopSearch extends SearchDelegate<Hit?> {
     required this.places,
     required this.onSave,
     this.idle,
+    this.here,
   }) : super(searchFieldLabel: txt.findStop);
 
   final Api api;
@@ -52,6 +74,9 @@ class StopSearch extends SearchDelegate<Hit?> {
 
   /// What an empty query shows, given a way to close the search with nothing
   final Widget Function(BuildContext context, VoidCallback done)? idle;
+
+  /// Where the phone is, for the stops near it, when [idle] is not shown
+  final Here? here;
 
   @override
   List<Widget> buildActions(BuildContext context) => [
@@ -69,17 +94,113 @@ class StopSearch extends SearchDelegate<Hit?> {
   Widget buildResults(BuildContext context) => buildSuggestions(context);
 
   @override
-  Widget buildSuggestions(BuildContext context) =>
-      query.trim().isEmpty && idle != null
-      ? idle!(context, () => close(context, null))
-      : _Results(
-          api: api,
-          catalog: catalog,
-          places: places,
-          query: query.trim(),
-          onPick: (hit) => close(context, hit),
-          onSave: onSave,
-        );
+  Widget buildSuggestions(BuildContext context) {
+    void pick(Hit hit) => close(context, hit);
+    if (query.trim().isNotEmpty) {
+      return _Results(
+        api: api,
+        catalog: catalog,
+        places: places,
+        query: query.trim(),
+        onPick: pick,
+        onSave: onSave,
+      );
+    }
+    if (idle case final idle?) return idle(context, () => close(context, null));
+    if (here case final here?) {
+      return _Near(here: here, catalog: catalog, onPick: pick, onSave: onSave);
+    }
+    return const SizedBox.shrink();
+  }
+}
+
+/// Asks what to call [at], proposing [was], and saves it under that name.
+Future<void> _saveAs(
+  BuildContext context,
+  void Function(String name, LatLng at) onSave,
+  String was,
+  LatLng at,
+) async {
+  final name = await askName(
+    context,
+    txt.namePlace,
+    was: was,
+    action: txt.saveHere,
+  );
+  if (name != null && name.isNotEmpty) onSave(name, at);
+}
+
+/// The stops nearest the phone. Nothing is asked of it until the row is
+/// tapped, unless it is already locating.
+class _Near extends StatelessWidget {
+  const _Near({
+    required this.here,
+    required this.catalog,
+    required this.onPick,
+    required this.onSave,
+  });
+
+  final Here here;
+  final Catalog catalog;
+  final void Function(Hit hit) onPick;
+  final void Function(String name, LatLng at) onSave;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: here,
+    builder: (context, _) {
+      final at = here.fix?.point;
+      if (here.state != Locating.on || at == null) return _ask(context);
+      final near = nearest(catalog, at);
+      if (near.isEmpty) return _Said(txt.nothingNear);
+      return ListView(
+        children: [
+          _Heading(txt.nearMe),
+          for (final (i, m) in near)
+            _stop(context, catalog, i, txt.metres(m.round()), onPick, onSave),
+        ],
+      );
+    },
+  );
+
+  Widget _ask(BuildContext context) {
+    final waiting = here.state == Locating.waiting;
+    return ListView(
+      children: [
+        ListTile(
+          leading: const Icon(Icons.near_me_outlined),
+          title: Text(txt.nearMe),
+          subtitle: here.state == Locating.denied ? Text(txt.noLocation) : null,
+          trailing: waiting
+              ? const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : null,
+          onTap: waiting ? null : () => unawaited(here.start()),
+        ),
+      ],
+    );
+  }
+}
+
+/// Stop [i] as a row, with [under] beneath its name.
+Widget _stop(
+  BuildContext context,
+  Catalog catalog,
+  int i,
+  String under,
+  void Function(Hit hit) onPick,
+  void Function(String name, LatLng at) onSave,
+) {
+  final s = catalog.stops[i];
+  return _Row(
+    icon: Icons.directions_bus_outlined,
+    title: s.name,
+    under: under,
+    onTap: () => onPick(StopHit(i)),
+    onSave: () => _saveAs(context, onSave, s.name, LatLng(s.lat, s.lon)),
+  );
 }
 
 class _Results extends StatefulWidget {
@@ -158,15 +279,8 @@ class _ResultsState extends State<_Results> {
     }
   }
 
-  Future<void> _save(String was, LatLng at) async {
-    final name = await askName(
-      context,
-      txt.namePlace,
-      was: was,
-      action: txt.saveHere,
-    );
-    if (name != null && name.isNotEmpty) widget.onSave(name, at);
-  }
+  Future<void> _save(String was, LatLng at) =>
+      _saveAs(context, widget.onSave, was, at);
 
   @override
   Widget build(BuildContext context) {
@@ -196,37 +310,24 @@ class _ResultsState extends State<_Results> {
     return Column(
       children: [
         if (_busy) const LinearProgressIndicator(minHeight: 2),
-        if (_failed)
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(
-              txt.noSearch,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
+        if (_failed) _Said(txt.noSearch),
         Expanded(
           child: ListView.builder(
             itemCount: rows.length,
             itemBuilder: (context, i) {
               final row = rows[i];
-              if (row is String) {
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-                  child: Text(
-                    row,
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                );
-              }
+              if (row is String) return _Heading(row);
               if (row is int) {
-                final s = catalog.stops[row];
-                return _Row(
-                  icon: Icons.directions_bus_outlined,
-                  title: s.name,
-                  under: [for (final r in s.routes) catalog.routes[r].short]
-                      .join(' · '),
-                  onTap: () => widget.onPick(StopHit(row)),
-                  onSave: () => _save(s.name, LatLng(s.lat, s.lon)),
+                return _stop(
+                  context,
+                  catalog,
+                  row,
+                  [
+                    for (final r in catalog.stops[row].routes)
+                      catalog.routes[r].short,
+                  ].join(' · '),
+                  widget.onPick,
+                  widget.onSave,
                 );
               }
               if (row is Place) {
@@ -251,6 +352,32 @@ class _ResultsState extends State<_Results> {
       ],
     );
   }
+}
+
+/// A section's title above its rows.
+class _Heading extends StatelessWidget {
+  const _Heading(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+    child: Text(text, style: Theme.of(context).textTheme.labelLarge),
+  );
+}
+
+/// A line of small print in place of rows.
+class _Said extends StatelessWidget {
+  const _Said(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(12),
+    child: Text(text, style: Theme.of(context).textTheme.bodySmall),
+  );
 }
 
 class _Row extends StatelessWidget {

@@ -219,7 +219,8 @@ route sets and the same predictions, and the same journey planner behind the
 third choice in the tab pill. Both also carry the same three views added since:
 a saved list where a place can be renamed or dropped, a search that finds
 addresses and shops as well as stop names, with matching saved places above
-both, traffic drawn over the streets
+both, and lists the stops within 2 km of where you are (the web's ◎ in the search
+bar, the app's search before anything is typed), traffic drawn over the streets
 the model can see, following a journey as you travel it, and the banner that
 warns when the vehicles go quiet.
 

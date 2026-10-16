@@ -184,7 +184,7 @@ refused and the map stays empty while everything else works.
 | `lib/src/map_tab.dart`       | the basemap, the vehicles and the attribution                           |
 | `lib/src/times_tab.dart`     | the pinned stops and what is due at each                                |
 | `lib/src/stop_card.dart`     | one stop, from the bottom of the map                                    |
-| `lib/src/stop_search.dart`   | stops by name, and places from the service                              |
+| `lib/src/stop_search.dart`   | stops by name and near you, and places from the service                 |
 | `lib/src/saved.dart`         | the saved places and the pinned stops, in one list                      |
 | `lib/src/traffic.dart`       | how fast the streets are running, while that is on                      |
 | `lib/src/sheets.dart`        | the route sheet, the basemap sheet, and the dialogs each of them shares |
