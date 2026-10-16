@@ -14,7 +14,7 @@ import sqlite3
 import time
 from concurrent.futures import ProcessPoolExecutor
 
-from .. import boost, collect, layover, replay, snapshot
+from .. import boost, collect, layover, localtime, replay, snapshot
 from . import quiet
 from .state import Live
 
@@ -22,9 +22,8 @@ WARM_HOURS = 2.0         # of recorded history replayed at most, if it is fresh
 WARM_MAX_AGE = 900.0     # s: older than this and the recording is not "now"
 SAVE_EVERY = 600.0       # s between snapshots of the model
 FIT_EVERY = 6 * 3600.0   # s between refits of the learned models
-DAY_S = 86400.0
-BACKFILL_S = 3 * DAY_S   # of recording learned from when the learned models lack rows
-BACKFILL_WARMUP_S = DAY_S    # replayed before that, so the rows are a warm model's
+BACKFILL_S = 3 * localtime.DAY_S   # of recording learned from when models lack rows
+BACKFILL_WARMUP_S = localtime.DAY_S  # replayed first, so the rows are a warm model's
 BACKFILL_NICE = 10
 
 

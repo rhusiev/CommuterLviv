@@ -15,7 +15,7 @@ import datetime
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingRegressor
 
-from . import recent
+from . import localtime, recent
 
 # the rows learned from: of the ETAs of an epoch every SAMPLE_S, a KEEP share,
 # labelled when the vehicle passes the stop. Lviv has ~460 000 such ETAs a day
@@ -47,7 +47,6 @@ FEATURES = ("model s", "timetable s", "late", "m to go", "stops to go", "speed",
             "model per timetable", *recent.NAMES)
 CATEGORIES = ("route", "type")
 TYPES = ("bus", "tram", "trolleybus")
-DAY_S = 86400.0
 
 
 class Boost:
@@ -101,7 +100,8 @@ class Boost:
         np.divide(dt[k], sched, out=per, where=sched > MIN_TIMETABLE_S)
         local = datetime.datetime.fromtimestamp(now, self.tz)
         day_s = local.hour * 3600 + local.minute * 60 + local.second
-        late = (day_s - sched_now + DAY_S / 2) % DAY_S - DAY_S / 2
+        day = localtime.DAY_S
+        late = (day_s - sched_now + day / 2) % day - day / 2
         route, kind = self._route.get(self.net.trip_route.get(tr.trip), (np.nan,) * 2)
         same = (tr.v, now - tr.ts, local.hour + local.minute / 60, local.weekday(),
                 route, kind)

@@ -10,7 +10,7 @@ import asyncio
 import datetime
 import json
 
-from .. import gtfs, network, plan, snapshot, walk as footpaths
+from .. import gtfs, localtime, network, snapshot, walk as footpaths
 from . import geocode, geometry, journeys, state, traffic
 
 CHECK_AT = datetime.time(3, 30)     # local: after the last tram, before the first
@@ -36,7 +36,7 @@ def install(s, items):
 
 
 def _until(at):
-    now = datetime.datetime.now(plan.TZ)
+    now = datetime.datetime.now(localtime.TZ)
     then = now.replace(hour=at.hour, minute=at.minute, second=0, microsecond=0)
     if then <= now:
         then += datetime.timedelta(days=1)

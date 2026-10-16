@@ -23,6 +23,7 @@ import datetime
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingRegressor
 
+from . import localtime
 from .track import GAP_RESET
 
 TURN = 120.0        # s at least between reaching a terminus and leaving it
@@ -38,7 +39,6 @@ STILL = 3           # departures still ahead of now before they are believed
 AT_END = 60.0       # m short of the last stop within which a vehicle is in
 AWAY = 100.0        # m past the first stop by which it has left
 STRAY = 1000.0      # m past it beyond which a fix is a loop's far end, not leaving
-DAY = 86400.0
 FIELDS = ("route", "stop", "waited", "ahead")    # what `export` gives, in order
 
 # the model: a minute of an early stand is one row, its target the seconds
@@ -247,8 +247,6 @@ def fit(rows):
 def clock(sched, now, tz):
     """A timetable time - seconds past a service day's midnight, possibly
     over 24 h - as the unix instant nearest `now`."""
-    local = datetime.datetime.fromtimestamp(now, tz)
-    midnight = local.replace(hour=0, minute=0, second=0,
-                             microsecond=0).timestamp()
-    return min((midnight + k * DAY + sched for k in (-1, 0, 1)),
+    midnight = localtime.midnight(now, tz)
+    return min((midnight + k * localtime.DAY_S + sched for k in (-1, 0, 1)),
                key=lambda t: abs(t - now))

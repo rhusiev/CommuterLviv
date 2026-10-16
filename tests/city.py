@@ -18,9 +18,9 @@ from dataclasses import dataclass
 import numpy as np
 from google.transit import gtfs_realtime_pb2 as rt
 
-from commuterlviv import collect, gtfs, model, network, overrides
+from commuterlviv import collect, gtfs, localtime, network, overrides
 
-DAY = datetime.datetime(2026, 10, 5, tzinfo=model.TZ)   # a Monday
+DAY = datetime.datetime(2026, 10, 5, tzinfo=localtime.TZ)   # a Monday
 STOPS = 5
 GAP_M = 500.0              # m between stops
 LEG_S = 100.0              # s the timetable gives a leg, so 5 m/s

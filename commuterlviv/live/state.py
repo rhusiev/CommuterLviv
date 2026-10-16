@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .. import layover, model as pace, network, replay, track
+from .. import layover, localtime, network, replay, track
 
 VEH = np.dtype([("id", "u2"), ("route", "u2"), ("lat", "f8"), ("lon", "f8"),
                 ("heading", "u2"), ("flags", "u1"), ("run", "u2")])
@@ -264,7 +264,7 @@ class Live:
                 return
             stops, dist, sched = self.net.trip_stops[trip]
             leave = self.model.layovers.leave(
-                trip, layover.clock(sched[0], now, pace.TZ), ends, now)
+                trip, layover.clock(sched[0], now, localtime.TZ), ends, now)
             if leave > horizon:
                 return
             sid = self.net.trip_shape[trip]

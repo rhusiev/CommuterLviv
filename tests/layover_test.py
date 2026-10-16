@@ -5,7 +5,7 @@ import datetime
 import numpy as np
 import pytest
 
-from commuterlviv import layover, model, track
+from commuterlviv import layover, localtime, track
 
 from . import city
 
@@ -20,7 +20,7 @@ OUT_S = 180.0               # into the next trip when the vehicle is seen again
 
 @pytest.fixture
 def lay(net):
-    return layover.Layovers(net, model.TZ)
+    return layover.Layovers(net, localtime.TZ)
 
 
 def _key(net):
@@ -71,7 +71,7 @@ def test_departures_already_gone_by_now_are_not_believed(lay, net):
 def test_turnarounds_survive_export_and_restore(lay, net):
     _seen(lay, net, waited=False)
     lay.see(_key(net), True, 10.0)
-    again = layover.Layovers(net, model.TZ)
+    again = layover.Layovers(net, localtime.TZ)
 
     again.restore(**lay.export())
 
@@ -117,7 +117,7 @@ def test_no_departure_is_timed_off_a_vehicle_back_from_a_long_silence(lay, net):
 @pytest.mark.parametrize("n", [RING_ROWS - 1, RING_ROWS, RING_ROWS + 2])
 def test_the_ring_keeps_the_newest_rows_oldest_first(monkeypatch, net, n):
     monkeypatch.setattr(layover, "ROWS", RING_ROWS)
-    lay = layover.Layovers(net, model.TZ)
+    lay = layover.Layovers(net, localtime.TZ)
     width = len(layover.FEATURES) + 1
 
     for k in range(n):
@@ -129,7 +129,7 @@ def test_the_ring_keeps_the_newest_rows_oldest_first(monkeypatch, net, n):
 def test_rows_survive_training_and_restore(lay, net):
     rows = np.arange(30 * (len(layover.FEATURES) + 1), dtype=np.float32).reshape(30, -1)
     lay.restore_rows(rows)
-    again = layover.Layovers(net, model.TZ)
+    again = layover.Layovers(net, localtime.TZ)
 
     again.restore_rows(lay.training())
 
@@ -177,7 +177,8 @@ def test_the_minutes_of_a_stand_are_learned_from_once_it_leaves(lay, net):
 
 
 def test_a_timetable_time_past_midnight_lands_on_the_service_day():
-    after_midnight = datetime.datetime(2026, 10, 6, 0, 20, tzinfo=model.TZ).timestamp()
+    after_midnight = datetime.datetime(2026, 10, 6, 0, 20,
+                                       tzinfo=localtime.TZ).timestamp()
     sched = 24 * 3600 + 30 * 60      # 24:30 of the day before
 
-    assert layover.clock(sched, after_midnight, model.TZ) == after_midnight + 600
+    assert layover.clock(sched, after_midnight, localtime.TZ) == after_midnight + 600

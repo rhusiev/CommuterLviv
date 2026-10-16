@@ -22,20 +22,17 @@ import functools
 import hashlib
 import math
 import pickle
-import zoneinfo
 from dataclasses import dataclass
 from itertools import zip_longest
 from pathlib import Path
 
 import numpy as np
 
-from . import gtfs, network, replay, walk as footpaths
+from . import gtfs, localtime, network, replay, walk as footpaths
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 TRANSFERS = DATA / "transfers.npz"
 
-TZ = zoneinfo.ZoneInfo("Europe/Kyiv")
-DAY = 86400.0
 
 # longest stop-to-stop walk kept in the cached transfer table, whose size is
 # quadratic in it; the search's own limit is the pure walk
@@ -227,10 +224,11 @@ class Pattern:
         """The trips running on the day before, the day and the day after -
         `runs` holding each day's services - as one day's pattern in seconds
         since its midnight. The day before's count only past that midnight."""
+        day = localtime.DAY_S
         before = self.times[runs[0][self.service]]
-        times = np.concatenate((before[before[:, -1] >= DAY] - DAY,
+        times = np.concatenate((before[before[:, -1] >= day] - day,
                                 self.times[runs[1][self.service]],
-                                self.times[runs[2][self.service]] + DAY))
+                                self.times[runs[2][self.service]] + day))
         return Pattern(self.route, self.stops,
                        times[np.argsort(times[:, 0], kind="stable")])
 
@@ -311,7 +309,7 @@ class Timetable:
 
 @functools.lru_cache(maxsize=3)
 def _day(tt, midnight):
-    day = datetime.datetime.fromtimestamp(midnight, TZ).date()
+    day = datetime.datetime.fromtimestamp(midnight, localtime.TZ).date()
     runs = [np.array([tt.calendar.runs(s, day + datetime.timedelta(days=d))
                       for s in tt.services], dtype=bool) for d in (-1, 0, 1)]
     out = copy.copy(tt)
@@ -321,9 +319,8 @@ def _day(tt, midnight):
 
 
 def _seconds_since_midnight(now):
-    local = datetime.datetime.fromtimestamp(now, TZ)
-    midnight = local.replace(hour=0, minute=0, second=0, microsecond=0)
-    return now - midnight.timestamp(), midnight.timestamp()
+    midnight = localtime.midnight(now)
+    return now - midnight, midnight
 
 
 def build_transfers(tt, walk, cap=TRANSFER_CAP, path=TRANSFERS):
@@ -1220,7 +1217,7 @@ def main(argv):
 
 
 def _clock(t):
-    return datetime.datetime.fromtimestamp(t, TZ).strftime("%H:%M")
+    return datetime.datetime.fromtimestamp(t, localtime.TZ).strftime("%H:%M")
 
 
 if __name__ == "__main__":  # pragma: no cover - the CLI entry does this

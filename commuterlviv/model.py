@@ -17,18 +17,16 @@ at that hour, so the layers only explain what the timetable got wrong. Hold has
 no prior and is learned in seconds from zero.
 """
 import datetime
-import zoneinfo
 
 import numpy as np
 
-from . import boost, config, layover
+from . import boost, config, layover, localtime
 
 PACE_CLIP = (0.020, 2.0)     # s/m: 180 km/h .. 1.8 km/h while actually rolling
 HOLD_CLIP = (0.0, 240.0)     # s standing per crossing
 RATIO_CLIP = (0.15, 8.0)     # observed pace over timetabled pace
 PACE0 = 1 / 7.0              # s/m, fallback where the timetable says nothing
 SLOTS = 24                   # timetable prior resolution: one slot per hour
-TZ = zoneinfo.ZoneInfo("Europe/Kyiv")
 
 
 def group(keys, vals, weights):
@@ -186,8 +184,8 @@ class BaseModel:
         self._prior_t = None
         self._per_cell = self.prior[0] * self.cell_len
         self.emitting = False   # set by the replay: is this epoch being scored
-        self.layovers = layover.Layovers(net, TZ)
-        self.boost = boost.Boost(net, TZ)
+        self.layovers = layover.Layovers(net, localtime.TZ)
+        self.boost = boost.Boost(net, localtime.TZ)
 
     def _level(self, prior):
         """The one number a whole prior array is worth: its length-weighted mean.
@@ -274,7 +272,7 @@ class BaseModel:
     @staticmethod
     def _hours(now):
         """The local time of day as a fractional hour."""
-        local = datetime.datetime.fromtimestamp(now, TZ)
+        local = datetime.datetime.fromtimestamp(now, localtime.TZ)
         return local.hour + local.minute / 60.0
 
     def slot(self, now):
