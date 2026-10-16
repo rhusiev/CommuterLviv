@@ -83,10 +83,7 @@ def restore(model, data):
         return None
     if all(LAYOVER + k in data for k in layover.FIELDS):
         model.layovers.restore(*(data[LAYOVER + k] for k in layover.FIELDS))
-    if STANDS in data:
-        model.layovers.restore_rows(data[STANDS])
-    if PASSED in data and PASSED_ROUTES in data:
-        model.boost.restore_rows(data[PASSED], [str(r) for r in data[PASSED_ROUTES]])
+    restore_rows(model, data)
     net = model.net
     src, dst = [], []
     base = 0
@@ -115,6 +112,15 @@ def restore(model, data):
         for part in ("mean", "w", "t"):
             getattr(e, part)[d] = data[f"{name}.{part}"][s]
     return float(data["t"])
+
+
+def restore_rows(model, data):
+    """Add the training rows `data` holds to the terminus and ETA-correction
+    learners' own."""
+    if STANDS in data:
+        model.layovers.restore_rows(data[STANDS])
+    if PASSED in data and PASSED_ROUTES in data:
+        model.boost.restore_rows(data[PASSED], [str(r) for r in data[PASSED_ROUTES]])
 
 
 def save(data, path=PATH):

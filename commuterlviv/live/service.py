@@ -47,8 +47,13 @@ class Service:
         since = None
         if self.persist:
             since = await asyncio.to_thread(snapshot.load, self.live.model)
-            self.log("no model snapshot; learning from scratch" if since is None
-                     else f"model snapshot from {time.time() - since:.0f}s ago")
+            if since is not None:
+                self.log(f"model snapshot from {time.time() - since:.0f}s ago")
+            elif snapshot.PATH.exists():
+                self.log("model snapshot unreadable or of another model; "
+                         "learning from scratch")
+            else:
+                self.log("no model snapshot; learning from scratch")
         await asyncio.to_thread(self.warm, since=since)
         tasks = [self.poll_loop(), self.epoch_loop(), self.fit_loop()]
         if self.persist:
@@ -112,9 +117,7 @@ class Service:
             if cold:
                 snapshot.restore(model, data)
             else:
-                model.boost.restore_rows(data[snapshot.PASSED],
-                                         [str(r) for r in data[snapshot.PASSED_ROUTES]])
-                model.layovers.restore_rows(data[snapshot.STANDS])
+                snapshot.restore_rows(model, data)
         self.log(f"backfilled {len(data[snapshot.PASSED])} passed stops and "
                  f"{len(data[snapshot.STANDS])} minutes of stands in "
                  f"{time.time() - t0:.0f}s")
