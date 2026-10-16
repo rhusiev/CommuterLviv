@@ -636,6 +636,7 @@ class _HomeScreenState extends State<HomeScreen> {
       delegate: StopSearch(
         api: widget.api,
         catalog: catalog,
+        places: _sets?.places ?? const [],
         onSave: _savePlace,
       ),
     );
@@ -697,6 +698,7 @@ class _HomeScreenState extends State<HomeScreen> {
     (sheet) => AccountSheet(
       server: widget.api.base,
       speed: widget.api.walkSpeed,
+      hurry: widget.api.hurrySpeed,
       followAway: _followAway,
       onFollowAway: (on) {
         setState(() => _followAway = on);

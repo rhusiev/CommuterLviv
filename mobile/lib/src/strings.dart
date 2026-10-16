@@ -111,12 +111,16 @@ class Strings {
     required this.hidePanel,
     required this.showPanel,
     required this.leaveOn,
+    required this.paces,
+    required this.pacesNow,
     required this.walkSpeed,
     required this.walkSpeedHint,
     required this.hurrySpeed,
     required this.hurrySpeedHint,
     required this.hurry,
     required this.hurryHint,
+    required this.hurryAt,
+    required this.paceHint,
     required this.slower,
     required this.faster,
     required this.alsoOptionHint,
@@ -277,12 +281,20 @@ class Strings {
   final String hidePanel;
   final String showPanel;
   final String leaveOn;
+  final String paces;
+
+  /// The usual walking speed and the hurrying one, null when hurrying is off.
+  final String Function(double walk, double? hurry) pacesNow;
   final String walkSpeed;
   final String walkSpeedHint;
   final String hurrySpeed;
   final String hurrySpeedHint;
   final String hurry;
   final String hurryHint;
+
+  /// Hurrying, and the [pace] that catches the bus with time to spare
+  final String Function(String pace) hurryAt;
+  final String paceHint;
   final String slower;
   final String faster;
   final String alsoOptionHint;
@@ -441,12 +453,16 @@ const _en = Strings(
   hidePanel: 'Hide, keeping the journey on the map',
   showPanel: 'Show the journey',
   leaveOn: 'Leave on',
+  paces: 'Walking and hurrying',
+  pacesNow: _enPacesNow,
   walkSpeed: 'Walking speed',
   walkSpeedHint: 'On flat ground - hills are taken into account',
   hurrySpeed: 'Hurrying speed',
   hurrySpeedHint: 'How fast you would walk to catch a bus. Off, only a bus you would miss by seconds is offered as one to hurry for',
   hurry: 'Hurry',
   hurryHint: 'Only hurrying to the first stop catches this bus',
+  hurryAt: _enHurryAt,
+  paceHint: 'Walk at least this fast to be at the stop with time to spare, in case the bus comes early',
   slower: 'Slower',
   faster: 'Faster',
   alsoOptionHint: 'This way is also among the options',
@@ -532,6 +548,10 @@ String _enPrefer(Prefer p) => switch (p) {
 };
 String _enMinutes(int m) => '$m min';
 String _enKmh(double v) => '${v.toStringAsFixed(1)} km/h';
+String _enPacesNow(double walk, double? hurry) =>
+    '${_enKmh(walk)}, ${hurry == null ? 'not hurrying' : 'hurrying ${_enKmh(hurry)}'}';
+
+String _enHurryAt(String pace) => 'Hurry: $pace';
 String _enAlsoOption(int n) => 'Option $n';
 String _enUnreachable(String server) => 'Could not reach $server';
 String _enWalkTo(String stop) => 'Walk to $stop';
@@ -644,12 +664,16 @@ const _uk = Strings(
   hidePanel: 'Сховати, лишивши маршрут на мапі',
   showPanel: 'Показати маршрут',
   leaveOn: 'Виїзд',
+  paces: 'Ходьба і поспіх',
+  pacesNow: _ukPacesNow,
   walkSpeed: 'Швидкість ходьби',
   walkSpeedHint: 'По рівному - схили враховано',
   hurrySpeed: 'Швидкість, коли поспішаєте',
   hurrySpeedHint: 'Як швидко ви йшли б, щоб встигнути на автобус. Вимкнено - пропонуємо поспішити лише на той, що ви пропустили б на секунди',
   hurry: 'Поспішіть',
   hurryHint: 'На цей автобус встигнете, лише якщо поспішите до першої зупинки',
+  hurryAt: _ukHurryAt,
+  paceHint: 'Ідіть щонайменше так швидко, щоб бути на зупинці із запасом, якщо автобус прийде раніше',
   slower: 'Повільніше',
   faster: 'Швидше',
   alsoOptionHint: 'Цей шлях є і серед варіантів',
@@ -734,6 +758,10 @@ String _ukPrefer(Prefer p) => switch (p) {
 String _ukMinutes(int m) => '$m хв';
 String _ukKmh(double v) =>
     '${v.toStringAsFixed(1).replaceAll('.', ',')} км/год';
+String _ukPacesNow(double walk, double? hurry) =>
+    '${_ukKmh(walk)}, ${hurry == null ? 'без поспіху' : 'поспіх ${_ukKmh(hurry)}'}';
+
+String _ukHurryAt(String pace) => 'Поспішіть: $pace';
 String _ukAlsoOption(int n) => 'Варіант $n';
 String _ukUnreachable(String server) => 'Не вдалося зʼєднатися з $server';
 String _ukWalkTo(String stop) => 'Ідіть до зупинки $stop';

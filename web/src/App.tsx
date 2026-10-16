@@ -466,6 +466,7 @@ export function App() {
             onSave={(name, lat, lon) =>
               keepPlaces(saved(places, name, lat, lon))
             }
+            places={places}
           />
         </div>
         <span

@@ -13,6 +13,7 @@
  * hurrying - now, or off the ride before it - or not at all. */
 
 import type { Catalog, Journey, Leg } from "./types";
+import { HURRY_KMH } from "./walking";
 
 export type Fix = { lat: number; lon: number; accuracy: number; t: number };
 
@@ -42,19 +43,38 @@ export type Progress = {
 export type Due = (stop: number, veh: number) => number | undefined;
 
 /** When the next ride to board leaves, and when the device gets to its stop at
- * the usual and at the hurrying pace, all Unix seconds. `live`: `dep` is a
- * prediction for a tracked vehicle, not the timetable. */
-export type Reach = { leg: number; dep: number; live: boolean; usual: number; hurried: number };
+ * the usual and at the hurrying pace, all Unix seconds: setting off on foot at
+ * `from` for the `walk` metres there. `live`: `dep` is a prediction for a
+ * tracked vehicle, not the timetable. */
+export type Reach = {
+  leg: number;
+  dep: number;
+  live: boolean;
+  from: number;
+  walk: number;
+  usual: number;
+  hurried: number;
+};
 
 /** The next ride to board, on time or not: `riding` warns ahead of a change
- * from the ride under way, which hurrying cannot help yet */
+ * from the ride under way, which hurrying cannot help yet. `kmh` is the pace
+ * hurrying needs (`needKmh`), null once missed. */
 export type Catch =
   | { kind: "ok" }
-  | { kind: "hurry" | "missed"; leg: number; dep: number; riding: boolean };
+  | { kind: "hurry" | "missed"; leg: number; dep: number; riding: boolean; kmh: number | null };
 
 /** A tracked vehicle missed by this little is still caught: the driver waits
  * for somebody waving or running. `GRACE` in `commuterlviv/plan.py`. */
 export const GRACE_S = 10;
+/** Seconds ahead, and the slack a change needs that far ahead: `CHANGE_AHEAD`
+ * and `CHANGE_SLACK` in `commuterlviv/plan.py` */
+const CHANGE_AHEAD = [60, 210, 450, 750, 1050, 1500, 2250];
+const CHANGE_SLACK = [60, 90, 150, 180, 210, 270, 300];
+/** A change is broken by either vehicle's forecast missing, a walk to a stop
+ * only by the one vehicle's, so it keeps this share of a change's slack.
+ * Chosen, not derived */
+const MARGIN_SHARE = 0.5;
+const KMH_PER_MPS = 3.6;
 /** A worse word on the connection holds this long before it is said: two of
  * the service's five-second frames, so one jumpy prediction is not news.
  * Chosen, not derived. */
@@ -226,6 +246,8 @@ export class Follower {
       leg: r,
       dep: tracked ?? next.dep,
       live: tracked !== undefined,
+      from,
+      walk,
       usual: from + walk / mps,
       hurried: from + walk / hurryMps,
     };
@@ -413,6 +435,45 @@ function median(xs: number[]): number {
   return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
 }
 
+/** `xs` ascending; flat past both ends */
+function interp(x: number, xs: number[], ys: number[]): number {
+  const k = xs.findIndex((v) => v >= x);
+  if (k === 0) return ys[0]!;
+  if (k < 0) return ys[ys.length - 1]!;
+  const share = (x - xs[k - 1]!) / (xs[k]! - xs[k - 1]!);
+  return ys[k - 1]! + share * (ys[k]! - ys[k - 1]!);
+}
+
+/** Seconds to be at a stop before a vehicle forecast to leave `ahead` s from
+ * now does, so that a forecast missing the usual amount still finds it there */
+export const margin = (ahead: number) => MARGIN_SHARE * interp(ahead, CHANGE_AHEAD, CHANGE_SLACK);
+
+/** The pace in km/h that walks `metres` setting off at `from` to be at the stop
+ * `margin` before `dep`, forecast at `now` - or right at `dep` should the
+ * margin take more than a run (`HURRY_KMH.max`). Rounded up to the step speeds
+ * are set in; null with nothing to walk, or when not even that leaves any time. */
+export function needKmh(metres: number, from: number, dep: number, now = from): number | null {
+  const pace = (s: number) => (s > 0 ? (metres / s) * KMH_PER_MPS : Infinity);
+  let kmh = pace(dep - margin(dep - now) - from);
+  if (kmh > HURRY_KMH.max) kmh = pace(dep - from);
+  if (!Number.isFinite(kmh) || kmh <= 0) return null;
+  return Math.ceil(kmh / HURRY_KMH.step) * HURRY_KMH.step;
+}
+
+/** Metres along `pts`, [lat, lon] pairs */
+export function along(pts: [number, number][]): number {
+  const [lat0, lon0] = pts[0] ?? [0, 0];
+  const at = plane(lat0, lon0);
+  return new Line(pts.map(([lat, lon]) => at(lat, lon))).length;
+}
+
+/** `needKmh` of an option caught only by hurrying, as it was planned */
+export function plannedKmh(j: Journey): number | null {
+  const [walk, ride] = j.legs;
+  if (walk?.kind !== "walk" || ride?.kind !== "ride") return null;
+  return needKmh(along(walk.pts ?? []), walk.dep, ride.dep);
+}
+
 /** Caught at the usual pace; else at the hurrying one, or for a tracked vehicle
  * within `GRACE_S` of it; else missed */
 export function judge(r: Reach): "ok" | "hurry" | "missed" {
@@ -444,8 +505,9 @@ export class Watch {
     }
     if (said.kind !== "ok" && said.leg !== reach.leg) this.said = OK;
     const kind = judge(reach);
+    const kmh = kind === "hurry" ? needKmh(reach.walk, reach.from, reach.dep, now) : null;
     const word: Catch =
-      kind === "ok" ? OK : { kind, leg: reach.leg, dep: reach.dep, riding: stage.kind === "ride" };
+      kind === "ok" ? OK : { kind, leg: reach.leg, dep: reach.dep, riding: stage.kind === "ride", kmh };
     if (kind === "ok" || WORSE[kind] <= WORSE[this.said.kind]) {
       this.said = word;
       this.coming = null;

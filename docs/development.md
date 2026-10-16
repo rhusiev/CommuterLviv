@@ -40,7 +40,9 @@ They cover the vehicle tracker, the layover rule and its learned model, the
 offline replay, the live engine, the snapshot, and the HTTP and websocket API.
 The API tests need Postgres. They use `COMMUTERLVIV_TEST_DATABASE_URL` if it is
 set, and otherwise start a throwaway `postgres:16-alpine` container with podman
-or docker. With neither, they are skipped.
+or docker. With neither, they are skipped. The live service they start runs on
+the wall clock, in a time zone pinned so that it is noon there whatever the hour
+(`tests/service.py` `isolate`): the city's timetable runs only in the morning.
 
 `tests/browser_test.py` drives the built web app in headless Chromium:
 `vite preview` serves `web/dist` and proxies to the service, which runs in the

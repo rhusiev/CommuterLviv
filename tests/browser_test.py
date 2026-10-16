@@ -46,6 +46,10 @@ CENTRE = city._point(city.LENGTH / 2)
 WALK_KMH = 3
 END = city._point(city.LENGTH)
 MISSED_S = 60            # the bus left this long before the page loaded
+# Most starts, the service plans the door to the end on foot alone from about 2
+# to 28 s in, so a ride is asked for until this long. 60 s is chosen
+RIDE_S = 60.0
+ASK_EVERY_MS = 1000
 
 
 def _chromium():
@@ -174,6 +178,21 @@ def test_a_new_user_finds_a_stop_and_sees_the_bus_coming(page):
         timeout=SEE_MS)
 
 
+def test_a_saved_place_is_offered_above_the_stops_it_matches(page):
+    _register(page, "saver")
+    search = page.get_by_placeholder("Find a stop or a place")
+    search.fill("Stop 4")
+    page.get_by_title("Save this place").first.click()
+
+    search.fill("stop 4")
+    rows = page.locator("ul li")
+    expect = playwright.expect
+    expect(rows.first).to_contain_text("Saved places")
+    expect(rows.first).to_contain_text("Stop 4")
+    expect(rows.first.get_by_title("Save this place")).to_have_count(0)
+    expect(rows.nth(1)).to_contain_text("Stops")
+
+
 def test_picking_the_route_puts_its_bus_on_the_map(page):
     _register(page, "watcher")
     expect = playwright.expect
@@ -244,11 +263,16 @@ def _a_ride_from_the_door(page):
     bus, as the service plans it, with the catalog it belongs to."""
     tag = page.evaluate("fetch('/api/catalog').then(r => r.headers.get('ETag'))")
     lat, lon = streets.DOOR
-    plan = page.evaluate(
-        f"fetch('/api/plan?from={lat},{lon}&to={END[0]},{END[1]}"
-        f"&speed={WALK_KMH}').then(r => r.json())")
-    journey = next((o for o in plan["options"]
-                    if any(leg["kind"] == "ride" for leg in o["legs"])), None)
+    deadline = time.monotonic() + RIDE_S
+    while True:
+        plan = page.evaluate(
+            f"fetch('/api/plan?from={lat},{lon}&to={END[0]},{END[1]}"
+            f"&speed={WALK_KMH}').then(r => r.json())")
+        journey = next((o for o in plan["options"]
+                        if any(leg["kind"] == "ride" for leg in o["legs"])), None)
+        if journey is not None or time.monotonic() > deadline:
+            break
+        page.wait_for_timeout(ASK_EVERY_MS)
     assert journey is not None, plan
     return journey, tag
 

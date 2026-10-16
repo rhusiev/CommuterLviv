@@ -87,6 +87,7 @@ class EndField extends StatelessWidget {
       delegate: StopSearch(
         api: api,
         catalog: catalog,
+        places: places,
         onSave: onSave,
         idle: (sheet, done) {
           void then(VoidCallback act) {

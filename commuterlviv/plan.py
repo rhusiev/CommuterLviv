@@ -46,7 +46,7 @@ TRANSFER_CAP = 900.0
 # on a replay of 2026-09-16..21 (docs/service.md): each is where at most 15% of
 # changes between two tracked vehicles broke (15% is chosen, not derived), at
 # the middle of its band of 0-2/2-5/5-10/10-15/15-20/20-30/30-45 min ahead, and
-# read between them
+# read between them. Copied into the clients' `follow`, for the pace hurrying needs
 CHANGE_AHEAD = (60.0, 210.0, 450.0, 750.0, 1050.0, 1500.0, 2250.0)
 CHANGE_SLACK = (60.0, 90.0, 150.0, 180.0, 210.0, 270.0, 300.0)
 # the same, per whole second ahead, for the scan's inner loop; past the last

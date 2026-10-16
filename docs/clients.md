@@ -88,7 +88,16 @@ planner does - or missed. Predictions jump, so `Watch` says a worse word only
 once it has held for 10 s, or at once within 120 s of leaving; a better word is
 said at once. It judges again with each fix, each word of arrivals and every
 second, so a held word is not left waiting for the next fix. Hurrying is urged
-only on foot. On a ride the card warns ahead that the change will need it, with
+only on foot, with an amber pill giving the pace that gets to the stop with time
+to spare, from the metres left (`needKmh`). The time to spare is half
+(`MARGIN_SHARE`, chosen, not derived) of the slack the planner keeps for a
+change that far ahead (`CHANGE_AHEAD`/`CHANGE_SLACK`, copied from
+`commuterlviv/plan.py`), as a vehicle comes early as well as late. When that
+pace is over 12 km/h (`HURRY_KMH`), the pill gives the one that gets there as
+the vehicle leaves; either is rounded up to 0.5 km/h. A hurry option in the
+planner carries the same pill for its walk to the first stop (`plannedKmh`).
+The pace is only said: whether the ride is caught is judged at the hurrying
+speed set, as above. On a ride the card warns ahead that the change will need it, with
 "Find another way". A missed ride says the journey no longer works, with
 "Search again". Either search asks for the same destination from on board the
 vehicle ridden, sending only its id, or else from where you are, sent only on
@@ -194,7 +203,8 @@ endpoint and no model - the browser and the phone see the same city, the same
 route sets and the same predictions, and the same journey planner behind the
 third choice in the tab pill. Both also carry the same three views added since:
 a saved list where a place can be renamed or dropped, a search that finds
-addresses and shops as well as stop names, traffic drawn over the streets
+addresses and shops as well as stop names, with matching saved places above
+both, traffic drawn over the streets
 the model can see, and following a journey as you travel it.
 
 ```sh

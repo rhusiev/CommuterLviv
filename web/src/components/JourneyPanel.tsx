@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../lib/api";
 import { clock, mins } from "../lib/eta";
-import { followable } from "../lib/follow";
+import { followable, plannedKmh } from "../lib/follow";
 import { t } from "../lib/i18n";
 import { saved } from "../lib/places";
 import {
@@ -13,6 +13,7 @@ import {
 } from "../lib/prefer";
 import { heldHurry, heldSpeed } from "../lib/walking";
 import { Backups, type WayPick } from "./Backups";
+import { HurryPill } from "./HurryPill";
 import { Icon, type IconName } from "./Icon";
 import { RouteBadge } from "./RouteBadge";
 import { Speed } from "./Speed";
@@ -498,6 +499,7 @@ function Field({
             }}
             onPlace={(p) => onPlace({ lat: p.lat, lon: p.lon }, p.name)}
             onSave={(n, lat, lon) => onSave(n, { lat, lon })}
+            places={places}
             inline={{
               placeholder: END[end].label,
               onDismiss: () => setOpen(false),
@@ -625,9 +627,7 @@ function Option({
           {journey.hurry && (
             <>
               {" · "}
-              <span title={t.hurryHint} className="text-amber-400">
-                {t.hurry}
-              </span>
+              <Hurried journey={journey} />
             </>
           )}
           {journey.rides > 0 && journey.backup > 0 && (
@@ -688,6 +688,16 @@ function Option({
         </button>
       )}
     </div>
+  );
+}
+
+/** An option caught only by hurrying, with the pace that catches it */
+function Hurried({ journey }: { journey: Journey }) {
+  const kmh = plannedKmh(journey);
+  return kmh === null ? (
+    <HurryPill hint={t.hurryHint}>{t.hurry}</HurryPill>
+  ) : (
+    <HurryPill hint={`${t.hurryHint}. ${t.paceHint}`}>{t.hurryAt(t.kmh(kmh))}</HurryPill>
   );
 }
 
