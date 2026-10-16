@@ -1,9 +1,32 @@
+import os
+
 import pytest
 
 from commuterlviv import config
 from commuterlviv.live import journeys, state
 
 from . import city, postgres, streets
+
+# Set by CI, which has every toolchain, so a test skipped there for a missing
+# one would pass unrun
+STRICT = "CI"
+
+
+def _no_skip(report):
+    if os.environ.get(STRICT) and report.skipped and not hasattr(report, "wasxfail"):
+        *_, reason = report.longrepr      # (path, line, reason)
+        report.outcome = "failed"
+        report.longrepr = f"${STRICT} is set, so nothing may be skipped - {reason}"
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    _no_skip((yield).get_result())
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_make_collect_report(collector):
+    _no_skip((yield).get_result())
 
 
 @pytest.fixture

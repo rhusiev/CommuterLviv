@@ -22,6 +22,12 @@ tests pass, the web app typechecks, passes its tests and builds, and
 `flutter analyze` and `flutter test` pass. A missing toolchain is reported and
 stepped over rather than failing the run.
 
+`.github/workflows/check.yml` runs it on every pull request and every push to
+`dev`. There `CI` is set, and with it a missing toolchain fails the run, and so
+does a skipped test: the browser tests drive the runner's Chrome and the
+database tests start their Postgres in its Docker, so neither has a reason to
+skip.
+
 ## Tests
 
 ```sh
