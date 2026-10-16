@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Live } from "./live";
 
 /** Set across the reload a new catalog forces, so the page can say why */
@@ -15,13 +15,14 @@ export function takeRenewed() {
  * arrivals, never on a position frame. A new catalog reloads the page, which
  * keeps what it shows in its URL by id. */
 export function useLive() {
-  const live = useMemo(
+  // State, not a memo: React may drop a memo's value, and a new Live starts over
+  // without its socket or vehicles
+  const [live] = useState(
     () =>
       new Live(() => {
         sessionStorage.setItem(RENEWED, "");
         location.reload();
       }),
-    [],
   );
 
   useEffect(() => {
