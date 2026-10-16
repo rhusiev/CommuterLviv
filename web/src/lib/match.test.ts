@@ -1,5 +1,12 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { score, words } from "./match";
+import { fold, score, words } from "./match";
+
+/** What NFKD folds each Latin and Cyrillic letter to, which the app's
+ * hand-written folding is checked against too (`tests/fold_test.py`) */
+const FOLDS: [string, string][] = JSON.parse(
+  readFileSync(new URL("../../../tests/fold_cases.json", import.meta.url), "utf8"),
+).cases;
 
 const of = (q: string, name: string) => score(words(q), words(name));
 
@@ -22,5 +29,9 @@ describe("match", () => {
 
   test("a prefix outranks a slip", () => {
     expect(of("стрийсь", "Стрийська")).toBeGreaterThan(of("стрийска", "Стрийська"));
+  });
+
+  test("every letter folds as the app folds it", () => {
+    expect(FOLDS.map(([c]) => [c, fold(c)])).toEqual(FOLDS);
   });
 });

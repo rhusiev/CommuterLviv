@@ -60,7 +60,11 @@ the two implementations are checked against the same cases. The binary map frame
 checked across all three languages from one file, `tests/wire_frame.json`: the
 server must encode its vehicles to its bytes, and both clients must decode the
 bytes back to its vehicles - so a box, scale or flag that drifts in one of them
-fails that one's tests.
+fails that one's tests. Name matching folds accents the same way: the web with
+Unicode's NFKD, the app with a table written out by hand, since Dart has no NFKD.
+`tests/fold_cases.json` holds what NFKD folds each Latin and Cyrillic letter to,
+`tests/fold_test.py` keeps it equal to Python's NFKD (and rewrites it when run as
+`python3 -m tests.fold_test`), and both clients check every case.
 
 ## The version
 
