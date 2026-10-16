@@ -32,7 +32,7 @@ class TableModel(BaseModel):
     def _absorb(self, units, corr, ratio, held, w_pace, w_hold, now):
         if not self.emitting:
             self._table = None
-            slot = self._slot(now)
+            slot = self.slot(now)
             np.add.at(self.pace_num[slot], units, ratio * w_pace)
             np.add.at(self.pace_den[slot], units, w_pace)
             np.add.at(self.hold_num[slot], units, held * w_hold)
@@ -41,7 +41,7 @@ class TableModel(BaseModel):
             # the table's own prediction is the denominator, so a section the
             # table already knows is slow does not count as today being slow
             pace, _ = self._frozen()
-            want = pace[self._slot(now), units]
+            want = pace[self.slot(now), units]
             self.live.update(np.zeros(1, dtype=int),
                              np.array([np.average(ratio / want, weights=w_pace)]),
                              now, np.array([w_pace.sum()]))

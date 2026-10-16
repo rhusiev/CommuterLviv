@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from commuterlviv import replay
+from commuterlviv import config, replay
 
 from . import city
 
@@ -55,3 +55,10 @@ def test_fixes_polled_too_late_are_not_replayed(tmp_path, net):
 
     with pytest.raises(replay.NoData):
         replay.run(net, db=db)
+
+
+@pytest.mark.parametrize("cfg", config.VARIANTS, ids=lambda c: c.name)
+def test_every_variant_replays_and_predicts(net, cfg, jammed_recording):
+    _, res = replay.run(net, db=jammed_recording, cfg=cfg)
+
+    assert len(res.buf.done())
