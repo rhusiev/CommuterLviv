@@ -725,6 +725,8 @@ def build(st=None, net=None):
         refresh.install(s, refresh.served(loaded, s.svc.live))
         s.planner = journeys.Planner.maybe(loaded, cat, log)
         s.preparing = False
+        # read each epoch, since a renew or `arrange` replaces the planner
+        s.svc.timetable = lambda: s.planner and s.planner.tt
         s.geocoder = geocode.Geocoder(st.photon_url)
         s.hub = hub.Hub(s.svc.live)
         s.planning = asyncio.Semaphore(PLAN_WORKERS)

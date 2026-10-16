@@ -2,13 +2,14 @@
 in real time, a user registered, the map and the boards read as a client would."""
 import json
 import time
+from types import SimpleNamespace
 
 import pytest
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from commuterlviv import network
-from commuterlviv.live import app, wire
+from commuterlviv.live import app, journeys, quiet, wire
 
 from . import city, service
 
@@ -22,6 +23,16 @@ CLIENT = ("127.0.0.1", 50000)     # the peer the app sees; it stores it as an in
 @pytest.fixture
 def feed(monkeypatch, tmp_path):
     return service.isolate(monkeypatch, tmp_path)
+
+
+@pytest.fixture
+def judged(feed, monkeypatch):
+    """A planner whose timetable `quiet.judge` finds the vehicles quiet for;
+    to be asked for before `client`, which starts the service."""
+    tt = object()
+    monkeypatch.setattr(journeys.Planner, "maybe",
+                        classmethod(lambda *a: SimpleNamespace(tt=tt)))
+    monkeypatch.setattr(quiet, "judge", lambda reporting, got, now: got is tt)
 
 
 @pytest.fixture
@@ -143,6 +154,22 @@ def test_the_socket_says_hello_then_draws_the_bus_and_its_board(client):
     lat, lon = wire.latlon(rows)
     assert lat[0] == pytest.approx(city.LAT, abs=NEAR_DEG)
     assert city.LON - NEAR_DEG < lon[0] < city.LON + city.LENGTH / network.KX + NEAR_DEG
+
+
+def test_the_socket_says_when_the_vehicles_have_gone_quiet(judged, client):
+    _signed_in(client, "quiet")
+
+    with client.websocket_connect("/ws", headers={"Origin": ORIGIN}) as ws:
+        told = [json.loads(ws.receive_text())]
+        deadline = time.monotonic() + WAIT_S
+        while not told[-1].get("quiet"):
+            assert time.monotonic() < deadline
+            if text := ws.receive().get("text"):
+                told.append(json.loads(text))
+        ws.close()
+        _until(lambda: len(client.app.state.hub.clients), lambda n: n == 0)
+
+    assert told[-1]["type"] in ("hello", "quiet")
 
 
 def test_a_socket_without_a_session_is_closed(client):
