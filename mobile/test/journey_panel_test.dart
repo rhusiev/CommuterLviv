@@ -13,6 +13,8 @@ import 'package:commuterlviv/src/journey_panel.dart';
 import 'package:commuterlviv/src/models.dart';
 import 'package:commuterlviv/src/strings.dart';
 
+import 'real_server.dart';
+
 Future<void> pump(
   WidgetTester tester, {
   End? picking,
@@ -177,31 +179,6 @@ Future<HttpServer> _serve(List<Uri> asked) async {
   return server;
 }
 
-const _step = Duration(milliseconds: 10);
-const _steps = 100;
-
-/// Lets the fake server answer for a [_step] of real time, then moves the
-/// clock on as far, so a dialog closing meanwhile gets to finish.
-Future<void> _pumpStep(WidgetTester tester) async {
-  await tester.runAsync(() => Future<void>.delayed(_step));
-  await tester.pump(_step);
-}
-
-/// Pumps until [done] says so; fails if it never does.
-Future<void> _until(WidgetTester tester, bool Function() done) async {
-  for (var i = 0; i < _steps && !done(); i++) {
-    await _pumpStep(tester);
-  }
-  expect(done(), isTrue, reason: 'gave up waiting');
-}
-
-/// Pumps as long as [_until] would wait at most, for what must not come.
-Future<void> _quiet(WidgetTester tester) async {
-  for (var i = 0; i < _steps; i++) {
-    await _pumpStep(tester);
-  }
-}
-
 void main() {
   testWidgets('the depart chip leaves at now until a time is picked', (
     tester,
@@ -253,9 +230,7 @@ void main() {
   testWidgets('a hurrying speed is sent once set, and flags an option', (
     tester,
   ) async {
-    final faked = HttpOverrides.current;
-    HttpOverrides.global = null;
-    addTearDown(() => HttpOverrides.global = faked);
+    allowRealHttp();
     final asked = <Uri>[];
     final server = (await tester.runAsync(() => _serve(asked)))!;
     addTearDown(() => server.close(force: true));
@@ -270,7 +245,7 @@ void main() {
 
     await tester.tap(find.text(txt.findRoute));
     final pill = find.widgetWithText(HurryPill, txt.hurryAt(txt.kmh(5.5)));
-    await _until(tester, () => tester.any(pill));
+    await pumpUntil(tester, () => tester.any(pill));
 
     expect(asked.single.queryParameters['hurry'], '9.0');
     expect(pill, findsOneWidget);
@@ -425,9 +400,7 @@ void main() {
     tester,
   ) async {
     // The test binding answers every request 400 unless let through
-    final faked = HttpOverrides.current;
-    HttpOverrides.global = null;
-    addTearDown(() => HttpOverrides.global = faked);
+    allowRealHttp();
     final asked = <Uri>[];
     final server = (await tester.runAsync(() => _serve(asked)))!;
     addTearDown(() => server.close(force: true));
@@ -443,11 +416,11 @@ void main() {
 
     await tester.tap(find.text(txt.findRoute));
     final backups = find.text('· ${txt.backupCount(1)}');
-    await _until(tester, () => backups.evaluate().isNotEmpty);
+    await pumpUntil(tester, () => backups.evaluate().isNotEmpty);
     await tester.tap(backups);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip(txt.showWay).last);
-    await _until(tester, () => find.byType(AlertDialog).evaluate().isEmpty);
+    await pumpUntil(tester, () => find.byType(AlertDialog).evaluate().isEmpty);
 
     expect(asked.last.path, '/api/backup');
     expect(asked.last.queryParameters, {
@@ -464,9 +437,7 @@ void main() {
   testWidgets('on board, a search sends the vehicle alone and leaves now', (
     tester,
   ) async {
-    final faked = HttpOverrides.current;
-    HttpOverrides.global = null;
-    addTearDown(() => HttpOverrides.global = faked);
+    allowRealHttp();
     final asked = <Uri>[];
     final server = (await tester.runAsync(() => _serve(asked)))!;
     addTearDown(() => server.close(force: true));
@@ -486,7 +457,7 @@ void main() {
     expect(swap.onPressed, isNull);
 
     await tester.tap(find.text(txt.findRoute));
-    await _until(tester, () => asked.isNotEmpty);
+    await pumpUntil(tester, () => asked.isNotEmpty);
 
     expect(asked.single.path, '/api/plan');
     expect(asked.single.queryParameters.keys.toSet(), {'veh', 'to', 'speed'});
@@ -496,9 +467,7 @@ void main() {
   testWidgets('a search asked for runs once, as soon as both ends are set', (
     tester,
   ) async {
-    final faked = HttpOverrides.current;
-    HttpOverrides.global = null;
-    addTearDown(() => HttpOverrides.global = faked);
+    allowRealHttp();
     final asked = <Uri>[];
     var told = 0;
     final server = (await tester.runAsync(() => _serve(asked)))!;
@@ -514,13 +483,13 @@ void main() {
     );
 
     await ask(null);
-    await _quiet(tester);
+    await pumpQuiet(tester);
     expect(asked, isEmpty);
     expect(told, 0);
 
     await ask(const LatLng(49.81, 24.05));
-    await _until(tester, () => asked.isNotEmpty);
-    await _quiet(tester);
+    await pumpUntil(tester, () => asked.isNotEmpty);
+    await pumpQuiet(tester);
 
     expect(asked.single.path, '/api/plan');
     expect(told, 1);
