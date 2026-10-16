@@ -643,7 +643,9 @@ whole city - so what the gate protects is not the CPU but the output: a tracked,
 smoothed, city-wide vehicle history, handed over at 228 B/s to anyone who opens
 the socket. Passwords are argon2id, sessions are opaque rows in Postgres behind
 a `__Host-` cookie, and remember-me is series+token rotated on every use, where
-a spent token coming back is treated as theft. Migrations apply themselves at
+a spent token coming back is treated as theft. `POST /api/password` with
+`{"old", "new"}` keeps only the session that asked: every other session and
+every remember-me token, its own included, is dropped. Migrations apply themselves at
 boot and there is no down direction. The socket is not signed in once and
 trusted forever: it re-asks about its session every minute and closes with 4401
 when it has gone, it takes five messages a second with a burst of sixty, and it

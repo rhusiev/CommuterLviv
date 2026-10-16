@@ -1,7 +1,7 @@
 """The web app in a real browser against the real service: an account created
 through the sign-in screen, a stop found by name, the bus on its board, and a
-journey planned from on board it and followed, and one followed on foot that
-misses its bus searched again.
+journey planned from on board it and followed, one followed on foot that
+misses its bus searched again, a refused location and a changed password.
 
 Needs the built web app (`npm run build` in `web/`), Playwright for Python and a
 Chromium. Skipped when any of them is missing."""
@@ -157,11 +157,14 @@ def page(site):
 
 
 def _register(page, name):
+    """Creates an account named after `name`; the username it took."""
+    username = service.username(name)
     page.goto("/")
     page.get_by_role("button", name="Create an account").click()
-    page.get_by_label("Username").fill(service.username(name))
+    page.get_by_label("Username").fill(username)
     page.get_by_label("Password").fill(service.PASSWORD)
     page.get_by_role("button", name="Create the account").click()
+    return username
 
 
 def test_a_new_user_finds_a_stop_and_sees_the_bus_coming(page):
@@ -315,3 +318,22 @@ def test_a_refused_location_says_how_to_allow_it(page):
 
     playwright.expect(page.get_by_text(
         "Location is blocked for this page")).to_be_visible(timeout=SEE_MS)
+
+
+def test_a_changed_password_is_the_one_that_signs_in(page):
+    username = _register(page, "changer")
+    renewed = service.PASSWORD + "-renewed"
+
+    page.get_by_role("button", name="Account", exact=True).click()
+    page.get_by_role("button", name="Change password").click()
+    page.get_by_label("Current password").fill(service.PASSWORD)
+    page.get_by_label("New password").fill(renewed)
+    page.get_by_role("button", name="Change password").click()
+    playwright.expect(page.get_by_text("Password changed")).to_be_visible(timeout=SEE_MS)
+    page.get_by_role("button", name="Sign out").click()
+    page.get_by_label("Username").fill(username)
+    page.get_by_label("Password").fill(renewed)
+    page.get_by_role("button", name="Sign in").click()
+
+    playwright.expect(page.get_by_placeholder("Find a stop or a place")).to_be_visible(
+        timeout=SEE_MS)

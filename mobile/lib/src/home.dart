@@ -22,6 +22,7 @@ import 'map_controls.dart' show nearZoom;
 import 'map_tab.dart';
 import 'map_theme.dart';
 import 'models.dart';
+import 'password_dialog.dart';
 import 'quiet_banner.dart';
 import 'route_badge.dart';
 import 'saved.dart';
@@ -724,6 +725,13 @@ class _HomeScreenState extends State<HomeScreen> {
       onServer: () async {
         Navigator.pop(sheet);
         if (await editServer(context, widget.api) && mounted) widget.onOut();
+      },
+      onPassword: () async {
+        Navigator.pop(sheet);
+        if (await changePassword(context, widget.api) && mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(txt.passwordChanged)));
+        }
       },
       onOut: () {
         Navigator.pop(sheet);

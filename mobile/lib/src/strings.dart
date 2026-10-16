@@ -19,6 +19,11 @@ class Strings {
     required this.inviteHint,
     required this.username,
     required this.password,
+    required this.passwordHint,
+    required this.changePassword,
+    required this.currentPassword,
+    required this.newPassword,
+    required this.passwordChanged,
     required this.stayIn,
     required this.createAccount,
     required this.join,
@@ -184,6 +189,13 @@ class Strings {
   final String inviteHint;
   final String username;
   final String password;
+  final String passwordHint;
+  final String changePassword;
+  final String currentPassword;
+  final String newPassword;
+
+  /// Said once the service has taken it, and signed every other device out.
+  final String passwordChanged;
   final String stayIn;
   final String createAccount;
   final String join;
@@ -372,6 +384,11 @@ const _en = Strings(
   inviteHint: 'The last part of the link you were sent',
   username: 'Username',
   password: 'Password',
+  passwordHint: 'At least 10 characters',
+  changePassword: 'Change password',
+  currentPassword: 'Current password',
+  newPassword: 'New password',
+  passwordChanged: 'Password changed - every other device is signed out',
   stayIn: 'Stay signed in',
   createAccount: 'Create the account',
   join: 'Join',
@@ -586,6 +603,11 @@ const _uk = Strings(
   inviteHint: 'Остання частина надісланого посилання',
   username: 'Імʼя',
   password: 'Пароль',
+  passwordHint: 'Щонайменше 10 символів',
+  changePassword: 'Змінити пароль',
+  currentPassword: 'Поточний пароль',
+  newPassword: 'Новий пароль',
+  passwordChanged: 'Пароль змінено - на всіх інших пристроях виконано вихід',
   stayIn: 'Не виходити',
   createAccount: 'Створити акаунт',
   join: 'Приєднатися',

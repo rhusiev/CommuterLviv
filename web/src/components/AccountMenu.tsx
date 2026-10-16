@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { lang, setLang, t } from "../lib/i18n";
 import { HURRY_KMH, heldHurry, heldSpeed, holdHurry, holdSpeed } from "../lib/walking";
+import { PasswordForm } from "./PasswordForm";
 import { Speed } from "./Speed";
 
 /** Everything that belongs to the account rather than to the map. Signing out
@@ -66,6 +67,7 @@ export function AccountMenu(p: Props) {
         )}
       </div>
       <p className="px-2 text-xs text-slate-500">{t.hurrySpeedHint}</p>
+      <PasswordForm />
       <hr className="my-1 border-hair" />
       <button
         onClick={p.onOut}

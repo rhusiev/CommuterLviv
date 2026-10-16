@@ -152,11 +152,17 @@ wanted. Routes choose what is tracked and open the routes panel. Layers change
 what the map draws - the route lines, the traffic, the basemap - and live in one
 sheet behind a layers button, whose icon is lit while anything in it is on.
 Everything belonging to the account rather than to the map - what is saved, the
-language, the server, signing out - lives behind an account button, with signing
+language, the server, the password, signing out - lives behind an account button, with signing
 out below a rule so it is never the tap next to anything else. Nothing that is a
 toggle and nothing that signs you out sits loose on the map. That is
 `LayersSheet` and `AccountSheet` in `mobile/lib/src/sheets.dart`, and
 `LayersPanel.tsx` and `AccountMenu.tsx` on the web.
+
+Changing the password asks for the current one and the new one, and keeps the
+form open with the service's reason while it refuses. Once taken, every other
+device is signed out and so is this one's remember-me, so this device too signs
+in again once its session lapses. That is `PasswordForm.tsx` on the web and
+`mobile/lib/src/password_dialog.dart` in the app.
 
 A route is named the same way everywhere: the kind of vehicle as a glyph, then
 the number. The city writes the kind as the letter in front of the number - `А25`

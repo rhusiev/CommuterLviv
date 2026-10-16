@@ -197,6 +197,10 @@ class Api {
 
   Future<void> logout() => _call('POST', '/api/logout');
 
+  /// Signs every other device out, and drops this one's remember-me.
+  Future<void> password(String old, String next) =>
+      _call('POST', '/api/password', body: {'old': old, 'new': next});
+
   Future<Sets> sets() async =>
       Sets.fromJson(await _call('GET', '/api/sets') as Map<String, dynamic>);
 

@@ -235,6 +235,7 @@ class AccountSheet extends StatefulWidget {
     required this.onLanguage,
     required this.onSpeed,
     required this.onServer,
+    required this.onPassword,
     required this.onOut,
   });
 
@@ -251,6 +252,7 @@ class AccountSheet extends StatefulWidget {
   final VoidCallback onLanguage;
   final VoidCallback onSpeed;
   final VoidCallback onServer;
+  final VoidCallback onPassword;
   final VoidCallback onOut;
 
   @override
@@ -300,6 +302,11 @@ class _AccountSheetState extends State<AccountSheet> {
             title: Text(txt.server),
             subtitle: Text(widget.server),
             onTap: widget.onServer,
+          ),
+          ListTile(
+            leading: const Icon(Icons.password),
+            title: Text(txt.changePassword),
+            onTap: widget.onPassword,
           ),
           const Divider(height: 1),
           ListTile(
