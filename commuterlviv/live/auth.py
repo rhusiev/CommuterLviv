@@ -41,8 +41,12 @@ async def event(pool, kind, user_id=None, ip=None, detail=None):
         kind, user_id, ip, detail)
 
 
-async def user_count(pool):
-    return await pool.fetchval("SELECT count(*) FROM users")
+async def revoke(con, user_id, keep_session=None):
+    """End every session of the user but `keep_session`, and every
+    remember-me cookie. Run it in the transaction that caused it."""
+    await con.execute("DELETE FROM remember_tokens WHERE user_id = $1", user_id)
+    await con.execute("DELETE FROM sessions WHERE user_id = $1 AND id <> $2",
+                      user_id, keep_session or b"")
 
 
 async def register(pool, ph, username, password, code=None, mode="code"):
@@ -117,11 +121,7 @@ async def change_password(pool, ph, user_id, old, new, keep_session=None):
         async with con.transaction():
             await con.execute("UPDATE users SET password_hash = $2 WHERE id = $1",
                               user_id, hashed)
-            await con.execute("DELETE FROM remember_tokens WHERE user_id = $1",
-                              user_id)
-            await con.execute(
-                "DELETE FROM sessions WHERE user_id = $1 AND id <> $2",
-                user_id, keep_session or b"")
+            await revoke(con, user_id, keep_session)
     return None
 
 
@@ -203,10 +203,7 @@ async def consume_remember(pool, raw, days, ip=None):
                 # two tabs woke together; the loser of the race is not a thief
                 return row["user_id"], None
             else:
-                await con.execute("DELETE FROM remember_tokens WHERE user_id = $1",
-                                  row["user_id"])
-                await con.execute("DELETE FROM sessions WHERE user_id = $1",
-                                  row["user_id"])
+                await revoke(con, row["user_id"])
                 await con.execute(
                     "INSERT INTO auth_events(kind, user_id, ip, detail) "
                     "VALUES('remember_theft', $1, $2, 'spent token replayed')",

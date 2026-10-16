@@ -100,8 +100,8 @@ class Guard:
                         httponly=True, samesite="lax",
                         secure=self.set.secure_cookies)
 
-    def clear(self, resp):
-        for base in (SESSION_COOKIE, CSRF_COOKIE, REMEMBER_COOKIE):
+    def clear(self, resp, bases=(SESSION_COOKIE, CSRF_COOKIE, REMEMBER_COOKIE)):
+        for base in bases:
             resp.delete_cookie(self.name(base), path="/",
                                secure=self.set.secure_cookies, samesite="lax")
 
@@ -276,8 +276,7 @@ async def password(request, session):
     await auth.event(app.pool, "password_changed", session["user_id"],
                      app.guard.ip(request))
     resp = JSONResponse({"ok": True})
-    resp.delete_cookie(app.guard.name(REMEMBER_COOKIE), path="/",
-                       secure=app.settings.secure_cookies, samesite="lax")
+    app.guard.clear(resp, (REMEMBER_COOKIE,))
     return resp
 
 
@@ -321,14 +320,23 @@ async def traffic_now(request, session):
     return Response(cache.read(now), media_type="application/json")
 
 
+MAX_ID_DIGITS = 9    # `int` raises on a long enough digit string
+
+
+def _id(raw):
+    """A small non-negative integer from a query parameter, or None."""
+    if raw is None or not raw.isdigit() or len(raw) > MAX_ID_DIGITS:
+        return None
+    return int(raw)
+
+
 async def arrivals(request, session):
     """The timetable tab: what is coming to these stops, soonest first."""
     app = request.app.state
     want = request.query_params.get("stops", "")
     cat = app.svc.live.cat
-    # `int` raises on a long enough digit string, and the query is unbounded
-    ids = [int(p) for p in want.split(",")[:hub.MAX_STOPS]
-           if p.isdigit() and len(p) <= 9 and int(p) < len(cat.stops)]
+    ids = [i for i in map(_id, want.split(",")[:hub.MAX_STOPS])
+           if i is not None and i < len(cat.stops)]
     return JSONResponse(hub.due(app.svc.live.arrivals, ids))
 
 
@@ -336,12 +344,12 @@ async def vehicle(request, session):
     """One vehicle's predicted stops and times; an untracked id gets an empty
     list rather than a 404."""
     app = request.app.state
-    want = request.query_params.get("veh", "")
-    if not want.isdigit() or len(want) > 9:
+    veh = _id(request.query_params.get("veh"))
+    if veh is None:
         return error("Veh must be a number")
     arr = app.svc.live.arrivals
-    rows = arr.of(int(want))
-    return JSONResponse({"t": arr.t, "veh": int(want), "stops": [
+    rows = arr.of(veh)
+    return JSONResponse({"t": arr.t, "veh": veh, "stops": [
         {"stop": int(r["stop"]), "route": int(r["route"]), "t": int(r["t"]),
          **({"planned": True} if r["planned"] else {})}
         for r in rows]})
@@ -365,12 +373,10 @@ def _point(raw):
 def _origin(q):
     """Where a search starts: a point `from`, or on board vehicle `veh`, which
     keeps the traveller's own position off the request."""
-    veh = q.get("veh")
-    if veh is None:
+    if q.get("veh") is None:
         return _point(q.get("from"))
-    if not veh.isdigit() or len(veh) > 9:
-        return None
-    return plan.Aboard(int(veh))
+    veh = _id(q.get("veh"))
+    return None if veh is None else plan.Aboard(veh)
 
 
 PLAN_AHEAD_DAYS = 30

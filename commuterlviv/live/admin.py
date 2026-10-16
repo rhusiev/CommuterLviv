@@ -65,13 +65,12 @@ async def delete(username, st=None):
 
 async def disable(username, on=True, st=None):
     st = st or settings.load()
-    async with _pool(st) as pool:
-        uid = await pool.fetchval(
+    async with _pool(st) as pool, pool.acquire() as con, con.transaction():
+        uid = await con.fetchval(
             "UPDATE users SET disabled = $2 WHERE lower(username) = $1 "
             "RETURNING id", security.clean_username(username), on)
         if uid and on:
             # a disabled account with a live session is still a live session
-            await pool.execute("DELETE FROM sessions WHERE user_id = $1", uid)
-            await pool.execute("DELETE FROM remember_tokens WHERE user_id = $1", uid)
-            await auth.event(pool, "disabled", uid)
+            await auth.revoke(con, uid)
+            await auth.event(con, "disabled", uid)
         return uid is not None
