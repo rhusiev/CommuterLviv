@@ -25,7 +25,7 @@ KEEP = 0.15
 ROWS = 500_000
 NEED_ROWS = 20_000  # before a fitted model is trusted, ~6 h of service
 MAX_GAP_S = 120.0   # s between the fixes a passing is timed between, at most
-PENDING_S = 2 * 3600.0  # s an ETA waits for its stop to be passed before dropped
+PENDING_S = 2 * localtime.HOUR_S  # s an ETA waits for its stop to be passed before dropped
 ITERS = 300
 RATE = 0.08
 LEAVES = 63
@@ -98,7 +98,7 @@ class Boost:
         per = np.full(len(k), np.nan)
         np.divide(dt[k], sched, out=per, where=sched > MIN_TIMETABLE_S)
         local = datetime.datetime.fromtimestamp(now, self.tz)
-        day_s = local.hour * 3600 + local.minute * 60 + local.second
+        day_s = local.hour * localtime.HOUR_S + local.minute * 60 + local.second
         day = localtime.DAY_S
         late = (day_s - sched_now + day / 2) % day - day / 2
         route, kind = self._route.get(self.net.trip_route.get(tr.trip), (np.nan,) * 2)

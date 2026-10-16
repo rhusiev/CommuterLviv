@@ -51,7 +51,7 @@ NEED_ROWS = 20_000  # before a fitted model is trusted over the rule
 LEAN = 0.4
 ITERS = 300
 RATE = 0.05
-PENDING = 6 * 3600.0    # s a stand's rows wait for its departure before dropped
+PENDING = 6 * localtime.HOUR_S # s a stand's rows wait for its departure before dropped
 FEATURES = ("in for", "to timetable", "slack", "waited share", "kept", "ahead q25",
             "ahead q50", "ahead q75", "since last left", "timetable gap",
             "last ahead", "habit", "after last", "after last early", "hour")

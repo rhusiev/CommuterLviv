@@ -234,6 +234,7 @@ class BaseModel:
         back to its all-day mean, and one with none at all to PACE0.
         """
         num = np.zeros((SLOTS, self.ncell))
+        slot_s = localtime.DAY_S / SLOTS
         den = np.zeros((SLOTS, self.ncell))
         by_pattern = {}
         for trip, key in self.net.pattern_of.items():
@@ -248,7 +249,6 @@ class BaseModel:
             if len(dd) < 2:
                 continue
             by_slot = {}
-            slot_s = localtime.DAY_S / SLOTS
             for t in trips:
                 sched = self.net.trip_stops[t][2]
                 dt = np.diff(sched)
