@@ -56,7 +56,11 @@ Map tiles and fonts are blocked, so the map itself stays blank.
 
 `npm test` in `web/` runs the web app's unit tests (vitest). Those of
 `mobile/test` that test logic both apps share are ported line for line, so
-the two implementations are checked against the same cases.
+the two implementations are checked against the same cases. The binary map frame is
+checked across all three languages from one file, `tests/wire_frame.json`: the
+server must encode its vehicles to its bytes, and both clients must decode the
+bytes back to its vehicles - so a box, scale or flag that drifts in one of them
+fails that one's tests.
 
 ## The version
 

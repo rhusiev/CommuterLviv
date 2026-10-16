@@ -1,64 +1,57 @@
 /// The decoder against bytes the server actually produced.
 ///
-/// The frame below was encoded by `commuterlviv.live.wire.encode` and pasted here,
-/// so this is a test of agreement between two languages rather than of the Dart
-/// against itself. Regenerate it with:
-///
-///   .venv/bin/python -c "import numpy as np, commuterlviv.live.wire as w, \
-///     commuterlviv.live.state as st; veh = np.zeros(3, st.VEH); …; \
-///     print(list(w.encode(veh, 1234, w.DELTA, gone=[9, 12])))"
+/// `tests/wire_frame.json` holds a frame `commuterlviv.live.wire.encode`
+/// writes, which `tests/wire_test.py` checks, so this is a test of agreement
+/// between the languages rather than of the Dart against itself.
 library;
 
+import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:commuterlviv/src/wire.dart' as wire;
 
-/// Three vehicles - centre, south-west corner, far corner - and two gone ids.
-final _frame = Uint8List.fromList([
-  1, 1, 210, 4, 0, 0, 3, 0, 2, 0, //
-  7, 0, 0, 0, 58, 102, 53, 119, 0, 0, //
-  255, 255, 41, 0, 0, 0, 0, 0, 128, 1, //
-  1, 0, 3, 0, 240, 255, 233, 255, 255, 3, //
-  9, 0, 12, 0,
-]);
+/// `flutter test` runs in the package, beside the repo's `tests/`.
+final _shared = jsonDecode(
+  File('../tests/wire_frame.json').readAsStringSync(),
+) as Map<String, dynamic>;
+final _vehicles = (_shared['vehicles'] as List).cast<Map<String, dynamic>>();
+final _decoded = (_shared['decoded'] as List).cast<Map<String, dynamic>>();
+
+Uint8List _frame() => Uint8List.fromList((_shared['bytes'] as List).cast());
+
+/// Half a metre is the quantum, so equality is to seven decimal places.
+const _tolerance = 1e-7;
 
 void main() {
   test('a delta decodes to what the server encoded', () {
-    final f = wire.decode(_frame);
+    final f = wire.decode(_frame());
 
-    expect(f.kind, wire.delta);
-    expect(f.t, 1234);
-    expect(f.n, 3);
-    expect(f.ids, [7, 65535, 1]);
-    expect(f.routes, [0, 41, 3]);
-    expect(f.gone, [9, 12]);
-
-    // Half a metre is the quantum, so equality is to seven decimal places
-    expect(f.lats[0], closeTo(49.83969787, 1e-7));
-    expect(f.lons[0], closeTo(24.02969787, 1e-7));
-    expect(f.lats[1], closeTo(49.70, 1e-7));
-    expect(f.lons[1], closeTo(23.85, 1e-7));
-    expect(f.lats[2], closeTo(49.99989929, 1e-7));
-    expect(f.lons[2], closeTo(24.29989700, 1e-7));
-
-    // One byte of heading is 1.40625 degrees, and 359.5 lands on 358.59375
-    expect(f.headings, [0.0, 180.0, 358.59375]);
+    expect(f.kind, _shared['kind']);
+    expect(f.t, _shared['t']);
+    expect(f.n, _vehicles.length);
+    expect(f.ids, [for (final v in _vehicles) v['id']]);
+    expect(f.routes, [for (final v in _vehicles) v['route']]);
+    expect(f.gone, _shared['gone']);
+    for (final (i, d) in _decoded.indexed) {
+      expect(f.lats[i], closeTo(d['lat'] as num, _tolerance));
+      expect(f.lons[i], closeTo(d['lon'] as num, _tolerance));
+    }
+    expect(f.headings, [for (final d in _decoded) d['heading']]);
   });
 
   test('the flag bits say stale and moving', () {
-    final f = wire.decode(_frame);
+    final f = wire.decode(_frame());
 
-    expect(f.flags[0] & wire.staleFlag, 0);
-    expect(f.flags[0] & wire.movingFlag, 0);
-    expect(f.flags[1] & wire.staleFlag, wire.staleFlag);
-    expect(f.flags[1] & wire.movingFlag, 0);
-    expect(f.flags[2] & wire.staleFlag, wire.staleFlag);
-    expect(f.flags[2] & wire.movingFlag, wire.movingFlag);
+    for (final (i, v) in _vehicles.indexed) {
+      expect(f.flags[i] & wire.staleFlag != 0, v['stale']);
+      expect(f.flags[i] & wire.movingFlag != 0, v['moving']);
+    }
   });
 
   test('a frame from a newer server is refused, not misread', () {
-    final wrong = Uint8List.fromList(_frame)..[1] = 2;
+    final wrong = _frame()..[1] = 2;
     expect(() => wire.decode(wrong), throwsFormatException);
   });
 }
