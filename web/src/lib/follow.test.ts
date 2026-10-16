@@ -3,8 +3,12 @@ import {
   Follower,
   GRACE_S,
   Watch,
+  along,
   followable,
   judge,
+  margin,
+  needKmh,
+  plannedKmh,
   type Due,
   type Progress,
   type Reach,
@@ -370,6 +374,8 @@ const reach = (late: number, hurriedLate = late, live = true): Reach => ({
   leg: 3,
   dep: NEXT_DEP,
   live,
+  from: NEXT_DEP - 120,
+  walk: 300,
   usual: NEXT_DEP + late,
   hurried: NEXT_DEP + hurriedLate,
 });
@@ -444,6 +450,7 @@ describe("the next connection", () => {
       leg: 3,
       dep: NEXT_DEP,
       riding: true,
+      kmh: null,
     });
     expect(watch.update(reach(0), riding, now + 11).kind).toBe("ok");
   });
@@ -476,7 +483,15 @@ describe("the next connection", () => {
     const hurry = watch.update(reach(30, 0), { kind: "walk", leg: 2 }, now);
     // A change further on, far enough ahead for its prediction to be jumpy
     const later = NEXT_DEP + 600;
-    const after: Reach = { leg: 5, dep: later, live: true, usual: later + 30, hurried: later + 30 };
+    const after: Reach = {
+      leg: 5,
+      dep: later,
+      live: true,
+      from: now,
+      walk: 300,
+      usual: later + 30,
+      hurried: later + 30,
+    };
 
     expect(hurry.kind).toBe("hurry");
     expect(watch.update(after, { kind: "ride", leg: 3, veh: NEXT }, now + 1).kind).toBe("ok");
@@ -488,5 +503,59 @@ describe("the next connection", () => {
 
     expect(watch.update(null, { kind: "wait", leg: 3 }, NEXT_DEP).kind).toBe("missed");
     expect(watch.update(null, { kind: "ride", leg: 3, veh: NEXT }, NEXT_DEP).kind).toBe("ok");
+  });
+});
+
+/** Metres north of 49.84 N in degrees of latitude, as `along` measures them */
+const north = (m: number) => m / ((6_371_000 * Math.PI) / 180);
+
+describe("the pace hurrying needs", () => {
+  test("keeps half a change's slack, more the further ahead the ride leaves", () => {
+    expect(margin(0)).toBe(30);
+    expect(margin(300)).toBeCloseTo(56.25);
+    expect(margin(9999)).toBe(150);
+  });
+
+  test("walks there with the margin to spare, rounded up to a step", () => {
+    // 300 m in 300 - 56.25 s is 4.43 km/h
+    expect(needKmh(300, 0, 300)).toBe(4.5);
+  });
+
+  test("is timed from when the ride was forecast, not from setting off", () => {
+    // off a ride at 600 for a ride leaving at 900: forecast 900 s ahead, not 300
+    expect(needKmh(300, 600, 900, 0)).toBeGreaterThan(needKmh(300, 600, 900)!);
+  });
+
+  test("drops the margin rather than ask for more than a run", () => {
+    // with the margin 66 s for 300 m, 16.4 km/h; right at the ride 10.8
+    expect(needKmh(300, 0, 100)).toBe(11);
+  });
+
+  test("is nothing once no time is left, or with nothing to walk", () => {
+    expect(needKmh(300, 100, 100)).toBeNull();
+    expect(needKmh(0, 0, 300)).toBeNull();
+  });
+
+  test("of a planned option is read off its first walk", () => {
+    const pts: [number, number][] = [
+      [49.84, 24.03],
+      [49.84 + north(300), 24.03],
+    ];
+    expect(along(pts)).toBeCloseTo(300);
+    const option = {
+      legs: [
+        { kind: "walk", dep: 0, arr: 300, a: -1, b: 0, pts },
+        { kind: "ride", dep: 300, arr: 600, a: 0, b: 1 },
+      ],
+    } as unknown as Journey;
+    expect(plannedKmh(option)).toBe(4.5);
+  });
+
+  test("is said with a hurry, and not with a miss", () => {
+    const hurry = new Watch().update(reach(30, 0), { kind: "walk", leg: 2 }, NEXT_DEP - 120);
+    const missed = new Watch().update(reach(30), { kind: "walk", leg: 2 }, NEXT_DEP - 60);
+
+    expect(hurry).toMatchObject({ kind: "hurry", kmh: needKmh(300, NEXT_DEP - 120, NEXT_DEP) });
+    expect(missed).toMatchObject({ kind: "missed", kmh: null });
   });
 });

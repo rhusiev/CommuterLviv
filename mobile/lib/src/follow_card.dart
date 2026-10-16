@@ -12,6 +12,7 @@ import 'package:flutter/material.dart' as material show Theme;
 import 'eta.dart';
 import 'follow.dart';
 import 'here.dart' show Here, Locating;
+import 'hurry_pill.dart';
 import 'legs.dart';
 import 'live.dart';
 import 'models.dart';
@@ -316,6 +317,7 @@ class _FollowCardState extends State<FollowCard> {
               _CatchRow(
                 said: _catchSaid(widget.catalog, widget.journey, _caught)!,
                 missed: _caught.kind == CatchKind.missed,
+                kmh: _caught.kmh,
                 action: _caught.kind == CatchKind.missed
                     ? txt.planAgain
                     : _caught.riding
@@ -357,12 +359,16 @@ class _CatchRow extends StatelessWidget {
   const _CatchRow({
     required this.said,
     required this.missed,
+    required this.kmh,
     required this.action,
     required this.onTap,
   });
 
   final String said;
   final bool missed;
+
+  /// The pace hurrying needs, when it is asked for
+  final double? kmh;
   final String? action;
   final VoidCallback onTap;
 
@@ -377,6 +383,10 @@ class _CatchRow extends StatelessWidget {
       ),
       child: Row(
         children: [
+          if (kmh case final kmh?) ...[
+            HurryPill(text: txt.kmh(kmh), hint: txt.paceHint),
+            const SizedBox(width: 8),
+          ],
           Expanded(
             child: Text(
               said,

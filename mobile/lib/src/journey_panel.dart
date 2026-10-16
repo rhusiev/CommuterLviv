@@ -14,7 +14,8 @@ import 'api.dart';
 import 'backups_dialog.dart';
 import 'end_field.dart';
 import 'eta.dart';
-import 'follow.dart' show followable;
+import 'follow.dart' show followable, plannedKmh;
+import 'hurry_pill.dart';
 import 'models.dart';
 import 'route_badge.dart';
 import 'sheets.dart';
@@ -664,15 +665,6 @@ class _Option extends StatelessWidget {
                         : txt.changeCount(changes),
                     style: material.Theme.of(context).textTheme.bodySmall,
                   ),
-                  if (journey.hurry)
-                    Tooltip(
-                      message: txt.hurryHint,
-                      child: Text(
-                        ' · ${txt.hurry}',
-                        style: material.Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: Colors.amberAccent),
-                      ),
-                    ),
                   if (journey.rides > 0 && journey.backup > 0)
                     InkWell(
                       onTap: () => showBackups(
@@ -703,6 +695,11 @@ class _Option extends StatelessWidget {
                     ),
                 ],
               ),
+              if (journey.hurry)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: _hurried(journey),
+                ),
               for (final leg in journey.legs)
                 IgnorePointer(
                   ignoring: !shown,
@@ -733,6 +730,17 @@ class _Option extends StatelessWidget {
       ),
     );
   }
+}
+
+/// An option caught only by hurrying, with the pace that catches it
+Widget _hurried(Journey journey) {
+  final kmh = plannedKmh(journey);
+  return kmh == null
+      ? HurryPill(text: txt.hurry, hint: txt.hurryHint)
+      : HurryPill(
+          text: txt.hurryAt(txt.kmh(kmh)),
+          hint: '${txt.hurryHint}. ${txt.paceHint}',
+        );
 }
 
 class _LegRow extends StatelessWidget {

@@ -303,7 +303,7 @@ const walkKmh = (min: 0.5, max: 8.0, step: 0.5, usual: 4.5);
 
 /// How fast you would walk to catch a bus, in km/h: up to a brisk run, which
 /// is also the service's limit. Off until you say.
-final hurryKmh = (min: walkKmh.min, max: 12.0);
+final hurryKmh = (min: walkKmh.min, max: 12.0, step: walkKmh.step);
 
 /// Another way to the door from where a ride boards: the rides it takes, the
 /// first leaving from there, and when it reaches the door

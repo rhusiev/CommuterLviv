@@ -6,6 +6,7 @@ import { t } from "../lib/i18n";
 import { current, rows, type Row } from "../lib/legs";
 import type { Live } from "../lib/live";
 import type { Arrival, Catalog, Journey } from "../lib/types";
+import { HurryPill } from "./HurryPill";
 import { Icon } from "./Icon";
 import { RouteBadge } from "./RouteBadge";
 
@@ -116,6 +117,9 @@ function CatchLine({
       : t.hurryNow(route, countdown(caught.dep));
   return (
     <div className="mt-2 flex items-center gap-2 border-t border-raised pt-2">
+      {caught.kmh !== null && (
+        <HurryPill hint={t.paceHint}>{t.kmh(caught.kmh)}</HurryPill>
+      )}
       <p className={`min-w-0 flex-1 text-xs ${missed ? "text-rose-300" : "text-amber-300"}`}>
         {said}
       </p>
