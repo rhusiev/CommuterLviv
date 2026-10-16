@@ -30,7 +30,7 @@ class JourneyLayer extends StatelessWidget {
         if (leg.pts.length > 1) leg,
     ];
     final tags = [
-      for (final tag in journeyTags(legs)) _Tag(tag.point, tag.text, true),
+      for (final tag in journeyTags(legs)) _Tag(tag.point, tag.text),
     ];
     return Stack(
       children: [
@@ -66,13 +66,12 @@ class JourneyLayer extends StatelessWidget {
   }
 }
 
-/// One pill before placing: where it wants to sit, what it says, how loudly.
+/// One pill before placing: where it wants to sit and what it says.
 class _Tag {
-  const _Tag(this.point, this.text, this.bold);
+  const _Tag(this.point, this.text);
 
   final LatLng point;
   final String text;
-  final bool bold;
 }
 
 /// Tags sharing one spot, as one marker: pills that would print over each
@@ -127,7 +126,7 @@ Widget _pill(_Tag tag, Palette ink) => DecoratedBox(
       style: TextStyle(
         color: ink.edge,
         fontSize: 11,
-        fontWeight: tag.bold ? FontWeight.bold : FontWeight.normal,
+        fontWeight: FontWeight.bold,
       ),
     ),
   ),

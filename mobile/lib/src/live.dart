@@ -64,7 +64,6 @@ class Live extends ChangeNotifier {
   final Map<int, Vehicle> vehicles = {};
 
   Map<int, List<Arrival>> arrivals = {};
-  double arrivalsAt = 0;
   Connection connection = Connection.connecting;
 
   /// Too few vehicles report for the trips the timetable has running - during
@@ -194,7 +193,6 @@ class Live extends ChangeNotifier {
             Arrival.fromJson(a as Map<String, dynamic>),
         ],
     };
-    arrivalsAt = (msg['t'] as num).toDouble();
     notifyListeners();
   }
 

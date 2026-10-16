@@ -104,5 +104,3 @@ void tick() {
     HapticFeedback.lightImpact();
   }
 }
-
-bool get isCupertino => _cupertino;

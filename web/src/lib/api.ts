@@ -1,6 +1,5 @@
 import { readJson, writeJson } from "./storage";
 import type {
-  Arrivals,
   Call,
   Catalog,
   Found,
@@ -91,9 +90,7 @@ export const api = {
   sets: (): Promise<Sets> => call("/api/sets"),
   /** Pinned stops by feed id: the catalog is rebuilt whenever the city's feed
    * changes, so a stored index quietly becomes a different stop. */
-  pins: (): Promise<{ pins: string[] }> => call("/api/pins"),
   setPins: (pins: string[]): Promise<{ pins: string[] }> => post("/api/pins", { pins }),
-  places: (): Promise<{ places: Place[] }> => call("/api/places"),
   /** The whole list, every time: the name is the identity server-side, so a
    * rename is the old one dropped and the new one saved in one write */
   setPlaces: (places: Place[]): Promise<{ places: Place[] }> => post("/api/places", { places }),
@@ -104,8 +101,6 @@ export const api = {
   deleteSet: (id: string) => call<void>(`/api/sets/${id}`, { method: "DELETE" }),
   activateSet: (id: string | null) => post<void>("/api/sets/active", { id }),
 
-  arrivals: (stops: number[]): Promise<Arrivals> =>
-    call(`/api/arrivals?stops=${stops.join(",")}`),
   vehicle: (veh: number): Promise<{ t: number; veh: number; stops: Call[] }> =>
     call(`/api/vehicle?veh=${veh}`),
   /** `at` in unix seconds leaves at that time instead of now; a future one has

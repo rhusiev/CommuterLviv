@@ -416,11 +416,6 @@ class Api {
       kmh == null ? _prefs.remove('commuterlviv.hurry') : _keep('hurry', kmh);
 
   /// Pinned stops, by feed id, kept server-side so phone and browser agree.
-  Future<List<String>> pins() async {
-    final j = await _call('GET', '/api/pins') as Map<String, dynamic>;
-    return [for (final p in j['pins'] as List) p as String];
-  }
-
   Future<void> setPins(List<String> stops) =>
       _call('POST', '/api/pins', body: {'pins': stops});
 
