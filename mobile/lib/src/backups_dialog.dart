@@ -156,7 +156,7 @@ class _BackupsState extends State<_Backups> {
                       txt.changeAt(
                         chain
                             .skip(1)
-                            .map((r) => catalog.stops[r.a].name)
+                            .map((r) => catalog.stopName(r.a))
                             .join(', '),
                       ),
                       style: small,
@@ -185,7 +185,7 @@ class _BackupsState extends State<_Backups> {
             ),
           for (final (i, leg) in rides.indexed) ...[
             const Divider(height: 20),
-            Text(catalog.stops[leg.a].name, style: theme.textTheme.titleSmall),
+            Text(catalog.stopName(leg.a), style: theme.textTheme.titleSmall),
             const SizedBox(height: 4),
             way(rides.sublist(i), journey.arr, null),
             if (leg.backups.isEmpty)

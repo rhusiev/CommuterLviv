@@ -132,7 +132,7 @@ class _VehicleCardState extends State<VehicleCard> {
                     return ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
-                      title: Text(widget.catalog.stops[call.stop].name),
+                      title: Text(widget.catalog.stopName(call.stop)),
                       trailing: Text(countdown(call.t)),
                       onTap: () => widget.onStop(call.stop),
                     );

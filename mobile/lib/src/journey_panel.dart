@@ -763,7 +763,7 @@ class _LegRow extends StatelessWidget {
     final small = theme.textTheme.bodySmall;
     // A walk between two rides is a leg of its own on the wire, so it is one
     // here too: its own duration, and the stop it ends at
-    final where = leg.b < 0 ? txt.toDoor : catalog.stops[leg.b].name;
+    final where = leg.b < 0 ? txt.toDoor : catalog.stopName(leg.b);
     return InkWell(
       onTap: leg.b < 0 ? null : () => onStop(leg.b),
       child: Padding(

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../lib/api";
+import { stopName } from "../lib/catalog";
 import { clock, mins } from "../lib/eta";
 import { followable, plannedKmh } from "../lib/follow";
 import { t } from "../lib/i18n";
@@ -682,8 +683,8 @@ function Option({
                     : // Consecutive walks are folded before they are sent, so a
                       // walk with a ride either side is the change itself
                       i > 0 && i < journey.legs.length - 1
-                      ? t.changeAt(catalog.stops[leg.b]?.name ?? "")
-                      : (catalog.stops[leg.b]?.name ?? "")}
+                      ? t.changeAt(stopName(catalog, leg.b))
+                      : stopName(catalog, leg.b)}
                 </span>
               </>
             ) : (
@@ -746,7 +747,7 @@ function Ride({
           onClick={() => leg.b >= 0 && onStop(leg.b)}
           className="min-w-0 flex-1 truncate text-left text-slate-200 hover:underline"
         >
-          {catalog.stops[leg.b]?.name ?? ""}
+          {stopName(catalog, leg.b)}
         </button>
         {rests && (
           <button

@@ -1,4 +1,5 @@
 import { useState, type ComponentProps } from "react";
+import { stopName } from "../lib/catalog";
 import { t } from "../lib/i18n";
 import { dropped, renamed } from "../lib/places";
 import { useReorder } from "../lib/reorder";
@@ -69,7 +70,7 @@ export function SavedPanel({
                   title={t.showOnMap}
                   className="min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-sm text-slate-300 hover:bg-raised/70"
                 >
-                  {catalog.stops[i]?.name ?? ""}
+                  {stopName(catalog, i)}
                 </button>
                 <button
                   onClick={() => onPins(pins.filter((p) => p !== i))}
