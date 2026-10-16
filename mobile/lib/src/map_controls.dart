@@ -15,6 +15,10 @@ import 'theme.dart';
 const minZoom = 9.0;
 const maxZoom = 18.0;
 
+/// Where the map comes in to on where you are, close enough to read the streets
+/// around you.
+const nearZoom = 16.0;
+
 /// The thresholds below only apply with the gesture race on: without it every
 /// gesture runs at once and a pinch's incidental twist turns the map.
 const mapInteraction = InteractionOptions(
@@ -72,7 +76,7 @@ class _MapControlsState extends State<MapControls> {
   Future<void> _locate() async {
     final at = await widget.here.start();
     if (at == null || !mounted) return;
-    widget.map.move(at, 16);
+    widget.map.move(at, nearZoom);
     widget.onLocate?.call();
   }
 

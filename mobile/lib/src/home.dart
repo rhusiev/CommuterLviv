@@ -18,6 +18,7 @@ import 'followed.dart';
 import 'here.dart';
 import 'journey_panel.dart';
 import 'live.dart';
+import 'map_controls.dart' show nearZoom;
 import 'map_tab.dart';
 import 'map_theme.dart';
 import 'models.dart';
@@ -103,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Which end is waiting on a fix that has been asked for but not arrived.
   End? _wantHere;
 
-  late final Here _here = Here(onFirstFix: (at) => _map.move(at, 16));
+  late final Here _here = Here(onFirstFix: (at) => _map.move(at, nearZoom));
   late final _tracking = Tracking(_map, _here);
 
   late MapTheme _theme = themeById(widget.api.mapTheme);

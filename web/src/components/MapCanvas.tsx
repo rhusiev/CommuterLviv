@@ -38,6 +38,10 @@ const PLACE_R = 5;
 
 /** Below this a name is more clutter than help, so places are dots alone */
 const LABEL_ZOOM = 12.5;
+/** Where the map comes in to on a place it is sent to, close enough to read the
+ * streets around it */
+const NEAR_ZOOM = 16;
+const FLY_SPEED = 1.6;
 
 const HIT = 14;
 const TAU = Math.PI * 2;
@@ -563,7 +567,7 @@ export function MapCanvas({
         timer = window.setTimeout(go, 100);
         return;
       }
-      m.flyTo({ center: [focus.lon, focus.lat], zoom: Math.max(m.getZoom(), 16), speed: 1.6 });
+      m.flyTo({ center: [focus.lon, focus.lat], zoom: Math.max(m.getZoom(), NEAR_ZOOM), speed: FLY_SPEED });
     };
     go();
     return () => clearTimeout(timer);
@@ -587,7 +591,7 @@ export function MapCanvas({
         here.current = { lat: latitude, lon: longitude, accuracy };
         if (first) {
           first = false;
-          held.current?.flyTo({ center: [longitude, latitude], zoom: 16, speed: 1.6 });
+          held.current?.flyTo({ center: [longitude, latitude], zoom: NEAR_ZOOM, speed: FLY_SPEED });
         } else if (keep.current) {
           held.current?.easeTo({ center: [longitude, latitude] });
         }
@@ -613,7 +617,7 @@ export function MapCanvas({
         onClick={() => {
           if (locating === "on" && here.current) {
             const f = here.current;
-            held.current?.flyTo({ center: [f.lon, f.lat], zoom: 16, speed: 1.6 });
+            held.current?.flyTo({ center: [f.lon, f.lat], zoom: NEAR_ZOOM, speed: FLY_SPEED });
             keep.current = locate;
           } else if (locating !== "denied") {
             setLocating("waiting");
