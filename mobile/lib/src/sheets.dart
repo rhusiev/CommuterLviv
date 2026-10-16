@@ -400,9 +400,24 @@ class _RouteSheetState extends State<RouteSheet> {
   late String? _active = widget.sets?.active;
   late List<RouteSet> _sets = widget.sets?.sets ?? const [];
 
+  /// Why the last change to the sets did not go through
+  String? _failed;
+
   List<String> get _ids => [
     for (final i in widget.picked) widget.catalog.routes[i].id,
   ];
+
+  /// Runs [change], saying under the buttons why it failed if it does.
+  Future<void> _guard(Future<void> Function() change) async {
+    setState(() => _failed = null);
+    try {
+      await change();
+    } on ApiError catch (e) {
+      if (mounted) setState(() => _failed = e.message);
+    } on Exception {
+      if (mounted) setState(() => _failed = txt.unreachable(widget.api.base));
+    }
+  }
 
   Future<void> _reload() async {
     final sets = await widget.api.sets();
@@ -441,8 +456,8 @@ class _RouteSheetState extends State<RouteSheet> {
 
   Future<void> _manage(RouteSet set) => manage(
     context,
-    onRename: () => _rename(set),
-    onDelete: () => _delete(set),
+    onRename: () => _guard(() => _rename(set)),
+    onDelete: () => _guard(() => _delete(set)),
   );
 
   Future<void> _activate(RouteSet set) async {
@@ -493,7 +508,7 @@ class _RouteSheetState extends State<RouteSheet> {
                       // A checkmark widens the chip, shuffling the ones after it
                       showCheckmark: false,
                       selected: s.id == _active,
-                      onSelected: (_) => _activate(s),
+                      onSelected: (_) => _guard(() => _activate(s)),
                     ),
                   ),
               ],
@@ -576,7 +591,7 @@ class _RouteSheetState extends State<RouteSheet> {
               if (changed) ...[
                 Expanded(
                   child: FilledButton.tonal(
-                    onPressed: () => _update(active),
+                    onPressed: () => _guard(() => _update(active)),
                     child: Text(
                       txt.updateSet(active.name),
                       overflow: TextOverflow.ellipsis,
@@ -587,12 +602,22 @@ class _RouteSheetState extends State<RouteSheet> {
               ],
               Expanded(
                 child: FilledButton.tonal(
-                  onPressed: widget.picked.isEmpty ? null : _save,
+                  onPressed: widget.picked.isEmpty ? null : () => _guard(_save),
                   child: Text(txt.saveAsSet, overflow: TextOverflow.ellipsis),
                 ),
               ),
             ],
           ),
+          if (_failed case final failed?)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                failed,
+                style: material.Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: material.Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ),
         ],
       ),
     );
