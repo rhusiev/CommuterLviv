@@ -1,7 +1,8 @@
 """The loops: poll the feed, step the model, wake the clients.
 
 Everything touching the tracker or the model runs in one worker thread behind a
-lock, to keep ~200 ms of numpy per epoch off the event loop.
+lock, to keep ~200 ms of numpy per epoch off the event loop. The feed is fetched
+outside it, so a slow upstream delays only the poll, never an epoch.
 
 This does not write `feed.db` - the collector owns it - so the two poll the same
 endpoint independently.
@@ -166,7 +167,7 @@ class Service:
         self.live = live
         self._seen.clear()
         try:
-            self.poll_once()
+            self.fold(self.fetch())
             live.epoch()
         except Exception as exc:
             self.log("first poll of the new city failed", repr(exc)[:200])
@@ -176,8 +177,9 @@ class Service:
         while True:
             t0 = time.time()
             try:
+                msg = await asyncio.to_thread(self.fetch)
                 async with self.lock:
-                    n = await asyncio.to_thread(self.poll_once)
+                    n = await asyncio.to_thread(self.fold, msg)
                 self.polls += 1
                 fails = 0
                 self.hub.publish()
@@ -194,9 +196,14 @@ class Service:
                        collect.BACKOFF_MAX) if fails else self.set.poll_veh
             await asyncio.sleep(max(0.5, wait - (time.time() - t0)))
 
-    def poll_once(self):
-        """One fetch, folded in. Runs in a worker thread."""
-        msg = collect.rt("vehicle_position")
+    @staticmethod
+    def fetch():
+        """The feed's vehicle positions now. Blocks; run it in a worker thread."""
+        return collect.rt("vehicle_position")
+
+    def fold(self, msg):
+        """The new fixes in `msg` handed to the tracker, and how many there
+        were. Runs in a worker thread, holding the lock."""
         n = 0
         for e in msg.entity:
             v = e.vehicle
