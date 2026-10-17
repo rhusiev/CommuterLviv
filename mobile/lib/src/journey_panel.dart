@@ -345,32 +345,13 @@ class _JourneyPanelState extends State<JourneyPanel> {
   Widget _open(BuildContext context) {
     final aboard = widget.aboard;
     final ready = _ready;
-    final ranked = _prefer.ranked(_options ?? const []);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                txt.plan,
-                style: material.Theme.of(context).textTheme.titleMedium,
-              ),
-              const Spacer(),
-              IconButton(
-                onPressed: aboard == null ? widget.onSwap : null,
-                icon: const Icon(Icons.swap_vert),
-                tooltip: txt.swap,
-              ),
-              IconButton(
-                onPressed: () => widget.onFold(true),
-                icon: const Icon(Icons.expand_more),
-                tooltip: txt.hidePanel,
-              ),
-            ],
-          ),
+          _header(context),
           for (final end in End.values)
             EndField(
               end: end,
@@ -388,40 +369,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
               },
               onSave: widget.onSave,
             ),
-          Row(
-            children: [
-              if (aboard == null) ...[
-                RowLabel(text: txt.departAt, icon: Icons.schedule),
-                Tooltip(
-                  message: txt.leaveOn,
-                  child: ActionChip(
-                    label: Text(_dayName(_leaving)),
-                    onPressed: _pickDay,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                InputChip(
-                  label: Text(_at == null ? txt.now : clockTime(_at!)),
-                  onPressed: _pickTime,
-                  onDeleted: _at == null ? null : () => _leave(null),
-                ),
-              ],
-              const Spacer(),
-              PopupMenuButton<Prefer>(
-                icon: const Icon(Icons.sort),
-                tooltip: '${txt.preferBy}: ${txt.prefer(_prefer)}',
-                initialValue: _prefer,
-                onSelected: (p) {
-                  setState(() => _prefer = p);
-                  widget.api.setPrefer(p);
-                },
-                itemBuilder: (_) => [
-                  for (final p in Prefer.values)
-                    PopupMenuItem(value: p, child: Text(txt.prefer(p))),
-                ],
-              ),
-            ],
-          ),
+          _when(),
           Row(
             children: [
               RowLabel(text: txt.walkSpeed, icon: Icons.directions_walk),
@@ -453,32 +401,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
               ),
             ),
           if (_options != null)
-            Flexible(
-              child: _options!.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(txt.noJourney),
-                    )
-                  : ListView.builder(
-                      shrinkWrap: true,
-                      padding: EdgeInsets.zero,
-                      itemCount: ranked.length,
-                      itemBuilder: (_, i) => _Option(
-                        journey: ranked[i],
-                        shown: ranked[i] == _shown,
-                        onShow: () => setState(
-                          () => _show(ranked[i] == _shown ? null : ranked[i]),
-                        ),
-                        prefer: _prefer,
-                        place: (i) => ranked.indexOf(_options![i]) + 1,
-                        catalog: widget.catalog,
-                        onStop: widget.onStop,
-                        onLine: widget.onLine,
-                        onWay: (pick) => _takeWay(ranked[i], pick),
-                        onFollow: () => widget.onFollow(ranked[i]),
-                      ),
-                    ),
-            )
+            Flexible(child: _results())
           else if (!ready && _failed == null && !_busy)
             Padding(
               padding: const EdgeInsets.only(top: 12),
@@ -502,6 +425,88 @@ class _JourneyPanelState extends State<JourneyPanel> {
               label: Text(txt.report),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _header(BuildContext context) => Row(
+    children: [
+      Text(txt.plan, style: material.Theme.of(context).textTheme.titleMedium),
+      const Spacer(),
+      IconButton(
+        onPressed: widget.aboard == null ? widget.onSwap : null,
+        icon: const Icon(Icons.swap_vert),
+        tooltip: txt.swap,
+      ),
+      IconButton(
+        onPressed: () => widget.onFold(true),
+        icon: const Icon(Icons.expand_more),
+        tooltip: txt.hidePanel,
+      ),
+    ],
+  );
+
+  /// When to set off - unless already on board - and how to rank the options.
+  Widget _when() => Row(
+    children: [
+      if (widget.aboard == null) ...[
+        RowLabel(text: txt.departAt, icon: Icons.schedule),
+        Tooltip(
+          message: txt.leaveOn,
+          child: ActionChip(
+            label: Text(_dayName(_leaving)),
+            onPressed: _pickDay,
+          ),
+        ),
+        const SizedBox(width: 8),
+        InputChip(
+          label: Text(_at == null ? txt.now : clockTime(_at!)),
+          onPressed: _pickTime,
+          onDeleted: _at == null ? null : () => _leave(null),
+        ),
+      ],
+      const Spacer(),
+      PopupMenuButton<Prefer>(
+        icon: const Icon(Icons.sort),
+        tooltip: '${txt.preferBy}: ${txt.prefer(_prefer)}',
+        initialValue: _prefer,
+        onSelected: (p) {
+          setState(() => _prefer = p);
+          widget.api.setPrefer(p);
+        },
+        itemBuilder: (_) => [
+          for (final p in Prefer.values)
+            PopupMenuItem(value: p, child: Text(txt.prefer(p))),
+        ],
+      ),
+    ],
+  );
+
+  Widget _results() {
+    final options = _options!;
+    if (options.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Text(txt.noJourney),
+      );
+    }
+    final ranked = _prefer.ranked(options);
+    return ListView.builder(
+      shrinkWrap: true,
+      padding: EdgeInsets.zero,
+      itemCount: ranked.length,
+      itemBuilder: (_, i) => _Option(
+        journey: ranked[i],
+        shown: ranked[i] == _shown,
+        onShow: () =>
+            setState(() => _show(ranked[i] == _shown ? null : ranked[i])),
+        prefer: _prefer,
+        place: (i) => ranked.indexOf(options[i]) + 1,
+        catalog: widget.catalog,
+        onStop: widget.onStop,
+        onLine: widget.onLine,
+        onWay: (pick) => _takeWay(ranked[i], pick),
+        onFollow: () => widget.onFollow(ranked[i]),
       ),
     );
   }
