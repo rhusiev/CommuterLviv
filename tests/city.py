@@ -40,6 +40,9 @@ SHAPE_OF = {trip: sid for trip, sid, _ in TRIPS + FLEET}
 DEPARTS = {trip: dep for trip, _, dep in TRIPS + FLEET}
 LENGTH = GAP_M * (STOPS - 1)
 NIGHT = 23 * 3600        # s past midnight, long after the last ride
+SEARCH_AT = 9 * 3600 + 600   # s past midnight the planner is searched at, the fleet out
+SEARCH_VEH = 3           # the vehicle it is searched from on board
+ETA_TOL_S = 30.0         # s a predicted time may be off the driven one
 STEPS = 400              # pieces `drive` integrates a speed over
 
 
@@ -197,6 +200,28 @@ class Feed:
         v.position.latitude, v.position.longitude = fix.lat, fix.lon
         v.position.speed, v.position.odometer = fix.speed, fix.odometer
         return msg
+
+
+def epoch_after(live, t):
+    """The first epoch of `live`'s grid at or after `t`."""
+    return np.ceil(t / live.epoch_s) * live.epoch_s
+
+
+def run(live, fixes, until=None):
+    """Feed `live` the fixes of vehicle "v1" in order, stepping an epoch on its
+    grid as the service does, and on until `until`; the arrivals of every
+    epoch, by when it ran."""
+    boards = {}
+    nxt = epoch_after(live, fixes[0].ts)
+    for f in fixes:
+        while f.ts >= nxt:
+            boards[nxt] = live.epoch(nxt)
+            nxt += live.epoch_s
+        live.fix("v1", f.ts, f.lat, f.lon, f.speed, f.odometer, f.trip)
+    while until is not None and nxt <= until:
+        boards[nxt] = live.epoch(nxt)
+        nxt += live.epoch_s
+    return boards
 
 
 def arrivals(cat, now, veh, first, at_first):

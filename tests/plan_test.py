@@ -10,8 +10,8 @@ from commuterlviv.live import app
 from . import city
 from .streets import DOOR, MIDDLE
 
-NOW = city.at(9 * 3600 + 600)
-VEH = 3
+NOW = city.at(city.SEARCH_AT)
+VEH = city.SEARCH_VEH
 # s the bus aboard is from its next stop
 TO_NEXT_S = 50.0
 # further from it than any walk is capped at

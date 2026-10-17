@@ -6,6 +6,7 @@ import uuid
 
 from commuterlviv import collect, localtime, replay
 from commuterlviv.live import journeys, settings
+from commuterlviv.live.service import Service
 
 from . import city
 
@@ -34,6 +35,13 @@ def settings_for(database, origin):
         session_idle=3600.0, session_max=86400.0, remember_days=1.0,
         trust_proxy=False, build_planner=False, self_tiles=False, photon_url="",
         places_url="", poll_veh=POLL_S, epoch=EPOCH_S, dev=False, argon2=FAST_ARGON2)
+
+
+def offline(net):
+    """A service over `net` that reaches no database and no feed, and keeps
+    nothing; for its loops alone."""
+    return Service(settings_for("postgresql://unused", "http://localhost"), net,
+                   log=lambda *a: None, persist=False)
 
 
 def _noon():

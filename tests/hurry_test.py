@@ -11,8 +11,8 @@ from commuterlviv.live.state import Arrivals
 from . import city
 from .streets import DOOR, MIDDLE
 
-NOW = city.at(9 * 3600 + 600)
-VEH = 3
+NOW = city.at(city.SEARCH_AT)
+VEH = city.SEARCH_VEH
 END = city._point(city.LENGTH)
 USUAL_KMH = 5.0
 # fast enough to halve the walk to the middle stop

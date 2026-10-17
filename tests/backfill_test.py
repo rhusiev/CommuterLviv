@@ -7,10 +7,9 @@ import pytest
 
 from commuterlviv import replay, snapshot
 from commuterlviv.live import service, state
-from commuterlviv.live.service import Service
 
 from . import city
-from .service import EPOCH_S, settings_for
+from .service import EPOCH_S, offline
 
 OWN = 7.0                   # marks the rows a model noted itself
 
@@ -24,11 +23,6 @@ def _same(a, b):
     assert a.keys() == b.keys()
     for k in a:
         assert np.array_equal(a[k], b[k], equal_nan=a[k].dtype.kind == "f"), k
-
-
-def _service(net):
-    return Service(settings_for("postgresql://unused", "http://localhost"), net,
-                   log=lambda *a: None, persist=False)
 
 
 def _replayed(net, cfg, db):
@@ -56,12 +50,7 @@ def test_a_replay_notes_the_stands_at_the_terminus_as_the_live_model_does(
     db = tmp_path / "stand.db"
     city.record(db, {"v1": fixes})
     live = state.Live(net, cfg, epoch=EPOCH_S)
-    nxt = np.ceil(fixes[0].ts / EPOCH_S) * EPOCH_S
-    for f in fixes:
-        while f.ts >= nxt:
-            live.epoch(nxt)
-            nxt += EPOCH_S
-        live.fix("v1", f.ts, f.lat, f.lon, f.speed, f.odometer, f.trip)
+    city.run(live, fixes)
 
     model = _replayed(net, cfg, db)
 
@@ -77,7 +66,7 @@ def no_warmup(monkeypatch):
 
 def test_a_cold_model_takes_everything_the_recording_teaches(
         net, cfg, jammed_recording, no_warmup):
-    svc = _service(net)
+    svc = offline(net)
     cold = _learned(svc.live.model)
 
     asyncio.run(svc.backfill(cold=True, db=jammed_recording, t_to=city.at(city.NIGHT)))
@@ -91,7 +80,7 @@ def test_a_cold_model_takes_everything_the_recording_teaches(
 
 def test_a_warm_model_takes_only_the_rows_and_keeps_its_own_as_newest(
         net, cfg, jammed_recording, no_warmup):
-    svc = _service(net)
+    svc = offline(net)
     model = svc.live.model
     boost, stands = model.boost.training(), model.layovers.training()
     model.boost.restore_rows(np.full((1, boost.shape[1]), OWN), model.boost.routes)

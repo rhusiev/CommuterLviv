@@ -16,7 +16,6 @@ from . import city, service
 
 ORIGIN = "http://testserver"
 WAIT_S = 15.0
-ETA_TOL_S = 30.0
 NEAR_DEG = 1e-3
 CLIENT = ("127.0.0.1", 50000)     # the peer the app sees; it stores it as an inet
 
@@ -139,7 +138,7 @@ def test_the_boards_show_the_bus_coming(client, feed):
 
     row = due["stops"][str(last)][0]
     # an untrained model times the road by its priors, not by the timetable
-    assert feed.start < row["t"] <= feed.start + city.LENGTH / city.SPEED + ETA_TOL_S
+    assert feed.start < row["t"] <= feed.start + city.LENGTH / city.SPEED + city.ETA_TOL_S
     ahead = client.get(f"/api/vehicle?veh={row['veh']}").json()["stops"]
     assert ahead and all(a["route"] == row["route"] for a in ahead)
 
