@@ -9,6 +9,7 @@ import { JourneyPanel, type Origin, type Point } from "./components/JourneyPanel
 import { StopCard } from "./components/StopCard";
 import { AccountMenu } from "./components/AccountMenu";
 import { LayersPanel } from "./components/LayersPanel";
+import { Close } from "./components/Cross";
 import { Menu } from "./components/Menu";
 import { SavedPanel } from "./components/SavedPanel";
 import { StopSearch } from "./components/StopSearch";
@@ -642,15 +643,12 @@ export function App() {
           <p className="min-w-0 flex-1 truncate text-sm text-slate-300">
             {cat.routes[route]!.long}
           </p>
-          <button
+          <Close
             onClick={() => {
               setRoute(null);
               openTab("map");
             }}
-            className="px-1 text-slate-500 hover:text-slate-200"
-          >
-            ✕
-          </button>
+          />
         </aside>
       )}
 

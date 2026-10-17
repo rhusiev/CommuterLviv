@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, EPOCH_MS } from "../lib/api";
+import { Close } from "./Cross";
 import { countdown } from "../lib/eta";
 import { t } from "../lib/i18n";
 import { RouteBadge } from "./RouteBadge";
@@ -64,12 +65,7 @@ export function VehicleCard({
             <p className="truncate text-xs text-slate-500">{route.long}</p>
           )}
         </div>
-        <button
-          onClick={onClose}
-          className="px-1 text-slate-500 hover:text-slate-200"
-        >
-          ✕
-        </button>
+        <Close onClick={onClose} />
       </div>
 
       {calls === null && !gone && (

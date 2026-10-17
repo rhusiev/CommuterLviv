@@ -3,6 +3,7 @@ import type { Catalog, RouteSet } from "../lib/types";
 import { t } from "../lib/i18n";
 import { RouteBadge } from "./RouteBadge";
 import { Icon } from "./Icon";
+import { Remove } from "./Cross";
 
 /** Which routes are tracked, and the saved sets of them - nothing else. What
  * the map draws lives in the layers panel, and the account in its own menu.
@@ -73,13 +74,7 @@ export function RoutePanel(p: Props) {
               >
                 <Icon name="check" className="size-4" />
               </button>
-              <button
-                title={t.deleteSet}
-                onClick={guard(() => p.onDelete(s))}
-                className="rounded-control px-2 py-1.5 text-xs text-slate-500 transition-colors hover:bg-raised/70 hover:text-rose-300"
-              >
-                ✕
-              </button>
+              <Remove title={t.deleteSet} onClick={guard(() => p.onDelete(s))} />
             </li>
           ))}
         </ul>
