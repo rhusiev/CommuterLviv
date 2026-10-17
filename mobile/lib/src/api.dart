@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'map_theme.dart';
 import 'models.dart';
+import 'strings.dart';
 
 /// Must be listed in the server's `COMMUTERLVIV_ORIGINS`.
 const appOrigin = 'app://commuterlviv';
@@ -79,6 +80,11 @@ class Api {
   String _base;
 
   String get base => _base;
+
+  /// What to tell the user about [e], thrown by a call to this server: its own
+  /// message, or that it could not be reached.
+  String failure(Exception e) =>
+      e is ApiError ? e.message : txt.unreachable(_base);
 
   /// Drops everything held for the old server. False when the address did not change.
   Future<bool> setBase(String value) async {

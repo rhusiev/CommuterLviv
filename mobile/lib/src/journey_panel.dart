@@ -254,14 +254,15 @@ class _JourneyPanelState extends State<JourneyPanel> {
         _held = (id: got.report, built: {}, from: {});
       });
       _show(null);
-    } on ApiError catch (e) {
+    } on Exception catch (e) {
+      final preparing = e is ApiError && e.preparing;
       if (mounted) {
         setState(
-          () => _failed = e.preparing ? txt.plannerPreparing : e.message,
+          () => _failed = preparing
+              ? txt.plannerPreparing
+              : widget.api.failure(e),
         );
       }
-    } on Exception {
-      if (mounted) setState(() => _failed = txt.unreachable(widget.api.base));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -273,26 +274,24 @@ class _JourneyPanelState extends State<JourneyPanel> {
   Future<String?> _takeWay(Journey j, WayPick? pick) async {
     if (pick == null) return _showNow(j);
     final options = _options ?? const <Journey>[];
-    final same = j.legs[pick.leg].backups[pick.n].option;
-    if (same >= 0) return _showNow(options[same]);
-    final search = _held;
-    final from = search.from[j] ?? options.indexOf(j);
-    final key = '$from ${pick.leg} ${pick.n}';
-    var got = search.built[key];
+    final riding = j.legs[pick.leg].backups[pick.n].option;
+    if (riding >= 0) return _showNow(options[riding]);
+    final kept = _held;
+    final option = kept.from[j] ?? options.indexOf(j);
+    final way = '$option ${pick.leg} ${pick.n}';
+    var got = kept.built[way];
     if (got == null) {
-      final id = search.id;
+      final id = kept.id;
       if (id == null) return txt.searchAgain;
       try {
-        got = await widget.api.backup(id, from, pick.leg, pick.n);
-      } on ApiError catch (e) {
-        return e.message;
-      } on Exception {
-        return txt.unreachable(widget.api.base);
+        got = await widget.api.backup(id, option, pick.leg, pick.n);
+      } on Exception catch (e) {
+        return widget.api.failure(e);
       }
       // a search made meanwhile has options of its own
-      if (!mounted || !identical(_held.built, search.built)) return null;
-      search.built[key] = got;
-      search.from[got] = from;
+      if (!mounted || !identical(_held.built, kept.built)) return null;
+      kept.built[way] = got;
+      kept.from[got] = option;
       _options = [...options, got];
     }
     return _showNow(got);
@@ -312,10 +311,8 @@ class _JourneyPanelState extends State<JourneyPanel> {
     String? failed;
     try {
       await widget.api.reportPlan(id, note);
-    } on ApiError catch (e) {
-      failed = e.message;
-    } on Exception {
-      failed = txt.unreachable(widget.api.base);
+    } on Exception catch (e) {
+      failed = widget.api.failure(e);
     }
     if (!mounted || id != _report) return;
     setState(() {

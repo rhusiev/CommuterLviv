@@ -422,10 +422,8 @@ class _RouteSheetState extends State<RouteSheet> {
     setState(() => _failed = null);
     try {
       await change();
-    } on ApiError catch (e) {
-      if (mounted) setState(() => _failed = e.message);
-    } on Exception {
-      if (mounted) setState(() => _failed = txt.unreachable(widget.api.base));
+    } on Exception catch (e) {
+      if (mounted) setState(() => _failed = widget.api.failure(e));
     }
   }
 

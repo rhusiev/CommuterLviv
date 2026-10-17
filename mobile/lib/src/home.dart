@@ -156,15 +156,11 @@ class _HomeScreenState extends State<HomeScreen> {
       _push();
       _resume();
       await _carryOldPins(catalog, sets.pins);
-    } on ApiError catch (e) {
-      if (e.unauthorised) {
+    } on Exception catch (e) {
+      if (e is ApiError && e.unauthorised) {
         widget.onOut();
       } else if (mounted) {
-        setState(() => _error = e.message);
-      }
-    } on Exception {
-      if (mounted) {
-        setState(() => _error = txt.unreachable(widget.api.base));
+        setState(() => _error = widget.api.failure(e));
       }
     }
   }
@@ -272,8 +268,8 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final shapes = await widget.api.shapes();
       if (mounted) setState(() => _shapes = shapes);
-    } on Exception {
-      if (mounted) setState(() => _error = txt.unreachable(widget.api.base));
+    } on Exception catch (e) {
+      if (mounted) setState(() => _error = widget.api.failure(e));
     }
   }
 
@@ -305,8 +301,8 @@ class _HomeScreenState extends State<HomeScreen> {
           places: saved,
         ),
       );
-    } on Exception {
-      if (mounted) setState(() => _error = txt.unreachable(widget.api.base));
+    } on Exception catch (e) {
+      if (mounted) setState(() => _error = widget.api.failure(e));
     }
   }
 
