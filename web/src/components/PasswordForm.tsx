@@ -12,16 +12,22 @@ export function PasswordForm() {
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
 
+  // Folds away forgetting what was typed, so it is not there when unfolded
+  const close = () => {
+    setOpen(false);
+    setOld("");
+    setNext("");
+    setError("");
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError("");
     try {
       await api.password(old, next);
-      setOpen(false);
+      close();
       setDone(true);
-      setOld("");
-      setNext("");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.wrong);
     }
@@ -74,7 +80,7 @@ export function PasswordForm() {
         <button type="submit" disabled={busy} className="btn flex-1 py-1.5 text-sm disabled:opacity-50">
           {t.changePassword}
         </button>
-        <button type="button" onClick={() => setOpen(false)} className="btn-quiet px-2 text-sm">
+        <button type="button" onClick={close} disabled={busy} className="btn-quiet px-2 text-sm disabled:opacity-50">
           {t.cancel}
         </button>
       </div>

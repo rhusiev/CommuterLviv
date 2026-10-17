@@ -1,7 +1,8 @@
 """The web app in a real browser against the real service: an account created
 through the sign-in screen, a stop found by name, the bus on its board, and a
 journey planned from on board it and followed, one followed on foot that
-misses its bus searched again, a refused location and a changed password.
+misses its bus searched again, a refused location, a changed password and a
+cancelled one.
 
 Needs the built web app (`npm run build` in `web/`), Playwright for Python and a
 Chromium. Skipped when any of them is missing."""
@@ -337,3 +338,17 @@ def test_a_changed_password_is_the_one_that_signs_in(page):
 
     playwright.expect(page.get_by_placeholder("Find a stop or a place")).to_be_visible(
         timeout=SEE_MS)
+
+
+def test_a_cancelled_password_change_forgets_what_was_typed(page):
+    _register(page, "canceller")
+    page.get_by_role("button", name="Account", exact=True).click()
+    page.get_by_role("button", name="Change password").click()
+    page.get_by_label("Current password").fill(service.PASSWORD)
+    page.get_by_label("New password").fill(service.PASSWORD + "-unsent")
+    page.get_by_role("button", name="Cancel").click()
+
+    page.get_by_role("button", name="Change password").click()
+
+    playwright.expect(page.get_by_label("Current password")).to_have_value("")
+    playwright.expect(page.get_by_label("New password")).to_have_value("")

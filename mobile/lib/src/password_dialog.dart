@@ -66,7 +66,13 @@ class _PasswordDialogState extends State<PasswordDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog.adaptive(
+  Widget build(BuildContext context) => PopScope(
+    // Closing mid-change would hide whether the password changed
+    canPop: !_busy,
+    child: _dialog(context),
+  );
+
+  Widget _dialog(BuildContext context) => AlertDialog.adaptive(
     title: Text(txt.changePassword),
     content: Column(
       mainAxisSize: MainAxisSize.min,
@@ -95,7 +101,7 @@ class _PasswordDialogState extends State<PasswordDialog> {
     ),
     actions: [
       TextButton(
-        onPressed: () => Navigator.pop(context, false),
+        onPressed: _busy ? null : () => Navigator.pop(context, false),
         child: Text(txt.cancel),
       ),
       TextButton(

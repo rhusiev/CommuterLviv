@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -81,6 +83,24 @@ void main() {
 
     expect(find.text(_unreachable), findsOneWidget);
     expect(closed, isEmpty);
+  });
+
+  testWidgets('a change under way cannot be cancelled or backed out of', (
+    tester,
+  ) async {
+    final answer = Completer<void>();
+    final closed = await _open(tester, (_, _) => answer.future);
+    await tester.tap(find.widgetWithText(TextButton, txt.changePassword));
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(TextButton, txt.cancel));
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+
+    expect(find.byType(PasswordDialog), findsOneWidget);
+    answer.complete();
+    await tester.pumpAndSettle();
+    expect(closed, [true]);
   });
 }
 
