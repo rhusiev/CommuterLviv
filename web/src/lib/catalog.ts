@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 
+import type { Catalog } from "./types";
+
 /** Feed id to position in the catalog. Everything but storage addresses a route
  * or a stop by position; only what is stored is an id. */
 export const useIndex = (items: { id: string }[] | undefined) =>
@@ -21,3 +23,8 @@ export const usePositions = (
         .filter((i): i is number => i !== undefined),
     [ids, index],
   );
+
+/** A stop's name, or none for a position this catalog lacks: the server sends
+ * -1 for a stop missing from it, and a newer catalog may be longer */
+export const stopName = (catalog: Catalog, i: number) =>
+  catalog.stops[i]?.name ?? "";

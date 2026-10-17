@@ -1,19 +1,22 @@
 """Learning from the recording what a fresh model lacks: the replay that keeps
 nothing but what the model learns, and the service's backfill from it."""
 import asyncio
+import time
 
 import numpy as np
 import pytest
 
 from commuterlviv import replay, snapshot
 from commuterlviv.live import service, state
-from commuterlviv.live.service import Service
 
 from . import city
-from .service import EPOCH_S, settings_for
+from .service import EPOCH_S, offline
 
-NIGHT = 23 * 3600           # s past midnight, long after the last ride
 OWN = 7.0                   # marks the rows a model noted itself
+LONG_S = 60.0               # a backfill's replay that has not finished
+STARTED_S = 30.0            # for its worker process to start, at most
+POLL_S = 0.05
+QUICK_S = 10.0              # for a cancelled backfill to end, at most
 
 
 def _learned(model):
@@ -25,11 +28,6 @@ def _same(a, b):
     assert a.keys() == b.keys()
     for k in a:
         assert np.array_equal(a[k], b[k], equal_nan=a[k].dtype.kind == "f"), k
-
-
-def _service(net):
-    return Service(settings_for("postgresql://unused", "http://localhost"), net,
-                   log=lambda *a: None, persist=False)
 
 
 def _replayed(net, cfg, db):
@@ -57,12 +55,7 @@ def test_a_replay_notes_the_stands_at_the_terminus_as_the_live_model_does(
     db = tmp_path / "stand.db"
     city.record(db, {"v1": fixes})
     live = state.Live(net, cfg, epoch=EPOCH_S)
-    nxt = np.ceil(fixes[0].ts / EPOCH_S) * EPOCH_S
-    for f in fixes:
-        while f.ts >= nxt:
-            live.epoch(nxt)
-            nxt += EPOCH_S
-        live.fix("v1", f.ts, f.lat, f.lon, f.speed, f.odometer, f.trip)
+    city.run(live, fixes)
 
     model = _replayed(net, cfg, db)
 
@@ -78,10 +71,10 @@ def no_warmup(monkeypatch):
 
 def test_a_cold_model_takes_everything_the_recording_teaches(
         net, cfg, jammed_recording, no_warmup):
-    svc = _service(net)
+    svc = offline(net)
     cold = _learned(svc.live.model)
 
-    asyncio.run(svc.backfill(cold=True, db=jammed_recording, t_to=city.at(NIGHT)))
+    asyncio.run(svc.backfill(cold=True, db=jammed_recording, t_to=city.at(city.NIGHT)))
 
     got = _learned(svc.live.model)
     _same(got, _learned(_replayed(net, cfg, jammed_recording)))
@@ -92,14 +85,14 @@ def test_a_cold_model_takes_everything_the_recording_teaches(
 
 def test_a_warm_model_takes_only_the_rows_and_keeps_its_own_as_newest(
         net, cfg, jammed_recording, no_warmup):
-    svc = _service(net)
+    svc = offline(net)
     model = svc.live.model
     boost, stands = model.boost.training(), model.layovers.training()
     model.boost.restore_rows(np.full((1, boost.shape[1]), OWN), model.boost.routes)
     model.layovers.restore_rows(np.full((1, stands.shape[1]), OWN))
     before = _learned(model)
 
-    asyncio.run(svc.backfill(cold=False, db=jammed_recording, t_to=city.at(NIGHT)))
+    asyncio.run(svc.backfill(cold=False, db=jammed_recording, t_to=city.at(city.NIGHT)))
 
     got = _learned(model)
     replayed = _learned(_replayed(net, cfg, jammed_recording))
@@ -108,3 +101,32 @@ def test_a_warm_model_takes_only_the_rows_and_keeps_its_own_as_newest(
               {rows: np.concatenate([replayed[rows], before[rows]])})
     _same({k: v for k, v in got.items() if k not in (snapshot.PASSED, snapshot.STANDS)},
           {k: v for k, v in before.items() if k not in (snapshot.PASSED, snapshot.STANDS)})
+
+
+def _endless(net, cfg, started, *_):
+    """A replay that never finishes in time, saying when it began."""
+    started.touch()
+    time.sleep(LONG_S)
+
+
+async def _cancel_once_started(svc, started):
+    """Seconds a backfill takes to end after it is cancelled mid-replay."""
+    task = asyncio.create_task(svc.backfill(cold=True, db=started))
+    deadline = time.monotonic() + STARTED_S
+    while not started.exists():
+        assert time.monotonic() < deadline, "the backfill's worker never started"
+        await asyncio.sleep(POLL_S)
+    t0 = time.monotonic()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    return time.monotonic() - t0
+
+
+def test_a_backfill_cancelled_at_shutdown_stops_its_worker_at_once(
+        net, monkeypatch, tmp_path):
+    monkeypatch.setattr(service, "_learn", _endless)
+
+    took = asyncio.run(_cancel_once_started(offline(net), tmp_path / "started"))
+
+    assert took < QUICK_S

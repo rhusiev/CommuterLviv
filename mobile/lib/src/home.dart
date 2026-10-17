@@ -3,6 +3,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart' hide Theme;
 import 'package:flutter/material.dart' as material show Theme;
@@ -10,17 +11,20 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:vector_map_tiles/vector_map_tiles.dart';
 
-import '../main.dart' show tick;
 import 'api.dart';
 import 'follow.dart' show Stage, StageKind;
 import 'follow_card.dart';
 import 'followed.dart';
+import 'haptics.dart';
 import 'here.dart';
 import 'journey_panel.dart';
 import 'live.dart';
+import 'map_controls.dart' show nearZoom;
 import 'map_tab.dart';
 import 'map_theme.dart';
 import 'models.dart';
+import 'password_dialog.dart';
+import 'quiet_banner.dart';
 import 'route_badge.dart';
 import 'saved.dart';
 import 'server_dialog.dart';
@@ -37,6 +41,9 @@ import 'strings.dart';
 
 /// How far a tap may land from a stop and still count.
 const _hitRadius = 22.0;
+
+/// The share of the screen the planner may grow to, the map keeping the rest.
+const _plannerShare = 0.6;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -59,6 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Live? _live;
   Catalog? _catalog;
   Sets? _sets;
+  bool _passwordChange = false;
   String? _error;
 
   final Set<int> _routes = {};
@@ -102,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Which end is waiting on a fix that has been asked for but not arrived.
   End? _wantHere;
 
-  late final Here _here = Here(onFirstFix: (at) => _map.move(at, 16));
+  late final Here _here = Here(onFirstFix: (at) => _map.move(at, nearZoom));
   late final _tracking = Tracking(_map, _here);
 
   late MapTheme _theme = themeById(widget.api.mapTheme);
@@ -130,7 +138,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _load() async {
     try {
       final catalog = await widget.api.catalog();
-      final sets = await widget.api.sets();
+      final me = await widget.api.me();
+      final sets = me.sets;
       final active = sets.sets.where((s) => s.id == sets.active).firstOrNull;
       final live = Live(widget.api, onRenewed: _renew)..open();
       if (!mounted) {
@@ -140,6 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _catalog = catalog;
         _sets = sets;
+        _passwordChange = me.passwordChange;
         _live = live;
         _pins = catalog.stopsAt(sets.pins);
         _routes
@@ -149,15 +159,11 @@ class _HomeScreenState extends State<HomeScreen> {
       _push();
       _resume();
       await _carryOldPins(catalog, sets.pins);
-    } on ApiError catch (e) {
-      if (e.unauthorised) {
+    } on Exception catch (e) {
+      if (e is ApiError && e.unauthorised) {
         widget.onOut();
       } else if (mounted) {
-        setState(() => _error = e.message);
-      }
-    } on Exception {
-      if (mounted) {
-        setState(() => _error = txt.unreachable(widget.api.base));
+        setState(() => _error = widget.api.failure(e));
       }
     }
   }
@@ -265,8 +271,8 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final shapes = await widget.api.shapes();
       if (mounted) setState(() => _shapes = shapes);
-    } on Exception {
-      if (mounted) setState(() => _error = txt.unreachable(widget.api.base));
+    } on Exception catch (e) {
+      if (mounted) setState(() => _error = widget.api.failure(e));
     }
   }
 
@@ -280,8 +286,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _places([..._withoutPlace(name), Place(name: name, at: at)]);
 
   Future<void> _nameSpot(LatLng at) async {
-    final name = await askName(context, txt.namePlace, action: txt.saveHere);
-    if (name != null && name.isNotEmpty) await _savePlace(name, at);
+    final name = await askPlaceName(context);
+    if (name != null) await _savePlace(name, at);
   }
 
   Future<void> _places(List<Place> next) async {
@@ -298,8 +304,8 @@ class _HomeScreenState extends State<HomeScreen> {
           places: saved,
         ),
       );
-    } on Exception {
-      if (mounted) setState(() => _error = txt.unreachable(widget.api.base));
+    } on Exception catch (e) {
+      if (mounted) setState(() => _error = widget.api.failure(e));
     }
   }
 
@@ -478,10 +484,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _watch();
     if (fly) {
       final s = _catalog!.stops[stop];
-      _map.move(
-        LatLng(s.lat, s.lon),
-        _map.camera.zoom < 15 ? 16 : _map.camera.zoom,
-      );
+      _fly(LatLng(s.lat, s.lon));
     }
     showFloatingSheet<void>(
       context,
@@ -638,6 +641,7 @@ class _HomeScreenState extends State<HomeScreen> {
         catalog: catalog,
         places: _sets?.places ?? const [],
         onSave: _savePlace,
+        here: _here,
       ),
     );
     if (hit == null || !mounted) return;
@@ -650,8 +654,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _fly(LatLng at) =>
-      _map.move(at, _map.camera.zoom < 15 ? 16 : _map.camera.zoom);
+  /// Moves to [at], zooming in to [nearZoom] if further out, as the web does.
+  void _fly(LatLng at) => _map.move(at, math.max(_map.camera.zoom, nearZoom));
 
   void _openSaved() => showFloatingSheet<void>(
     context,
@@ -723,12 +727,21 @@ class _HomeScreenState extends State<HomeScreen> {
         Navigator.pop(sheet);
         if (await editServer(context, widget.api) && mounted) widget.onOut();
       },
+      onPassword: _passwordChange ? () => _changePassword(sheet) : null,
       onOut: () {
         Navigator.pop(sheet);
         unawaited(_signOut());
       },
     ),
   );
+
+  Future<void> _changePassword(BuildContext sheet) async {
+    Navigator.pop(sheet);
+    if (await changePassword(context, widget.api) && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(txt.passwordChanged)));
+    }
+  }
 
   Future<void> _signOut() async {
     try {
@@ -744,25 +757,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final catalog = _catalog;
     final live = _live;
     if (_error != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('CommuterLviv')),
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(_error!),
-              const SizedBox(height: 12),
-              FilledButton.tonal(
-                onPressed: () => setState(() {
-                  _error = null;
-                  _load();
-                  _loadStyle();
-                }),
-                child: Text(txt.tryAgain),
-              ),
-            ],
-          ),
-        ),
+      return _Failed(
+        text: _error!,
+        onRetry: () => setState(() {
+          _error = null;
+          _load();
+          _loadStyle();
+        }),
       );
     }
     if (catalog == null || live == null) {
@@ -778,55 +779,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IndexedStack(
             index: _tab,
             children: [
-              MapTab(
-                api: widget.api,
-                map: _map,
-                style: _style,
-                traffic: _traffic,
-                catalog: catalog,
-                live: live,
-                stops: _drawn,
-                selected: _stop,
-                theme: _theme,
-                here: _here,
-                onLocate: _following != null ? _tracking.start : null,
-                // Offstage rather than gone, so the follower keeps what it has
-                // seen
-                card: _following == null
-                    ? null
-                    : Offstage(
-                        offstage: _planning,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: floatingGap),
-                          child: FollowCard(
-                            catalog: catalog,
-                            journey: _following!,
-                            live: live,
-                            here: _here,
-                            walkSpeed: widget.api.walkSpeed,
-                            hurrySpeed: widget.api.hurrySpeed,
-                            stage: _followed!.stage,
-                            away: _followAway,
-                            onMoved: _moved,
-                            onSearch: _searchAgain,
-                            onEnd: _endFollow,
-                          ),
-                        ),
-                      ),
-                empty: _shown.isEmpty,
-                marks: [
-                  if (_planning && _from != null) (at: _from!, label: 'A'),
-                  if (_planning && _to != null) (at: _to!, label: 'B'),
-                ],
-                journey: _onMap,
-                pins: _pins,
-                places: _sets?.places ?? const [],
-                shapes: _shapes,
-                lines: _lines,
-                arrowed: _onRoute ? _route : null,
-                onTap: _tap,
-                onHold: _nameSpot,
-              ),
+              _mapTab(catalog, live),
               TimesTab(
                 catalog: catalog,
                 live: live,
@@ -840,50 +793,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          if (_planning && _tab == 0)
-            Positioned(
-              left: floatingGap,
-              // Folded, clear of the map's buttons
-              right: _folded || _picking != null
-                  ? floatingGap * 2 + kMinInteractiveDimension
-                  : floatingGap,
-              bottom: floatingBottom(context),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.sizeOf(context).height * 0.6,
-                ),
-                child: JourneyPanel(
-                  api: widget.api,
-                  catalog: catalog,
-                  from: _from,
-                  aboard: _aboard,
-                  to: _to,
-                  picking: _picking,
-                  onPick: (which) => setState(() => _picking = which),
-                  folded: _folded,
-                  onFold: (folded) => setState(() => _folded = folded),
-                  onSwap: () => setState(() {
-                    if (_aboard != null) return;
-                    final was = _from;
-                    _from = _to;
-                    _to = was;
-                  }),
-                  onHere: _hereFor,
-                  onStop: (stop) => _openStop(stop, fly: true),
-                  onLine: _openRoute,
-                  places: _sets?.places ?? const [],
-                  onPlace: (end, at) => setState(() => _at(end, at)),
-                  onSave: _savePlace,
-                  onShow: (journey) {
-                    setState(() => _journey = journey);
-                    _push();
-                  },
-                  onFollow: _follow,
-                  ask: _ask,
-                  onAsked: () => setState(() => _ask = false),
-                ),
-              ),
-            ),
+          if (_planning && _tab == 0) _planner(catalog),
           Positioned(
             left: floatingGap,
             right: floatingGap,
@@ -913,8 +823,115 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
+          Positioned(
+            left: floatingGap,
+            right: floatingGap,
+            top: floatingTop(context),
+            child: QuietBanner(live: live),
+          ),
           _Status(live: live),
         ],
+      ),
+    );
+  }
+
+  Widget _mapTab(Catalog catalog, Live live) {
+    return MapTab(
+      api: widget.api,
+      map: _map,
+      style: _style,
+      traffic: _traffic,
+      catalog: catalog,
+      live: live,
+      stops: _drawn,
+      selected: _stop,
+      theme: _theme,
+      here: _here,
+      onLocate: _following != null ? _tracking.start : null,
+      card: _followCard(catalog, live),
+      empty: _shown.isEmpty,
+      marks: [
+        if (_planning && _from != null) (at: _from!, label: 'A'),
+        if (_planning && _to != null) (at: _to!, label: 'B'),
+      ],
+      journey: _onMap,
+      pins: _pins,
+      places: _sets?.places ?? const [],
+      shapes: _shapes,
+      lines: _lines,
+      arrowed: _onRoute ? _route : null,
+      onTap: _tap,
+      onHold: _nameSpot,
+    );
+  }
+
+  /// Offstage rather than gone, so the follower keeps what it has seen
+  Widget? _followCard(Catalog catalog, Live live) {
+    return _following == null
+        ? null
+        : Offstage(
+            offstage: _planning,
+            child: Padding(
+              padding: const EdgeInsets.only(top: floatingGap),
+              child: FollowCard(
+                catalog: catalog,
+                journey: _following!,
+                live: live,
+                here: _here,
+                walkSpeed: widget.api.walkSpeed,
+                hurrySpeed: widget.api.hurrySpeed,
+                stage: _followed!.stage,
+                away: _followAway,
+                onMoved: _moved,
+                onSearch: _searchAgain,
+                onEnd: _endFollow,
+              ),
+            ),
+          );
+  }
+
+  Widget _planner(Catalog catalog) {
+    return Positioned(
+      left: floatingGap,
+      // Folded, clear of the map's buttons
+      right: _folded || _picking != null
+          ? floatingGap * 2 + kMinInteractiveDimension
+          : floatingGap,
+      bottom: floatingBottom(context),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * _plannerShare,
+        ),
+        child: JourneyPanel(
+          api: widget.api,
+          catalog: catalog,
+          from: _from,
+          aboard: _aboard,
+          to: _to,
+          picking: _picking,
+          onPick: (which) => setState(() => _picking = which),
+          folded: _folded,
+          onFold: (folded) => setState(() => _folded = folded),
+          onSwap: () => setState(() {
+            if (_aboard != null) return;
+            final was = _from;
+            _from = _to;
+            _to = was;
+          }),
+          onHere: _hereFor,
+          onStop: (stop) => _openStop(stop, fly: true),
+          onLine: _openRoute,
+          places: _sets?.places ?? const [],
+          onPlace: (end, at) => setState(() => _at(end, at)),
+          onSave: _savePlace,
+          onShow: (journey) {
+            setState(() => _journey = journey);
+            _push();
+          },
+          onFollow: _follow,
+          ask: _ask,
+          onAsked: () => setState(() => _ask = false),
+        ),
       ),
     );
   }
@@ -1208,4 +1225,28 @@ class _Status extends StatelessWidget {
             ),
           ),
   );
+}
+
+class _Failed extends StatelessWidget {
+  const _Failed({required this.text, required this.onRetry});
+
+  final String text;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('CommuterLviv')),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(text),
+            const SizedBox(height: 12),
+            FilledButton.tonal(onPressed: onRetry, child: Text(txt.tryAgain)),
+          ],
+        ),
+      ),
+    );
+  }
 }

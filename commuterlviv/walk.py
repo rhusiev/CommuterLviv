@@ -20,7 +20,8 @@ import requests
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components, dijkstra
 
-from . import network
+from . import files, network
+from .gtfs import LAT_M
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 CACHE = DATA / "walk.npz"
@@ -137,7 +138,7 @@ def hill(rise, run):
 def metres(lat1, lon1, lat2, lon2):
     """Equirectangular distance, exact enough over a city block."""
     k = math.cos(math.radians((lat1 + lat2) / 2))
-    return math.hypot((lat2 - lat1) * 111320.0, (lon2 - lon1) * 111320.0 * k)
+    return math.hypot((lat2 - lat1) * LAT_M, (lon2 - lon1) * LAT_M * k)
 
 
 def compile_graph(raw):
@@ -201,8 +202,7 @@ def renew(path=CACHE, keep=0.9):
     """Refetches the graph and its heights beside the one held, then swaps it
     in. One with under `keep` of the nodes held is refused: that is Overpass
     cut short, not the city shrinking."""
-    fresh = path.with_name("walk.next.npz")
-    try:
+    with files.replacing(path) as fresh:
         save(fresh)
         climb(fresh)
         if path.exists():
@@ -211,9 +211,6 @@ def renew(path=CACHE, keep=0.9):
             if got < keep * held:
                 raise ValueError(f"Overpass gave {got} footpath nodes, "
                                  f"against {held} held")
-        fresh.replace(path)
-    finally:
-        fresh.unlink(missing_ok=True)
 
 
 def age(path=CACHE):
@@ -362,7 +359,7 @@ class Walk:
     def near(self, lat, lon, within=150.0):
         """Every node within `within` metres, nearest first; empty means the
         point is off the graph."""
-        r = int(within / (self.cell * 111320.0)) + 1
+        r = int(within / (self.cell * LAT_M)) + 1
         cy, cx = int(lat / self.cell), int(lon / self.cell)
         found = []
         for y in range(cy - r, cy + r + 1):
@@ -384,9 +381,9 @@ class Walk:
             return None
         e = np.concatenate([np.arange(self.start[i], self.start[i + 1]) for i in near])
         u, v = np.repeat(near, np.diff(self.start)[near]), self.to[e]
-        k = 111320.0 * math.cos(math.radians(lat))
-        ux, uy = (self.lon[u] - lon) * k, (self.lat[u] - lat) * 111320.0
-        dx, dy = (self.lon[v] - lon) * k - ux, (self.lat[v] - lat) * 111320.0 - uy
+        k = LAT_M * math.cos(math.radians(lat))
+        ux, uy = (self.lon[u] - lon) * k, (self.lat[u] - lat) * LAT_M
+        dx, dy = (self.lon[v] - lon) * k - ux, (self.lat[v] - lat) * LAT_M - uy
         t = np.clip(-(ux * dx + uy * dy) / np.maximum(dx * dx + dy * dy, 1e-9), 0, 1)
         j = int(np.argmin(np.hypot(ux + t * dx, uy + t * dy)))
         a, b, f = int(u[j]), int(v[j]), float(t[j])

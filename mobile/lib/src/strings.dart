@@ -19,6 +19,11 @@ class Strings {
     required this.inviteHint,
     required this.username,
     required this.password,
+    required this.passwordHint,
+    required this.changePassword,
+    required this.currentPassword,
+    required this.newPassword,
+    required this.passwordChanged,
     required this.stayIn,
     required this.createAccount,
     required this.join,
@@ -58,6 +63,8 @@ class Strings {
     required this.foundStops,
     required this.foundPlaces,
     required this.noSearch,
+    required this.nearMe,
+    required this.nothingNear,
     required this.traffic,
     required this.departAt,
     required this.preferBy,
@@ -82,6 +89,7 @@ class Strings {
     required this.whereAmI,
     required this.noLocation,
     required this.renewed,
+    required this.quiet,
     required this.plannerPreparing,
     required this.stopsAhead,
     required this.vehicleGone,
@@ -183,6 +191,13 @@ class Strings {
   final String inviteHint;
   final String username;
   final String password;
+  final String passwordHint;
+  final String changePassword;
+  final String currentPassword;
+  final String newPassword;
+
+  /// Said once the service has taken it, and signed every other device out.
+  final String passwordChanged;
   final String stayIn;
   final String createAccount;
   final String join;
@@ -224,6 +239,8 @@ class Strings {
   final String foundStops;
   final String foundPlaces;
   final String noSearch;
+  final String nearMe;
+  final String nothingNear;
   final String traffic;
   final String departAt;
   final String preferBy;
@@ -248,10 +265,16 @@ class Strings {
   final String zoomIn;
   final String zoomOut;
   final String whereAmI;
+
+  /// Location refused or switched off: the phone does not say which to the app.
   final String noLocation;
 
   /// The service moved to new routes and timetables while the app was open.
   final String renewed;
+
+  /// Too few vehicles report for what the timetable has running.
+  final String quiet;
+
   final String plannerPreparing;
   final String stopsAhead;
   final String vehicleGone;
@@ -365,6 +388,11 @@ const _en = Strings(
   inviteHint: 'The last part of the link you were sent',
   username: 'Username',
   password: 'Password',
+  passwordHint: 'At least 10 characters',
+  changePassword: 'Change password',
+  currentPassword: 'Current password',
+  newPassword: 'New password',
+  passwordChanged: 'Password changed - every other device is signed out',
   stayIn: 'Stay signed in',
   createAccount: 'Create the account',
   join: 'Join',
@@ -404,6 +432,8 @@ const _en = Strings(
   foundStops: 'Stops',
   foundPlaces: 'Places',
   noSearch: 'Place search is unavailable',
+  nearMe: 'Stops near me',
+  nothingNear: 'No stop within 2 km of where you are',
   traffic: 'Traffic',
   departAt: 'Leave at',
   preferBy: 'Order',
@@ -426,8 +456,11 @@ const _en = Strings(
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
   whereAmI: 'Where I am',
-  noLocation: 'Location is not available',
+  noLocation: "Location is off or not allowed for the app - turn it on in the phone's settings",
   renewed: "The city's routes and timetables were updated",
+  quiet:
+      'Few vehicles are reporting where they are - possibly an air raid alert. '
+      'Positions and arrival times may be missing or off',
   plannerPreparing:
       'The journey planner is getting ready - try again in a few minutes',
   plan: 'Journey',
@@ -576,6 +609,11 @@ const _uk = Strings(
   inviteHint: 'Остання частина надісланого посилання',
   username: 'Імʼя',
   password: 'Пароль',
+  passwordHint: 'Щонайменше 10 символів',
+  changePassword: 'Змінити пароль',
+  currentPassword: 'Поточний пароль',
+  newPassword: 'Новий пароль',
+  passwordChanged: 'Пароль змінено - на всіх інших пристроях виконано вихід',
   stayIn: 'Не виходити',
   createAccount: 'Створити акаунт',
   join: 'Приєднатися',
@@ -615,6 +653,8 @@ const _uk = Strings(
   foundStops: 'Зупинки',
   foundPlaces: 'Місця',
   noSearch: 'Пошук місць недоступний',
+  nearMe: 'Зупинки поруч',
+  nothingNear: 'Немає зупинки ближче ніж за 2 км',
   traffic: 'Затори',
   departAt: 'Виїзд о',
   preferBy: 'Порядок',
@@ -637,8 +677,11 @@ const _uk = Strings(
   zoomIn: 'Наблизити',
   zoomOut: 'Віддалити',
   whereAmI: 'Де я',
-  noLocation: 'Місцеперебування недоступне',
+  noLocation: 'Геолокацію вимкнено або не дозволено застосунку - увімкніть її в налаштуваннях телефона',
   renewed: 'Маршрути й розклади міста оновилися',
+  quiet:
+      'Мало транспорту передає, де він є - можливо, через повітряну тривогу. '
+      'Розташування й час прибуття можуть бути неповні або неточні',
   plannerPreparing:
       'Планувальник поїздок готується - спробуйте за кілька хвилин',
   plan: 'Маршрут',

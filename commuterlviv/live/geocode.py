@@ -14,24 +14,28 @@ away: point COMMUTERLVIV_PHOTON_URL at it.
 
 Either source alone is enough to search; with neither the endpoint answers 503.
 """
-import os
 import threading
 import time
 import urllib.parse
 
 import requests
 
-from .. import __version__, gtfs, walk
+from .. import __version__, files, gtfs, localtime, walk
 from ..mapidx import search as mapidx
+from . import wire
 
 INDEX = gtfs.DATA / "lviv-search.sqlite"
-INDEX_EVERY = 30 * 86400.0      # s between index refetches
+INDEX_EVERY = 30 * localtime.DAY_S  # s between index refetches
 
-# the city's box, also what the footpath graph covers
-SOUTH, NORTH, WEST, EAST = 49.7, 50.05, 23.8, 24.25
-CENTRE = (49.8419, 24.0315)
+# the city's box: every stop lies in the one the map frames can place a vehicle
+# in, and the footpaths reach walk.MARGIN past the stops, so a place outside it
+# is past the end of every walk to a line
+SOUTH, WEST = wire.LAT0 - walk.MARGIN, wire.LON0 - walk.MARGIN
+NORTH = wire.LAT0 + wire.DLAT + walk.MARGIN
+EAST = wire.LON0 + wire.DLON + walk.MARGIN
+CENTRE = (49.8419, 24.0315)  # Rynok Square, where both clients' maps open
 
-TTL = 86400.0
+TTL = localtime.DAY_S
 ENTRIES = 2000          # a day of queries from a city-sized audience
 LIMIT = 8
 TIMEOUT = 4.0
@@ -142,8 +146,7 @@ def index_age(path=INDEX):
 def renew_index(url, path=INDEX):
     """Downloads the index beside the one held and swaps it in once it answers.
     Searches open the file per query, so one in flight keeps reading the old."""
-    fresh = path.with_name("lviv-search.next.sqlite")
-    try:
+    with files.replacing(path) as fresh:
         with requests.get(url, stream=True, timeout=60,
                           headers={"user-agent": AGENT}) as r:
             r.raise_for_status()
@@ -152,9 +155,6 @@ def renew_index(url, path=INDEX):
                     f.write(chunk)
         if not mapidx.search(str(fresh), "львів", limit=1):
             raise ValueError("the downloaded index does not find Lviv")
-        os.replace(fresh, path)
-    finally:
-        fresh.unlink(missing_ok=True)
 
 
 def _same(a, b):

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:latlong2/latlong.dart';
 
 import 'package:commuterlviv/src/here.dart';
 import 'package:commuterlviv/src/map_controls.dart';
+import 'package:commuterlviv/src/map_tab.dart' show lviv;
 import 'package:commuterlviv/src/strings.dart';
 
 /// No tile layer: the controls only read the camera.
@@ -17,7 +17,7 @@ Future<MapController> pump(WidgetTester tester, {double zoom = 13}) async {
           FlutterMap(
             mapController: map,
             options: MapOptions(
-              initialCenter: const LatLng(49.8397, 24.0297),
+              initialCenter: lviv,
               initialZoom: zoom,
               minZoom: minZoom,
               maxZoom: maxZoom,

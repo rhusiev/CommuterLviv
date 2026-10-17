@@ -1,10 +1,7 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import { clock } from "./eta";
 import { journeyTags, SHORT_WALK_S } from "./tags";
 import type { Leg } from "./types";
-
-// `clock` lives beside the strings, which read `localStorage` as they load
-vi.hoisted(() => vi.stubGlobal("localStorage", { getItem: () => null }));
 
 // on a minute, so a few seconds later is still the same one on the clock
 const T0 = 1_790_000_040;
@@ -67,6 +64,22 @@ describe("journeyTags", () => {
       clock(T0),
       clock(T0 + 5 * MIN_S),
       clock(T0 + 8 * MIN_S),
+      clock(T0 + 20 * MIN_S),
+    ]);
+  });
+
+  test("two stops 25 m apart or more keep a pill each, whichever way they lie", () => {
+    // 20 m north and 20 m east: each closer than 25 m, the two together 28 m
+    const corner: [number, number] = [STOP[0] + 0.00018, STOP[1] + 0.00028];
+    const legs = [
+      ride(T0, T0 + 5 * MIN_S, OTHER, STOP),
+      ride(T0 + 5 * MIN_S + 30, T0 + 20 * MIN_S, corner, DOOR),
+    ];
+
+    expect(texts(legs)).toEqual([
+      clock(T0),
+      clock(T0 + 5 * MIN_S),
+      clock(T0 + 5 * MIN_S + 30),
       clock(T0 + 20 * MIN_S),
     ]);
   });

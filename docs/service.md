@@ -113,6 +113,39 @@ thread every 6 hours. Correcting the morning peak's 7 600 stops takes about
 0.12 s of CPU a minute, 0.05 s of it for what the last minutes said. The
 500 000 notes take 46 MB.
 
+## When the vehicles go quiet
+
+During an air raid alert in Lviv the vehicles stop reporting where they are,
+and the map empties while the buses still run. The feed itself failing looks
+the same, so the service only says the vehicles have gone quiet and both
+clients word it as a possibility: few vehicles are reporting, possibly an air
+raid alert, positions and arrival times may be missing or off.
+
+Every epoch the service counts the vehicles with a fix in the last 120 s
+(`replay.STALE`) against the trips the planner's timetable has between leaving
+their first stop and reaching their last (`commuterlviv/live/quiet.py`). Under
+half of them reporting is quiet (`QUIET_SHARE`), but only while at least 50
+trips are under way (`MIN_RUNNING`): at night the timetable has next to nothing
+running, and an empty feed then means nothing. Until the planner is built
+nothing is judged. On the recording of 2026-09-13..17 in 10-minute samples, a
+vehicle reported for 0.83-1.2 of the trips under way in normal service, for
+0.00-0.21 through four blackouts and 0.40-0.43 at their edges, and night had
+fewer than 50 trips under way. Both thresholds are chosen in that gap, not
+derived.
+
+The `hello` frame carries `quiet`, and a `{"type": "quiet", "quiet": ...}` frame
+follows each change. `/api/status` shows `quiet` and the count `reporting`.
+
+A blackout also misleads the tracks. Through it many vehicles go on reporting
+with fresh timestamps while their place, odometer and speed stop changing, then
+the place jumps kilometres ahead while the odometer barely moves - see
+[the filter](how-it-works.md#3-the-fix-is-folded-into-a-filter-not-used-directly)
+for what the tracker does about that. A vehicle back from a silence longer
+than 300 s (`track.GAP_RESET`) may have left its terminus, or been to the
+depot and back, unseen, so no stand or departure is timed off it until it next
+gets in (`Layovers.follow`). That drops 25 of 1052 departures replaying
+2026-09-15 19:00-21:00 and almost none in normal service.
+
 ## The journey planner
 
 `GET /api/plan?from=lat,lon&to=lat,lon` answers the door-to-door question:
@@ -440,8 +473,11 @@ built by osm-mapidx (https://github.com/rhusiev/osm-mapidx) with
 `python -m mapidx.cli build ukraine-latest.osm.pbf --region lviv`; its search
 code is vendored as `commuterlviv/mapidx/`. It forgives typos and Latin
 transliteration, and leads for queries without a digit. The second is Photon
-over OpenStreetMap, biased to the city and clamped to it, which leads when the
-query has a digit, since house numbers are what it is best at. The same name
+over OpenStreetMap, biased to the city, which leads when the query has a digit,
+since house numbers are what it is best at. Both are clamped to the box the map
+frames can place a vehicle in (`wire.py`), widened by the footpaths' reach past
+the stops (`walk.MARGIN`), which `/api/plan` also refuses points outside of:
+past it there is no walk to a line. The same name
 within 100 m is kept once. Answers are cached for a day.
 The index is not in the image. `.github/workflows/places.yml` rebuilds it from
 OpenStreetMap on the 3rd of every month and publishes it on this repository's
@@ -566,7 +602,9 @@ two hours of recording cannot replay.
    positions in one build of the feed, so it carries what each meant - shape
    id, cell count and length per unit, the corridor key per corridor, the
    route ids the passed stops were noted under - and only what still matches
-   is read back.
+   is read back. The learned models' rows and the turnarounds hold no shape
+   and are always read back, so even with no shape left that matches, the
+   snapshot's time stands and step 2 does not note its rows a second time.
 2. It then replays the recording from the later of the snapshot's time and two
    hours ago (`WARM_HOURS`), so the minutes between the last save and the
    restart are learned again.
@@ -587,6 +625,9 @@ two hours of recording cannot replay.
    uncorrected model and the rule answer. Started on 2026-10-05 at 03:00
    with no rows, the ETAs of the first 6 hours missed by 163 s rather than
    243 s, and those of the next 18 hours by about 130 s rather than 158 s.
+   Stopped while it runs, the service kills that process (`kill_workers`,
+   new in Python 3.14) instead of waiting out a replay that would outlast the
+   container's stop timeout, so the snapshot saved on the way out is not lost.
 
 A missing or unreadable snapshot is not an error - the model starts from the
 timetable, as it did before the file existed, and the log says so. The
@@ -608,7 +649,13 @@ whole city - so what the gate protects is not the CPU but the output: a tracked,
 smoothed, city-wide vehicle history, handed over at 228 B/s to anyone who opens
 the socket. Passwords are argon2id, sessions are opaque rows in Postgres behind
 a `__Host-` cookie, and remember-me is series+token rotated on every use, where
-a spent token coming back is treated as theft. Migrations apply themselves at
+a spent token coming back is treated as theft. `POST /api/password` with
+`{"old", "new"}` keeps only the session that asked: every other session and
+every remember-me token, its own included, is dropped. It answers 403 unless
+`COMMUTERLVIV_PASSWORD_CHANGE` is true, and it is false by default: until an
+account has a second way to prove who owns it, a stolen session could change the
+password and lock the owner out. `/api/me` says which (`password_change`), so
+the clients offer the change only where it works. Migrations apply themselves at
 boot and there is no down direction. The socket is not signed in once and
 trusted forever: it re-asks about its session every minute and closes with 4401
 when it has gone, it takes five messages a second with a burst of sixty, and it

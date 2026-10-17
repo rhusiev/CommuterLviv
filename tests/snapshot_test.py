@@ -45,6 +45,19 @@ def test_a_restored_model_keeps_the_turnarounds_and_stands(net, cfg, learned):
     assert np.array_equal(fresh.layovers.training(), learned.layovers.training())
 
 
+def test_rows_are_restored_and_timed_when_no_shape_fits_any_more(net, cfg, learned):
+    learned.layovers.restore_rows(np.ones((3, len(layover.FEATURES) + 1)))
+    data = snapshot.export(learned, t=123.0)
+    data["shapes"] = np.array([f"gone-{s}" for s in data["shapes"]])
+    fresh = replay.build(net, cfg)
+
+    assert snapshot.restore(fresh, data) == 123.0
+    assert np.array_equal(fresh.layovers.training(), learned.layovers.training())
+    # what was learned per cell stays behind; per corridor, it still applies
+    assert np.array_equal(fresh.pace.cf.w, replay.build(net, cfg).pace.cf.w)
+    assert not np.array_equal(fresh.pace.rf.w, replay.build(net, cfg).pace.rf.w)
+
+
 def test_another_variants_snapshot_is_not_restored(net, learned):
     other = replay.build(net, config.BY_NAME["slow-day"])
 

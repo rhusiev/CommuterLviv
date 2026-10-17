@@ -23,6 +23,9 @@ import datetime
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingRegressor
 
+from . import localtime, ring
+from .track import GAP_RESET
+
 TURN = 120.0        # s at least between reaching a terminus and leaving it
 KEEP = 50           # recent turnarounds kept per route and terminus
 NEED = 10           # of them before the route's own habit is believed
@@ -36,7 +39,6 @@ STILL = 3           # departures still ahead of now before they are believed
 AT_END = 60.0       # m short of the last stop within which a vehicle is in
 AWAY = 100.0        # m past the first stop by which it has left
 STRAY = 1000.0      # m past it beyond which a fix is a loop's far end, not leaving
-DAY = 86400.0
 FIELDS = ("route", "stop", "waited", "ahead")    # what `export` gives, in order
 
 # the model: a minute of an early stand is one row, its target the seconds
@@ -49,10 +51,21 @@ NEED_ROWS = 20_000  # before a fitted model is trusted over the rule
 LEAN = 0.4
 ITERS = 300
 RATE = 0.05
-PENDING = 6 * 3600.0    # s a stand's rows wait for its departure before dropped
+PENDING = 6 * localtime.HOUR_S  # s a stand's rows wait for its departure before dropped
 FEATURES = ("in for", "to timetable", "slack", "waited share", "kept", "ahead q25",
             "ahead q50", "ahead q75", "since last left", "timetable gap",
             "last ahead", "habit", "after last", "after last early", "hour")
+
+
+class _On:
+    """The trip a vehicle is on, as `Layovers.follow` sees it."""
+    __slots__ = ("trip", "away", "came", "seen")
+
+    def __init__(self, trip, ts):
+        self.trip = trip
+        self.away = False    # been away from the trip's end
+        self.came = None     # when it then got to the end
+        self.seen = ts       # its latest fix
 
 
 class Layovers:
@@ -63,10 +76,9 @@ class Layovers:
         self.tz = tz
         self.seen = {}       # (route, first stop) -> deque of (waited, s ahead)
         self.last = {}       # (route, first stop) -> (departure, timetabled) of its latest
-        self._rows = np.zeros((ROWS, len(FEATURES) + 1), dtype=np.float32)
-        self._wrote = 0      # rows ever written; the ring keeps the last `ROWS`
+        self._rows = ring.Ring(ROWS, len(FEATURES) + 1)
         self.model = None
-        self._on = {}        # veh -> [trip, been away from its end, time in]
+        self._on = {}        # veh -> _On
         self._out = {}       # veh -> (timetabled departure, in early), until it leaves
         self._asked = {}     # trip -> [(time, features)] of its stand, until it leaves
         self._batch = []     # this epoch's stands: (trip, soonest, features)
@@ -77,16 +89,23 @@ class Layovers:
         if tr.s is None:
             return
         on = self._on.get(veh)
-        if on is None or on[0] != tr.trip:
-            came = on[2] if on is not None \
-                and self.net.trip_next.get(on[0]) == tr.trip else None
+        if on is not None and tr.ts - on.seen > GAP_RESET:
+            # unseen for so long - as through an air raid alert - that it may
+            # have left, or been to the depot and back: no stand or departure
+            # can be timed until it comes in again
+            self._out.pop(veh, None)
+            on = self._on[veh] = _On(tr.trip, tr.ts)
+        if on is None or on.trip != tr.trip:
+            came = on.came if on is not None \
+                and self.net.trip_next.get(on.trip) == tr.trip else None
             sched = clock(tr.sched[0], tr.ts, self.tz)
             self._out[veh] = sched, came is not None and came + TURN < sched
-            on = self._on[veh] = [tr.trip, False, None]
+            on = self._on[veh] = _On(tr.trip, tr.ts)
         if tr.s < tr.sdist[-1] - AT_END:
-            on[1] = True
-        elif on[1] and on[2] is None:
-            on[2] = tr.ts
+            on.away = True
+        elif on.away and on.came is None:
+            on.came = tr.ts
+        on.seen = tr.ts
         out = self._out.get(veh)
         if out is not None and AWAY <= tr.s - tr.sdist[0] <= STRAY:
             del self._out[veh]
@@ -101,7 +120,7 @@ class Layovers:
         if early:
             self.see(key, dep - sched > -WAITED, sched - dep)
         for t, f in self._asked.pop(trip, ()):
-            self._add((*f, dep - t))
+            self._rows.add((*f, dep - t))
         for k in [k for k, got in self._asked.items() if got[-1][0] < dep - PENDING]:
             del self._asked[k]
 
@@ -114,7 +133,7 @@ class Layovers:
     def came(self, veh, trip):
         """When this vehicle got to the end of `trip`, if it is in."""
         on = self._on.get(veh)
-        return on[2] if on is not None and on[0] == trip else None
+        return on.came if on is not None and on.trip == trip else None
 
     def stand(self, trip, sched, ready, now):
         """A vehicle in at `ready` stands to leave on `trip`, which the
@@ -187,7 +206,7 @@ class Layovers:
         return (now - ready, sched - now, sched - ready,
                 np.mean([w for w, _ in got]) if got else np.nan, len(got), *qs,
                 now - dep, sched - was, was - dep, habit[0] - now, after - now,
-                habit[1] - now, local.hour + local.minute / 60)
+                habit[1] - now, localtime.hours(local))
 
     def export(self):
         """The turnarounds as flat arrays, oldest first within a key."""
@@ -201,25 +220,16 @@ class Layovers:
         for r, st, w, a in zip(route, stop, waited, ahead):
             self.see((str(r), str(st)), w, a)
 
-    def _add(self, row):
-        self._rows[self._wrote % ROWS] = row
-        self._wrote += 1
-
     def training(self):
         """A copy of the rows to `fit` on, oldest first: `FEATURES` and the
         seconds that were left."""
-        if self._wrote < ROWS:
-            return self._rows[:self._wrote].copy()
-        at = self._wrote % ROWS
-        return np.concatenate([self._rows[at:], self._rows[:at]])
+        return self._rows.oldest_first()
 
     def restore_rows(self, rows):
         """Rows from `training`, if they are of this version's `FEATURES`, taken
         as older than any this one has written itself."""
-        if rows.ndim == 2 and rows.shape[1] == self._rows.shape[1]:
-            rows = np.concatenate([rows, self.training()])[-ROWS:]
-            self._rows[:len(rows)] = rows
-            self._wrote = len(rows)
+        if rows.ndim == 2 and rows.shape[1] == self._rows.width:
+            self._rows.put_before(rows)
 
 
 def fit(rows):
@@ -238,8 +248,6 @@ def fit(rows):
 def clock(sched, now, tz):
     """A timetable time - seconds past a service day's midnight, possibly
     over 24 h - as the unix instant nearest `now`."""
-    local = datetime.datetime.fromtimestamp(now, tz)
-    midnight = local.replace(hour=0, minute=0, second=0,
-                             microsecond=0).timestamp()
-    return min((midnight + k * DAY + sched for k in (-1, 0, 1)),
+    midnight = localtime.midnight(now, tz)
+    return min((midnight + k * localtime.DAY_S + sched for k in (-1, 0, 1)),
                key=lambda t: abs(t - now))

@@ -1,36 +1,34 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Banner } from "./components/Banner";
 import { Icon } from "./components/Icon";
 import { MapCanvas } from "./components/MapCanvas";
 import { RoutePanel } from "./components/RoutePanel";
 import { SignIn } from "./components/SignIn";
 import { FollowCard } from "./components/FollowCard";
-import { JourneyPanel, type Origin, type Point } from "./components/JourneyPanel";
+import { JourneyPanel } from "./components/JourneyPanel";
 import { StopCard } from "./components/StopCard";
 import { AccountMenu } from "./components/AccountMenu";
 import { LayersPanel } from "./components/LayersPanel";
+import { Close } from "./components/Cross";
+import { Menu } from "./components/Menu";
 import { SavedPanel } from "./components/SavedPanel";
 import { StopSearch } from "./components/StopSearch";
 import { RouteBadge } from "./components/RouteBadge";
 import { VehicleCard } from "./components/VehicleCard";
 import { Timetable } from "./components/Timetable";
-import {
-  api,
-  ApiError,
-  catalog as fetchCatalog,
-  catalogTag,
-  shapes as fetchShapes,
-} from "./lib/api";
+import { api, catalog as fetchCatalog, catalogTag } from "./lib/api";
 import { useIndex, usePositions } from "./lib/catalog";
 import { saved } from "./lib/places";
 import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from "./lib/theme";
 import { RAMP, useTraffic } from "./lib/traffic";
 import { readUrl, writeUrl, type UrlState } from "./lib/url";
-import type { Stage } from "./lib/follow";
 import { heldFollowed, holdFollowed, type Followed } from "./lib/followed";
-import { hereOnce } from "./lib/position";
 import { useFollow } from "./lib/useFollow";
 import { takeRenewed, useLive } from "./lib/useLive";
-import type { Catalog, Journey, Me, Place, RouteSet, Shapes } from "./lib/types";
+import { useMapLayers } from "./lib/useMapLayers";
+import { usePlanner } from "./lib/usePlanner";
+import { useSession } from "./lib/useSession";
+import type { Catalog, Journey, Me } from "./lib/types";
 import { t } from "./lib/i18n";
 
 const LINES_KEY = "commuterlviv.lines";
@@ -41,6 +39,33 @@ const JOIN = /^\/join\/([\w-]+)\/?$/;
  * account against whatever catalog is loaded now, then deleted. */
 const oldPinKey = (user: string) => `commuterlviv.pins.${user}`;
 
+/** The old pins of `who` as ids of `cat`'s stops, sent to the server, which
+ * forgets them locally once it has them. None once the account has pins of its
+ * own. */
+function carryOldPins(cat: Catalog, who: Me): string[] {
+  const key = oldPinKey(who.username);
+  const held = localStorage.getItem(key);
+  if (held === null) return [];
+  try {
+    const ids =
+      who.sets.pins.length === 0
+        ? (JSON.parse(held) as number[])
+            .map((i) => cat.stops[i]?.id)
+            .filter((id): id is string => id !== undefined)
+        : [];
+    if (ids.length === 0) {
+      localStorage.removeItem(key);
+      return [];
+    }
+    // Dropped only once the server has them
+    void api.setPins(ids).then(() => localStorage.removeItem(key));
+    return ids;
+  } catch {
+    localStorage.removeItem(key);
+    return [];
+  }
+}
+
 const TAB_NAMES: Record<UrlState["tab"], string> = {
   map: t.map,
   times: t.times,
@@ -50,17 +75,11 @@ const TAB_NAMES: Record<UrlState["tab"], string> = {
 };
 
 export function App() {
-  const [me, setMe] = useState<Me | null | undefined>(undefined);
-  const [cat, setCat] = useState<Catalog | null>(null);
   // Read once, at mount: from here on the address bar follows this component
   const [opened] = useState(readUrl);
-  const [picked, setPicked] = useState<Set<string>>(
-    new Set(opened.routes ?? []),
-  );
-  const [sets, setSets] = useState<RouteSet[]>([]);
-  const [active, setActive] = useState<string | null>(null);
-  const [pinIds, setPinIds] = useState<string[]>([]);
-  const [places, setPlaces] = useState<Place[]>([]);
+  const session = useSession(opened.routes);
+  const { me, failed, notice, setNotice, picked, places, keepPlaces } = session;
+  const [cat, setCat] = useState<Catalog | null>(null);
   const [stop, setStop] = useState<number | null>(null);
   const [veh, setVeh] = useState<number | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lon: number } | null>(null);
@@ -69,137 +88,72 @@ export function App() {
   );
   const [route, setRoute] = useState<number | null>(null);
   const [allLines, setAllLines] = useState(() => loadFlag(LINES_KEY));
-  const [geo, setGeo] = useState<Shapes | null>(null);
-  const [from, setFrom] = useState<Origin | null>(null);
-  /** Times got on board, so a fix asked for before it does not move the start */
-  const boarded = useRef(0);
-  const [to, setTo] = useState<Point | null>(null);
+  const planner = usePlanner(tab === "plan", (why) => setNotice(t.noFix[why]));
   const [journey, setJourney] = useState<Journey | null>(null);
   /** Being travelled: it keeps the map, whichever tab is open, and a reload */
   const [followed, setFollowed] = useState<Followed | null>(null);
   const following = followed?.journey ?? null;
-  /** Where a journey followed before the page loaded had got to */
-  const resumed = useRef<Stage | undefined>(undefined);
-  /** The planner is to search as soon as both ends are set */
-  const [ask, setAsk] = useState(false);
-  const [picking, setPicking] = useState<"from" | "to" | null>(null);
   const [folded, setFolded] = useState(false);
   const [panel, setPanel] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme);
-  const [notice, setNotice] = useState<string | null>(null);
   /** Not a failure: news worth a line, such as the city changing */
   const [info, setInfo] = useState<string | null>(null);
+  /** The quiet banner closed; it comes back the next time the vehicles go quiet */
+  const [quietShut, setQuietShut] = useState(false);
   const [jams, setJams] = useState(() => loadFlag(TRAFFIC_KEY));
-  const [layers, setLayers] = useState(false);
-  const [account, setAccount] = useState(false);
+  /** The one header menu open, as opening either closes the other */
+  const [menu, setMenu] = useState<"layers" | "account" | null>(null);
+  const toggle = (which: "layers" | "account") => (open: boolean) =>
+    setMenu(open ? which : null);
+
+  const openTab = (next: UrlState["tab"]) => {
+    setTab(next);
+    if (next !== "plan") planner.leave();
+  };
 
   const code = JOIN.exec(location.pathname)?.[1] ?? null;
-  const { live, connection, count } = useLive();
+  const { live, connection, count, quiet } = useLive();
+  if (!quiet && quietShut) setQuietShut(false);
   // Asked for again every minute, and only while the view is open
   const traffic = useTraffic(jams);
 
-  const failed = useCallback((err: unknown) => {
-    if (err instanceof ApiError && err.status === 401) {
-      setMe(null);
-      return;
-    }
-    setNotice(err instanceof Error ? err.message : t.noService);
-  }, []);
-
-  const load = useCallback(async () => {
-    try {
-      const who = await api.me();
-      setMe(who);
-      setSets(who.sets.sets);
-      setActive(who.sets.active);
-      // The account's active set only decides when the link names no routes
-      const set = who.sets.sets.find((s) => s.id === who.sets.active);
-      if (set && opened.routes === null) setPicked(new Set(set.routes));
-      setPinIds(who.sets.pins);
-      setPlaces(who.sets.places);
-      setNotice(null);
-    } catch (err) {
-      failed(err);
-    }
-  }, [failed, opened.routes]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const loadCatalog = useCallback(() => {
-    setNotice(null);
-    void fetchCatalog().then((got) => {
-      setCat(got);
-      if (takeRenewed()) setInfo(t.renewed);
-    }, failed);
-  }, [failed]);
+  /** The catalog, and everything that waited for it: where the address pointed,
+   * the journey followed before the page loaded and the pins from before the
+   * server kept them */
+  const { showPins } = session;
+  const loadCatalog = useCallback(
+    (who: Me) =>
+      fetchCatalog().then((got) => {
+        setCat(got);
+        if (takeRenewed()) setInfo(t.renewed);
+        const tag = catalogTag();
+        const held = tag ? heldFollowed(tag, Date.now() / 1000) : null;
+        if (held) setFollowed(held);
+        if (opened.route !== null) {
+          const i = got.routes.findIndex((r) => r.id === opened.route);
+          if (i >= 0) setRoute(i);
+          else setTab("map");
+        }
+        const i = got.stops.findIndex((x) => x.id === opened.stop);
+        if (i >= 0) {
+          setStop(i);
+          setFocus({ lat: got.stops[i]!.lat, lon: got.stops[i]!.lon });
+        }
+        const old = carryOldPins(got, who);
+        if (old.length > 0) showPins(old);
+      }, failed),
+    [failed, opened, showPins],
+  );
 
   useEffect(() => {
-    if (me) loadCatalog();
+    if (me) void loadCatalog(me);
   }, [me, loadCatalog]);
 
   const stopIndex = useIndex(cat?.stops);
 
   /** The socket and every panel address a stop by catalog position; only what
    * is stored is an id. */
-  const pins = usePositions(stopIndex, pinIds);
-
-  useEffect(() => {
-    if (!cat || !me) return;
-    const key = oldPinKey(me.username);
-    const held = localStorage.getItem(key);
-    if (held === null) return;
-    try {
-      const ids =
-        pinIds.length === 0
-          ? (JSON.parse(held) as number[])
-              .map((i) => cat.stops[i]?.id)
-              .filter((id): id is string => id !== undefined)
-          : [];
-      if (ids.length === 0) {
-        localStorage.removeItem(key);
-        return;
-      }
-      setPinIds(ids);
-      // Dropped only once the server has them
-      void api.setPins(ids).then(() => localStorage.removeItem(key));
-    } catch {
-      localStorage.removeItem(key);
-    }
-    // Must not re-run when the pins change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cat, me]);
-
-  useEffect(() => {
-    const tag = catalogTag();
-    if (!cat || !tag) return;
-    const held = heldFollowed(tag, Date.now() / 1000);
-    if (!held) return;
-    resumed.current = held.stage;
-    setFollowed(held);
-    // Once, when the catalog arrives
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cat]);
-
-  useEffect(() => {
-    if (!cat || opened.route === null) return;
-    const i = cat.routes.findIndex((r) => r.id === opened.route);
-    if (i >= 0) setRoute(i);
-    else setTab("map");
-    // Once, when the catalog arrives: after that the address bar follows
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cat]);
-
-  useEffect(() => {
-    if (!cat || opened.stop === null) return;
-    const i = stopIndex.get(opened.stop);
-    if (i === undefined) return;
-    setStop(i);
-    setFocus({ lat: cat.stops[i]!.lat, lon: cat.stops[i]!.lon });
-    // Once, when the catalog arrives: after that the address bar follows
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cat]);
+  const pins = usePositions(stopIndex, session.pinIds);
 
   useEffect(() => {
     if (!cat) return;
@@ -218,7 +172,7 @@ export function App() {
   const showStop = (i: number) => {
     const s = cat?.stops[i];
     if (!s) return;
-    setTab("map");
+    openTab("map");
     setStop(i);
     setFocus({ lat: s.lat, lon: s.lon });
   };
@@ -227,50 +181,15 @@ export function App() {
   // against the one followed
   const drawn = (tab === "plan" ? journey : null) ?? following;
 
-  /** While a journey is shown, only its rides are on the map */
-  const journeyRoutes = useMemo(() => {
-    if (!drawn) return null;
-    const out = new Set<number>();
-    for (const leg of drawn.legs) {
-      if (leg.route !== undefined) out.add(leg.route);
-    }
-    return [...out].sort((a, b) => a - b);
-  }, [drawn]);
-
-  /** The socket's own filter: while one route is open it is the only one sent */
-  const indexes = useMemo(
-    () => journeyRoutes ?? (tab === "route" && route !== null ? [route] : chosen),
-    [journeyRoutes, tab, route, chosen],
-  );
-
-  const lines = useMemo(() => {
-    if (tab === "route" && route !== null) return [route];
-    if (!allLines || !cat) return [];
-    return cat.routes.map((_, i) => i);
-  }, [tab, route, allLines, cat]);
-
-  const fit = useMemo((): [number, number, number, number] | null => {
-    const shape = tab === "route" && route !== null ? geo?.routes[route] : null;
-    if (!shape) return null;
-    let w = 180,
-      s = 90,
-      e = -180,
-      n = -90;
-    for (const line of shape.lines) {
-      for (const [lat, lon] of line.pts) {
-        w = Math.min(w, lon);
-        e = Math.max(e, lon);
-        s = Math.min(s, lat);
-        n = Math.max(n, lat);
-      }
-    }
-    return w > e ? null : [w, s, e, n];
-  }, [tab, route, geo]);
-
-  useEffect(() => {
-    if (!lines.length || geo) return;
-    void fetchShapes().then(setGeo, failed);
-  }, [lines, geo, failed]);
+  const { geo, indexes, lines, fit, stops } = useMapLayers({
+    cat,
+    tab,
+    route,
+    drawn,
+    chosen,
+    allLines,
+    onError: failed,
+  });
 
   useEffect(() => {
     if (cat) live.setRoutes(indexes);
@@ -292,10 +211,15 @@ export function App() {
   }, [live, cat, watched]);
 
   // Here rather than in its card, which a change of tab unmounts
-  const { progress, caught } = useFollow(following, live, cat ?? undefined, resumed.current);
+  const { progress, caught } = useFollow(
+    following,
+    live,
+    cat ?? undefined,
+    // where a journey followed before the page loaded had got to
+    followed?.stage,
+  );
 
   const follow = (next: Followed | null) => {
-    resumed.current = undefined;
     holdFollowed(next);
     setFollowed(next);
   };
@@ -305,87 +229,34 @@ export function App() {
   const searchAgain = () => {
     if (!followed || progress === null || progress === "denied") return;
     const { stage } = progress;
-    setTo(followed.to);
+    planner.setTo(followed.to);
     if (stage.kind === "ride" && stage.veh !== null) {
-      boarded.current += 1;
-      setFrom({ veh: stage.veh, route: followed.journey.legs[stage.leg]!.route ?? null });
+      planner.board({ veh: stage.veh, route: followed.journey.legs[stage.leg]!.route ?? null });
     } else {
-      setFrom(null);
-      useHere("from");
+      planner.setFrom(null);
+      planner.hereFor("from");
     }
-    setAsk(true);
-    setTab("plan");
-  };
-
-  /** Only the stops of the routes on the map are drawn or clickable */
-  const stops = useMemo(() => {
-    if (!cat) return [];
-    const on = new Set(indexes);
-    const out: number[] = [];
-    cat.stops.forEach((s, i) => {
-      if (s.routes.some((r) => on.has(r))) out.push(i);
-    });
-    return out;
-  }, [cat, indexes]);
-
-  const marks = useMemo(() => {
-    const out: { lat: number; lon: number; label: string }[] = [];
-    if (tab !== "plan") return out;
-    if (from && !("veh" in from)) out.push({ ...from, label: "A" });
-    if (to) out.push({ ...to, label: "B" });
-    return out;
-  }, [tab, from, to]);
-
-  // On board lasts only while planning: the vehicle goes on without the planner
-  useEffect(() => {
-    if (tab !== "plan") setFrom((was) => (was && "veh" in was ? null : was));
-  }, [tab]);
-
-  /** Asked separately from the map's own locate button, so a refusal here does
-   * not turn the map's dot off */
-  const useHere = (which: "from" | "to") => {
-    const asked = boarded.current;
-    if (!navigator.geolocation) return;
-    hereOnce({ enableHighAccuracy: true, timeout: 10_000 }).then(
-      (pos) => {
-        const at = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        // A fix asked for before getting on board is no longer the start
-        if (which === "to") setTo(at);
-        else if (asked === boarded.current) setFrom(at);
-      },
-      () => setNotice(t.noLocation),
-    );
+    planner.setAsk(true);
+    openTab("plan");
   };
 
   const setPinned = (next: number[]) => {
     if (!cat) return;
-    const ids = next.map((i) => cat.stops[i]!.id);
-    setPinIds(ids);
-    // Optimistic: a failed save comes back at the next sign-in
-    void api.setPins(ids).catch(() => undefined);
-  };
-
-  const keepPlaces = (next: Place[]) => {
-    setPlaces(next);
-    void api.setPlaces(next).catch(() => undefined);
+    session.savePins(next.map((i) => cat.stops[i]!.id));
   };
 
   const showPlace = (at: { lat: number; lon: number }) => {
-    setTab("map");
+    openTab("map");
     setStop(null);
     setFocus({ lat: at.lat, lon: at.lon });
   };
 
   const openRoute = (i: number) => {
     setRoute(i);
-    setTab("route");
+    openTab("route");
   };
 
-  const refreshSets = async () => {
-    const s = await api.sets();
-    setSets(s.sets);
-    setActive(s.active);
-  };
+  const { load } = session;
 
   if (code !== null && !me)
     return <SignIn code={code} onIn={() => void load()} />;
@@ -400,7 +271,13 @@ export function App() {
     return notice === null ? (
       <Splash text={t.loading} />
     ) : (
-      <Splash text={notice} onRetry={loadCatalog} />
+      <Splash
+        text={notice}
+        onRetry={() => {
+          setNotice(null);
+          void loadCatalog(me);
+        }}
+      />
     );
 
   // 12 px + the drawer's 320 + 12, so panels centre on the map left over. Only
@@ -425,17 +302,13 @@ export function App() {
         onPickVehicle={setVeh}
         focus={focus}
         fit={fit}
-        picking={picking !== null}
-        onPickPoint={(lat, lon) => {
-          if (picking === "from") setFrom({ lat, lon });
-          if (picking === "to") setTo({ lat, lon });
-          setPicking(null);
-        }}
+        picking={planner.picking !== null}
+        onPickPoint={planner.pickAt}
         onHoldPoint={(lat, lon) => {
           const name = prompt(t.namePlace)?.trim();
           if (name) keepPlaces(saved(places, name, lat, lon));
         }}
-        marks={marks}
+        marks={planner.marks}
         journey={drawn}
         locate={following !== null}
         pinned={pins}
@@ -481,85 +354,47 @@ export function App() {
           {t.vehicles(count)}
         </span>
         <div className="pointer-events-auto relative">
-          <button
-            onClick={() => {
-              setAccount((v) => !v);
-              setLayers(false);
-            }}
-            title={t.account}
-            aria-label={t.account}
-            className={`fab ${account ? "text-accent" : "text-slate-300 hover:text-slate-100"}`}
+          <Menu
+            icon="account"
+            label={t.account}
+            open={menu === "account"}
+            onToggle={toggle("account")}
           >
-            <Icon name="account" />
-          </button>
-          {account && (
-            <>
-              <button
-                aria-hidden
-                tabIndex={-1}
-                onClick={() => setAccount(false)}
-                className="fixed inset-0 cursor-default"
-              />
-              <div className="panel absolute right-0 top-12 w-52 p-2">
-                <AccountMenu
-                  username={me.username}
-                  onOut={async () => {
-                    // Signed out whether or not the request landed
-                    await api.logout().catch(() => undefined);
-                    setMe(null);
-                  }}
-                />
-              </div>
-            </>
-          )}
+            <AccountMenu
+              username={me.username}
+              passwordChange={me.password_change ?? false}
+              onOut={session.signOut}
+            />
+          </Menu>
         </div>
       </header>
 
       <div className="absolute right-3 top-31 z-20">
-        <button
-          onClick={() => {
-            setLayers((v) => !v);
-            setAccount(false);
-          }}
-          title={t.layers}
-          aria-label={t.layers}
-          className={`fab ${
-            allLines || jams
-              ? "text-accent"
-              : "text-slate-300 hover:text-slate-100"
-          }`}
+        <Menu
+          icon="layers"
+          label={t.layers}
+          open={menu === "layers"}
+          lit={allLines || jams}
+          onToggle={toggle("layers")}
         >
-          <Icon name="layers" />
-        </button>
-        {layers && (
-          <>
-            <button
-              aria-hidden
-              tabIndex={-1}
-              onClick={() => setLayers(false)}
-              className="fixed inset-0 cursor-default"
-            />
-            <div className="panel absolute right-0 top-12 w-52 p-2">
-              <LayersPanel
-                lines={allLines}
-                onLines={(on) => {
-                  setAllLines(on);
-                  saveFlag(LINES_KEY, on);
-                }}
-                traffic={jams}
-                onTraffic={(on) => {
-                  setJams(on);
-                  saveFlag(TRAFFIC_KEY, on);
-                }}
-                theme={theme}
-                onTheme={(next) => {
-                  setTheme(next);
-                  saveTheme(next);
-                }}
-              />
-            </div>
-          </>
-        )}
+          <LayersPanel
+            lines={allLines}
+            onLines={(on) => {
+              setAllLines(on);
+              saveFlag(LINES_KEY, on);
+            }}
+            traffic={jams}
+            onTraffic={(on) => {
+              setJams(on);
+              saveFlag(TRAFFIC_KEY, on);
+            }}
+            theme={theme}
+            onTheme={(next) => {
+              setTheme(next);
+              saveTheme(next);
+            }}
+          />
+        </Menu>
       </div>
 
       {jams && (
@@ -581,57 +416,44 @@ export function App() {
         </div>
       )}
 
-      {(notice ?? info) !== null && (
-        <p
-          className={`panel absolute left-1/2 top-19 z-40 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-2 px-3 py-2 text-sm ${notice !== null ? "text-rose-200" : "text-sky-200"}`}
-        >
-          {notice ?? info}
-          <button
-            onClick={() => (notice !== null ? setNotice(null) : setInfo(null))}
-            className={
-              notice !== null
-                ? "text-rose-400 hover:text-rose-200"
-                : "text-sky-400 hover:text-sky-200"
-            }
-          >
-            ✕
-          </button>
-        </p>
-      )}
+      <div className="absolute left-1/2 top-19 z-40 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-col items-center gap-2">
+        {notice !== null ? (
+          <Banner tone="error" text={notice} onClose={() => setNotice(null)} />
+        ) : (
+          info !== null && <Banner tone="info" text={info} onClose={() => setInfo(null)} />
+        )}
+        {quiet && !quietShut && (
+          <Banner tone="warn" text={t.quiet} onClose={() => setQuietShut(true)} />
+        )}
+      </div>
 
       {tab === "plan" && (
         <aside
           className={`panel absolute right-3 top-19 z-20 w-96 max-w-[calc(100vw-1.5rem)] overflow-y-auto p-3 ${
-            folded || picking ? "" : "bottom-20"
+            folded || planner.picking ? "" : "bottom-20"
           }`}
         >
           <JourneyPanel
             catalog={cat}
-            from={from}
-            to={to}
-            picking={picking}
-            onPick={setPicking}
-            onSwap={() => {
-              if (from && "veh" in from) return;
-              setFrom(to);
-              setTo(from);
-            }}
-            onHere={useHere}
+            from={planner.from}
+            to={planner.to}
+            picking={planner.picking}
+            onPick={planner.setPicking}
+            onSwap={planner.swap}
+            onHere={planner.hereFor}
             onShow={setJourney}
             onFollow={(j) => {
-              follow({ journey: j, to: to!, tag: catalogTag() ?? "" });
-              setTab("map");
+              follow({ journey: j, to: planner.to!, tag: catalogTag() ?? "" });
+              openTab("map");
             }}
-            ask={ask}
-            onAsked={() => setAsk(false)}
+            ask={planner.ask}
+            onAsked={() => planner.setAsk(false)}
             folded={folded}
             onFold={setFolded}
             onLine={openRoute}
             places={places}
             onPlaces={keepPlaces}
-            onPoint={(which, at) =>
-              which === "from" ? setFrom(at) : setTo(at)
-            }
+            onPoint={planner.setEnd}
             onStop={showStop}
           />
         </aside>
@@ -678,15 +500,12 @@ export function App() {
           <p className="min-w-0 flex-1 truncate text-sm text-slate-300">
             {cat.routes[route]!.long}
           </p>
-          <button
+          <Close
             onClick={() => {
               setRoute(null);
-              setTab("map");
+              openTab("map");
             }}
-            className="px-1 text-slate-500 hover:text-slate-200"
-          >
-            ✕
-          </button>
+          />
         </aside>
       )}
 
@@ -712,6 +531,8 @@ export function App() {
             />
           ) : veh === null ? null : (
             <VehicleCard
+              // Another vehicle is another card, not this one's calls kept
+              key={veh}
               catalog={cat}
               veh={veh}
               onStop={(i) => {
@@ -720,10 +541,9 @@ export function App() {
               }}
               onRoute={openRoute}
               onAboard={(on) => {
-                boarded.current += 1;
-                setFrom(on);
+                planner.board(on);
                 setVeh(null);
-                setTab("plan");
+                openTab("plan");
               }}
               onClose={() => setVeh(null)}
             />
@@ -757,9 +577,8 @@ export function App() {
           <button
             key={v}
             onClick={() => {
-              setTab(v);
-              setLayers(false);
-              setAccount(false);
+              openTab(v);
+              setMenu(null);
             }}
             className={`rounded-full px-2 py-1.5 font-medium transition-colors sm:px-4 ${
               tab === v
@@ -777,34 +596,15 @@ export function App() {
           <RoutePanel
             catalog={cat}
             picked={picked}
-            onToggle={(id) =>
-              setPicked((was) => {
-                const next = new Set(was);
-                if (!next.delete(id)) next.add(id);
-                return next;
-              })
-            }
-            onClear={() => setPicked(new Set())}
+            onToggle={session.togglePicked}
+            onClear={session.clearPicked}
             onRoute={openRoute}
-            sets={sets}
-            active={active}
-            onActivate={(s) => {
-              setPicked(new Set(s.routes));
-              setActive(s.id);
-              void api.activateSet(s.id).catch(failed);
-            }}
-            onCreate={async (name) => {
-              await api.createSet(name, [...picked]);
-              await refreshSets();
-            }}
-            onUpdate={async (s) => {
-              await api.updateSet(s.id, s.name, [...picked]);
-              await refreshSets();
-            }}
-            onDelete={async (s) => {
-              await api.deleteSet(s.id);
-              await refreshSets();
-            }}
+            sets={session.routeSets.sets}
+            active={session.routeSets.active}
+            onActivate={session.routeSets.activate}
+            onCreate={session.routeSets.create}
+            onUpdate={session.routeSets.update}
+            onDelete={session.routeSets.remove}
           />
         </aside>
       )}

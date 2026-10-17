@@ -53,7 +53,13 @@ class Followed {
   /// [tag] or the journey is stale at [now], unix seconds
   static Followed? held(String? raw, String tag, int now) {
     if (raw == null) return null;
-    final held = Followed.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    final Followed held;
+    try {
+      held = Followed.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      // Unparsable, or of another shape: nothing is being followed
+      return null;
+    }
     return held.tag == tag && held.journey.arr + _staleS > now ? held : null;
   }
 

@@ -1,25 +1,35 @@
 /** Web Mercator, because the basemap is: the overlay has to agree with MapLibre
  * to the pixel or the vehicles drive beside the streets. */
 
-export const CENTRE = { lat: 49.842, lon: 24.032 };
+import { readJson, writeJson } from "./storage";
+import { BOX } from "./wire";
+
+/** Rynok Square, which the server's place search also ranks from */
+export const CENTRE = { lat: 49.8419, lon: 24.0315 };
 export const MIN_ZOOM = 11;
 export const MAX_ZOOM = 18;
 /** Below this the stop circles are more clutter than information */
 export const STOPS_ZOOM = 13.4;
 
-/** The same box `wire.py` quantises positions in */
-export const BOUNDS: [number, number, number, number] = [
-  CENTRE.lon - 0.45,
-  CENTRE.lat - 0.3,
-  CENTRE.lon + 0.45,
-  CENTRE.lat + 0.3,
-];
+/** How far the map pans past the box vehicles can be in, as a share of the
+ * box: enough to bring its edge to the middle of a wide screen */
+const PAN_ROOM = 0.5;
+
+/** Where the map can be panned, as `[west, south, east, north]` */
+export const BOUNDS = ((): [number, number, number, number] => {
+  const [west, south, east, north] = BOX;
+  const lon = (east - west) * PAN_ROOM;
+  const lat = (north - south) * PAN_ROOM;
+  return [west - lon, south - lat, east + lon, north + lat];
+})();
 
 export type View = { lat: number; lon: number; zoom: number };
 
 export const START: View = { ...CENTRE, zoom: 14.3 };
 
-/** MapLibre's tiles are 512 px, so a zoom of z spans 512 * 2^z pixels */
+/** MapLibre's tiles are 512 px, so a zoom of z spans 512 * 2^z pixels - the
+ * scale the app's 256 px tiles reach at z + 1, which its thresholds allow for
+ * (`webZoomOffset`) */
 const TILE = 512;
 
 export const mercX = (lon: number) => (lon + 180) / 360;
@@ -57,22 +67,10 @@ export function metres(a: { lat: number; lon: number }, b: { lat: number; lon: n
 const VIEW_KEY = "commuterlviv.view";
 
 export function loadView(): View {
-  try {
-    const raw = localStorage.getItem(VIEW_KEY);
-    if (raw) {
-      const v = JSON.parse(raw) as View;
-      if (typeof v.zoom === "number" && typeof v.lat === "number") return v;
-    }
-  } catch {
-    // A corrupt stored view is not worth a blank page
-  }
-  return START;
+  const v = readJson<View>(VIEW_KEY);
+  return typeof v?.zoom === "number" && typeof v.lat === "number" ? v : START;
 }
 
 export function saveView(v: View) {
-  try {
-    localStorage.setItem(VIEW_KEY, JSON.stringify(v));
-  } catch {
-    // The view simply will not survive a reload
-  }
+  writeJson(VIEW_KEY, v);
 }

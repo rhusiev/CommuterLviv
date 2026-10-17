@@ -18,10 +18,10 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .. import layover, model as pace, network, replay, track
+from .. import layover, localtime, network, replay, track
 
 VEH = np.dtype([("id", "u2"), ("route", "u2"), ("lat", "f8"), ("lon", "f8"),
-                ("heading", "u2"), ("flags", "u1"), ("run", "u2")])
+                ("heading", "u2"), ("flags", "u1")])
 # `planned`: the vehicle has yet to start this trip, so the time is anchored on
 # the timetable's departure from its first stop rather than on where it is
 ETA = np.dtype([("stop", "u2"), ("route", "u2"), ("veh", "u2"), ("t", "i4"),
@@ -62,8 +62,6 @@ class Catalog:
         self.stop_i = {s: i for i, s in enumerate(self.stops)}
         self.stop_routes = [sorted(self.route_i[r] for r in serving[s]
                                    if r in self.route_i) for s in self.stops]
-        self.lat = np.array([net.stops[s]["lat"] for s in self.stops])
-        self.lon = np.array([net.stops[s]["lon"] for s in self.stops])
         self.net = net
 
     @functools.cached_property
@@ -141,6 +139,7 @@ class Live:
         self.wire, self.free, self.next_wire = {}, collections.deque(), 0
         self.next_epoch = None
         self.epochs = 0
+        self.reporting = 0       # vehicles with a fix within `replay.STALE`
         self.positions = Positions(0.0)
         self.arrivals = Arrivals(0.0)
         self.started = time.time()
@@ -182,8 +181,7 @@ class Live:
             moving = self._moving(tr)
             s = self._believed(tr, now, moving)
             rows[n] = (self._wire(veh), ri, *self._latlon(tr, s),
-                       self._heading(tr, s), self._flags(tr, now, moving),
-                       tr.run % 65536)
+                       self._heading(tr, s), self._flags(tr, now, moving))
             n += 1
         self.positions = Positions(now, rows[:n])
         return self.positions
@@ -199,6 +197,8 @@ class Live:
             self.free.append(self.wire.pop(veh))
         self.model.refresh(now)
         self.epochs += 1
+        self.reporting = sum(tr.ts is not None and now - tr.ts <= replay.STALE
+                             for tr in self.tracks.values())
         self.arrivals = self._arrivals(now)
         return self.arrivals
 
@@ -261,7 +261,7 @@ class Live:
                 return
             stops, dist, sched = self.net.trip_stops[trip]
             leave = self.model.layovers.leave(
-                trip, layover.clock(sched[0], now, pace.TZ), ends, now)
+                trip, layover.clock(sched[0], now, localtime.TZ), ends, now)
             if leave > horizon:
                 return
             sid = self.net.trip_shape[trip]
@@ -325,6 +325,7 @@ class Live:
                 "tracks": len(self.tracks),
                 "vehicles": int(len(self.positions.veh)),
                 "arrivals": int(len(self.arrivals.eta)),
+                "reporting": self.reporting,
                 "positions_age": round(time.time() - self.positions.t, 1),
                 "arrivals_age": round(time.time() - self.arrivals.t, 1),
                 "uptime": round(time.time() - self.started, 1)}

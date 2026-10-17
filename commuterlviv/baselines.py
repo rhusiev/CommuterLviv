@@ -10,7 +10,7 @@ Table fitting runs during the replay warmup and stops when `replay` sets
 """
 import numpy as np
 
-from .model import SLOTS, BaseModel, Ewma, PaceModel, group
+from .model import SLOTS, BaseModel, Ewma, PaceModel, between_slots, decay, group
 
 
 class TableModel(BaseModel):
@@ -32,7 +32,7 @@ class TableModel(BaseModel):
     def _absorb(self, units, corr, ratio, held, w_pace, w_hold, now):
         if not self.emitting:
             self._table = None
-            slot = self._slot(now)
+            slot = self.slot(now)
             np.add.at(self.pace_num[slot], units, ratio * w_pace)
             np.add.at(self.pace_den[slot], units, w_pace)
             np.add.at(self.hold_num[slot], units, held * w_hold)
@@ -41,7 +41,7 @@ class TableModel(BaseModel):
             # the table's own prediction is the denominator, so a section the
             # table already knows is slow does not count as today being slow
             pace, _ = self._frozen()
-            want = pace[self._slot(now), units]
+            want = pace[self.slot(now), units]
             self.live.update(np.zeros(1, dtype=int),
                              np.array([np.average(ratio / want, weights=w_pace)]),
                              now, np.array([w_pace.sum()]))
@@ -62,16 +62,10 @@ class TableModel(BaseModel):
     def refresh(self, now):
         pace, hold = self._frozen()
         k = self._hours(now)
-        ratio = self._between(pace, k)
+        ratio = between_slots(pace, k)
         if self.live is not None:
             ratio = ratio * self.live.read(now)[0][0]
-        self._apply(ratio, self._between(hold, k), now)
-
-    @staticmethod
-    def _between(table, k):
-        """The table at a fractional hour, interpolated the way the prior is."""
-        i, f = int(k), k - int(k)
-        return (1.0 - f) * table[i] + f * table[(i + 1) % SLOTS]
+        self._apply(ratio, between_slots(hold, k), now)
 
 
 class KnnModel(BaseModel):
@@ -149,7 +143,7 @@ class Ring:
         two medians is not a median.
         """
         age = now - self.t
-        left = sum(np.exp(-np.minimum(age / tau, 700.0)) for tau in self.taus)
+        left = sum(decay(age, tau) for tau in self.taus)
         return self.w * left / len(self.taus)
 
 
@@ -225,7 +219,7 @@ class MedianLayer:
 
 
 class MedianModel(PaceModel):
-    """The shipped model with `MedianLayer` in place of `model.Layer`."""
+    """`PaceModel` with `MedianLayer` in place of `model.Layer`."""
 
     def _layer(self, init):
         return MedianLayer(self.nunit, self.ncorr, self.unit_corr, init,

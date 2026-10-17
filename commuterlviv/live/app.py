@@ -20,7 +20,8 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
 
-from .. import __version__, network, plan
+from .. import __version__, localtime, network, plan
+from ..logs import brief, log
 from . import (auth, db, geocode, hub, journeys, prefs, refresh, reports,
                security, service, settings)
 
@@ -31,6 +32,8 @@ REMEMBER_COOKIE = "lp_remember"
 MAX_BODY = 8 * 1024
 SESSION_RECHECK = 60.0          # s between asking whether an open socket still has a session
 PLAN_WORKERS = 4                # journey searches running at once, city-wide
+MAX_ID_DIGITS = 9               # `int` raises on a long enough digit string
+NO_SUCH_SET = "No such set"     # missing, or another user's
 
 
 def _address(raw):
@@ -40,10 +43,6 @@ def _address(raw):
         return str(ipaddress.ip_address(raw))
     except ValueError:
         return None
-
-
-def log(*a):
-    print(time.strftime("%Y-%m-%d %H:%M:%S"), *a, flush=True)
 
 
 class Guard:
@@ -96,12 +95,12 @@ class Guard:
 
     def set_remember(self, resp, raw):
         resp.set_cookie(self.name(REMEMBER_COOKIE), raw,
-                        max_age=int(self.set.remember_days * 86400), path="/",
+                        max_age=int(self.set.remember_days * localtime.DAY_S), path="/",
                         httponly=True, samesite="lax",
                         secure=self.set.secure_cookies)
 
-    def clear(self, resp):
-        for base in (SESSION_COOKIE, CSRF_COOKIE, REMEMBER_COOKIE):
+    def clear(self, resp, bases=(SESSION_COOKIE, CSRF_COOKIE, REMEMBER_COOKIE)):
+        for base in bases:
             resp.delete_cookie(self.name(base), path="/",
                                secure=self.set.secure_cookies, samesite="lax")
 
@@ -110,21 +109,38 @@ def error(message, status=400, **extra):
     return JSONResponse({"error": message, **extra}, status_code=status)
 
 
+class BadBodyError(Exception):
+    """A request body refused before its handler sees it; answered as
+    `error(message, status)`."""
+
+    def __init__(self, message, status=400):
+        super().__init__(message)
+        self.message, self.status = message, status
+
+
+async def _bad_body(request, exc):
+    return error(exc.message, exc.status)
+
+
 async def body(request):
+    """The request's JSON object, or BadBodyError."""
     # checked before reading: buffering first would already cost the memory
     declared = request.headers.get("content-length", "")
-    if declared.isdigit() and (len(declared) > 9 or int(declared) > MAX_BODY):
-        return None, error("Request too large", 413)
+    if declared.isdecimal() and (len(declared) > MAX_ID_DIGITS
+                                 or int(declared) > MAX_BODY):
+        raise BadBodyError("Request too large", 413)
     raw = b""
     async for chunk in request.stream():
         raw += chunk
         if len(raw) > MAX_BODY:
-            return None, error("Request too large", 413)
+            raise BadBodyError("Request too large", 413)
     try:
         data = json.loads(raw or b"{}")
-    except json.JSONDecodeError:
-        return None, error("Expected JSON")
-    return (data, None) if isinstance(data, dict) else (None, error("Expected an object"))
+    except json.JSONDecodeError as exc:
+        raise BadBodyError("Expected JSON") from exc
+    if not isinstance(data, dict):
+        raise BadBodyError("Expected an object")
+    return data
 
 
 async def resolve(request):
@@ -189,7 +205,8 @@ def protected(handler, unsafe=True):
 async def me(request, session):
     app = request.app.state
     return JSONResponse({"username": session["username"],
-                         "sets": await prefs.listing(app.pool, session["user_id"])})
+                         "sets": await prefs.listing(app.pool, session["user_id"]),
+                         "password_change": app.settings.password_change})
 
 
 async def register(request):
@@ -200,9 +217,7 @@ async def register(request):
     if not g.auth_ip.take(g.ip(request)):
         return error("Too many attempts", 429,
                      retry=round(g.auth_ip.retry_after(g.ip(request))))
-    data, bad = await body(request)
-    if bad:
-        return bad
+    data = await body(request)
     # the code may arrive in the path, since what an admin hands out is a link
     code = request.path_params.get("code") or data.get("code")
     uid, why = await auth.register(app.pool, app.hasher, data.get("username"),
@@ -220,9 +235,7 @@ async def login(request):
     if not g.origin_ok(request):
         return error("Bad origin", 403)
     ip = g.ip(request)
-    data, bad = await body(request)
-    if bad:
-        return bad
+    data = await body(request)
     name = security.clean_username(data.get("username")) or "?"
     if not g.auth_ip.take(ip) or not g.auth_user.take((ip, name)):
         return error("Too many attempts", 429,
@@ -265,9 +278,9 @@ async def logout(request, session):
 
 async def password(request, session):
     app = request.app.state
-    data, bad = await body(request)
-    if bad:
-        return bad
+    if not app.settings.password_change:
+        return error("Changing the password is turned off", 403)
+    data = await body(request)
     why = await auth.change_password(app.pool, app.hasher, session["user_id"],
                                      data.get("old"), data.get("new"),
                                      session["id"])
@@ -276,8 +289,7 @@ async def password(request, session):
     await auth.event(app.pool, "password_changed", session["user_id"],
                      app.guard.ip(request))
     resp = JSONResponse({"ok": True})
-    resp.delete_cookie(app.guard.name(REMEMBER_COOKIE), path="/",
-                       secure=app.settings.secure_cookies, samesite="lax")
+    app.guard.clear(resp, (REMEMBER_COOKIE,))
     return resp
 
 
@@ -313,8 +325,19 @@ async def traffic_streets(request, session):
 async def traffic_now(request, session):
     """How each of those is running against its timetable, now."""
     app = request.app.state
-    return Response(app.traffic_cache.read(time.time()),
-                    media_type="application/json")
+    cache, now = app.traffic_cache, time.time()
+    if not cache.fresh(now):
+        # an epoch rewrites the model's arrays in a worker thread
+        async with app.svc.lock:
+            await asyncio.to_thread(cache.read, now)
+    return Response(cache.read(now), media_type="application/json")
+
+
+def _id(raw):
+    """A small non-negative integer from a query parameter, or None."""
+    if raw is None or not raw.isdecimal() or len(raw) > MAX_ID_DIGITS:
+        return None
+    return int(raw)
 
 
 async def arrivals(request, session):
@@ -322,9 +345,8 @@ async def arrivals(request, session):
     app = request.app.state
     want = request.query_params.get("stops", "")
     cat = app.svc.live.cat
-    # `int` raises on a long enough digit string, and the query is unbounded
-    ids = [int(p) for p in want.split(",")[:hub.MAX_STOPS]
-           if p.isdigit() and len(p) <= 9 and int(p) < len(cat.stops)]
+    ids = [i for i in map(_id, want.split(",")[:hub.MAX_STOPS])
+           if i is not None and i < len(cat.stops)]
     return JSONResponse(hub.due(app.svc.live.arrivals, ids))
 
 
@@ -332,12 +354,12 @@ async def vehicle(request, session):
     """One vehicle's predicted stops and times; an untracked id gets an empty
     list rather than a 404."""
     app = request.app.state
-    want = request.query_params.get("veh", "")
-    if not want.isdigit() or len(want) > 9:
+    veh = _id(request.query_params.get("veh"))
+    if veh is None:
         return error("Veh must be a number")
     arr = app.svc.live.arrivals
-    rows = arr.of(int(want))
-    return JSONResponse({"t": arr.t, "veh": int(want), "stops": [
+    rows = arr.of(veh)
+    return JSONResponse({"t": arr.t, "veh": veh, "stops": [
         {"stop": int(r["stop"]), "route": int(r["route"]), "t": int(r["t"]),
          **({"planned": True} if r["planned"] else {})}
         for r in rows]})
@@ -345,7 +367,7 @@ async def vehicle(request, session):
 
 def _point(raw):
     """A "lat,lon" query parameter, or None; points outside the city's box are
-    refused, since the footpath graph stops at the city limit."""
+    refused, since the footpath graph ends there."""
     parts = (raw or "").split(",")
     if len(parts) != 2:
         return None
@@ -361,15 +383,14 @@ def _point(raw):
 def _origin(q):
     """Where a search starts: a point `from`, or on board vehicle `veh`, which
     keeps the traveller's own position off the request."""
-    veh = q.get("veh")
-    if veh is None:
+    if q.get("veh") is None:
         return _point(q.get("from"))
-    if not veh.isdigit() or len(veh) > 9:
-        return None
-    return plan.Aboard(int(veh))
+    veh = _id(q.get("veh"))
+    return None if veh is None else plan.Aboard(veh)
 
 
 PLAN_AHEAD_DAYS = 30
+PLAN_PAST_S = 3600.0    # s in the past an `at` may still be
 
 
 def _departure(raw):
@@ -382,7 +403,7 @@ def _departure(raw):
     except ValueError:
         return None, "at must be a unix time in seconds"
     now = time.time()
-    if at < now - 3600 or at > now + PLAN_AHEAD_DAYS * 86400:
+    if at < now - PLAN_PAST_S or at > now + PLAN_AHEAD_DAYS * localtime.DAY_S:
         return None, f"at must be within the next {PLAN_AHEAD_DAYS} days"
     return at, None
 
@@ -447,7 +468,7 @@ async def journey(request, session):
         # answered as JSON on purpose: an unhandled exception leaves Starlette
         # with a plain-text 500, which every client reads as a JSON.parse
         # failure rather than as what went wrong
-        log("plan failed:", repr(exc)[:200])
+        log("plan failed:", brief(exc))
         return error("Could not plan that journey", 500)
     rid = app.recent.hold(session["user_id"], {
         "from": origin, "to": dest, "t": found["t"], "asked": asked,
@@ -483,7 +504,7 @@ async def backup(request, session):
                 held["speed"], held["hurry"], held["journeys"][option], leg, n)
     except Exception as exc:
         # as JSON for the same reason as a failed search's
-        log("backup failed:", repr(exc)[:200])
+        log("backup failed:", brief(exc))
         return error("Could not draw that way", 500)
     if found is None:
         return error("That search has no such backup", 404)
@@ -494,9 +515,7 @@ async def report(request, session):
     """Keeps a search just made, with what it ran on, for a look later; see
     `reports`."""
     app = request.app.state
-    data, bad = await body(request)
-    if bad:
-        return bad
+    data = await body(request)
     note = data.get("note") or ""
     if not isinstance(note, str) or len(note) > reports.NOTE:
         return error(f"A note is text of at most {reports.NOTE} characters")
@@ -527,7 +546,7 @@ async def places_near(request, session):
     try:
         found = await asyncio.to_thread(app.geocoder.find, q[:120])
     except Exception as exc:
-        log("geocode:", repr(exc)[:200])
+        log("geocode:", brief(exc))
         return error("Place search is unavailable", status=502)
     return JSONResponse({"places": found})
 
@@ -539,9 +558,7 @@ async def pins(request, session):
     uid = session["user_id"]
     if request.method == "GET":
         return JSONResponse({"pins": await prefs.pins(app.pool, uid)})
-    data, bad = await body(request)
-    if bad:
-        return bad
+    data = await body(request)
     stops, why = prefs.clean_pins(data.get("pins"), app.svc.live.cat.stop_i)
     if why:
         return error(why)
@@ -555,9 +572,7 @@ async def places(request, session):
     uid = session["user_id"]
     if request.method == "GET":
         return JSONResponse({"places": await prefs.places(app.pool, uid)})
-    data, bad = await body(request)
-    if bad:
-        return bad
+    data = await body(request)
     saved, why = prefs.clean_places(data.get("places"))
     if why:
         return error(why)
@@ -570,9 +585,7 @@ async def sets(request, session):
     uid = session["user_id"]
     if request.method == "GET":
         return JSONResponse(await prefs.listing(app.pool, uid))
-    data, bad = await body(request)
-    if bad:
-        return bad
+    data = await body(request)
     valid = app.svc.live.cat.route_i
     ok, why = prefs.clean(data.get("name"), data.get("routes") or [], valid)
     if why:
@@ -586,31 +599,28 @@ async def one_set(request, session):
     uid, sid = session["user_id"], request.path_params["sid"]
     if request.method == "DELETE":
         return (JSONResponse({"ok": True}) if await prefs.delete(app.pool, sid, uid)
-                else error("No such set", 404))
-    data, bad = await body(request)
-    if bad:
-        return bad
+                else error(NO_SUCH_SET, 404))
+    data = await body(request)
     ok, why = prefs.clean(data.get("name"), data.get("routes") or [],
                           app.svc.live.cat.route_i)
     if why:
         return error(why)
     row, why = await prefs.update(app.pool, sid, uid, *ok)
-    return error(why, 404 if why == "no such set" else 400) if why \
-        else JSONResponse(row)
+    if why:
+        return error(why)
+    return JSONResponse(row) if row else error(NO_SUCH_SET, 404)
 
 
 async def active(request, session):
     app = request.app.state
-    data, bad = await body(request)
-    if bad:
-        return bad
+    data = await body(request)
     sid = data.get("id")
     try:
         sid = uuidlib.UUID(sid) if sid else None
     except (ValueError, AttributeError, TypeError):
-        return error("No such set", 404)
+        return error(NO_SUCH_SET, 404)
     if not await prefs.activate(app.pool, session["user_id"], sid):
-        return error("No such set", 404)
+        return error(NO_SUCH_SET, 404)
     return JSONResponse({"ok": True})
 
 
@@ -725,6 +735,8 @@ def build(st=None, net=None):
         refresh.install(s, refresh.served(loaded, s.svc.live))
         s.planner = journeys.Planner.maybe(loaded, cat, log)
         s.preparing = False
+        # read each epoch, since a renew or `arrange` replaces the planner
+        s.svc.timetable = lambda: s.planner and s.planner.tt
         s.geocoder = geocode.Geocoder(st.photon_url)
         s.hub = hub.Hub(s.svc.live)
         s.planning = asyncio.Semaphore(PLAN_WORKERS)
@@ -753,7 +765,8 @@ def build(st=None, net=None):
     # gzip only ever sees complete HTTP responses; the websocket's packed bytes
     # are untouched
     return Starlette(routes=routes(), lifespan=lifespan,
-                     middleware=[Middleware(GZipMiddleware, minimum_size=1024)])
+                     middleware=[Middleware(GZipMiddleware, minimum_size=1024)],
+                     exception_handlers={BadBodyError: _bad_body})
 
 
 async def sweeper(pool, every=3600.0):
@@ -762,4 +775,4 @@ async def sweeper(pool, every=3600.0):
         try:
             await auth.sweep(pool)
         except Exception as exc:
-            log("sweep failed", repr(exc)[:200])
+            log("sweep failed", brief(exc))

@@ -22,6 +22,19 @@ AT_END = 1.0             # m short of the shape's end that counts as at it
 SIG_SNAP = 12.0          # m, along-track map-match error
 SIG_SPEED = 1.5          # m/s, reported speed error
 SIG_ACC = 0.8            # m/s^2, unmodelled acceleration
+SIG_ODO = 1.0            # m, odometer increment error, plus...
+ODO_SHARE = 0.02         # ...this share of the increment
+SIG_START = 20.0         # m, position error of a fresh track
+SIG_START_SPEED = 5.0    # m/s, speed error of a fresh track
+IGNORED = 1e6            # m^2, a snap's variance where it is not to be trusted
+# a known track's snap searches this far ahead of it, plus as far as it could
+# have gone at this speed over the gap, the gap counted to at most this long -
+# and half as far behind it
+SEARCH = 200.0           # m
+SEARCH_SPEED = 25.0      # m/s
+SEARCH_GAP = 120.0       # s
+SEARCH_BACK = 0.5
+EDGE = 1e-6              # m, how close to a cell's start counts as at it
 
 
 class Cell:
@@ -73,7 +86,7 @@ class Track:
         self.clen = self.shape.length / self.shape.cells
         self.s = None
         self.v = 0.0
-        self.P = np.array([[400.0, 0.0], [0.0, 25.0]])
+        self.P = np.diag([SIG_START ** 2, SIG_START_SPEED ** 2])
         self.ts = ts
         self.odo = None
         self.next_stop = 0
@@ -84,9 +97,9 @@ class Track:
         if self.s is None:
             d, e = candidates(self.shape, xy)
             return float(d[0]), float(e[0])
-        reach = 200.0 + 25.0 * min(gap, 120.0)
+        reach = SEARCH + SEARCH_SPEED * min(gap, SEARCH_GAP)
         return project(self.shape.xy, self.shape.cum, xy,
-                       self.s - 0.5 * reach, self.s + reach)
+                       self.s - SEARCH_BACK * reach, self.s + reach)
 
 
 def observe(tr, net, ts, lat, lon, speed, odometer, trip):
@@ -100,23 +113,56 @@ def observe(tr, net, ts, lat, lon, speed, odometer, trip):
     if trip != tr.trip or tr.ts is None or ts - tr.ts > GAP_RESET:
         tr.reset(trip, net, ts)
     gap = max(ts - tr.ts, 0.0)
-    xy = to_xy(np.array([lat]), np.array([lon]))[0]
-
-    z_s, lat_err = tr.snap(xy, gap)
+    z_s, lat_err = _locate(tr, net, ts, lat, lon, gap)
     odo_m = odometer * 1000.0
     u = None if (tr.odo is None or odo_m < tr.odo) else odo_m - tr.odo
     tr.odo = odo_m
 
     if tr.s is None or (lat_err > MAX_LATERAL and u is None):
         tr.s, tr.v, tr.ts = z_s, speed, ts
-        tr.next_stop = int(np.searchsorted(tr.sdist, tr.s, "right"))
-        tr.cell = None
+        _restart_stops(tr)
         return [], []
 
     s0 = tr.s
+    _filter(tr, gap, u, z_s, lat_err, speed)
+    tr.ts = ts
+    if tr.s < s0 - JUMP_BACK:
+        _restart_stops(tr)
+        tr.run += 1
+        return [], []
+
+    dist = tr.s - s0
+    holding = dist < HOLD_DIST and speed < HOLD_SPEED
+    return _spread(tr, s0, dist, gap, holding), _passings(tr, s0, dist, gap, ts)
+
+
+def _locate(tr, net, ts, lat, lon, gap):
+    """Where on the shape a fix is: (distance along it, metres off it)."""
+    xy = to_xy(np.array([lat]), np.array([lon]))[0]
+    z_s, lat_err = tr.snap(xy, gap)
+    if tr.s is not None and lat_err > MAX_LATERAL:
+        d, e = candidates(tr.shape, xy)
+        if e[0] <= MAX_LATERAL:
+            # on the shape, but nowhere the track could have got to: it has lost
+            # the vehicle - its fixes froze and came back, odometer and all, as
+            # through an air raid alert - and is as stale as after a gap
+            tr.reset(tr.trip, net, ts)
+            z_s, lat_err = float(d[0]), float(e[0])
+    return z_s, lat_err
+
+
+def _restart_stops(tr):
+    """Count stops on from where the track now is, in no cell yet."""
+    tr.next_stop = int(np.searchsorted(tr.sdist, tr.s, "right"))
+    tr.cell = None
+
+
+def _filter(tr, gap, u, z_s, lat_err, speed):
+    """One Kalman step: predict by the odometer's `u` metres when there is an
+    increment, else by the speed, then correct by the snap and the speed."""
     if u is not None and gap > 0:
         s_pred, v_pred = tr.s + u, u / gap
-        var_u = (1.0 + 0.02 * u) ** 2
+        var_u = (SIG_ODO + ODO_SHARE * u) ** 2
     else:
         s_pred, v_pred = tr.s + tr.v * gap, tr.v
         var_u = (0.5 * SIG_ACC * gap * gap) ** 2
@@ -126,24 +172,17 @@ def observe(tr, net, ts, lat, lon, speed, odometer, trip):
     P[1, 1] += (SIG_ACC * gap) ** 2
 
     x0 = np.array([s_pred, v_pred])
-    R = np.diag([SIG_SNAP ** 2 if lat_err <= MAX_LATERAL else 1e6, SIG_SPEED ** 2])
+    R = np.diag([SIG_SNAP ** 2 if lat_err <= MAX_LATERAL else IGNORED, SIG_SPEED ** 2])
     K = P @ np.linalg.inv(P + R)
     x = x0 + K @ (np.array([z_s, speed]) - x0)
     tr.P = (np.eye(2) - K) @ P
     tr.s = float(np.clip(x[0], 0.0, tr.shape.length))
     tr.v = float(max(x[1], 0.0))
-    tr.ts = ts
 
-    if tr.s < s0 - JUMP_BACK:
-        tr.next_stop = int(np.searchsorted(tr.sdist, tr.s, "right"))
-        tr.run += 1
-        tr.cell = None
-        return [], []
 
-    dist = tr.s - s0
-    holding = dist < HOLD_DIST and speed < HOLD_SPEED
-    done = _spread(tr, s0, dist, gap, holding)
-
+def _passings(tr, s0, dist, gap, ts):
+    """The stops passed going `dist` from `s0` in the `gap` s to `ts`, each
+    timed by where between the two fixes it lies."""
     # the position stops at the shape's end, and the filter only nears it, so
     # a stop placed at the end - or just past it - is passed on getting there
     reach = tr.s if tr.s < tr.shape.length - AT_END else np.inf
@@ -154,7 +193,7 @@ def observe(tr, net, ts, lat, lon, speed, odometer, trip):
         passings.append((i, ts - gap + f * gap, gap))
         i += 1
     tr.next_stop = i
-    return done, passings
+    return passings
 
 
 def _spread(tr, s0, dist, gap, holding):
@@ -164,7 +203,7 @@ def _spread(tr, s0, dist, gap, holding):
     last = tr.shape.cells - 1
     i0 = min(int(s0 / cl), last)
     if tr.cell is None:
-        tr.cell = Cell(i0, s0 <= i0 * cl + 1e-6)
+        tr.cell = Cell(i0, s0 <= i0 * cl + EDGE)
     elif tr.cell.i != i0:
         tr.cell = Cell(i0, False)
 

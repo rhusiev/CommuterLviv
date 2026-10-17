@@ -8,12 +8,15 @@ from pathlib import Path
 
 import requests
 
+from . import files
+from .localtime import DAY_S
+
 BASE = "https://track.ua-gis.com/gtfs/lviv"
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 ZIP = DATA / "static.zip"
 PREV = DATA / "static.prev.zip"     # the feed a new one replaced, until it is kept
-MAX_AGE = 24 * 3600
+MAX_AGE = DAY_S      # s a downloaded feed is used before fetching again
 
 LAT_M = 111320.0
 
@@ -48,11 +51,10 @@ def refetch():
         missing = {"a zip"}
     if missing:
         raise ValueError(f"the feed came without {', '.join(sorted(missing))}")
-    tmp = DATA / "static.zip.tmp"
-    tmp.write_bytes(body)
-    if ZIP.exists():
-        ZIP.replace(PREV)
-    tmp.replace(ZIP)
+    with files.replacing(ZIP) as fresh:
+        fresh.write_bytes(body)
+        if ZIP.exists():
+            ZIP.replace(PREV)
     return True
 
 

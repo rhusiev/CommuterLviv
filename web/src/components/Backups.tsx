@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { stopName } from "../lib/catalog";
 import { clock } from "../lib/eta";
 import { t } from "../lib/i18n";
 import { shortlist, type Prefer } from "../lib/prefer";
@@ -80,7 +81,7 @@ export function Backups({
       </span>
       {chain.length > 1 && (
         <span className="block pl-12 text-xs text-slate-500">
-          {t.changeAt(chain.slice(1).map((r) => catalog.stops[r.a]?.name ?? "").join(", "))}
+          {t.changeAt(chain.slice(1).map((r) => stopName(catalog, r.a)).join(", "))}
         </span>
       )}
     </button>
@@ -100,7 +101,7 @@ export function Backups({
         {failed && <p className="mt-2 text-xs text-rose-300">{failed}</p>}
         {rides.map((leg, i) => (
           <div key={i} className="mt-3 border-t border-hair pt-2">
-            <h3 className="mb-1 truncate text-slate-200">{catalog.stops[leg.a]?.name}</h3>
+            <h3 className="mb-1 truncate text-slate-200">{stopName(catalog, leg.a)}</h3>
             {way(
               rides.slice(i).map((r) => ({ route: r.route!, dep: r.dep, a: r.a })),
               journey.arr,

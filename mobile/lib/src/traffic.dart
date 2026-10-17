@@ -20,8 +20,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'api.dart';
 import 'models.dart';
 
-const trafficPeriod = Duration(seconds: 60);
-
 /// The zoom the stretches are projected at. Web Mercator pixels scale by a power
 /// of two between zooms, so one projection serves every zoom under a scale.
 const _zoom = 18.0;
@@ -142,7 +140,7 @@ class _TrafficLayerState extends State<TrafficLayer> {
   void initState() {
     super.initState();
     unawaited(_load());
-    _timer = Timer.periodic(trafficPeriod, (_) => unawaited(_load()));
+    _timer = Timer.periodic(epoch, (_) => unawaited(_load()));
   }
 
   @override

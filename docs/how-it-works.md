@@ -87,7 +87,19 @@ neighbouring fixes and would bias the increment systematically. GPS still
 enters, but only as a correction of absolute position, with 12 m assumed
 along-track snap error and 1.5 m/s assumed speed error. A snap more than 60 m
 off the line is refused; 300 s without a fix, or 150 m of backwards motion,
-resets the track (the latter is a loop restart, not noise).
+resets the track (the latter is a loop restart, not noise). So does a fix that
+lands on the trip's line - within the same 60 m - but outside the stretch the
+snap searches around where the track has the vehicle: the track has lost it.
+Fixes that froze and came back far ahead do that, as through an air raid alert,
+when the odometer froze with them and carries on as if the vehicle had not
+moved. Before the reset existed such a track stayed behind, moved on by the
+odometer alone, and timed the stops ahead minutes late. Replaying 2026-09-15
+19:00-21:00, 09-16 10:00-12:00 and 09-17 13:00-14:00, the reset moved 1481,
+2264 and 983 passings by over a minute - about one in twenty in each, as many
+in normal service as through a blackout. In 300 sampled from each, it put 266,
+279 and 274 of them where the raw fix nearest the stop was, a median of 3 s off
+rather than about 430 s, and the median ETA error, scored against the passings
+it produces, fell from 109, 102 and 78 s to 88, 83 and 64 s.
 
 Measured against interpolated truth, the filtered position is off by a median of
 +6 m, with p5 and p95 at -159 m and +169 m.

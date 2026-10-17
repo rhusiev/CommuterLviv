@@ -152,11 +152,19 @@ wanted. Routes choose what is tracked and open the routes panel. Layers change
 what the map draws - the route lines, the traffic, the basemap - and live in one
 sheet behind a layers button, whose icon is lit while anything in it is on.
 Everything belonging to the account rather than to the map - what is saved, the
-language, the server, signing out - lives behind an account button, with signing
+language, the server, the password, signing out - lives behind an account button, with signing
 out below a rule so it is never the tap next to anything else. Nothing that is a
 toggle and nothing that signs you out sits loose on the map. That is
 `LayersSheet` and `AccountSheet` in `mobile/lib/src/sheets.dart`, and
 `LayersPanel.tsx` and `AccountMenu.tsx` on the web.
+
+Changing the password is offered only where the service says it allows it
+(`password_change` in `/api/me`), which it does not by default. Where offered, it
+asks for the current one and the new one, and keeps the
+form open with the service's reason while it refuses. Once taken, every other
+device is signed out and so is this one's remember-me, so this device too signs
+in again once its session lapses. That is `PasswordForm.tsx` on the web and
+`mobile/lib/src/password_dialog.dart` in the app.
 
 A route is named the same way everywhere: the kind of vehicle as a glyph, then
 the number. The city writes the kind as the letter in front of the number - `А25`
@@ -179,6 +187,15 @@ served - hashed assets under `/assets/` for good, the document network-first -
 and never `/api` or `/ws`, because a minute-old arrival time is worse than none
 and a cached session would lie about who is signed in. Offline it opens and says
 the service is not answering, which is the truth: the times come from the socket.
+
+When the service says the vehicles have gone quiet - too few reporting for the
+trips the timetable has under way, see
+[the service](service.md#when-the-vehicles-go-quiet) - an amber banner over the
+map says that few vehicles are reporting, possibly because of an air raid alert,
+and that positions and arrival times may be missing or off. It says "possibly":
+a failing feed looks the same. Closing it hides it until the vehicles report
+again and go quiet anew, and it is never shown while the socket is down, when
+the service cannot say either way.
 
 The language is Ukrainian, with English for a browser that asks for it;
 `web/src/lib/i18n.ts` holds both dictionaries and the picker is in the route
@@ -204,8 +221,10 @@ route sets and the same predictions, and the same journey planner behind the
 third choice in the tab pill. Both also carry the same three views added since:
 a saved list where a place can be renamed or dropped, a search that finds
 addresses and shops as well as stop names, with matching saved places above
-both, traffic drawn over the streets
-the model can see, and following a journey as you travel it.
+both, and lists the stops within 2 km of where you are (the web's ◎ in the search
+bar, the app's search before anything is typed), traffic drawn over the streets
+the model can see, following a journey as you travel it, and the banner that
+warns when the vehicles go quiet.
 
 ```sh
 cd mobile && flutter pub get
@@ -222,7 +241,11 @@ The shape of the code is the shape of the web app's, for the same reason. Every
 vehicle and every stop is one `CustomPaint` repainted from a `Ticker`, not four
 hundred widgets; positions are eased between the five-second frames; and the
 route badge for each route is laid out once into a `ui.Paragraph` and drawn
-thereafter, which is what the offscreen badge canvases do in the browser.
+thereafter, which is what the offscreen badge canvases do in the browser. The
+two maps count zoom differently - flutter_map's tiles are 256 px, MapLibre's
+512 - so where the app starts drawing stops and place names, and how close it
+comes in on a place, are the web's levels plus one (`webZoomOffset`): both do it
+at the same ground scale.
 
 It is built to be publishable on F-Droid, which is why it is Flutter and not
 Expo: F-Droid builds from source and takes no proprietary SDK, so there is no

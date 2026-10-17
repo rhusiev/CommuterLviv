@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { api, ApiError } from "../lib/api";
+import { stopName } from "../lib/catalog";
 import { clock, mins } from "../lib/eta";
 import { followable, plannedKmh } from "../lib/follow";
 import { t } from "../lib/i18n";
@@ -26,6 +27,16 @@ export type Origin = Point | Aboard;
 
 type End = "from" | "to";
 
+/** A key per journey that follows it through re-ranking: an option keeps its
+ *  own state when a backup taken is ranked in above it */
+const keys = new WeakMap<Journey, number>();
+let nextKey = 0;
+function keyOf(j: Journey) {
+  let k = keys.get(j);
+  if (k === undefined) keys.set(j, (k = nextKey++));
+  return k;
+}
+
 /** What a ride not on a tracked vehicle rests on, how loudly to say so, and why
  *  it matters */
 const RESTS: Record<
@@ -45,20 +56,19 @@ const RESTS: Record<
   quiet: { word: t.quietPart, tone: "text-amber-400", why: t.quietWhy },
 };
 
-/** As far ahead as the server plans */
-const AHEAD_S = 30 * 86400;
-
-/** What `<input type="datetime-local">` wants: local wall clock, no zone */
-const onClock = (at: number) => {
-  const d = new Date(at * 1000);
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-};
-
 /** The same place: 1e-4 degrees is about 11 m */
 const same = (a: Point, b: Place) =>
   Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lon - b.lon) < 1e-4;
 
 const key = (p: Point) => `${p.lat},${p.lon}`;
+
+/** What the panel keeps of a search beyond its options: its name for its
+ *  backups, which reporting it leaves alone; the backups fetched as options of
+ *  their own, by the option, leg and backup they came from; and the option of
+ *  the search's each was built from */
+type Held = { id: string | null; built: Map<string, Journey>; from: Map<Journey, number> };
+
+const fresh = (id: string | null): Held => ({ id, built: new Map(), from: new Map() });
 
 export function JourneyPanel({
   catalog,
@@ -103,61 +113,52 @@ export function JourneyPanel({
   folded: boolean;
   onFold: (folded: boolean) => void;
 }) {
-  const [options, setOptions] = useState<Journey[] | null>(null);
-  const [shown, setShown] = useState<Journey | null>(null);
+  /** The ends of the last search: what it found is shown only while they are
+   *  still these ends */
+  const [searched, setSearched] = useState<{ from: Origin; to: Point } | null>(null);
+  const current = searched?.from === from && searched?.to === to;
+  const [found, setFound] = useState<Journey[] | null>(null);
+  const options = current ? found : null;
+  const [picked, setPicked] = useState<Journey | null>(null);
+  const shown = current ? picked : null;
   const show = (j: Journey | null) => {
-    setShown(j);
+    setPicked(j);
     onShow(j);
   };
   // Leaving the planner takes its journey off the map
   useEffect(() => () => onShow(null), [onShow]);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const failed = current ? failure : null;
   /** The search's name for reporting it, until it is reported */
-  const [report, setReport] = useState<string | null>(null);
+  const [reportable, setReportable] = useState<string | null>(null);
+  const report = current ? reportable : null;
   /** How reporting it went */
-  const [reportSaid, setReportSaid] = useState<string | null>(null);
-  /** The search's name for its backups, which reporting it leaves alone; the
-   *  backups fetched as options of their own, by the option, leg and backup
-   *  they came from; and the option of the search's each was built from */
-  const held = useRef<{
-    id: string | null;
-    built: Map<string, Journey>;
-    from: Map<Journey, number>;
-  }>({ id: null, built: new Map(), from: new Map() });
+  const [reported, setReported] = useState<string | null>(null);
+  const reportSaid = current ? reported : null;
+  const held = useRef(fresh(null));
   /** Unix seconds, or null for now - which is what the service assumes */
   const [at, setAt] = useState<number | null>(null);
   const [prefer, setPrefer] = useState<Prefer>(heldPrefer);
   /** km/h, starting at the one kept as the default */
   const [speed, setSpeed] = useState(heldSpeed);
   /** What the points picked by name were called, so they keep reading so */
-  const names = useRef(new Map<string, string>());
+  const [names, setNames] = useState(() => new Map<string, string>());
   // Options found for other ends are not these ends' options
   useEffect(() => {
-    setOptions(null);
-    setFailed(null);
-    setReport(null);
-    setReportSaid(null);
-    held.current = { id: null, built: new Map(), from: new Map() };
-    setShown(null);
+    held.current = fresh(null);
     onShow(null);
   }, [from, to, onShow]);
-  useEffect(() => {
-    if (!ask || !from || !to) return;
-    onAsked();
-    void search();
-    // Only a new ask or new ends search; `search` reads the rest as it is
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ask, from, to]);
   const aboard = from && "veh" in from ? from : null;
   const start = from && !("veh" in from) ? from : null;
 
   const search = async () => {
     if (!from || !to) return;
+    setSearched({ from, to });
     setBusy(true);
-    setFailed(null);
-    setReport(null);
-    setReportSaid(null);
+    setFailure(null);
+    setReportable(null);
+    setReported(null);
     show(null);
     try {
       // On board is now: the vehicle is tracked only as it goes
@@ -168,22 +169,34 @@ export function JourneyPanel({
         speed,
         heldHurry(),
       );
-      setOptions(got.options);
-      setReport(got.report ?? null);
-      held.current = { id: got.report ?? null, built: new Map(), from: new Map() };
+      setFound(got.options);
+      setReportable(got.report ?? null);
+      held.current = fresh(got.report ?? null);
     } catch (err) {
-      setFailed(
+      setFailure(
         err instanceof ApiError && err.preparing
           ? t.plannerPreparing
           : err instanceof Error
             ? err.message
             : t.failed,
       );
-      setOptions(null);
+      setFound(null);
     } finally {
       setBusy(false);
     }
   };
+
+  // Only a new ask or new ends search; `search` reads the rest as it is
+  const searchAsked = useEffectEvent(() => {
+    onAsked();
+    void search();
+  });
+  useEffect(() => {
+    // A search is what the parent asked for, and the panel may only now have
+    // mounted to hear it, so it cannot be started from the parent's handler
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (ask && from && to) searchAsked();
+  }, [ask, from, to]);
 
   const sendReport = async () => {
     const id = report;
@@ -191,10 +204,10 @@ export function JourneyPanel({
     if (note === null || !id) return;
     try {
       await api.report(id, note);
-      setReport((r) => (r === id ? null : r));
-      setReportSaid(t.reported);
+      setReportable((r) => (r === id ? null : r));
+      setReported(t.reported);
     } catch (err) {
-      setReportSaid(err instanceof Error ? err.message : t.failed);
+      setReported(err instanceof Error ? err.message : t.failed);
     }
   };
 
@@ -207,20 +220,20 @@ export function JourneyPanel({
    *  same, or else that way fetched and listed as an option of its own */
   const takeWay = async (j: Journey, pick: WayPick) => {
     if (pick === null) return draw(j);
-    const same = options?.[j.legs[pick.leg]?.backups?.[pick.n]?.option ?? -1];
-    if (same) return draw(same);
-    const search = held.current;
-    const from = search.from.get(j) ?? options?.indexOf(j) ?? -1;
-    const key = `${from} ${pick.leg} ${pick.n}`;
-    let got = search.built.get(key);
+    const riding = options?.[j.legs[pick.leg]?.backups?.[pick.n]?.option ?? -1];
+    if (riding) return draw(riding);
+    const kept = held.current;
+    const option = kept.from.get(j) ?? options?.indexOf(j) ?? -1;
+    const way = `${option} ${pick.leg} ${pick.n}`;
+    let got = kept.built.get(way);
     if (!got) {
-      if (!search.id) throw new Error(t.searchAgain);
-      got = await api.backup(search.id, from, pick.leg, pick.n);
+      if (!kept.id) throw new Error(t.searchAgain);
+      got = await api.backup(kept.id, option, pick.leg, pick.n);
       // a search made meanwhile has options of its own
-      if (held.current !== search) return;
-      search.built.set(key, got);
-      search.from.set(got, from);
-      setOptions((o) => o && [...o, got!]);
+      if (held.current !== kept) return;
+      kept.built.set(way, got);
+      kept.from.set(got, option);
+      setFound((o) => o && [...o, got!]);
     }
     draw(got);
   };
@@ -280,13 +293,13 @@ export function JourneyPanel({
       end={which}
       point={point}
       aboard={on}
-      name={point && names.current.get(key(point))}
+      name={point && names.get(key(point))}
       catalog={catalog}
       onPick={() => onPick(which)}
       onHere={() => onHere(which)}
       places={places}
       onPlace={(p, name) => {
-        if (name) names.current.set(key(p), name);
+        if (name) setNames((n) => new Map(n).set(key(p), name));
         onPoint(which, p);
       }}
       onSave={(name, p) => onPlaces(saved(places, name, p.lat, p.lon))}
@@ -308,25 +321,7 @@ export function JourneyPanel({
       {field("from", start, aboard)}
       {field("to", to)}
 
-      <div className={`flex items-center gap-2 ${aboard ? "hidden" : ""}`}>
-        <Label text={t.leaveAt} icon="clock" />
-        <input
-          type="datetime-local"
-          value={at === null ? "" : onClock(at)}
-          min={onClock(Date.now() / 1000)}
-          max={onClock(Date.now() / 1000 + AHEAD_S)}
-          onChange={(e) =>
-            setAt(e.target.value === "" ? null : Math.round(new Date(e.target.value).getTime() / 1000))
-          }
-          className="field min-w-0 flex-1 py-1.5"
-        />
-        <button
-          onClick={() => setAt(null)}
-          className={`btn-quiet shrink-0 px-2 text-xs ${at === null ? "text-accent" : ""}`}
-        >
-          {t.leaveNow}
-        </button>
-      </div>
+      {!aboard && <Departure at={at} onAt={setAt} />}
 
       <div className="flex items-center gap-2">
         <Label text={t.walkSpeed} icon="walk" />
@@ -367,9 +362,9 @@ export function JourneyPanel({
       )}
 
       {options &&
-        order.map((j, i) => (
+        order.map((j) => (
           <Option
-            key={i}
+            key={keyOf(j)}
             journey={j}
             shown={j === shown}
             onShow={() => show(j)}
@@ -443,6 +438,45 @@ function Order({
 }
 
 /** An icon standing for a row's name, which it keeps as a tooltip */
+/** As far ahead as the server plans */
+const AHEAD_S = 30 * 86400;
+
+const MINUTE_MS = 60_000;
+
+/** What `<input type="datetime-local">` wants: local wall clock, no zone */
+const onClock = (at: number) => {
+  const d = new Date(at * 1000);
+  return new Date(d.getTime() - d.getTimezoneOffset() * MINUTE_MS).toISOString().slice(0, 16);
+};
+
+/** When to leave: unix seconds, or null for now */
+function Departure({ at, onAt }: { at: number | null; onAt: (at: number | null) => void }) {
+  /** Unix seconds the picker counts from, renewed as it is opened */
+  const [now, setNow] = useState(() => Date.now() / 1000);
+  return (
+    <div className="flex items-center gap-2">
+      <Label text={t.leaveAt} icon="clock" />
+      <input
+        type="datetime-local"
+        value={at === null ? "" : onClock(at)}
+        min={onClock(now)}
+        max={onClock(now + AHEAD_S)}
+        onFocus={() => setNow(Date.now() / 1000)}
+        onChange={(e) =>
+          onAt(e.target.value === "" ? null : Math.round(new Date(e.target.value).getTime() / 1000))
+        }
+        className="field min-w-0 flex-1 py-1.5"
+      />
+      <button
+        onClick={() => onAt(null)}
+        className={`btn-quiet shrink-0 px-2 text-xs ${at === null ? "text-accent" : ""}`}
+      >
+        {t.leaveNow}
+      </button>
+    </div>
+  );
+}
+
 function Label({ text, icon }: { text: string; icon: IconName }) {
   return (
     <span title={text} className="flex w-6 shrink-0 justify-center text-slate-500">
@@ -672,8 +706,8 @@ function Option({
                     : // Consecutive walks are folded before they are sent, so a
                       // walk with a ride either side is the change itself
                       i > 0 && i < journey.legs.length - 1
-                      ? t.changeAt(catalog.stops[leg.b]?.name ?? "")
-                      : (catalog.stops[leg.b]?.name ?? "")}
+                      ? t.changeAt(stopName(catalog, leg.b))
+                      : stopName(catalog, leg.b)}
                 </span>
               </>
             ) : (
@@ -736,7 +770,7 @@ function Ride({
           onClick={() => leg.b >= 0 && onStop(leg.b)}
           className="min-w-0 flex-1 truncate text-left text-slate-200 hover:underline"
         >
-          {catalog.stops[leg.b]?.name ?? ""}
+          {stopName(catalog, leg.b)}
         </button>
         {rests && (
           <button

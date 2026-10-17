@@ -92,6 +92,17 @@ class Catalog {
       ids.map((id) => index[id]).whereType<int>();
 
   List<int> stopsAt(List<String> ids) => [for (final id in ids) ?stopIndex[id]];
+
+  /// A stop's name, or none for a position this catalog lacks: the server
+  /// sends -1 for a stop missing from it, and a newer catalog may be longer
+  String stopName(int stop) =>
+      stop >= 0 && stop < stops.length ? stops[stop].name : '';
+
+  /// The route at [route], or null for a position this catalog lacks
+  TransitRoute? routeAt(int? route) =>
+      route != null && route >= 0 && route < routes.length
+      ? routes[route]
+      : null;
 }
 
 class RouteSet {
@@ -165,15 +176,23 @@ class Sets {
 }
 
 class Me {
-  const Me({required this.username, required this.sets});
+  const Me({
+    required this.username,
+    required this.sets,
+    required this.passwordChange,
+  });
 
   factory Me.fromJson(Map<String, dynamic> j) => Me(
     username: j['username'] as String,
     sets: Sets.fromJson(j['sets'] as Map<String, dynamic>),
+    passwordChange: j['password_change'] as bool? ?? false,
   );
 
   final String username;
   final Sets sets;
+
+  /// Whether the service lets the password be changed; older ones do not say.
+  final bool passwordChange;
 }
 
 class Call {

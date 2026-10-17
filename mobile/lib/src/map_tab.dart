@@ -22,7 +22,8 @@ import 'traffic.dart';
 import 'vehicle_layer.dart';
 import 'strings.dart';
 
-const lviv = LatLng(49.8397, 24.0297);
+/// Rynok Square, which the server's place search also ranks from.
+const lviv = LatLng(49.8419, 24.0315);
 
 class MapTab extends StatelessWidget {
   const MapTab({

@@ -14,6 +14,7 @@ import 'package:latlong2/latlong.dart';
 
 import 'here.dart';
 import 'live.dart';
+import 'map_controls.dart' show webZoomOffset;
 import 'map_theme.dart';
 import 'models.dart';
 import 'theme.dart';
@@ -21,8 +22,8 @@ import 'theme.dart';
 /// Logical pixels.
 const badgeRadius = 13.0;
 
-/// Below this stops overlap into mush, so none are drawn.
-const stopsZoom = 14.0;
+/// Below this stops overlap into mush, so none are drawn: the web's `STOPS_ZOOM`.
+const stopsZoom = 13.4 + webZoomOffset;
 
 const _stopRadius = 3.5;
 
@@ -32,8 +33,9 @@ const _stopRadius = 3.5;
 const _pinRadius = 6.0;
 const _placeRadius = 5.0;
 
-/// Below this a name is more clutter than help, so places are dots alone.
-const _labelZoom = 12.5;
+/// Below this a name is more clutter than help, so places are dots alone: the
+/// web's `LABEL_ZOOM`.
+const _labelZoom = 12.5 + webZoomOffset;
 
 /// Pixels between chevrons along a line. Measured on screen rather than on the
 /// ground, so they stay this far apart at every zoom without being respaced.

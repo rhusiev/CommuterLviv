@@ -20,8 +20,9 @@ set -u
 site=${COMMUTERLVIV_WEB_BASE:-${COMMUTERLVIV_ORIGINS%%,*}}
 site=${site%/}
 public=https://tiles.versatiles.org
-# Lviv and its approaches, from `walk.bbox(net)` - the same area the footpath
-# graph covers, so the map has tiles exactly where the planner has streets
+# Lviv and its approaches: the stops' box with 0.07 degrees (5-8 km) around it,
+# wider than the footpath graph's `walk.bbox(net)`, so the map goes on past the
+# last streets the planner walks
 bbox=23.791,49.702,24.233,50.045
 # The ids the clients offer, in web/src/lib/theme.ts and mobile/lib/src/map_theme.dart
 styles="colorful colorful-dark natural natural-dark muted muted-dark gray gray-dark"

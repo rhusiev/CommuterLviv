@@ -15,6 +15,15 @@ import 'theme.dart';
 const minZoom = 9.0;
 const maxZoom = 18.0;
 
+/// flutter_map's tiles are 256 px where MapLibre's are 512, so the web app's zoom
+/// z shows the ground at the scale this app's z + 1 does. A threshold the two
+/// share is the web's number plus this.
+const webZoomOffset = 1.0;
+
+/// Where the map comes in to on where you are, close enough to read the streets
+/// around you: the web's `NEAR_ZOOM`.
+const nearZoom = 16.0 + webZoomOffset;
+
 /// The thresholds below only apply with the gesture race on: without it every
 /// gesture runs at once and a pinch's incidental twist turns the map.
 const mapInteraction = InteractionOptions(
@@ -72,7 +81,7 @@ class _MapControlsState extends State<MapControls> {
   Future<void> _locate() async {
     final at = await widget.here.start();
     if (at == null || !mounted) return;
-    widget.map.move(at, 16);
+    widget.map.move(at, nearZoom);
     widget.onLocate?.call();
   }
 

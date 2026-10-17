@@ -15,6 +15,9 @@ import 'route_badge.dart';
 import 'strings.dart';
 import 'theme.dart';
 
+/// The share of the screen the route sheet opens to.
+const _routeSheetShare = 0.7;
+
 /// A sheet that floats rather than docks. `showModalBottomSheet` is docked by
 /// construction, so the sheet itself is transparent and the gap is padding
 /// inside it; the handle is drawn here for the same reason. The bottom inset is
@@ -47,6 +50,17 @@ Future<T?> showFloatingSheet<T>(
     ),
   ),
 );
+
+/// What to call a place at a point, proposing [was]; null unless a name was given.
+Future<String?> askPlaceName(BuildContext context, {String? was}) async {
+  final name = await askName(
+    context,
+    txt.namePlace,
+    was: was,
+    action: txt.saveHere,
+  );
+  return name == null || name.isEmpty ? null : name;
+}
 
 /// The one-field dialog behind every name in the app.
 Future<String?> askName(
@@ -235,6 +249,7 @@ class AccountSheet extends StatefulWidget {
     required this.onLanguage,
     required this.onSpeed,
     required this.onServer,
+    this.onPassword,
     required this.onOut,
   });
 
@@ -251,6 +266,9 @@ class AccountSheet extends StatefulWidget {
   final VoidCallback onLanguage;
   final VoidCallback onSpeed;
   final VoidCallback onServer;
+
+  /// Null where the service does not let a password be changed, which hides the row.
+  final VoidCallback? onPassword;
   final VoidCallback onOut;
 
   @override
@@ -301,6 +319,12 @@ class _AccountSheetState extends State<AccountSheet> {
             subtitle: Text(widget.server),
             onTap: widget.onServer,
           ),
+          if (widget.onPassword case final onPassword?)
+            ListTile(
+              leading: const Icon(Icons.password),
+              title: Text(txt.changePassword),
+              onTap: onPassword,
+            ),
           const Divider(height: 1),
           ListTile(
             leading: Icon(Icons.logout, color: colours.error),
@@ -400,9 +424,22 @@ class _RouteSheetState extends State<RouteSheet> {
   late String? _active = widget.sets?.active;
   late List<RouteSet> _sets = widget.sets?.sets ?? const [];
 
+  /// Why the last change to the sets did not go through
+  String? _failed;
+
   List<String> get _ids => [
     for (final i in widget.picked) widget.catalog.routes[i].id,
   ];
+
+  /// Runs [change], saying under the buttons why it failed if it does.
+  Future<void> _guard(Future<void> Function() change) async {
+    setState(() => _failed = null);
+    try {
+      await change();
+    } on Exception catch (e) {
+      if (mounted) setState(() => _failed = widget.api.failure(e));
+    }
+  }
 
   Future<void> _reload() async {
     final sets = await widget.api.sets();
@@ -415,10 +452,13 @@ class _RouteSheetState extends State<RouteSheet> {
     final name = await askName(context, txt.nameSet);
     if (name == null || name.isEmpty) return;
     final made = await widget.api.createSet(name, _ids);
-    await widget.api.activateSet(made.id);
-    if (!mounted) return;
-    _active = made.id;
-    await _reload();
+    try {
+      await widget.api.activateSet(made.id);
+      _active = made.id;
+    } finally {
+      // made, the set belongs in the list even if it could not be activated
+      if (mounted) await _reload();
+    }
   }
 
   Future<void> _update(RouteSet set) async {
@@ -441,8 +481,8 @@ class _RouteSheetState extends State<RouteSheet> {
 
   Future<void> _manage(RouteSet set) => manage(
     context,
-    onRename: () => _rename(set),
-    onDelete: () => _delete(set),
+    onRename: () => _guard(() => _rename(set)),
+    onDelete: () => _guard(() => _delete(set)),
   );
 
   Future<void> _activate(RouteSet set) async {
@@ -471,7 +511,7 @@ class _RouteSheetState extends State<RouteSheet> {
             !active.routes.toSet().containsAll(_ids));
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.7,
+      initialChildSize: _routeSheetShare,
       builder: (context, controller) => ListView(
         controller: controller,
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
@@ -493,7 +533,7 @@ class _RouteSheetState extends State<RouteSheet> {
                       // A checkmark widens the chip, shuffling the ones after it
                       showCheckmark: false,
                       selected: s.id == _active,
-                      onSelected: (_) => _activate(s),
+                      onSelected: (_) => _guard(() => _activate(s)),
                     ),
                   ),
               ],
@@ -576,7 +616,7 @@ class _RouteSheetState extends State<RouteSheet> {
               if (changed) ...[
                 Expanded(
                   child: FilledButton.tonal(
-                    onPressed: () => _update(active),
+                    onPressed: () => _guard(() => _update(active)),
                     child: Text(
                       txt.updateSet(active.name),
                       overflow: TextOverflow.ellipsis,
@@ -587,12 +627,22 @@ class _RouteSheetState extends State<RouteSheet> {
               ],
               Expanded(
                 child: FilledButton.tonal(
-                  onPressed: widget.picked.isEmpty ? null : _save,
+                  onPressed: widget.picked.isEmpty ? null : () => _guard(_save),
                   child: Text(txt.saveAsSet, overflow: TextOverflow.ellipsis),
                 ),
               ),
             ],
           ),
+          if (_failed case final failed?)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                failed,
+                style: material.Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: material.Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ),
         ],
       ),
     );

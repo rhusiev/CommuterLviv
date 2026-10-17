@@ -1,0 +1,23 @@
+{
+  "about": "One delta frame as commuterlviv.live.wire.encode writes it, and what the vehicles behind it were. tests/wire_test.py encodes `vehicles` and expects `bytes`; web/src/lib/wire.test.ts and mobile/test/wire_test.dart decode `bytes` and expect `vehicles` back, positions to `decoded`. Three vehicles - centre, south-west corner, far corner - and two gone ids",
+  "kind": 1,
+  "t": 1234,
+  "gone": [9, 12],
+  "vehicles": [
+    {"id": 7, "route": 0, "lat": 49.8397, "lon": 24.0297, "heading": 0, "stale": false, "moving": false},
+    {"id": 65535, "route": 41, "lat": 49.7, "lon": 23.85, "heading": 180, "stale": true, "moving": false},
+    {"id": 1, "route": 3, "lat": 49.9999, "lon": 24.2999, "heading": 359, "stale": true, "moving": true}
+  ],
+  "decoded": [
+    {"lat": 49.83969787, "lon": 24.02969787, "heading": 0.0},
+    {"lat": 49.7, "lon": 23.85, "heading": 180.0},
+    {"lat": 49.99989929, "lon": 24.299897, "heading": 358.59375}
+  ],
+  "bytes": [
+    1, 1, 210, 4, 0, 0, 3, 0, 2, 0,
+    7, 0, 0, 0, 58, 102, 53, 119, 0, 0,
+    255, 255, 41, 0, 0, 0, 0, 0, 128, 1,
+    1, 0, 3, 0, 240, 255, 233, 255, 255, 3,
+    9, 0, 12, 0
+  ]
+}

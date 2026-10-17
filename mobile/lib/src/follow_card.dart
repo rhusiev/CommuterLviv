@@ -171,7 +171,7 @@ class _FollowCardState extends State<FollowCard> {
     if (p.stage.kind == StageKind.walk || p.stage.kind == StageKind.arrived) {
       return null;
     }
-    return _routeOf(widget.catalog, widget.journey.legs[p.stage.leg].route);
+    return widget.catalog.routeAt(widget.journey.legs[p.stage.leg].route);
   }
 
   /// Repeats the card on the notification, sounding once for each moment
@@ -343,8 +343,8 @@ class _FollowCardState extends State<FollowCard> {
 String? _catchSaid(Catalog catalog, Journey journey, Catch caught) {
   if (caught.kind == CatchKind.ok) return null;
   final leg = journey.legs[caught.leg];
-  final route = _routeOf(catalog, leg.route)?.short ?? '';
-  final stop = _stopName(catalog, leg.a);
+  final route = catalog.routeAt(leg.route)?.short ?? '';
+  final stop = catalog.stopName(leg.a);
   if (caught.kind == CatchKind.missed) {
     return '${txt.noLonger}: ${txt.missedRide(route, stop)}';
   }
@@ -421,7 +421,7 @@ _Said _say(Catalog catalog, Journey journey, Live live, Progress progress) {
   final stage = progress.stage;
   if (stage.kind == StageKind.arrived) return _Said(txt.arrived, null, null);
   final leg = journey.legs[stage.leg];
-  String name(int stop) => _stopName(catalog, stop);
+  String name(int stop) => catalog.stopName(stop);
   List<Arrival> due(int stop) => [
     for (final a in live.arrivals[stop] ?? const <Arrival>[])
       if (a.route == leg.route) a,
@@ -562,8 +562,8 @@ class _Steps extends StatelessWidget {
   }
 
   List<Widget> _what(PlanRow row) {
-    String name(int stop) => _stopName(catalog, stop);
-    final route = _routeOf(catalog, row.route);
+    String name(int stop) => catalog.stopName(stop);
+    final route = catalog.routeAt(row.route);
     final (Widget lead, String text) = switch (row.kind) {
       PlanRowKind.ride => (
         route == null
@@ -591,15 +591,6 @@ class _Steps extends StatelessWidget {
     ];
   }
 }
-
-/// A stop's name; the server sends -1 for a stop the catalog lacks
-String _stopName(Catalog catalog, int stop) =>
-    stop >= 0 && stop < catalog.stops.length ? catalog.stops[stop].name : '';
-
-TransitRoute? _routeOf(Catalog catalog, int? route) =>
-    route != null && route >= 0 && route < catalog.routes.length
-    ? catalog.routes[route]
-    : null;
 
 String _distance(double m) => m < _mPerKm
     ? txt.metres((m / _stepM).round() * _stepM)

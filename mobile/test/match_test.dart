@@ -1,9 +1,23 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:latlong2/latlong.dart';
 
 import 'package:commuterlviv/src/match.dart';
 import 'package:commuterlviv/src/models.dart';
+
+/// What NFKD folds each Latin and Cyrillic letter to, which the web's folding
+/// is checked against too (`tests/fold_test.py`).
+final _folds = [
+  for (final c
+      in (jsonDecode(
+            File('../tests/fold_cases.json').readAsStringSync(),
+          )['cases']
+          as List))
+    (c as List).cast<String>(),
+];
 
 int of(String q, String name) => score(words(q), words(name));
 
@@ -54,5 +68,11 @@ void main() {
 
   test('saved places wait for a second letter', () {
     expect(names('д', ['Дім']), isEmpty);
+  });
+
+  test('every letter folds as the web folds it', () {
+    expect([
+      for (final [c, _] in _folds) [c, fold(c)],
+    ], _folds);
   });
 }

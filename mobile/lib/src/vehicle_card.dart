@@ -48,8 +48,8 @@ class _VehicleCardState extends State<VehicleCard> {
   void initState() {
     super.initState();
     _load();
-    // An epoch is 60 s, so refresh rather than freeze at the time opened
-    _again = Timer.periodic(const Duration(seconds: 60), (_) => _load());
+    // Refreshed every epoch rather than frozen at the time opened
+    _again = Timer.periodic(epoch, (_) => _load());
   }
 
   @override
@@ -132,7 +132,7 @@ class _VehicleCardState extends State<VehicleCard> {
                     return ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
-                      title: Text(widget.catalog.stops[call.stop].name),
+                      title: Text(widget.catalog.stopName(call.stop)),
                       trailing: Text(countdown(call.t)),
                       onTap: () => widget.onStop(call.stop),
                     );
