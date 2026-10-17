@@ -5,14 +5,14 @@ import numpy as np
 import pytest
 
 from commuterlviv import plan
-from commuterlviv.live import app, journeys
-from commuterlviv.live.state import ETA, Arrivals, Catalog
+from commuterlviv.live import app
+from commuterlviv.live.state import Arrivals
 
-from . import city, streets
+from . import city
 from .streets import DOOR, MIDDLE
 
-NOW = city.at(9 * 3600 + 600)
-VEH = 3
+NOW = city.at(city.SEARCH_AT)
+VEH = city.SEARCH_VEH
 END = city._point(city.LENGTH)
 USUAL_KMH = 5.0
 # fast enough to halve the walk to the middle stop
@@ -23,20 +23,10 @@ WAVED_S = plan.GRACE / 2
 RUN_FOR_S = 30.0
 
 
-@pytest.fixture
-def planner(net, tmp_path):
-    return journeys.Planner(*streets.load(net, tmp_path), Catalog(net))
-
-
 def _arrivals(cat, at_middle):
     """Vehicle VEH on its way out, at the middle stop at `at_middle` and on to
     the end of the line at the timetable's pace."""
-    rows = [(cat.stop_i[f"s{i}"], cat.route_i[city.ROUTE], VEH,
-             at_middle + (i - MIDDLE) * city.LEG_S, 0)
-            for i in range(MIDDLE, city.STOPS)]
-    eta = np.sort(np.array(rows, ETA), order="stop")
-    start = np.searchsorted(eta["stop"], np.arange(len(cat.stops) + 1))
-    return Arrivals(NOW, eta, start)
+    return city.arrivals(cat, NOW, VEH, MIDDLE, at_middle)
 
 
 def _walk_to_middle(planner, now=NOW):

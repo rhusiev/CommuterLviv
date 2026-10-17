@@ -1,10 +1,6 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import { countdown } from "./eta";
 import { t as txt } from "./i18n";
-
-// The strings module picks a language from `localStorage` as it loads, which
-// Node does not have. Hoisted above the imports
-vi.hoisted(() => vi.stubGlobal("localStorage", { getItem: () => null }));
 
 describe("eta", () => {
   // Pins the bug where `t` was read as a countdown, not an instant

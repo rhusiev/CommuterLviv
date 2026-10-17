@@ -10,11 +10,12 @@ import asyncio
 import datetime
 import json
 
-from .. import gtfs, network, plan, snapshot, walk as footpaths
+from .. import gtfs, localtime, network, snapshot, walk as footpaths
+from ..logs import brief
 from . import geocode, geometry, journeys, state, traffic
 
 CHECK_AT = datetime.time(3, 30)     # local: after the last tram, before the first
-WALK_EVERY = 30 * 86400.0           # s between footpath refetches
+WALK_EVERY = 30 * localtime.DAY_S  # s between footpath refetches
 SHRINK = 0.5    # of the routes a new feed may keep before it is taken as broken
 
 
@@ -36,7 +37,7 @@ def install(s, items):
 
 
 def _until(at):
-    now = datetime.datetime.now(plan.TZ)
+    now = datetime.datetime.now(localtime.TZ)
     then = now.replace(hour=at.hour, minute=at.minute, second=0, microsecond=0)
     if then <= now:
         then += datetime.timedelta(days=1)
@@ -49,7 +50,7 @@ async def nightly(s, log):
         try:
             await check(s, log)
         except Exception as exc:
-            log("refresh: keeping the city as it is -", repr(exc)[:200])
+            log("refresh: keeping the city as it is -", brief(exc))
 
 
 async def check(s, log):
@@ -64,13 +65,13 @@ async def check(s, log):
         try:
             await asyncio.to_thread(footpaths.renew)
         except Exception as exc:
-            log("refresh: keeping the footpaths held -", repr(exc)[:200])
+            log("refresh: keeping the footpaths held -", brief(exc))
             paths = False
     fetched = False
     try:
         fetched = await asyncio.to_thread(gtfs.refetch)
     except Exception as exc:
-        log("refresh: keeping the feed held -", repr(exc)[:200])
+        log("refresh: keeping the feed held -", brief(exc))
     source = await asyncio.to_thread(network.source)
     if source != s.source:
         try:
@@ -90,7 +91,7 @@ async def places(s, log):
         await asyncio.to_thread(geocode.renew_index, s.settings.places_url)
         log("refresh: the place index is renewed")
     except Exception as exc:
-        log("refresh: keeping the place index held -", repr(exc)[:200])
+        log("refresh: keeping the place index held -", brief(exc))
 
 
 async def renew(s, log):

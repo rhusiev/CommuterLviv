@@ -1,5 +1,6 @@
 """The service end to end over HTTP and its websocket: a made-up feed polled
 in real time, a user registered, the map and the boards read as a client would."""
+import dataclasses
 import json
 import time
 from types import SimpleNamespace
@@ -15,7 +16,6 @@ from . import city, service
 
 ORIGIN = "http://testserver"
 WAIT_S = 15.0
-ETA_TOL_S = 30.0
 NEAR_DEG = 1e-3
 CLIENT = ("127.0.0.1", 50000)     # the peer the app sees; it stores it as an inet
 
@@ -83,6 +83,34 @@ def test_registering_needs_the_apps_origin(client):
     assert r.status_code == 403
 
 
+@pytest.mark.parametrize("allowed", [True, False])
+def test_a_password_is_changed_only_where_the_service_allows_it(
+        feed, net, database, allowed):
+    st = dataclasses.replace(service.settings_for(database, ORIGIN),
+                             password_change=allowed)
+    with TestClient(app.build(st, net), base_url=ORIGIN, client=CLIENT) as c:
+        headers = _signed_in(c, "changer")
+
+        said = c.get("/api/me").json()["password_change"]
+        r = c.post("/api/password", headers=headers,
+                   json={"old": service.PASSWORD, "new": service.PASSWORD + "-new"})
+
+    assert said is allowed
+    assert r.status_code == (200 if allowed else 403), r.text
+
+
+@pytest.mark.parametrize(("sent", "status", "said"), [
+    (b"not json", 400, "Expected JSON"),
+    (b"[]", 400, "Expected an object"),
+    (b" " * (app.MAX_BODY + 1), 413, "Request too large"),
+], ids=["not json", "not an object", "too large"])
+def test_a_body_that_is_not_a_small_json_object_is_refused(client, sent, status, said):
+    headers = _signed_in(client, "sender")
+
+    r = client.post("/api/pins", headers=headers, content=sent)
+
+    assert (r.status_code, r.json()) == (status, {"error": said})
+
 def test_the_catalog_lists_the_citys_routes_and_stops(client):
     _signed_in(client, "catalog")
 
@@ -110,9 +138,26 @@ def test_the_boards_show_the_bus_coming(client, feed):
 
     row = due["stops"][str(last)][0]
     # an untrained model times the road by its priors, not by the timetable
-    assert feed.start < row["t"] <= feed.start + city.LENGTH / city.SPEED + ETA_TOL_S
+    assert feed.start < row["t"] <= feed.start + city.LENGTH / city.SPEED + city.ETA_TOL_S
     ahead = client.get(f"/api/vehicle?veh={row['veh']}").json()["stops"]
     assert ahead and all(a["route"] == row["route"] for a in ahead)
+
+
+def test_an_id_of_other_digits_is_refused_rather_than_failing(client):
+    _signed_in(client, "digits")
+    # "²" is a digit to `str.isdigit` but `int` cannot read it
+    r = client.get("/api/vehicle?veh=\u00b2")
+    assert r.status_code == 400, r.text
+
+
+def test_traffic_gives_a_number_or_none_per_street_piece(client):
+    _signed_in(client, "traffic")
+    pieces = client.get("/api/traffic/streets").json()["lines"]
+
+    now = client.get("/api/traffic").json()
+
+    assert len(now["ratio"]) == len(pieces)
+    assert all(r is None or r > 0 for r in now["ratio"])
 
 
 def test_an_unsafe_request_needs_the_csrf_token(client):
@@ -124,6 +169,25 @@ def test_an_unsafe_request_needs_the_csrf_token(client):
     assert refused.status_code == 403
     assert taken.status_code == 200
     assert client.get("/api/catalog").status_code == 401
+
+
+def test_renaming_a_set_onto_another_is_refused_and_a_missing_one_not_found(client):
+    headers = _signed_in(client, "sets")
+    made = [client.post("/api/sets", headers=headers,
+                        json={"name": name, "routes": [city.ROUTE]}).json()
+            for name in ("home", "work")]
+    missing = "00000000-0000-0000-0000-000000000000"
+
+    clash = client.put(f"/api/sets/{made[0]['id']}", headers=headers,
+                       json={"name": "work", "routes": [city.ROUTE]})
+    gone = client.put(f"/api/sets/{missing}", headers=headers,
+                      json={"name": "gym", "routes": [city.ROUTE]})
+    renamed = client.put(f"/api/sets/{made[0]['id']}", headers=headers,
+                         json={"name": "gym", "routes": [city.ROUTE]})
+
+    assert clash.status_code == 400
+    assert gone.status_code == 404
+    assert renamed.status_code == 200 and renamed.json()["name"] == "gym"
 
 
 def test_the_socket_says_hello_then_draws_the_bus_and_its_board(client):

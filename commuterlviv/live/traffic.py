@@ -219,9 +219,14 @@ class Cache:
         self.model, self.pool, self.period = model, Pool(groups), period
         self.epoch, self.body = None, b""
 
+    def fresh(self, now):
+        """Whether `read(now)` would answer without touching the model."""
+        return int(now // self.period) == self.epoch
+
     def read(self, now):
-        epoch = int(now // self.period)
-        if epoch != self.epoch:
-            self.epoch = epoch
+        """The reading for `now`'s period. When not `fresh`, this reads the
+        model, so hold its lock."""
+        if not self.fresh(now):
+            self.epoch = int(now // self.period)
             self.body = json.dumps(reading(self.model, self.pool, now)).encode()
         return self.body

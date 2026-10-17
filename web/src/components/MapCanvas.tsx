@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Map as MapLibre } from "maplibre-gl";
 import WORKER from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import {
@@ -38,6 +38,10 @@ const PLACE_R = 5;
 
 /** Below this a name is more clutter than help, so places are dots alone */
 const LABEL_ZOOM = 12.5;
+/** Where the map comes in to on a place it is sent to, close enough to read the
+ * streets around it */
+const NEAR_ZOOM = 16;
+const FLY_SPEED = 1.6;
 
 const HIT = 14;
 const TAU = Math.PI * 2;
@@ -84,39 +88,25 @@ const viewOf = (m: MapLibre): View => {
   return { lat: c.lat, lon: c.lng, zoom: m.getZoom() };
 };
 
-export function MapCanvas({
-  catalog,
-  live,
-  stops,
-  selected,
-  onPickStop,
-  vehicle,
-  onPickVehicle,
-  focus,
-  fit,
-  picking,
-  onPickPoint,
-  onHoldPoint,
-  marks,
-  journey,
-  locate,
-  pinned,
-  places,
-  shapes,
-  lines,
-  directed,
-  traffic,
-  theme,
-}: Props) {
+export function MapCanvas(props: Props) {
+  const {
+    catalog,
+    live,
+    focus,
+    fit,
+    locate,
+    shapes,
+    directed,
+    traffic,
+    theme,
+  } = props;
   const box = useRef<HTMLDivElement>(null);
   const under = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const sprites = useRef<Sprites | null>(null);
-  const shown = useRef(stops);
-  const pick = useRef(selected);
-  const onPick = useRef(onPickStop);
-  const onPickVeh = useRef(onPickVehicle);
-  const chosen = useRef(vehicle);
+  /** The props as of the last render, for the map's and the frame loop's
+   * handlers, which are set up once */
+  const latest = useRef(props);
   const paint = useRef(ink(theme.dark));
   const style = useRef(styleUrl(theme));
   const held = useRef<MapLibre | null>(null);
@@ -124,36 +114,23 @@ export function MapCanvas({
   /** Whether each fix centres the camera: from `locate` until a pan, and again
    * from the locate button */
   const keep = useRef(false);
-  const pickPoint = useRef(onPickPoint);
-  const holdPoint = useRef(onHoldPoint);
-  const picks = useRef(picking);
-  const pins = useRef(marks);
-  const trip = useRef(journey);
-  const kept = useRef(pinned);
-  const saved = useRef(places);
-  const geometry = useRef(shapes);
-  const drawn = useRef(lines);
   /** What the basemap's own layers draw, read again on every `styledata` */
   const beneath = useRef({ shapes, directed, traffic, dark: theme.dark });
-  const [locating, setLocating] = useState<Locating>("off");
+  const [locating, setLocating] = useState<Locating>(locate ? "waiting" : "off");
   const [ready, setReady] = useState(false);
+  // Turning `locate` on starts the dot as the button would; off, it stays
+  const [wasLocate, setWasLocate] = useState(locate);
+  if (locate !== wasLocate) {
+    setWasLocate(locate);
+    if (locate) setLocating((was) => (was === "off" ? "waiting" : was));
+  }
 
-  shown.current = stops;
-  pick.current = selected;
-  onPick.current = onPickStop;
-  onPickVeh.current = onPickVehicle;
-  chosen.current = vehicle;
-  paint.current = ink(theme.dark);
-  pickPoint.current = onPickPoint;
-  holdPoint.current = onHoldPoint;
-  picks.current = picking;
-  pins.current = marks;
-  trip.current = journey;
-  kept.current = pinned;
-  saved.current = places;
-  geometry.current = shapes;
-  drawn.current = lines;
-  beneath.current = { shapes, directed, traffic, dark: theme.dark };
+  // First of the effects, so every other one reads this render's
+  useLayoutEffect(() => {
+    latest.current = props;
+    paint.current = ink(theme.dark);
+    beneath.current = { shapes, directed, traffic, dark: theme.dark };
+  });
 
   useEffect(() => {
     const el = canvas.current!;
@@ -189,16 +166,17 @@ export function MapCanvas({
       const m = map!;
       const p = screen(viewOf(m), w, h);
       const now = performance.now();
+      const { lines, stops, selected, pinned, places, journey, marks, vehicle } = latest.current;
       const c = paint.current;
 
       g.clearRect(0, 0, w, h);
 
       // Route lines first: everything else is drawn over them
-      const geo = geometry.current;
+      const geo = latest.current.shapes;
       if (geo) {
         g.lineJoin = "round";
         g.lineCap = "round";
-        for (const i of drawn.current) {
+        for (const i of lines) {
           const shape = geo.routes[i];
           const route = catalog.routes[i];
           if (!shape || !route) continue;
@@ -220,7 +198,7 @@ export function MapCanvas({
           g.stroke(path);
           g.strokeStyle = colour(route.short, route.type);
           g.lineWidth = 3.5;
-          g.globalAlpha = drawn.current.length > 1 ? 0.75 : 1;
+          g.globalAlpha = lines.length > 1 ? 0.75 : 1;
           g.stroke(path);
           g.globalAlpha = 1;
         }
@@ -229,7 +207,7 @@ export function MapCanvas({
       if (m.getZoom() >= STOPS_ZOOM) {
         // One path for every stop: one fill and one stroke, not two per circle
         const ring = new Path2D();
-        for (const i of shown.current) {
+        for (const i of stops) {
           const s = catalog.stops[i]!;
           const x = p.x(s.lon);
           const y = p.y(s.lat);
@@ -243,9 +221,8 @@ export function MapCanvas({
         g.fill(ring);
         g.stroke(ring);
 
-        const sel = pick.current;
-        if (sel !== null && catalog.stops[sel]) {
-          const s = catalog.stops[sel]!;
+        if (selected !== null && catalog.stops[selected]) {
+          const s = catalog.stops[selected]!;
           g.beginPath();
           g.arc(p.x(s.lon), p.y(s.lat), STOP_R + 4, 0, TAU);
           g.lineWidth = 2;
@@ -289,7 +266,7 @@ export function MapCanvas({
 
       // What the account kept, over the stops and under the journey's ends
       const ringed = new Path2D();
-      for (const i of kept.current) {
+      for (const i of pinned) {
         const s = catalog.stops[i];
         if (!s) continue;
         const x = p.x(s.lon);
@@ -307,7 +284,7 @@ export function MapCanvas({
       const named = m.getZoom() >= LABEL_ZOOM;
       g.font = "600 11px system-ui, sans-serif";
       g.textBaseline = "middle";
-      for (const place of saved.current) {
+      for (const place of places) {
         const x = p.x(place.lon);
         const y = p.y(place.lat);
         if (x < -PLACE_R || y < -PLACE_R || x > w + PLACE_R || y > h + PLACE_R) continue;
@@ -330,7 +307,7 @@ export function MapCanvas({
         g.fillText(place.name, x + PLACE_R + 8, y);
       }
 
-      const legs = trip.current?.legs.filter((l) => (l.pts?.length ?? 0) > 1) ?? [];
+      const legs = journey?.legs.filter((l) => (l.pts?.length ?? 0) > 1) ?? [];
       g.lineJoin = "round";
       g.lineCap = "round";
       for (const leg of legs) {
@@ -354,7 +331,7 @@ export function MapCanvas({
           g.stroke(path);
         }
       }
-      if (trip.current === null) for (const mark of pins.current) {
+      if (journey === null) for (const mark of marks) {
         const x = p.x(mark.lon);
         const y = p.y(mark.lat);
         g.beginPath();
@@ -404,7 +381,7 @@ export function MapCanvas({
           continue;
         }
         g.drawImage(badge, x - R, y - R, R * 2, R * 2);
-        if (id === chosen.current) {
+        if (id === vehicle) {
           g.beginPath();
           g.arc(x, y, R + 3, 0, TAU);
           g.lineWidth = 2;
@@ -464,19 +441,18 @@ export function MapCanvas({
         keep.current = false;
       });
       // Mobile browsers raise a long press as `contextmenu` too
-      map.on("contextmenu", (e) => holdPoint.current(e.lngLat.lat, e.lngLat.lng));
+      map.on("contextmenu", (e) => latest.current.onHoldPoint(e.lngLat.lat, e.lngLat.lng));
       map.on("click", (e) => {
-        if (picks.current) {
-          pickPoint.current(e.lngLat.lat, e.lngLat.lng);
+        if (latest.current.picking) {
+          latest.current.onPickPoint(e.lngLat.lat, e.lngLat.lng);
           return;
         }
         const p = screen(viewOf(map!), w, h);
         // Vehicles first: they are drawn over the stops
         let veh: number | null = null;
         let vehD = R * R;
-        const now = Date.now() / 1000;
         for (const [id, v] of live.vehicles) {
-          const [lat, lon] = sample(v, now);
+          const [lat, lon] = sample(v);
           const dx = p.x(lon) - e.point.x;
           const dy = p.y(lat) - e.point.y;
           const d = dx * dx + dy * dy;
@@ -486,14 +462,14 @@ export function MapCanvas({
           }
         }
         if (veh !== null) {
-          onPickVeh.current(veh);
-          onPick.current(null);
+          latest.current.onPickVehicle(veh);
+          latest.current.onPickStop(null);
           return;
         }
 
         let best: number | null = null;
         let bestD = HIT * HIT;
-        for (const i of shown.current) {
+        for (const i of latest.current.stops) {
           const s = catalog.stops[i]!;
           const dx = p.x(s.lon) - e.point.x;
           const dy = p.y(s.lat) - e.point.y;
@@ -503,8 +479,8 @@ export function MapCanvas({
             best = i;
           }
         }
-        onPickVeh.current(null);
-        onPick.current(best);
+        latest.current.onPickVehicle(null);
+        latest.current.onPickStop(best);
       });
       map.on("render", draw);
       // Every style swap throws the sources and layers away and leaves this the
@@ -564,7 +540,7 @@ export function MapCanvas({
         timer = window.setTimeout(go, 100);
         return;
       }
-      m.flyTo({ center: [focus.lon, focus.lat], zoom: Math.max(m.getZoom(), 16), speed: 1.6 });
+      m.flyTo({ center: [focus.lon, focus.lat], zoom: Math.max(m.getZoom(), NEAR_ZOOM), speed: FLY_SPEED });
     };
     go();
     return () => clearTimeout(timer);
@@ -572,7 +548,6 @@ export function MapCanvas({
 
   useEffect(() => {
     keep.current = locate;
-    if (locate) setLocating((was) => (was === "off" ? "waiting" : was));
   }, [locate]);
 
   // A boolean and not the state: the watch must not restart when the first fix
@@ -588,7 +563,7 @@ export function MapCanvas({
         here.current = { lat: latitude, lon: longitude, accuracy };
         if (first) {
           first = false;
-          held.current?.flyTo({ center: [longitude, latitude], zoom: 16, speed: 1.6 });
+          held.current?.flyTo({ center: [longitude, latitude], zoom: NEAR_ZOOM, speed: FLY_SPEED });
         } else if (keep.current) {
           held.current?.easeTo({ center: [longitude, latitude] });
         }
@@ -614,13 +589,13 @@ export function MapCanvas({
         onClick={() => {
           if (locating === "on" && here.current) {
             const f = here.current;
-            held.current?.flyTo({ center: [f.lon, f.lat], zoom: 16, speed: 1.6 });
+            held.current?.flyTo({ center: [f.lon, f.lat], zoom: NEAR_ZOOM, speed: FLY_SPEED });
             keep.current = locate;
           } else if (locating !== "denied") {
             setLocating("waiting");
           }
         }}
-        title={locating === "denied" ? t.noLocation : t.whereAmI}
+        title={locating === "denied" ? t.noFix.refused : t.whereAmI}
         className={`fab absolute right-3 top-19 z-10 ${
           locating === "denied"
             ? "text-slate-600"

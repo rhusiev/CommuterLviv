@@ -80,10 +80,8 @@ class _SignInScreenState extends State<SignInScreen> {
       // save what was typed; it never sees the form leave the screen
       TextInput.finishAutofillContext();
       widget.onIn(name);
-    } on ApiError catch (e) {
-      setState(() => _error = e.message);
-    } on Exception {
-      setState(() => _error = txt.unreachable(widget.api.base));
+    } on Exception catch (e) {
+      if (mounted) setState(() => _error = widget.api.failure(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

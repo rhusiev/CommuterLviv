@@ -1,7 +1,9 @@
 """The web app in a real browser against the real service: an account created
 through the sign-in screen, a stop found by name, the bus on its board, and a
-journey planned from on board it and followed, and one followed on foot that
-misses its bus searched again.
+journey planned from on board it and followed, one followed on foot that
+misses its bus searched again, a refused location, a changed password and a
+cancelled one, one that cannot be cancelled while under way, none offered
+where the service turns it off, and a shared link that opens its stop or route.
 
 Needs the built web app (`npm run build` in `web/`), Playwright for Python and a
 Chromium. Skipped when any of them is missing."""
@@ -157,11 +159,14 @@ def page(site):
 
 
 def _register(page, name):
+    """Creates an account named after `name`; the username it took."""
+    username = service.username(name)
     page.goto("/")
     page.get_by_role("button", name="Create an account").click()
-    page.get_by_label("Username").fill(service.username(name))
+    page.get_by_label("Username").fill(username)
     page.get_by_label("Password").fill(service.PASSWORD)
     page.get_by_role("button", name="Create the account").click()
+    return username
 
 
 def test_a_new_user_finds_a_stop_and_sees_the_bus_coming(page):
@@ -193,13 +198,18 @@ def test_a_saved_place_is_offered_above_the_stops_it_matches(page):
     expect(rows.nth(1)).to_contain_text("Stops")
 
 
+def _pick_route(page):
+    """Picks the city's one route from the routes tab."""
+    page.get_by_role("button", name="Routes").click()
+    page.get_by_role("button", name="1", exact=True).click()
+
+
 def test_picking_the_route_puts_its_bus_on_the_map(page):
     _register(page, "watcher")
     expect = playwright.expect
     expect(page.get_by_text("0 vehicles")).to_be_visible()
 
-    page.get_by_role("button", name="Routes").click()
-    page.get_by_role("button", name="1", exact=True).click()
+    _pick_route(page)
 
     expect(page.get_by_text("1 on")).to_be_visible()
     expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
@@ -236,8 +246,7 @@ def _board_the_bus(page):
 def test_a_journey_planned_on_board_is_followed_from_the_ride(page):
     _register(page, "aboard")
     expect = playwright.expect
-    page.get_by_role("button", name="Routes").click()
-    page.get_by_role("button", name="1", exact=True).click()
+    _pick_route(page)
     expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
     page.get_by_role("button", name="Map", exact=True).click()
 
@@ -280,8 +289,7 @@ def _a_ride_from_the_door(page):
 def test_a_missed_bus_is_searched_again_from_the_last_fix(page):
     _register(page, "late")
     expect = playwright.expect
-    page.get_by_role("button", name="Routes").click()
-    page.get_by_role("button", name="1", exact=True).click()
+    _pick_route(page)
     expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
     journey, tag = _a_ride_from_the_door(page)
     ride = next(leg for leg in journey["legs"] if leg["kind"] == "ride")
@@ -302,3 +310,87 @@ def test_a_missed_bus_is_searched_again_from_the_last_fix(page):
         again.click()
     lat, lon = asked.value.url.split("from=")[1].split("&")[0].split(",")
     assert (float(lat), float(lon)) == pytest.approx(streets.DOOR)
+
+
+def test_a_refused_location_says_how_to_allow_it(page):
+    _register(page, "hidden")
+    page.context.clear_permissions()
+
+    page.get_by_title("Stops near me").click()
+
+    playwright.expect(page.get_by_text(
+        "Location is blocked for this page")).to_be_visible(timeout=SEE_MS)
+
+
+def test_a_changed_password_is_the_one_that_signs_in(page):
+    username = _register(page, "changer")
+    renewed = service.PASSWORD + "-renewed"
+
+    page.get_by_role("button", name="Account", exact=True).click()
+    page.get_by_role("button", name="Change password").click()
+    page.get_by_label("Current password").fill(service.PASSWORD)
+    page.get_by_label("New password").fill(renewed)
+    page.get_by_role("button", name="Change password").click()
+    playwright.expect(page.get_by_text("Password changed")).to_be_visible(timeout=SEE_MS)
+    page.get_by_role("button", name="Sign out").click()
+    page.get_by_label("Username").fill(username)
+    page.get_by_label("Password").fill(renewed)
+    page.get_by_role("button", name="Sign in").click()
+
+    playwright.expect(page.get_by_placeholder("Find a stop or a place")).to_be_visible(
+        timeout=SEE_MS)
+
+
+def test_a_cancelled_password_change_forgets_what_was_typed(page):
+    _register(page, "canceller")
+    page.get_by_role("button", name="Account", exact=True).click()
+    page.get_by_role("button", name="Change password").click()
+    page.get_by_label("Current password").fill(service.PASSWORD)
+    page.get_by_label("New password").fill(service.PASSWORD + "-unsent")
+    page.get_by_role("button", name="Cancel").click()
+
+    page.get_by_role("button", name="Change password").click()
+
+    playwright.expect(page.get_by_label("Current password")).to_have_value("")
+    playwright.expect(page.get_by_label("New password")).to_have_value("")
+
+
+def test_a_password_change_under_way_cannot_be_cancelled(page):
+    _register(page, "patient")
+    held = []
+    page.route("**/api/password", lambda route: held.append(route))
+    page.get_by_role("button", name="Account", exact=True).click()
+    page.get_by_role("button", name="Change password").click()
+    page.get_by_label("Current password").fill(service.PASSWORD)
+    page.get_by_label("New password").fill(service.PASSWORD + "-renewed")
+    page.get_by_role("button", name="Change password").click()
+
+    playwright.expect(page.get_by_role("button", name="Cancel")).to_be_disabled()
+    held[0].continue_()
+    playwright.expect(page.get_by_text("Password changed")).to_be_visible(timeout=SEE_MS)
+
+
+def test_changing_the_password_is_not_offered_where_the_service_turns_it_off(page):
+    def turned_off(route):
+        got = route.fetch()
+        route.fulfill(response=got, json={**got.json(), "password_change": False})
+
+    page.route("**/api/me", turned_off)
+    _register(page, "unoffered")
+    page.get_by_role("button", name="Account", exact=True).click()
+
+    expect = playwright.expect
+    expect(page.get_by_role("button", name="Sign out")).to_be_visible()
+    expect(page.get_by_role("button", name="Change password")).to_have_count(0)
+
+def test_a_shared_link_opens_its_stop_or_route(page):
+    _register(page, "linked")
+    expect = playwright.expect
+    # signed in once the map is up
+    expect(page.get_by_text("0 vehicles")).to_be_visible()
+
+    page.goto("/?stop=s4")
+    expect(page.get_by_role("heading", name="Stop 4")).to_be_visible()
+
+    page.goto(f"/?route={city.ROUTE}&tab=route")
+    expect(page.get_by_text("Stop 0 - Stop 4")).to_be_visible()

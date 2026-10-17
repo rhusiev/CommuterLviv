@@ -11,9 +11,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'map_theme.dart';
 import 'models.dart';
+import 'strings.dart';
 
 /// Must be listed in the server's `COMMUTERLVIV_ORIGINS`.
 const appOrigin = 'app://commuterlviv';
+
+/// The server's default model epoch: what it predicts changes no faster, so
+/// what is polled is asked for again on it
+const epoch = Duration(seconds: 60);
 
 /// Overridden for development with
 /// `--dart-define=COMMUTERLVIV_BASE=http://10.0.2.2:8099`, the host machine as
@@ -75,6 +80,11 @@ class Api {
   String _base;
 
   String get base => _base;
+
+  /// What to tell the user about [e], thrown by a call to this server: its own
+  /// message, or that it could not be reached.
+  String failure(Exception e) =>
+      e is ApiError ? e.message : txt.unreachable(_base);
 
   /// Drops everything held for the old server. False when the address did not change.
   Future<bool> setBase(String value) async {
@@ -196,6 +206,10 @@ class Api {
   }
 
   Future<void> logout() => _call('POST', '/api/logout');
+
+  /// Signs every other device out, and drops this one's remember-me.
+  Future<void> password(String old, String next) =>
+      _call('POST', '/api/password', body: {'old': old, 'new': next});
 
   Future<Sets> sets() async =>
       Sets.fromJson(await _call('GET', '/api/sets') as Map<String, dynamic>);
@@ -416,11 +430,6 @@ class Api {
       kmh == null ? _prefs.remove('commuterlviv.hurry') : _keep('hurry', kmh);
 
   /// Pinned stops, by feed id, kept server-side so phone and browser agree.
-  Future<List<String>> pins() async {
-    final j = await _call('GET', '/api/pins') as Map<String, dynamic>;
-    return [for (final p in j['pins'] as List) p as String];
-  }
-
   Future<void> setPins(List<String> stops) =>
       _call('POST', '/api/pins', body: {'pins': stops});
 

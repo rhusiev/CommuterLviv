@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { canKeepAwake, heldAwake, holdAwake, useAwake } from "../lib/awake";
+import { stopName } from "../lib/catalog";
 import { clock, countdown } from "../lib/eta";
 import type { Catch, Progress, Stage } from "../lib/follow";
 import { t } from "../lib/i18n";
@@ -55,7 +56,7 @@ export function FollowCard({
             {progress === null ? (
               <p className="text-slate-400">{t.locating}</p>
             ) : progress === "denied" ? (
-              <p className="text-rose-300">{t.noLocation}</p>
+              <p className="text-rose-300">{t.noFix.refused}</p>
             ) : (
               <Step catalog={catalog} journey={journey} live={live} progress={progress} />
             )}
@@ -252,4 +253,3 @@ function distance(m: number): string {
   return m < M_PER_KM ? t.metres(Math.round(m / STEP_M) * STEP_M) : t.km(m / M_PER_KM);
 }
 
-const stopName = (catalog: Catalog, i: number) => catalog.stops[i]?.name ?? "";

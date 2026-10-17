@@ -11,7 +11,10 @@ import 'package:commuterlviv/src/api.dart';
 import 'package:commuterlviv/src/hurry_pill.dart';
 import 'package:commuterlviv/src/journey_panel.dart';
 import 'package:commuterlviv/src/models.dart';
+import 'package:commuterlviv/src/route_badge.dart';
 import 'package:commuterlviv/src/strings.dart';
+
+import 'real_server.dart';
 
 Future<void> pump(
   WidgetTester tester, {
@@ -134,9 +137,9 @@ Map<String, Object> _journey(
   ],
 };
 
-/// Answers a search with one option backed by a ride that is no option of its
-/// own, and that ride's way when asked for it, noting the asks.
-Future<HttpServer> _serve(List<Uri> asked) async {
+/// Answers a search with one option, riding [route], backed by a ride that is
+/// no option of its own, and that ride's way when asked for it, noting the asks.
+Future<HttpServer> _serve(List<Uri> asked, {int route = 0}) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   final later = _ride(1, 900);
   server.listen((req) {
@@ -148,7 +151,7 @@ Future<HttpServer> _serve(List<Uri> asked) async {
         'options': [
           _journey(
             _ride(
-              0,
+              route,
               60,
               backups: [
                 {
@@ -175,16 +178,6 @@ Future<HttpServer> _serve(List<Uri> asked) async {
       ..close();
   });
   return server;
-}
-
-/// Pumps, letting the fake server answer, until [done] says so.
-Future<void> _until(WidgetTester tester, bool Function() done) async {
-  for (var i = 0; i < 100 && !done(); i++) {
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 10)),
-    );
-    await tester.pump();
-  }
 }
 
 void main() {
@@ -238,9 +231,7 @@ void main() {
   testWidgets('a hurrying speed is sent once set, and flags an option', (
     tester,
   ) async {
-    final faked = HttpOverrides.current;
-    HttpOverrides.global = null;
-    addTearDown(() => HttpOverrides.global = faked);
+    allowRealHttp();
     final asked = <Uri>[];
     final server = (await tester.runAsync(() => _serve(asked)))!;
     addTearDown(() => server.close(force: true));
@@ -255,7 +246,7 @@ void main() {
 
     await tester.tap(find.text(txt.findRoute));
     final pill = find.widgetWithText(HurryPill, txt.hurryAt(txt.kmh(5.5)));
-    await _until(tester, () => tester.any(pill));
+    await pumpUntil(tester, () => tester.any(pill));
 
     expect(asked.single.queryParameters['hurry'], '9.0');
     expect(pill, findsOneWidget);
@@ -410,9 +401,7 @@ void main() {
     tester,
   ) async {
     // The test binding answers every request 400 unless let through
-    final faked = HttpOverrides.current;
-    HttpOverrides.global = null;
-    addTearDown(() => HttpOverrides.global = faked);
+    allowRealHttp();
     final asked = <Uri>[];
     final server = (await tester.runAsync(() => _serve(asked)))!;
     addTearDown(() => server.close(force: true));
@@ -428,11 +417,11 @@ void main() {
 
     await tester.tap(find.text(txt.findRoute));
     final backups = find.text('· ${txt.backupCount(1)}');
-    await _until(tester, () => backups.evaluate().isNotEmpty);
+    await pumpUntil(tester, () => backups.evaluate().isNotEmpty);
     await tester.tap(backups);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip(txt.showWay).last);
-    await _until(tester, () => find.byType(AlertDialog).evaluate().isEmpty);
+    await pumpUntil(tester, () => find.byType(AlertDialog).evaluate().isEmpty);
 
     expect(asked.last.path, '/api/backup');
     expect(asked.last.queryParameters, {
@@ -446,12 +435,35 @@ void main() {
     expect(find.text(txt.findRoute), findsNothing);
   });
 
+  testWidgets('a ride on a line the catalog lacks is shown without its badge', (
+    tester,
+  ) async {
+    allowRealHttp();
+    final server = (await tester.runAsync(() => _serve([], route: -1)))!;
+    addTearDown(() => server.close(force: true));
+    await pump(
+      tester,
+      server: 'http://${server.address.host}:${server.port}',
+      catalog: _twoLines,
+      from: const LatLng(49.84, 24.03),
+      to: const LatLng(49.81, 24.05),
+    );
+
+    await tester.tap(find.text(txt.findRoute));
+    final backups = find.text('· ${txt.backupCount(1)}');
+    await pumpUntil(tester, () => backups.evaluate().isNotEmpty);
+    await tester.tap(backups);
+    await tester.pumpAndSettle();
+
+    // the backup rides line 3; the planned ride's line is unknown
+    expect(find.widgetWithText(RouteBadge, '3'), findsWidgets);
+    expect(find.widgetWithText(RouteBadge, '8'), findsNothing);
+  });
+
   testWidgets('on board, a search sends the vehicle alone and leaves now', (
     tester,
   ) async {
-    final faked = HttpOverrides.current;
-    HttpOverrides.global = null;
-    addTearDown(() => HttpOverrides.global = faked);
+    allowRealHttp();
     final asked = <Uri>[];
     final server = (await tester.runAsync(() => _serve(asked)))!;
     addTearDown(() => server.close(force: true));
@@ -471,7 +483,7 @@ void main() {
     expect(swap.onPressed, isNull);
 
     await tester.tap(find.text(txt.findRoute));
-    await _until(tester, () => asked.isNotEmpty);
+    await pumpUntil(tester, () => asked.isNotEmpty);
 
     expect(asked.single.path, '/api/plan');
     expect(asked.single.queryParameters.keys.toSet(), {'veh', 'to', 'speed'});
@@ -481,9 +493,7 @@ void main() {
   testWidgets('a search asked for runs once, as soon as both ends are set', (
     tester,
   ) async {
-    final faked = HttpOverrides.current;
-    HttpOverrides.global = null;
-    addTearDown(() => HttpOverrides.global = faked);
+    allowRealHttp();
     final asked = <Uri>[];
     var told = 0;
     final server = (await tester.runAsync(() => _serve(asked)))!;
@@ -499,13 +509,13 @@ void main() {
     );
 
     await ask(null);
-    await _until(tester, () => asked.isNotEmpty);
+    await pumpQuiet(tester);
     expect(asked, isEmpty);
     expect(told, 0);
 
     await ask(const LatLng(49.81, 24.05));
-    await _until(tester, () => asked.isNotEmpty);
-    await _until(tester, () => asked.length > 1);
+    await pumpUntil(tester, () => asked.isNotEmpty);
+    await pumpQuiet(tester);
 
     expect(asked.single.path, '/api/plan');
     expect(told, 1);

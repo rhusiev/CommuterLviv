@@ -18,9 +18,10 @@ from dataclasses import dataclass
 import numpy as np
 from google.transit import gtfs_realtime_pb2 as rt
 
-from commuterlviv import collect, gtfs, model, network, overrides
+from commuterlviv import collect, gtfs, localtime, network, overrides
+from commuterlviv.live.state import ETA, Arrivals
 
-DAY = datetime.datetime(2026, 10, 5, tzinfo=model.TZ)   # a Monday
+DAY = datetime.datetime(2026, 10, 5, tzinfo=localtime.TZ)   # a Monday
 STOPS = 5
 GAP_M = 500.0              # m between stops
 LEG_S = 100.0              # s the timetable gives a leg, so 5 m/s
@@ -38,6 +39,10 @@ FLEET_IDS = frozenset(trip for trip, *_ in FLEET)
 SHAPE_OF = {trip: sid for trip, sid, _ in TRIPS + FLEET}
 DEPARTS = {trip: dep for trip, _, dep in TRIPS + FLEET}
 LENGTH = GAP_M * (STOPS - 1)
+NIGHT = 23 * 3600        # s past midnight, long after the last ride
+SEARCH_AT = 9 * 3600 + 600   # s past midnight the planner is searched at, the fleet out
+SEARCH_VEH = 3           # the vehicle it is searched from on board
+ETA_TOL_S = 30.0         # s a predicted time may be off the driven one
 STEPS = 400              # pieces `drive` integrates a speed over
 
 
@@ -195,3 +200,37 @@ class Feed:
         v.position.latitude, v.position.longitude = fix.lat, fix.lon
         v.position.speed, v.position.odometer = fix.speed, fix.odometer
         return msg
+
+
+def epoch_after(live, t):
+    """The first epoch of `live`'s grid at or after `t`."""
+    return np.ceil(t / live.epoch_s) * live.epoch_s
+
+
+def run(live, fixes, until=None):
+    """Feed `live` the fixes of vehicle "v1" in order, stepping an epoch on its
+    grid as the service does, and on until `until`; the arrivals of every
+    epoch, by when it ran."""
+    boards = {}
+    nxt = epoch_after(live, fixes[0].ts)
+    for f in fixes:
+        while f.ts >= nxt:
+            boards[nxt] = live.epoch(nxt)
+            nxt += live.epoch_s
+        live.fix("v1", f.ts, f.lat, f.lon, f.speed, f.odometer, f.trip)
+    while until is not None and nxt <= until:
+        boards[nxt] = live.epoch(nxt)
+        nxt += live.epoch_s
+    return boards
+
+
+def arrivals(cat, now, veh, first, at_first):
+    """The boards at `now` with vehicle `veh` on its way out alone: at stop
+    `first` at `at_first`, then on to the end of the line at the timetable's
+    pace."""
+    rows = [(cat.stop_i[f"s{i}"], cat.route_i[ROUTE], veh,
+             at_first + (i - first) * LEG_S, 0)
+            for i in range(first, STOPS)]
+    eta = np.sort(np.array(rows, ETA), order="stop")
+    start = np.searchsorted(eta["stop"], np.arange(len(cat.stops) + 1))
+    return Arrivals(now, eta, start)

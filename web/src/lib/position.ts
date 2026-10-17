@@ -55,6 +55,12 @@ export function watchHere(fix: PositionCallback, fail: PositionErrorCallback): (
   };
 }
 
+/** How long a one-off fix is waited for before giving up */
+const FIX_TIMEOUT_MS = 10_000;
+
+/** What a one-off fix asks the browser for */
+export const ONE_FIX = { enableHighAccuracy: true, timeout: FIX_TIMEOUT_MS };
+
 /** One fix: the last one, while the position is watched, else the browser is
  * asked with `options`. Rejects with a `NoFix` */
 export function hereOnce(options: PositionOptions & { timeout: number }): Promise<GeolocationPosition> {

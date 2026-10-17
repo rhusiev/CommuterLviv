@@ -6,10 +6,11 @@ import 'package:latlong2/latlong.dart';
 
 import 'package:commuterlviv/src/here.dart';
 import 'package:commuterlviv/src/map_controls.dart';
+import 'package:commuterlviv/src/map_tab.dart' show lviv;
 import 'package:commuterlviv/src/strings.dart';
 import 'package:commuterlviv/src/tracking.dart';
 
-const start = LatLng(49.8397, 24.0297);
+const start = lviv;
 const zoom = 15.0;
 
 /// A map with the controls over it, a `Here` fed by [fix], and the tracking

@@ -1,5 +1,5 @@
+import { readJson, writeJson } from "./storage";
 import type {
-  Arrivals,
   Call,
   Catalog,
   Found,
@@ -17,6 +17,10 @@ import type {
 /** Same origin by default: Vite proxies `/api` and `/ws` in development, so the
  * session cookie is first-party either way. */
 export const BASE = import.meta.env.VITE_API_URL ?? "";
+
+/** The server's default model epoch: what it predicts changes no faster, so
+ * what is polled is asked for again on it */
+export const EPOCH_MS = 60_000;
 
 type Failure = { error?: string; retry?: number; preparing?: boolean };
 
@@ -90,9 +94,7 @@ export const api = {
   sets: (): Promise<Sets> => call("/api/sets"),
   /** Pinned stops by feed id: the catalog is rebuilt whenever the city's feed
    * changes, so a stored index quietly becomes a different stop. */
-  pins: (): Promise<{ pins: string[] }> => call("/api/pins"),
   setPins: (pins: string[]): Promise<{ pins: string[] }> => post("/api/pins", { pins }),
-  places: (): Promise<{ places: Place[] }> => call("/api/places"),
   /** The whole list, every time: the name is the identity server-side, so a
    * rename is the old one dropped and the new one saved in one write */
   setPlaces: (places: Place[]): Promise<{ places: Place[] }> => post("/api/places", { places }),
@@ -103,8 +105,6 @@ export const api = {
   deleteSet: (id: string) => call<void>(`/api/sets/${id}`, { method: "DELETE" }),
   activateSet: (id: string | null) => post<void>("/api/sets/active", { id }),
 
-  arrivals: (stops: number[]): Promise<Arrivals> =>
-    call(`/api/arrivals?stops=${stops.join(",")}`),
   vehicle: (veh: number): Promise<{ t: number; veh: number; stops: Call[] }> =>
     call(`/api/vehicle?veh=${veh}`),
   /** `at` in unix seconds leaves at that time instead of now; a future one has
@@ -143,8 +143,7 @@ const tags = new Map<string, string>();
 /** Cached in local storage against the service's ETag: the usual request comes
  * back 304 with no body. */
 async function held<T>(path: string, key: string): Promise<T> {
-  const stored = localStorage.getItem(key);
-  const had = stored ? (JSON.parse(stored) as { tag: string; data: T }) : null;
+  const had = readJson<{ tag: string; data: T }>(key);
   const res = await fetch(BASE + path, {
     credentials: "include",
     headers: had ? { "If-None-Match": had.tag } : {},
@@ -158,11 +157,7 @@ async function held<T>(path: string, key: string): Promise<T> {
   const tag = res.headers.get("ETag");
   if (tag) {
     tags.set(key, tag);
-    try {
-      localStorage.setItem(key, JSON.stringify({ tag, data }));
-    } catch {
-      // A full quota only costs a refetch
-    }
+    writeJson(key, { tag, data });
   }
   return data;
 }

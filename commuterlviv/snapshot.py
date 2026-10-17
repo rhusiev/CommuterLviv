@@ -13,12 +13,11 @@ feed keeps everything learned on the shapes and streets it did not change.
 Age needs no check. Every weight is stamped with the time it was earned and
 decays from that stamp, so an old snapshot fades back to the prior on its own.
 """
-import os
 import time
 
 import numpy as np
 
-from . import gtfs, layover
+from . import files, gtfs, layover
 from .model import PaceModel
 
 PATH = gtfs.DATA / "model.npz"
@@ -78,15 +77,16 @@ def export(model, t=None):
 
 def restore(model, data):
     """Copy what still applies into a fresh model. Returns the time the state
-    was taken, or None if none of it fits this model."""
+    was taken, or None if it is another model's.
+
+    The training rows and turnarounds hold no shape, so they are restored even
+    when no shape fits any more: the recording they came from must then not
+    be replayed into them again, which a None would have the caller do."""
     if not supported(model) or str(data["variant"]) != model.cfg.name:
         return None
     if all(LAYOVER + k in data for k in layover.FIELDS):
         model.layovers.restore(*(data[LAYOVER + k] for k in layover.FIELDS))
-    if STANDS in data:
-        model.layovers.restore_rows(data[STANDS])
-    if PASSED in data and PASSED_ROUTES in data:
-        model.boost.restore_rows(data[PASSED], [str(r) for r in data[PASSED_ROUTES]])
+    restore_rows(model, data)
     net = model.net
     src, dst = [], []
     base = 0
@@ -99,9 +99,8 @@ def restore(model, data):
             src.append(np.arange(base, base + cells))
             dst.append(model.shape_base[sid] + np.arange(cells))
         base += int(cells)
-    if not src:
-        return None
-    unit = np.concatenate(src), np.concatenate(dst)
+    unit = ((np.concatenate(src), np.concatenate(dst)) if src
+            else (np.empty(0, dtype=int),) * 2)
 
     held, now = data["corridors"], _corridors(net)
     at = np.minimum(np.searchsorted(held, now), len(held) - 1)
@@ -117,10 +116,18 @@ def restore(model, data):
     return float(data["t"])
 
 
+def restore_rows(model, data):
+    """Add the training rows `data` holds to the terminus and ETA-correction
+    learners' own."""
+    if STANDS in data:
+        model.layovers.restore_rows(data[STANDS])
+    if PASSED in data and PASSED_ROUTES in data:
+        model.boost.restore_rows(data[PASSED], [str(r) for r in data[PASSED_ROUTES]])
+
+
 def save(data, path=PATH):
-    tmp = path.with_suffix(".tmp.npz")     # savez appends .npz unless it is there
-    np.savez(tmp, **data)
-    os.replace(tmp, path)
+    with files.replacing(path) as fresh:   # savez appends .npz unless it is there
+        np.savez(fresh, **data)
 
 
 def load(model, path=PATH):

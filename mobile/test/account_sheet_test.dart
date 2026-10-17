@@ -4,7 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:commuterlviv/src/sheets.dart';
 import 'package:commuterlviv/src/strings.dart';
 
-Widget _sheet({required double? hurry, VoidCallback? onSpeed}) => MaterialApp(
+Widget _sheet({
+  required double? hurry,
+  VoidCallback? onSpeed,
+  VoidCallback? onPassword,
+  bool canChangePassword = true,
+}) => MaterialApp(
   home: Scaffold(
     body: AccountSheet(
       server: 'https://example.org',
@@ -16,6 +21,7 @@ Widget _sheet({required double? hurry, VoidCallback? onSpeed}) => MaterialApp(
       onLanguage: () {},
       onSpeed: onSpeed ?? () {},
       onServer: () {},
+      onPassword: canChangePassword ? onPassword ?? () {} : null,
       onOut: () {},
     ),
   ),
@@ -40,5 +46,24 @@ void main() {
 
     expect(find.text(txt.pacesNow(4.5, null)), findsOneWidget);
     expect(txt.pacesNow(4.5, null), isNot(txt.pacesNow(4.5, 4.5)));
+  });
+
+  testWidgets('the password row opens the change', (tester) async {
+    var opened = false;
+    await tester.pumpWidget(
+      _sheet(hurry: null, onPassword: () => opened = true),
+    );
+
+    await tester.tap(find.text(txt.changePassword));
+
+    expect(opened, isTrue);
+  });
+
+  testWidgets('no password row where the service does not allow a change', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_sheet(hurry: null, canChangePassword: false));
+
+    expect(find.text(txt.changePassword), findsNothing);
   });
 }

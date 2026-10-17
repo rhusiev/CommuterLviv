@@ -35,7 +35,7 @@ first start and refreshed on their own.
 [docs/deployment.md](docs/deployment.md) has the rest: TLS, running behind an
 existing proxy, updating, what it reaches out to, moving a recording in.
 
-Without Docker, for development:
+Without Docker, for development (Python 3.14 or newer):
 
 ```sh
 pip install -r requirements.txt -r requirements-live.txt

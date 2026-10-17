@@ -5,11 +5,20 @@
 #
 # A missing toolchain is reported and stepped over rather than failing the run,
 # so someone editing the service need not install Flutter. Nothing is skipped
-# silently.
+# silently. With $CI set, as CI sets it, a missing toolchain fails the run, and
+# so does a skipped test (tests/conftest.py).
 set -u
 
 root=$(cd "$(dirname "$0")" && pwd)
 failed=""
+
+# Reports a toolchain that is not there, which fails the run only under CI
+missing() {
+  local name=$1
+  shift
+  echo "skipped - $*"
+  if [ -n "${CI:-}" ]; then failed="$failed $name"; fi
+}
 
 step() {
   echo
@@ -72,21 +81,27 @@ fi
 step "python: the package imports"
 run import . python3 -c "import commuterlviv.live.app, commuterlviv.cli"
 
-step "web: types, tests and build"
+step "web: types, lint, tests and build"
 if command -v npm >/dev/null; then
-  [ -d "$root/web/node_modules" ] || run npm-ci web npm ci
+  # npm records what it installed in node_modules/.package-lock.json, so a lock
+  # newer than that record means a dependency was added since
+  web=$root/web
+  if [ ! "$web/node_modules/.package-lock.json" -nt "$web/package-lock.json" ]; then
+    run npm-ci web npm ci
+  fi
   run typecheck web npm run typecheck
+  run lint web npm run lint
   run vitest web npm test
   run build web npm run build
 else
-  echo "npm is not installed - skipped"
+  missing npm "npm is not installed"
 fi
 
 step "python: tests, the browser ones against the web build"
 if python3 -c "import pytest" 2>/dev/null; then
   run pytest . python3 -m pytest
 else
-  echo "pytest is not installed - skipped. pip install -r requirements-dev.txt"
+  missing pytest "pytest is not installed. pip install -r requirements-dev.txt"
 fi
 
 step "mobile: analyze and test"
@@ -94,7 +109,7 @@ if command -v flutter >/dev/null; then
   run analyze mobile flutter analyze
   run test mobile flutter test
 else
-  echo "flutter is not on PATH - skipped. Put the Flutter SDK's bin there"
+  missing flutter "flutter is not on PATH. Put the Flutter SDK's bin there"
 fi
 
 echo

@@ -3,6 +3,7 @@ import { RouteBadge } from "./RouteBadge";
 import type { Arrival, Catalog } from "../lib/types";
 import { t } from "../lib/i18n";
 import { Icon } from "./Icon";
+import { Close } from "./Cross";
 
 /** The route list is complete; the times only cover the routes on the map,
  * because only those are being predicted for. */
@@ -49,9 +50,7 @@ export function StopCard({
         >
           <Icon name="pin" filled={pinned} />
         </button>
-        <button onClick={onClose} className="px-1 text-slate-500 hover:text-slate-200">
-          ✕
-        </button>
+        <Close onClick={onClose} />
       </div>
 
       <ul className="mt-2 flex flex-wrap gap-1">

@@ -16,6 +16,7 @@ import numpy as np
 import requests
 
 from .. import network, plan, replay, walk as footpaths
+from ..logs import brief
 from . import geometry
 
 DETAIL = 4.0    # m a drawn leg may stray from the real line
@@ -276,7 +277,7 @@ def _make(net, log):
         try:
             footpaths.climb()
         except requests.RequestException as exc:
-            log("planner: walking on the level for now -", repr(exc)[:200])
+            log("planner: walking on the level for now -", brief(exc))
     tt, walk = plan.Timetable(net), footpaths.load()
     try:
         why = plan.Transfers.load().stale(tt, walk)
@@ -307,7 +308,7 @@ async def arrange(state, net, cat, log):
         if cat is state.svc.live.cat:
             state.planner = planner
     except Exception as exc:
-        log("planner: giving up on this start -", repr(exc)[:200])
+        log("planner: giving up on this start -", brief(exc))
     finally:
         state.preparing = False
     if state.planner:

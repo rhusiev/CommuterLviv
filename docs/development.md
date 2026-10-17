@@ -18,9 +18,15 @@ A release is `dev` merged into `main`. Deploy from `main`.
 
 It needs nothing but the checkout: the versions agree (see below), ruff
 finds no syntax errors or undefined names, the package imports, the Python
-tests pass, the web app typechecks, passes its tests and builds, and
+tests pass, the web app typechecks, passes eslint and its tests and builds, and
 `flutter analyze` and `flutter test` pass. A missing toolchain is reported and
 stepped over rather than failing the run.
+
+`.github/workflows/check.yml` runs it on every pull request and every push to
+`dev`. There `CI` is set, and with it a missing toolchain fails the run, and so
+does a skipped test: the browser tests drive the Chromium or Chrome the runner
+image ships, and the database tests start their Postgres with its podman or
+docker, so neither has a reason to skip.
 
 ## Tests
 
@@ -49,14 +55,24 @@ the wall clock, in a time zone pinned so that it is noon there whatever the hour
 test process on the made-up city. A user registers through the sign-in screen,
 finds a stop and sees the bus on its board, and picks the route and sees the
 bus on the map. Another boards the bus from its card, plans to a point picked
-on the map, follows the journey and opens its list of steps. It needs `npm run build` first, and a Chromium -
+on the map, follows the journey and opens its list of steps. A link with `?stop=` or
+`?route=` opens that stop or route. It needs `npm run build` first, and a Chromium -
 `chromium-browser`, `chromium` or `google-chrome` on the PATH, or
 `COMMUTERLVIV_TEST_CHROMIUM`. Playwright's own browser download is not needed.
 Map tiles and fonts are blocked, so the map itself stays blank.
 
-`npm test` in `web/` runs the web app's unit tests (vitest). Those of
+`npm test` in `web/` runs the web app's unit tests (vitest), each file with an
+in-memory `localStorage` emptied before every test (`web/src/test/storage.ts`). Those of
 `mobile/test` that test logic both apps share are ported line for line, so
-the two implementations are checked against the same cases.
+the two implementations are checked against the same cases. The binary map frame is
+checked across all three languages from one file, `tests/wire_frame.json`: the
+server must encode its vehicles to its bytes, and both clients must decode the
+bytes back to its vehicles - so a box, scale or flag that drifts in one of them
+fails that one's tests. Name matching folds accents the same way: the web with
+Unicode's NFKD, the app with a table written out by hand, since Dart has no NFKD.
+`tests/fold_cases.json` holds what NFKD folds each Latin and Cyrillic letter to,
+`tests/fold_test.py` keeps it equal to Python's NFKD (and rewrites it when run as
+`python3 -m tests.fold_test`), and both clients check every case.
 
 ## The version
 

@@ -6,6 +6,7 @@ model, rebuild the cumulative travel-time table, then emit an ETA per remaining
 stop. Observations are batched to the epoch boundary, which stays causal because
 the model is only read after the batch is applied.
 """
+import contextlib
 import datetime
 import os
 import sqlite3
@@ -20,6 +21,8 @@ HORIZON = 45 * 60.0      # match the API's own forecast horizon
 EPOCH = 60.0
 STALE = 120.0            # s since last fix before a vehicle is dropped
 EXTRAP = 60.0            # s of dead reckoning allowed at an epoch
+# s a fix may be stamped after the poll that brought it, and before it
+FIX_AHEAD_S, FIX_BEHIND_S = 60, 300
 
 DTYPE = np.dtype([("epoch", "i4"), ("veh", "i4"), ("trip", "i4"),
                   ("run", "i2"), ("stop_i", "i2"), ("eta", "i4")])
@@ -94,21 +97,9 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
     closed = []
     veh_idx, trip_idx = {}, {}
 
-    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
-    sql = ("SELECT veh_id, veh_ts, trip_id, lat, lon, speed, odometer FROM veh "
-           "WHERE trip_id IS NOT NULL AND poll_ts - veh_ts BETWEEN -60 AND 300")
-    args = []
-    if t_from:
-        sql += " AND veh_ts >= ?"
-        args.append(t_from)
-    if t_to:
-        sql += " AND veh_ts <= ?"
-        args.append(t_to)
-    cur = con.execute(sql + " ORDER BY veh_ts", args)
-
     res = None
     next_epoch = t_start = None
-    for veh, ts, trip, lat, lon, speed, odo in cur:
+    for veh, ts, trip, lat, lon, speed, odo in _fixes(db, t_from, t_to):
         if trip not in net.trip_stops:
             continue
         if res is None:
@@ -143,7 +134,6 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
                     res.truth[k] = t
                     res.gap[k] = gap
 
-    con.close()
     if res is None:
         raise NoData(f"{db} holds no usable vehicle fixes in {_window(t_from, t_to)}. "
                      "The city runs no service between roughly 00:00 and 05:30, "
@@ -152,6 +142,22 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
     _flush(model, res, tracks, runs, closed, next_epoch, veh_idx, trip_idx,
            emit=True)
     return model, res
+
+
+def _fixes(db, t_from, t_to):
+    """The recording's on-trip fixes between `t_from` and `t_to` (either may
+    be None), in time order."""
+    sql = ("SELECT veh_id, veh_ts, trip_id, lat, lon, speed, odometer FROM veh "
+           "WHERE trip_id IS NOT NULL AND poll_ts - veh_ts BETWEEN ? AND ?")
+    args = [-FIX_AHEAD_S, FIX_BEHIND_S]
+    if t_from:
+        sql += " AND veh_ts >= ?"
+        args.append(t_from)
+    if t_to:
+        sql += " AND veh_ts <= ?"
+        args.append(t_to)
+    with contextlib.closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True)) as con:
+        yield from con.execute(sql + " ORDER BY veh_ts", args)
 
 
 def _idx(m, names, key):

@@ -254,14 +254,15 @@ class _JourneyPanelState extends State<JourneyPanel> {
         _held = (id: got.report, built: {}, from: {});
       });
       _show(null);
-    } on ApiError catch (e) {
+    } on Exception catch (e) {
+      final preparing = e is ApiError && e.preparing;
       if (mounted) {
         setState(
-          () => _failed = e.preparing ? txt.plannerPreparing : e.message,
+          () => _failed = preparing
+              ? txt.plannerPreparing
+              : widget.api.failure(e),
         );
       }
-    } on Exception {
-      if (mounted) setState(() => _failed = txt.unreachable(widget.api.base));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -273,26 +274,24 @@ class _JourneyPanelState extends State<JourneyPanel> {
   Future<String?> _takeWay(Journey j, WayPick? pick) async {
     if (pick == null) return _showNow(j);
     final options = _options ?? const <Journey>[];
-    final same = j.legs[pick.leg].backups[pick.n].option;
-    if (same >= 0) return _showNow(options[same]);
-    final search = _held;
-    final from = search.from[j] ?? options.indexOf(j);
-    final key = '$from ${pick.leg} ${pick.n}';
-    var got = search.built[key];
+    final riding = j.legs[pick.leg].backups[pick.n].option;
+    if (riding >= 0) return _showNow(options[riding]);
+    final kept = _held;
+    final option = kept.from[j] ?? options.indexOf(j);
+    final way = '$option ${pick.leg} ${pick.n}';
+    var got = kept.built[way];
     if (got == null) {
-      final id = search.id;
+      final id = kept.id;
       if (id == null) return txt.searchAgain;
       try {
-        got = await widget.api.backup(id, from, pick.leg, pick.n);
-      } on ApiError catch (e) {
-        return e.message;
-      } on Exception {
-        return txt.unreachable(widget.api.base);
+        got = await widget.api.backup(id, option, pick.leg, pick.n);
+      } on Exception catch (e) {
+        return widget.api.failure(e);
       }
       // a search made meanwhile has options of its own
-      if (!mounted || !identical(_held.built, search.built)) return null;
-      search.built[key] = got;
-      search.from[got] = from;
+      if (!mounted || !identical(_held.built, kept.built)) return null;
+      kept.built[way] = got;
+      kept.from[got] = option;
       _options = [...options, got];
     }
     return _showNow(got);
@@ -312,10 +311,8 @@ class _JourneyPanelState extends State<JourneyPanel> {
     String? failed;
     try {
       await widget.api.reportPlan(id, note);
-    } on ApiError catch (e) {
-      failed = e.message;
-    } on Exception {
-      failed = txt.unreachable(widget.api.base);
+    } on Exception catch (e) {
+      failed = widget.api.failure(e);
     }
     if (!mounted || id != _report) return;
     setState(() {
@@ -348,32 +345,13 @@ class _JourneyPanelState extends State<JourneyPanel> {
   Widget _open(BuildContext context) {
     final aboard = widget.aboard;
     final ready = _ready;
-    final ranked = _prefer.ranked(_options ?? const []);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                txt.plan,
-                style: material.Theme.of(context).textTheme.titleMedium,
-              ),
-              const Spacer(),
-              IconButton(
-                onPressed: aboard == null ? widget.onSwap : null,
-                icon: const Icon(Icons.swap_vert),
-                tooltip: txt.swap,
-              ),
-              IconButton(
-                onPressed: () => widget.onFold(true),
-                icon: const Icon(Icons.expand_more),
-                tooltip: txt.hidePanel,
-              ),
-            ],
-          ),
+          _header(context),
           for (final end in End.values)
             EndField(
               end: end,
@@ -391,40 +369,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
               },
               onSave: widget.onSave,
             ),
-          Row(
-            children: [
-              if (aboard == null) ...[
-                RowLabel(text: txt.departAt, icon: Icons.schedule),
-                Tooltip(
-                  message: txt.leaveOn,
-                  child: ActionChip(
-                    label: Text(_dayName(_leaving)),
-                    onPressed: _pickDay,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                InputChip(
-                  label: Text(_at == null ? txt.now : clockTime(_at!)),
-                  onPressed: _pickTime,
-                  onDeleted: _at == null ? null : () => _leave(null),
-                ),
-              ],
-              const Spacer(),
-              PopupMenuButton<Prefer>(
-                icon: const Icon(Icons.sort),
-                tooltip: '${txt.preferBy}: ${txt.prefer(_prefer)}',
-                initialValue: _prefer,
-                onSelected: (p) {
-                  setState(() => _prefer = p);
-                  widget.api.setPrefer(p);
-                },
-                itemBuilder: (_) => [
-                  for (final p in Prefer.values)
-                    PopupMenuItem(value: p, child: Text(txt.prefer(p))),
-                ],
-              ),
-            ],
-          ),
+          _when(),
           Row(
             children: [
               RowLabel(text: txt.walkSpeed, icon: Icons.directions_walk),
@@ -456,32 +401,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
               ),
             ),
           if (_options != null)
-            Flexible(
-              child: _options!.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(txt.noJourney),
-                    )
-                  : ListView.builder(
-                      shrinkWrap: true,
-                      padding: EdgeInsets.zero,
-                      itemCount: ranked.length,
-                      itemBuilder: (_, i) => _Option(
-                        journey: ranked[i],
-                        shown: ranked[i] == _shown,
-                        onShow: () => setState(
-                          () => _show(ranked[i] == _shown ? null : ranked[i]),
-                        ),
-                        prefer: _prefer,
-                        place: (i) => ranked.indexOf(_options![i]) + 1,
-                        catalog: widget.catalog,
-                        onStop: widget.onStop,
-                        onLine: widget.onLine,
-                        onWay: (pick) => _takeWay(ranked[i], pick),
-                        onFollow: () => widget.onFollow(ranked[i]),
-                      ),
-                    ),
-            )
+            Flexible(child: _results())
           else if (!ready && _failed == null && !_busy)
             Padding(
               padding: const EdgeInsets.only(top: 12),
@@ -505,6 +425,88 @@ class _JourneyPanelState extends State<JourneyPanel> {
               label: Text(txt.report),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _header(BuildContext context) => Row(
+    children: [
+      Text(txt.plan, style: material.Theme.of(context).textTheme.titleMedium),
+      const Spacer(),
+      IconButton(
+        onPressed: widget.aboard == null ? widget.onSwap : null,
+        icon: const Icon(Icons.swap_vert),
+        tooltip: txt.swap,
+      ),
+      IconButton(
+        onPressed: () => widget.onFold(true),
+        icon: const Icon(Icons.expand_more),
+        tooltip: txt.hidePanel,
+      ),
+    ],
+  );
+
+  /// When to set off - unless already on board - and how to rank the options.
+  Widget _when() => Row(
+    children: [
+      if (widget.aboard == null) ...[
+        RowLabel(text: txt.departAt, icon: Icons.schedule),
+        Tooltip(
+          message: txt.leaveOn,
+          child: ActionChip(
+            label: Text(_dayName(_leaving)),
+            onPressed: _pickDay,
+          ),
+        ),
+        const SizedBox(width: 8),
+        InputChip(
+          label: Text(_at == null ? txt.now : clockTime(_at!)),
+          onPressed: _pickTime,
+          onDeleted: _at == null ? null : () => _leave(null),
+        ),
+      ],
+      const Spacer(),
+      PopupMenuButton<Prefer>(
+        icon: const Icon(Icons.sort),
+        tooltip: '${txt.preferBy}: ${txt.prefer(_prefer)}',
+        initialValue: _prefer,
+        onSelected: (p) {
+          setState(() => _prefer = p);
+          widget.api.setPrefer(p);
+        },
+        itemBuilder: (_) => [
+          for (final p in Prefer.values)
+            PopupMenuItem(value: p, child: Text(txt.prefer(p))),
+        ],
+      ),
+    ],
+  );
+
+  Widget _results() {
+    final options = _options!;
+    if (options.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Text(txt.noJourney),
+      );
+    }
+    final ranked = _prefer.ranked(options);
+    return ListView.builder(
+      shrinkWrap: true,
+      padding: EdgeInsets.zero,
+      itemCount: ranked.length,
+      itemBuilder: (_, i) => _Option(
+        journey: ranked[i],
+        shown: ranked[i] == _shown,
+        onShow: () =>
+            setState(() => _show(ranked[i] == _shown ? null : ranked[i])),
+        prefer: _prefer,
+        place: (i) => ranked.indexOf(options[i]) + 1,
+        catalog: widget.catalog,
+        onStop: widget.onStop,
+        onLine: widget.onLine,
+        onWay: (pick) => _takeWay(ranked[i], pick),
+        onFollow: () => widget.onFollow(ranked[i]),
       ),
     );
   }
@@ -570,13 +572,10 @@ class _Folded extends StatelessWidget {
                   child: Row(
                     children: [
                       for (final leg in j.legs)
-                        if (!leg.walking)
+                        if (catalog.routeAt(leg.route) case final route?)
                           Padding(
                             padding: const EdgeInsets.only(right: 4),
-                            child: RouteBadge(
-                              route: catalog.routes[leg.route!],
-                              fontSize: 11,
-                            ),
+                            child: RouteBadge(route: route, fontSize: 11),
                           ),
                     ],
                   ),
@@ -763,7 +762,7 @@ class _LegRow extends StatelessWidget {
     final small = theme.textTheme.bodySmall;
     // A walk between two rides is a leg of its own on the wire, so it is one
     // here too: its own duration, and the stop it ends at
-    final where = leg.b < 0 ? txt.toDoor : catalog.stops[leg.b].name;
+    final where = leg.b < 0 ? txt.toDoor : catalog.stopName(leg.b);
     return InkWell(
       onTap: leg.b < 0 ? null : () => onStop(leg.b),
       child: Padding(
@@ -794,14 +793,12 @@ class _LegRow extends StatelessWidget {
               SizedBox(width: 44, child: Text(clockTime(leg.dep))),
               // Inside a row that opens the stop, so the badge takes its own
               // taps
-              InkWell(
-                onTap: () => onLine(leg.route!),
-                borderRadius: BorderRadius.circular(6),
-                child: RouteBadge(
-                  route: catalog.routes[leg.route!],
-                  fontSize: 11,
+              if (catalog.routeAt(leg.route) case final route?)
+                InkWell(
+                  onTap: () => onLine(leg.route!),
+                  borderRadius: BorderRadius.circular(6),
+                  child: RouteBadge(route: route, fontSize: 11),
                 ),
-              ),
               const SizedBox(width: 8),
             ],
             Expanded(child: Text(where, overflow: TextOverflow.ellipsis)),

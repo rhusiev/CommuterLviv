@@ -1,63 +1,59 @@
 /** The decoder against bytes the server actually produced.
  *
- * The frame below was encoded by `commuterlviv.live.wire.encode` and pasted
- * here, so this is a test of agreement between two languages rather than of the
- * TypeScript against itself. `mobile/test/wire_test.dart` says how to
- * regenerate it. */
+ * `tests/wire_frame.json` holds a frame `commuterlviv.live.wire.encode` writes,
+ * which `tests/wire_test.py` checks, so this is a test of agreement between the
+ * languages rather than of the TypeScript against itself. */
 
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { DELTA, MOVING_FLAG, STALE_FLAG, decode } from "./wire";
+import { MOVING_FLAG, STALE_FLAG, decode } from "./wire";
 
-/** Three vehicles - centre, south-west corner, far corner - and two gone ids */
-const FRAME = new Uint8Array([
-  1, 1, 210, 4, 0, 0, 3, 0, 2, 0,
-  7, 0, 0, 0, 58, 102, 53, 119, 0, 0,
-  255, 255, 41, 0, 0, 0, 0, 0, 128, 1,
-  1, 0, 3, 0, 240, 255, 233, 255, 255, 3,
-  9, 0, 12, 0,
-]);
+type Shared = {
+  kind: number;
+  t: number;
+  gone: number[];
+  vehicles: { id: number; route: number; stale: boolean; moving: boolean }[];
+  decoded: { lat: number; lon: number; heading: number }[];
+  bytes: number[];
+};
+
+const SHARED: Shared = JSON.parse(
+  readFileSync(new URL("../../../tests/wire_frame.json", import.meta.url), "utf8"),
+);
 
 /** Half a metre is the quantum, so equality is to seven decimal places */
 const TOLERANCE = 1e-7;
 
-const expectNear = (actual: number | undefined, expected: number) =>
-  expect(Math.abs(actual! - expected)).toBeLessThanOrEqual(TOLERANCE);
+const frame = () => new Uint8Array(SHARED.bytes).buffer;
 
 describe("wire", () => {
   test("a delta decodes to what the server encoded", () => {
-    const f = decode(FRAME.slice().buffer);
+    const f = decode(frame());
 
-    expect(f.kind).toBe(DELTA);
-    expect(f.t).toBe(1234);
-    expect(f.n).toBe(3);
-    expect([...f.ids]).toEqual([7, 65535, 1]);
-    expect([...f.routes]).toEqual([0, 41, 3]);
-    expect([...f.gone]).toEqual([9, 12]);
-
-    expectNear(f.lats[0], 49.83969787);
-    expectNear(f.lons[0], 24.02969787);
-    expectNear(f.lats[1], 49.7);
-    expectNear(f.lons[1], 23.85);
-    expectNear(f.lats[2], 49.99989929);
-    expectNear(f.lons[2], 24.299897);
-
-    // One byte of heading is 1.40625 degrees, and 359.5 lands on 358.59375
-    expect([...f.headings]).toEqual([0.0, 180.0, 358.59375]);
+    expect(f.kind).toBe(SHARED.kind);
+    expect(f.t).toBe(SHARED.t);
+    expect(f.n).toBe(SHARED.vehicles.length);
+    expect([...f.ids]).toEqual(SHARED.vehicles.map((v) => v.id));
+    expect([...f.routes]).toEqual(SHARED.vehicles.map((v) => v.route));
+    expect([...f.gone]).toEqual(SHARED.gone);
+    SHARED.decoded.forEach((d, i) => {
+      expect(Math.abs(f.lats[i]! - d.lat)).toBeLessThanOrEqual(TOLERANCE);
+      expect(Math.abs(f.lons[i]! - d.lon)).toBeLessThanOrEqual(TOLERANCE);
+    });
+    expect([...f.headings]).toEqual(SHARED.decoded.map((d) => d.heading));
   });
 
   test("the flag bits say stale and moving", () => {
-    const f = decode(FRAME.slice().buffer);
+    const f = decode(frame());
 
-    expect(f.flags[0]! & STALE_FLAG).toBe(0);
-    expect(f.flags[0]! & MOVING_FLAG).toBe(0);
-    expect(f.flags[1]! & STALE_FLAG).toBe(STALE_FLAG);
-    expect(f.flags[1]! & MOVING_FLAG).toBe(0);
-    expect(f.flags[2]! & STALE_FLAG).toBe(STALE_FLAG);
-    expect(f.flags[2]! & MOVING_FLAG).toBe(MOVING_FLAG);
+    SHARED.vehicles.forEach((v, i) => {
+      expect((f.flags[i]! & STALE_FLAG) !== 0).toBe(v.stale);
+      expect((f.flags[i]! & MOVING_FLAG) !== 0).toBe(v.moving);
+    });
   });
 
   test("a frame from a newer server is refused, not misread", () => {
-    const wrong = FRAME.slice();
+    const wrong = new Uint8Array(SHARED.bytes);
     wrong[1] = 2;
     expect(() => decode(wrong.buffer)).toThrow();
   });

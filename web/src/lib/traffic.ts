@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, streets as fetchStreets } from "./api";
+import { api, EPOCH_MS, streets as fetchStreets } from "./api";
 import type { Streets, Traffic } from "./types";
 
 /** How fast the streets are running, for as long as the view is open.
 
 The streets themselves are a quarter of a megabyte that never changes, so they
 are fetched once and kept across openings; the numbers are small and are asked
-for again every minute while the view is up, and not at all while it is down. */
-
-export const PERIOD = 60_000;
+for again every epoch while the view is up, and not at all while it is down. */
 
 /** The ramp, as maplibre reads it: a ratio of actual to timetabled travel time,
  * then the colour for it. 1 is exactly the timetable. */
@@ -46,7 +44,7 @@ export function useTraffic(open: boolean): Pace | null {
     let gone = false;
     const ask = () => void api.traffic().then((got) => !gone && setNow(got), console.warn);
     ask();
-    const id = setInterval(ask, PERIOD);
+    const id = setInterval(ask, EPOCH_MS);
     return () => {
       gone = true;
       clearInterval(id);

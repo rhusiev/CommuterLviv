@@ -77,7 +77,7 @@ class _StopTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListTile(
-    title: Text(catalog.stops[stop].name),
+    title: Text(catalog.stopName(stop)),
     subtitle: arrivals.isEmpty
         ? Text(txt.nothingDue)
         : Wrap(

@@ -73,4 +73,23 @@ void main() {
       clockTime(t0 + 20 * minS),
     ]);
   });
+
+  test(
+    'two stops 25 m apart or more keep a pill each, whichever way they lie',
+    () {
+      // 20 m north and 20 m east: each closer than 25 m, the two together 28 m
+      final corner = LatLng(stop.latitude + 0.00018, stop.longitude + 0.00028);
+      final legs = [
+        ride(t0, t0 + 5 * minS, other, stop),
+        ride(t0 + 5 * minS + 30, t0 + 20 * minS, corner, door),
+      ];
+
+      expect(texts(legs), [
+        clockTime(t0),
+        clockTime(t0 + 5 * minS),
+        clockTime(t0 + 5 * minS + 30),
+        clockTime(t0 + 20 * minS),
+      ]);
+    },
+  );
 }

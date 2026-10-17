@@ -11,6 +11,9 @@ const DLAT = 0.3;
 const DLON = 0.45;
 const SCALE = 65535;
 
+/** Where a frame can place a vehicle, as `[west, south, east, north]` */
+export const BOX: [number, number, number, number] = [LON0, LAT0, LON0 + DLON, LAT0 + DLAT];
+
 const ROW = 10;
 const HEADER = 10; // u8 kind, u8 version, u32 t, u16 n, u16 gone
 

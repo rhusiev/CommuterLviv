@@ -4,8 +4,9 @@ import datetime
 import time
 import uuid
 
-from commuterlviv import collect, model, plan, replay
+from commuterlviv import collect, localtime, replay
 from commuterlviv.live import journeys, settings
+from commuterlviv.live.service import Service
 
 from . import city
 
@@ -17,7 +18,6 @@ PASSWORD = "a long enough password"
 # trips from their nearest timetabled start (`layover.clock`), which at night is
 # tomorrow's, so it would plan no ride on the bus. Noon is chosen
 NOON_S = 12 * 3600
-DAY_S = 24 * 3600
 
 
 def username(name):
@@ -26,21 +26,30 @@ def username(name):
 
 
 def settings_for(database, origin):
-    """Settings for a service at `origin` that anyone may register with, which
-    polls and recomputes every `POLL_S` and `EPOCH_S`."""
+    """Settings for a service at `origin` that anyone may register with and
+    change their password on, which polls and recomputes every `POLL_S` and
+    `EPOCH_S`."""
     return settings.Settings(
         database_url=database, variant="profile", secure_cookies=False,
-        origins=(origin,), web_base=origin, registration="open",
+        origins=(origin,), web_base=origin, registration="open", password_change=True,
         session_idle=3600.0, session_max=86400.0, remember_days=1.0,
         trust_proxy=False, build_planner=False, self_tiles=False, photon_url="",
         places_url="", poll_veh=POLL_S, epoch=EPOCH_S, dev=False, argon2=FAST_ARGON2)
 
 
+def offline(net):
+    """A service over `net` that reaches no database and no feed, and keeps
+    nothing; for its loops alone."""
+    return Service(settings_for("postgresql://unused", "http://localhost"), net,
+                   log=lambda *a: None, persist=False)
+
+
 def _noon():
     """A fixed-offset zone in which it is noon now."""
-    offset = (NOON_S - time.time() % DAY_S) % DAY_S
-    if offset > DAY_S / 2:
-        offset -= DAY_S
+    day = localtime.DAY_S
+    offset = (NOON_S - time.time() % day) % day
+    if offset > day / 2:
+        offset -= day
     return datetime.timezone(datetime.timedelta(seconds=offset))
 
 
@@ -48,9 +57,7 @@ def isolate(monkeypatch, tmp_path):
     """Feed the service the city's bus, at noon whatever the hour, with no
     recording to warm up from and no journey planner; the feed, to know when the
     bus set off."""
-    zone = _noon()
-    monkeypatch.setattr(model, "TZ", zone)
-    monkeypatch.setattr(plan, "TZ", zone)
+    monkeypatch.setattr(localtime, "TZ", _noon())
     feed = city.Feed()
     monkeypatch.setattr(collect, "rt", feed)
     monkeypatch.setattr(replay, "DB", str(tmp_path / "no-recording.db"))

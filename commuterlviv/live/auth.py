@@ -7,13 +7,19 @@ Remember-me is the series-and-token scheme with constant-time comparisons; a
 spent token coming back is treated as theft and drops the series and every
 session the user has.
 """
+import asyncio
 import datetime
+from concurrent.futures import ThreadPoolExecutor
 
 from asyncpg.exceptions import UniqueViolationError
 
 from . import security
 
 GRACE = 30.0     # s an already-rotated remember-me token stays acceptable
+ARGON2_AT_ONCE = 2  # hashes in flight; each holds `argon2` memory_cost of RAM
+
+# threads start on first use; a pool, unlike a semaphore, is bound to no loop
+_argon2_pool = ThreadPoolExecutor(ARGON2_AT_ONCE, thread_name_prefix="argon2")
 
 
 def _now():
@@ -24,14 +30,24 @@ def _delta(seconds):
     return datetime.timedelta(seconds=seconds)
 
 
+async def _argon2(fn, *args):
+    """Run an argon2 hash or verify on a worker thread, so a login does not
+    stall every websocket for its duration."""
+    return await asyncio.get_running_loop().run_in_executor(_argon2_pool, fn, *args)
+
+
 async def event(pool, kind, user_id=None, ip=None, detail=None):
     await pool.execute(
         "INSERT INTO auth_events(kind, user_id, ip, detail) VALUES($1,$2,$3,$4)",
         kind, user_id, ip, detail)
 
 
-async def user_count(pool):
-    return await pool.fetchval("SELECT count(*) FROM users")
+async def revoke(con, user_id, keep_session=None):
+    """End every session of the user but `keep_session`, and every
+    remember-me cookie. Run it in the transaction that caused it."""
+    await con.execute("DELETE FROM remember_tokens WHERE user_id = $1", user_id)
+    await con.execute("DELETE FROM sessions WHERE user_id = $1 AND id <> $2",
+                      user_id, keep_session or b"")
 
 
 async def register(pool, ph, username, password, code=None, mode="code"):
@@ -47,7 +63,7 @@ async def register(pool, ph, username, password, code=None, mode="code"):
     if mode == "closed":
         return None, "registration is closed"
 
-    hashed = ph.hash(password)
+    hashed = await _argon2(ph.hash, password)
     async with pool.acquire() as con:
         async with con.transaction():
             if mode == "code":
@@ -75,14 +91,15 @@ async def login(pool, ph, username, password):
         "SELECT id, password_hash, disabled FROM users WHERE lower(username) = $1",
         name)
     if row is None:
-        security.burn(ph)
+        await _argon2(security.burn, ph)
         return None
-    ok, rehash = security.verify(ph, row["password_hash"], password)
+    ok, rehash = await _argon2(
+        security.verify, ph, row["password_hash"], password)
     if not ok or row["disabled"]:
         return None
     if rehash:
         await pool.execute("UPDATE users SET password_hash = $2 WHERE id = $1",
-                           row["id"], ph.hash(password))
+                           row["id"], await _argon2(ph.hash, password))
     await pool.execute("UPDATE users SET last_login = now() WHERE id = $1", row["id"])
     return row["id"]
 
@@ -94,21 +111,18 @@ async def change_password(pool, ph, user_id, old, new, keep_session=None):
         "SELECT username, password_hash FROM users WHERE id = $1", user_id)
     if row is None:
         return "no such user"
-    ok, _ = security.verify(ph, row["password_hash"], old)
+    ok, _ = await _argon2(security.verify, ph, row["password_hash"], old)
     if not ok:
         return "the current password is wrong"
     why = security.check_password(new, row["username"])
     if why:
         return why
+    hashed = await _argon2(ph.hash, new)
     async with pool.acquire() as con:
         async with con.transaction():
             await con.execute("UPDATE users SET password_hash = $2 WHERE id = $1",
-                              user_id, ph.hash(new))
-            await con.execute("DELETE FROM remember_tokens WHERE user_id = $1",
-                              user_id)
-            await con.execute(
-                "DELETE FROM sessions WHERE user_id = $1 AND id <> $2",
-                user_id, keep_session or b"")
+                              user_id, hashed)
+            await revoke(con, user_id, keep_session)
     return None
 
 
@@ -159,7 +173,7 @@ async def issue_remember(pool, user_id, days, ip=None, agent=None):
     await pool.execute(
         "INSERT INTO remember_tokens(series, user_id, token_hash, expires_at, "
         "ip, user_agent) VALUES($1,$2,$3,$4,$5,$6)",
-        series, user_id, token_hash, _now() + _delta(days * 86400), ip,
+        series, user_id, token_hash, _now() + datetime.timedelta(days=days), ip,
         (agent or "")[:300])
     return f"{series_raw}.{token_raw}"
 
@@ -190,10 +204,7 @@ async def consume_remember(pool, raw, days, ip=None):
                 # two tabs woke together; the loser of the race is not a thief
                 return row["user_id"], None
             else:
-                await con.execute("DELETE FROM remember_tokens WHERE user_id = $1",
-                                  row["user_id"])
-                await con.execute("DELETE FROM sessions WHERE user_id = $1",
-                                  row["user_id"])
+                await revoke(con, row["user_id"])
                 await con.execute(
                     "INSERT INTO auth_events(kind, user_id, ip, detail) "
                     "VALUES('remember_theft', $1, $2, 'spent token replayed')",
@@ -206,7 +217,7 @@ async def consume_remember(pool, raw, days, ip=None):
                 "rotated_at = now(), last_used_at = now(), expires_at = $4 "
                 "WHERE series = $1",
                 series, fresh_hash, row["token_hash"],
-                _now() + _delta(days * 86400))
+                _now() + datetime.timedelta(days=days))
     return row["user_id"], f"{series_raw}.{fresh_raw}"
 
 

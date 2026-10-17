@@ -1,8 +1,10 @@
 import { useState, type ComponentProps } from "react";
+import { stopName } from "../lib/catalog";
 import { t } from "../lib/i18n";
 import { dropped, renamed } from "../lib/places";
 import { useReorder } from "../lib/reorder";
 import type { Catalog, Place } from "../lib/types";
+import { Remove } from "./Cross";
 
 /** Everything the account has kept: places by name, stops by id. Both lists are
  * in the order the account chose, and a row is dragged by its grip to change it.
@@ -69,14 +71,9 @@ export function SavedPanel({
                   title={t.showOnMap}
                   className="min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-sm text-slate-300 hover:bg-raised/70"
                 >
-                  {catalog.stops[i]?.name ?? ""}
+                  {stopName(catalog, i)}
                 </button>
-                <button
-                  onClick={() => onPins(pins.filter((p) => p !== i))}
-                  className="rounded-control px-2 py-1.5 text-xs text-slate-500 transition-colors hover:bg-raised/70 hover:text-rose-300"
-                >
-                  ✕
-                </button>
+                <Remove onClick={() => onPins(pins.filter((p) => p !== i))} />
               </li>
             ))}
           </ul>
@@ -153,12 +150,7 @@ function PlaceRow({
       >
         {t.rename}
       </button>
-      <button
-        onClick={onForget}
-        className="rounded-control px-2 py-1.5 text-xs text-slate-500 transition-colors hover:bg-raised/70 hover:text-rose-300"
-      >
-        ✕
-      </button>
+      <Remove onClick={onForget} />
     </li>
   );
 }

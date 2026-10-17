@@ -123,11 +123,12 @@ class _BackupsState extends State<_Backups> {
                           for (final (i, r) in chain.indexed) ...[
                             if (i > 0)
                               const Icon(Icons.chevron_right, size: 16),
-                            RouteBadge(
-                              route: catalog.routes[r.route!],
-                              fontSize: 11,
-                              outline: planned.elementAtOrNull(i) ?? false,
-                            ),
+                            if (catalog.routeAt(r.route) case final route?)
+                              RouteBadge(
+                                route: route,
+                                fontSize: 11,
+                                outline: planned.elementAtOrNull(i) ?? false,
+                              ),
                           ],
                         ],
                       ),
@@ -156,7 +157,7 @@ class _BackupsState extends State<_Backups> {
                       txt.changeAt(
                         chain
                             .skip(1)
-                            .map((r) => catalog.stops[r.a].name)
+                            .map((r) => catalog.stopName(r.a))
                             .join(', '),
                       ),
                       style: small,
@@ -185,7 +186,7 @@ class _BackupsState extends State<_Backups> {
             ),
           for (final (i, leg) in rides.indexed) ...[
             const Divider(height: 20),
-            Text(catalog.stops[leg.a].name, style: theme.textTheme.titleSmall),
+            Text(catalog.stopName(leg.a), style: theme.textTheme.titleSmall),
             const SizedBox(height: 4),
             way(rides.sublist(i), journey.arr, null),
             if (leg.backups.isEmpty)

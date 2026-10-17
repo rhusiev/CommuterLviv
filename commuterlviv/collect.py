@@ -23,6 +23,8 @@ import requests
 from google.transit import gtfs_realtime_pb2
 
 from .gtfs import BASE, DATA, table
+from .localtime import DAY_S, HOUR_S
+from .logs import brief, log
 
 DB = os.path.join(DATA, "feed.db")
 
@@ -31,6 +33,7 @@ BATCH_S = 2.0            # how often the writer commits
 CHECKPOINT_S = 300.0     # how often the write-ahead log is folded back in
 HEARTBEAT_S = 300.0
 BACKOFF_MAX = 120.0      # s between attempts at a feed that keeps failing
+PRUNE_EVERY_S = HOUR_S   # between deletions of rows older than --keep-days
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -64,10 +67,6 @@ stop_flag = threading.Event()
 writes = queue.Queue(maxsize=QUEUE_MAX)
 stats = collections.Counter()
 stats_lock = threading.Lock()
-
-
-def log(*a):
-    print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), *a, flush=True)
 
 
 def count(**kw):
@@ -110,7 +109,7 @@ def writer():
                 pending.clear()
                 return
             except sqlite3.Error as exc:
-                log("write failed", repr(exc)[:200])
+                log("write failed", brief(exc))
                 count(write_errors=1)
                 try:
                     if db is not None:
@@ -143,10 +142,15 @@ def writer():
                 db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                 db.execute("PRAGMA incremental_vacuum")
             except sqlite3.Error as exc:
-                log("checkpoint failed", repr(exc)[:200])
+                log("checkpoint failed", brief(exc))
             last_ckpt = now
     if db is not None:
         db.close()
+
+
+def _polled(t0, feed, header, n, err):
+    """Records a poll started at `t0`, with how many ms it took."""
+    emit("poll", (t0, feed, header, n, int((time.time() - t0) * 1000), err))
 
 
 def poll_loop(feed, period, once):
@@ -157,16 +161,15 @@ def poll_loop(feed, period, once):
         t0 = time.time()
         try:
             n, header = once()
-            emit("poll", (t0, feed, header, n, int((time.time() - t0) * 1000), None))
+            _polled(t0, feed, header, n, None)
             count(**{f"{feed}_rows": n, f"{feed}_polls": 1})
             fails = 0
         except Exception as exc:
-            emit("poll", (t0, feed, 0, 0, int((time.time() - t0) * 1000),
-                          repr(exc)[:200]))
+            _polled(t0, feed, 0, 0, brief(exc))
             count(**{f"{feed}_errors": 1})
             fails += 1
             if fails in (1, 5) or fails % 50 == 0:
-                log(f"{feed} error x{fails}", repr(exc)[:150])
+                log(f"{feed} error x{fails}", brief(exc))
         wait = min(period * 2 ** min(fails, 16), BACKOFF_MAX) if fails else period
         stop_flag.wait(max(0.5, wait - (time.time() - t0)))
 
@@ -273,12 +276,11 @@ def collect_lad(period, limit):
                                  e.get("vehicle_id"), 1 if e.get("scheduled") else 0,
                                  int(when.timestamp()), e.get("end_stop_name"),
                                  e.get("direction_id")))
-                emit("poll", (t0, "lad", 0, len(rows), int((time.time() - t0) * 1000),
-                              None if r.status_code == 200 else str(r.status_code)))
+                _polled(t0, "lad", 0, len(rows),
+                        None if r.status_code == 200 else str(r.status_code))
                 count(lad_rows=len(rows), lad_polls=1)
             except Exception as exc:
-                emit("poll", (t0, "lad", 0, 0, int((time.time() - t0) * 1000),
-                              repr(exc)[:200]))
+                _polled(t0, "lad", 0, 0, brief(exc))
                 count(lad_errors=1)
             stop_flag.wait(max(0.05, gap - (time.time() - t0)))
         stop_flag.wait(max(0.5, period - (time.time() - cycle)))
@@ -294,7 +296,7 @@ def prune(keep_days):
 
     Shrinks the file only if the database was created with auto_vacuum on.
     """
-    cutoff = time.time() - keep_days * 86400
+    cutoff = time.time() - keep_days * DAY_S
     db = sqlite3.connect(DB, timeout=60)
     try:
         for t, col in (("veh", "poll_ts"), ("pred", "poll_ts"),
@@ -327,11 +329,11 @@ def heartbeat(min_free_gb, keep_days):
                 f"can still be closed cleanly")
             stop_flag.set()
             return
-        if keep_days and time.time() - last_prune > 3600:
+        if keep_days and time.time() - last_prune > PRUNE_EVERY_S:
             try:
                 prune(keep_days)
             except sqlite3.Error as exc:
-                log("prune failed", repr(exc)[:200])
+                log("prune failed", brief(exc))
             last_prune = time.time()
 
 
@@ -374,7 +376,7 @@ def main(argv=None):
         t.start()
     log(f"collecting into {DB}, {shutil.disk_usage(DATA).free / 2**30:.1f}G free")
 
-    deadline = time.time() + args.hours * 3600 if args.hours else None
+    deadline = time.time() + args.hours * HOUR_S if args.hours else None
     while not stop_flag.wait(1.0):
         if deadline and time.time() > deadline:
             break

@@ -1,19 +1,23 @@
 """The loops: poll the feed, step the model, wake the clients.
 
 Everything touching the tracker or the model runs in one worker thread behind a
-lock, to keep ~200 ms of numpy per epoch off the event loop.
+lock, to keep ~200 ms of numpy per epoch off the event loop. The poll fetches
+the feed outside it, so a slow upstream delays only the poll, never an epoch -
+all but the first poll of a renewed city, which `swap` makes holding it.
 
 This does not write `feed.db` - the collector owns it - so the two poll the same
 endpoint independently.
 """
 import asyncio
+import contextlib
 import multiprocessing
 import os
 import sqlite3
 import time
 from concurrent.futures import ProcessPoolExecutor
 
-from .. import boost, collect, layover, replay, snapshot
+from .. import boost, collect, layover, localtime, replay, snapshot
+from ..logs import brief
 from . import quiet
 from .state import Live
 
@@ -21,10 +25,10 @@ WARM_HOURS = 2.0         # of recorded history replayed at most, if it is fresh
 WARM_MAX_AGE = 900.0     # s: older than this and the recording is not "now"
 SAVE_EVERY = 600.0       # s between snapshots of the model
 FIT_EVERY = 6 * 3600.0   # s between refits of the learned models
-DAY_S = 86400.0
-BACKFILL_S = 3 * DAY_S   # of recording learned from when the learned models lack rows
-BACKFILL_WARMUP_S = DAY_S    # replayed before that, so the rows are a warm model's
+BACKFILL_S = 3 * localtime.DAY_S   # of recording learned from when models lack rows
+BACKFILL_WARMUP_S = localtime.DAY_S  # replayed first, so the rows are a warm model's
 BACKFILL_NICE = 10
+SEEN_MAX = 100_000       # vehicles' last timestamps kept before starting over
 
 
 class Service:
@@ -46,8 +50,13 @@ class Service:
         since = None
         if self.persist:
             since = await asyncio.to_thread(snapshot.load, self.live.model)
-            self.log("no model snapshot; learning from scratch" if since is None
-                     else f"model snapshot from {time.time() - since:.0f}s ago")
+            if since is not None:
+                self.log(f"model snapshot from {time.time() - since:.0f}s ago")
+            elif snapshot.PATH.exists():
+                self.log("model snapshot unreadable or of another model; "
+                         "learning from scratch")
+            else:
+                self.log("no model snapshot; learning from scratch")
         await asyncio.to_thread(self.warm, since=since)
         tasks = [self.poll_loop(), self.epoch_loop(), self.fit_loop()]
         if self.persist:
@@ -62,22 +71,21 @@ class Service:
         timetable."""
         live, db = live or self.live, db or replay.DB
         try:
-            con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
-            last = con.execute("SELECT max(veh_ts) FROM veh").fetchone()[0]
-            con.close()
+            with contextlib.closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True)) as con:
+                last = con.execute("SELECT max(veh_ts) FROM veh").fetchone()[0]
         except sqlite3.Error as exc:
-            self.log("no recording to warm from:", repr(exc)[:120])
+            self.log("no recording to warm from:", brief(exc))
             return False
         if not last or time.time() - last > WARM_MAX_AGE:
-            self.log("recording is stale; starting the model cold")
+            self.log("recording is stale; nothing to replay")
             return False
         t0 = time.time()
-        t_from = max(last - WARM_HOURS * 3600, since or 0.0)
+        t_from = max(last - WARM_HOURS * localtime.HOUR_S, since or 0.0)
         try:
             replay.run(live.net, t_from=t_from, t_to=last,
                        db=db, model=live.model, epoch=self.set.epoch)
         except replay.NoData as exc:
-            self.log("nothing to warm from:", str(exc)[:120])
+            self.log("nothing to warm from:", brief(exc))
             return False
         self.log(f"warmed the model on {(last - t_from) / 60:.0f} min of "
                  f"recording in {time.time() - t0:.1f}s")
@@ -100,20 +108,25 @@ class Service:
         spawn = multiprocessing.get_context("spawn")
         try:
             with ProcessPoolExecutor(1, mp_context=spawn) as pool:
-                data = await asyncio.get_running_loop().run_in_executor(
-                    pool, _learn, self.live.net, self.set.cfg, db or replay.DB,
-                    t_from, t_to, BACKFILL_WARMUP_S, self.set.epoch)
+                try:
+                    data = await asyncio.get_running_loop().run_in_executor(
+                        pool, _learn, self.live.net, self.set.cfg, db or replay.DB,
+                        t_from, t_to, BACKFILL_WARMUP_S, self.set.epoch)
+                except asyncio.CancelledError:
+                    # shutting down: leaving the pool waits for its worker, whose
+                    # replay of days outlasts the container's stop timeout, and
+                    # the kill that follows loses the final snapshot
+                    pool.kill_workers()
+                    raise
         except Exception as exc:
-            self.log("backfill failed", repr(exc)[:200])
+            self.log("backfill failed", brief(exc))
             return
         async with self.lock:
             model = self.live.model
             if cold:
                 snapshot.restore(model, data)
             else:
-                model.boost.restore_rows(data[snapshot.PASSED],
-                                         [str(r) for r in data[snapshot.PASSED_ROUTES]])
-                model.layovers.restore_rows(data[snapshot.STANDS])
+                snapshot.restore_rows(model, data)
         self.log(f"backfilled {len(data[snapshot.PASSED])} passed stops and "
                  f"{len(data[snapshot.STANDS])} minutes of stands in "
                  f"{time.time() - t0:.0f}s")
@@ -125,7 +138,7 @@ class Service:
             try:
                 await self.save()
             except Exception as exc:
-                self.log("model snapshot failed", repr(exc)[:200])
+                self.log("model snapshot failed", brief(exc))
 
     async def save(self):
         async with self.lock:
@@ -158,7 +171,7 @@ class Service:
                     learner.model = fitted
                 self.log(f"{name} fitted on {len(rows)} {rows_are}")
         except Exception as exc:
-            self.log(f"{name} fit failed", repr(exc)[:200])
+            self.log(f"{name} fit failed", brief(exc))
 
     def swap(self, live):
         """Onto a new city, primed with a poll and an epoch so it is not
@@ -166,18 +179,19 @@ class Service:
         self.live = live
         self._seen.clear()
         try:
-            self.poll_once()
+            self.fold(self.fetch())
             live.epoch()
         except Exception as exc:
-            self.log("first poll of the new city failed", repr(exc)[:200])
+            self.log("first poll of the new city failed", brief(exc))
 
     async def poll_loop(self):
         fails = 0
         while True:
             t0 = time.time()
             try:
+                msg = await asyncio.to_thread(self.fetch)
                 async with self.lock:
-                    n = await asyncio.to_thread(self.poll_once)
+                    n = await asyncio.to_thread(self.fold, msg)
                 self.polls += 1
                 fails = 0
                 self.hub.publish()
@@ -189,14 +203,19 @@ class Service:
                 self.errors += 1
                 fails += 1
                 if fails in (1, 5) or fails % 50 == 0:
-                    self.log(f"poll error x{fails}", repr(exc)[:200])
+                    self.log(f"poll error x{fails}", brief(exc))
             wait = min(self.set.poll_veh * 2 ** min(fails, 8),
                        collect.BACKOFF_MAX) if fails else self.set.poll_veh
             await asyncio.sleep(max(0.5, wait - (time.time() - t0)))
 
-    def poll_once(self):
-        """One fetch, folded in. Runs in a worker thread."""
-        msg = collect.rt("vehicle_position")
+    @staticmethod
+    def fetch():
+        """The feed's vehicle positions now. Blocks; run it in a worker thread."""
+        return collect.rt("vehicle_position")
+
+    def fold(self, msg):
+        """The new fixes in `msg` handed to the tracker, and how many there
+        were. Runs in a worker thread, holding the lock."""
         n = 0
         for e in msg.entity:
             v = e.vehicle
@@ -208,7 +227,7 @@ class Service:
             if self.live.fix(key, v.timestamp, p.latitude, p.longitude,
                              p.speed, p.odometer, v.trip.trip_id or None):
                 n += 1
-        if len(self._seen) > 100_000:
+        if len(self._seen) > SEEN_MAX:
             self._seen.clear()
         self.live.poll_done()
         return n
@@ -228,7 +247,7 @@ class Service:
                 self.hub.publish(epoch=True)
             except Exception as exc:
                 self.errors += 1
-                self.log("epoch error", repr(exc)[:200])
+                self.log("epoch error", brief(exc))
             took = time.time() - t
             if took > step / 2:
                 self.log(f"epoch took {took:.1f}s of a {step:.0f}s budget")

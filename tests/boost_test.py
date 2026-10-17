@@ -7,10 +7,9 @@ import pytest
 
 from commuterlviv import boost, layover, snapshot
 from commuterlviv.live import state
-from commuterlviv.live.service import Service
 
 from . import city
-from .service import settings_for
+from .service import offline
 
 TO_GO_TOL_S = 15.0
 WAIT_S = 10.0
@@ -26,11 +25,6 @@ class _Shift:
 
     def predict(self, x):
         return np.full(len(x), self.s)
-
-
-@pytest.fixture
-def live(net, cfg):
-    return state.Live(net, cfg)
 
 
 def _ride(live, until):
@@ -152,8 +146,7 @@ def test_a_refit_asked_for_fits_both_models_again(net, monkeypatch):
     fits = []
     monkeypatch.setattr(layover, "fit", lambda rows: fits.append("layover"))
     monkeypatch.setattr(boost, "fit", lambda rows: fits.append("boost"))
-    svc = Service(settings_for("postgresql://unused", "http://localhost"), net,
-                  log=lambda *a: None, persist=False)
+    svc = offline(net)
 
     async def go():
         task = asyncio.create_task(svc.fit_loop())

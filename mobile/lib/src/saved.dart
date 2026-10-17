@@ -12,6 +12,9 @@ import 'models.dart';
 import 'sheets.dart' show askName, manage;
 import 'strings.dart';
 
+/// The share of the screen the sheet opens to.
+const _sheetShare = 0.6;
+
 class SavedSheet extends StatefulWidget {
   const SavedSheet({
     super.key,
@@ -74,7 +77,7 @@ class _SavedSheetState extends State<SavedSheet> {
     final theme = material.Theme.of(context);
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.6,
+      initialChildSize: _sheetShare,
       builder: (context, controller) => CustomScrollView(
         controller: controller,
         slivers: [

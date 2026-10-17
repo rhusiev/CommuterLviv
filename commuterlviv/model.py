@@ -17,18 +17,30 @@ at that hour, so the layers only explain what the timetable got wrong. Hold has
 no prior and is learned in seconds from zero.
 """
 import datetime
-import zoneinfo
 
 import numpy as np
 
-from . import boost, config, layover
+from . import boost, config, layover, localtime
 
 PACE_CLIP = (0.020, 2.0)     # s/m: 180 km/h .. 1.8 km/h while actually rolling
 HOLD_CLIP = (0.0, 240.0)     # s standing per crossing
 RATIO_CLIP = (0.15, 8.0)     # observed pace over timetabled pace
 PACE0 = 1 / 7.0              # s/m, fallback where the timetable says nothing
 SLOTS = 24                   # timetable prior resolution: one slot per hour
-TZ = zoneinfo.ZoneInfo("Europe/Kyiv")
+EXP_CAP = 700.0              # the largest exponent np.exp takes without overflowing
+
+
+def decay(age, tau):
+    """Weight left after `age` s of exponential decay with time constant
+    `tau`; an infinite age gives zero."""
+    return np.exp(-np.minimum(age / tau, EXP_CAP))
+
+
+def between_slots(table, k):
+    """The hourly `table` at fractional hour `k`, interpolated, so it does not
+    jump on the hour."""
+    i, f = int(k), k - int(k)
+    return (1.0 - f) * table[i] + f * table[(i + 1) % SLOTS]
 
 
 def group(keys, vals, weights):
@@ -58,9 +70,8 @@ class Ewma:
         self.t = np.full(n, -np.inf)
 
     def _decay(self, t, now):
-        """Weight left from an observation made at t; t = -inf gives zero and the
-        cap only keeps exp from overflowing."""
-        return np.exp(-np.minimum((now - t) / self.tau, 700.0))
+        """Weight left from an observation made at t; t = -inf gives zero."""
+        return decay(now - t, self.tau)
 
     def update(self, idx, val, now, weight):
         idx, val, weight = group(idx, val, weight)
@@ -186,8 +197,8 @@ class BaseModel:
         self._prior_t = None
         self._per_cell = self.prior[0] * self.cell_len
         self.emitting = False   # set by the replay: is this epoch being scored
-        self.layovers = layover.Layovers(net, TZ)
-        self.boost = boost.Boost(net, TZ)
+        self.layovers = layover.Layovers(net, localtime.TZ)
+        self.boost = boost.Boost(net, localtime.TZ)
 
     def _level(self, prior):
         """The one number a whole prior array is worth: its length-weighted mean.
@@ -236,6 +247,7 @@ class BaseModel:
         back to its all-day mean, and one with none at all to PACE0.
         """
         num = np.zeros((SLOTS, self.ncell))
+        slot_s = localtime.DAY_S / SLOTS
         den = np.zeros((SLOTS, self.ncell))
         by_pattern = {}
         for trip, key in self.net.pattern_of.items():
@@ -254,7 +266,7 @@ class BaseModel:
                 sched = self.net.trip_stops[t][2]
                 dt = np.diff(sched)
                 if np.ptp(dt) > 1.0:
-                    by_slot.setdefault(int(sched[0] // 3600) % SLOTS, []).append(dt)
+                    by_slot.setdefault(int(sched[0] // slot_s) % SLOTS, []).append(dt)
             if not by_slot:
                 continue
             last = self.net.shapes[sid].cells - 1
@@ -274,8 +286,7 @@ class BaseModel:
     @staticmethod
     def _hours(now):
         """The local time of day as a fractional hour."""
-        local = datetime.datetime.fromtimestamp(now, TZ)
-        return local.hour + local.minute / 60.0
+        return localtime.hours(datetime.datetime.fromtimestamp(now, localtime.TZ))
 
     def slot(self, now):
         return int(self._hours(now))
@@ -287,10 +298,7 @@ class BaseModel:
         hour.
         """
         if now != self._prior_t:
-            k = self._hours(now)
-            i, f = int(k), k - int(k)
-            self._prior_row = ((1.0 - f) * self.prior[i]
-                               + f * self.prior[(i + 1) % SLOTS])
+            self._prior_row = between_slots(self.prior, self._hours(now))
             self._prior_t = now
         return self._prior_row
 

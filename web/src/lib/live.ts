@@ -203,9 +203,11 @@ export class Live {
   }
 }
 
-/** Where a vehicle is now, between the last two reports. Heading takes the
- * short way round, so turning past north does not spin the wrong way. */
-export function sample(v: Vehicle, now: number): [number, number, number] {
+/** Where a vehicle is at `now`, between the last two reports. `now` is on the
+ * clock reports are stamped with (`performance.now()`), passed in when one
+ * frame samples many. Heading takes the short way round, so turning past north
+ * does not spin the wrong way. */
+export function sample(v: Vehicle, now = performance.now()): [number, number, number] {
   const k = Math.min(1, (now - v.t0) / EASE);
   const e = k * (2 - k); // ease-out
   const dh = ((v.h1 - v.h0 + 540) % 360) - 180;

@@ -13,13 +13,70 @@ const minTyped = 2;
 
 final _word = RegExp(r'[\p{L}\p{N}]+', unicode: true);
 
-/// What Unicode decomposition would fold, by hand: Dart has no NFKD.
-const _folded = {'й': 'и', 'ї': 'і', 'ё': 'е', "'": '', 'ʼ': '', '’': ''};
+/// What the web's NFKD does to a Latin or Cyrillic letter, written out: Dart
+/// has no NFKD. Each key is what the letters after it fold to;
+/// `tests/fold_cases.json` holds the cases both clients are checked against.
+const _foldsTo = {
+  'a': 'ªàáâãäåāăą',
+  'c': 'çćĉċč',
+  'd': 'ď',
+  'e': 'èéêëēĕėęě',
+  'g': 'ĝğġģ',
+  'h': 'ĥ',
+  'i': 'ìíîïĩīĭį',
+  'ij': 'ĳ',
+  'j': 'ĵ',
+  'k': 'ķ',
+  'l': 'ĺļľ',
+  'l·': 'ŀ',
+  'n': 'ñńņňŉ',
+  'o': 'ºòóôõöōŏő',
+  'r': 'ŕŗř',
+  's': 'śŝşšſ',
+  't': 'ţť',
+  'u': 'ùúûüũūŭůűų',
+  'w': 'ŵ',
+  'y': 'ýÿŷ',
+  'z': 'źżž',
+  'μ': 'µ',
+  'а': 'ӑӓ',
+  'г': 'ѓ',
+  'е': 'ѐёӗ',
+  'ж': 'ӂӝ',
+  'з': 'ӟ',
+  'и': 'йѝӣӥ',
+  'к': 'ќ',
+  'о': 'ӧ',
+  'у': 'ўӯӱӳ',
+  'ч': 'ӵ',
+  'ы': 'ӹ',
+  'э': 'ӭ',
+  'і': 'ї',
+  'ѵ': 'ѷ',
+  'ә': 'ӛ',
+  'ө': 'ӫ',
+  '': "'ʼ’",
+};
 
-List<String> words(String s) {
-  final folded = s.toLowerCase().split('').map((c) => _folded[c] ?? c).join();
-  return [for (final m in _word.allMatches(folded)) m[0]!];
-}
+final _folds = {
+  for (final e in _foldsTo.entries)
+    for (final c in e.value.split('')) c: e.key,
+};
+
+/// Combining marks, typed apart from their letter.
+final _marks = RegExp('[\u0300-\u036f]');
+
+/// Case, accents and apostrophes gone, so й matches и and ʼ is not typed.
+String fold(String s) => s
+    .toLowerCase()
+    .replaceAll(_marks, '')
+    .split('')
+    .map((c) => _folds[c] ?? c)
+    .join();
+
+List<String> words(String s) => [
+  for (final m in _word.allMatches(fold(s))) m[0]!,
+];
 
 /// Fewest edits turning [q] into some prefix of [w].
 int _prefixEdits(String q, String w) {
