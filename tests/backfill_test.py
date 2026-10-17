@@ -1,6 +1,7 @@
 """Learning from the recording what a fresh model lacks: the replay that keeps
 nothing but what the model learns, and the service's backfill from it."""
 import asyncio
+import time
 
 import numpy as np
 import pytest
@@ -12,6 +13,10 @@ from . import city
 from .service import EPOCH_S, offline
 
 OWN = 7.0                   # marks the rows a model noted itself
+LONG_S = 60.0               # a backfill's replay that has not finished
+STARTED_S = 30.0            # for its worker process to start, at most
+POLL_S = 0.05
+QUICK_S = 10.0              # for a cancelled backfill to end, at most
 
 
 def _learned(model):
@@ -96,3 +101,32 @@ def test_a_warm_model_takes_only_the_rows_and_keeps_its_own_as_newest(
               {rows: np.concatenate([replayed[rows], before[rows]])})
     _same({k: v for k, v in got.items() if k not in (snapshot.PASSED, snapshot.STANDS)},
           {k: v for k, v in before.items() if k not in (snapshot.PASSED, snapshot.STANDS)})
+
+
+def _endless(net, cfg, started, *_):
+    """A replay that never finishes in time, saying when it began."""
+    started.touch()
+    time.sleep(LONG_S)
+
+
+async def _cancel_once_started(svc, started):
+    """Seconds a backfill takes to end after it is cancelled mid-replay."""
+    task = asyncio.create_task(svc.backfill(cold=True, db=started))
+    deadline = time.monotonic() + STARTED_S
+    while not started.exists():
+        assert time.monotonic() < deadline, "the backfill's worker never started"
+        await asyncio.sleep(POLL_S)
+    t0 = time.monotonic()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    return time.monotonic() - t0
+
+
+def test_a_backfill_cancelled_at_shutdown_stops_its_worker_at_once(
+        net, monkeypatch, tmp_path):
+    monkeypatch.setattr(service, "_learn", _endless)
+
+    took = asyncio.run(_cancel_once_started(offline(net), tmp_path / "started"))
+
+    assert took < QUICK_S

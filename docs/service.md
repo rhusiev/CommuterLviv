@@ -625,6 +625,9 @@ two hours of recording cannot replay.
    uncorrected model and the rule answer. Started on 2026-10-05 at 03:00
    with no rows, the ETAs of the first 6 hours missed by 163 s rather than
    243 s, and those of the next 18 hours by about 130 s rather than 158 s.
+   Stopped while it runs, the service kills that process (`kill_workers`,
+   new in Python 3.14) instead of waiting out a replay that would outlast the
+   container's stop timeout, so the snapshot saved on the way out is not lost.
 
 A missing or unreadable snapshot is not an error - the model starts from the
 timetable, as it did before the file existed, and the log says so. The

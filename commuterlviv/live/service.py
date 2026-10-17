@@ -108,9 +108,16 @@ class Service:
         spawn = multiprocessing.get_context("spawn")
         try:
             with ProcessPoolExecutor(1, mp_context=spawn) as pool:
-                data = await asyncio.get_running_loop().run_in_executor(
-                    pool, _learn, self.live.net, self.set.cfg, db or replay.DB,
-                    t_from, t_to, BACKFILL_WARMUP_S, self.set.epoch)
+                try:
+                    data = await asyncio.get_running_loop().run_in_executor(
+                        pool, _learn, self.live.net, self.set.cfg, db or replay.DB,
+                        t_from, t_to, BACKFILL_WARMUP_S, self.set.epoch)
+                except asyncio.CancelledError:
+                    # shutting down: leaving the pool waits for its worker, whose
+                    # replay of days outlasts the container's stop timeout, and
+                    # the kill that follows loses the final snapshot
+                    pool.kill_workers()
+                    raise
         except Exception as exc:
             self.log("backfill failed", brief(exc))
             return
