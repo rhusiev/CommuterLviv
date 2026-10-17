@@ -170,6 +170,18 @@ def _sec(hms):
 
 def build():
     net = Net()
+    _read_shapes(net)
+    _read_stops_and_routes(net)
+    blocks = _read_trips(net)
+    _solve_patterns(net)
+    for trips in blocks.values():
+        trips = sorted((t for t in trips if t in net.trip_stops),
+                       key=lambda t: net.trip_stops[t][2][0])
+        net.trip_next.update(zip(trips, trips[1:]))
+    return net
+
+
+def _read_shapes(net):
     pts = {}
     for r in gtfs.table("shapes.txt"):
         pts.setdefault(r["shape_id"], []).append(
@@ -179,6 +191,8 @@ def build():
         arr = np.array([(a[1], a[2]) for a in rows])
         net.shapes[sid] = Shape(to_xy(arr[:, 0], arr[:, 1]))
 
+
+def _read_stops_and_routes(net):
     for s in gtfs.table("stops.txt"):
         net.stops[s["stop_id"]] = {
             "name": s["stop_name"], "code": s["stop_code"],
@@ -189,6 +203,9 @@ def build():
             "short": r["route_short_name"], "long": r["route_long_name"],
             "type": gtfs.vehicle_type(r["route_short_name"])}
 
+
+def _read_trips(net):
+    """Fills in each trip's shape, route and direction; the trips of each block."""
     blocks = {}
     for t in gtfs.table("trips.txt"):
         if t.get("block_id"):
@@ -196,7 +213,11 @@ def build():
         net.trip_shape[t["trip_id"]] = t["shape_id"]
         net.trip_route[t["trip_id"]] = t["route_id"]
         net.trip_dir[t["trip_id"]] = int(t["direction_id"] or 0)
+    return blocks
 
+
+def _solve_patterns(net):
+    """Places each trip's stops along its shape, with the overrides applied."""
     seq = {}
     for r in gtfs.table("stop_times.txt"):
         seq.setdefault(r["trip_id"], []).append(
@@ -221,11 +242,6 @@ def build():
         net.pattern_of[trip] = key
         net.trip_stops[trip] = (ids, solved[key], np.array(when, dtype=float))
     extra.report()
-    for trips in blocks.values():
-        trips = sorted((t for t in trips if t in net.trip_stops),
-                       key=lambda t: net.trip_stops[t][2][0])
-        net.trip_next.update(zip(trips, trips[1:]))
-    return net
 
 
 def source():
