@@ -1,5 +1,6 @@
 """The service end to end over HTTP and its websocket: a made-up feed polled
 in real time, a user registered, the map and the boards read as a client would."""
+import dataclasses
 import json
 import time
 from types import SimpleNamespace
@@ -81,6 +82,22 @@ def test_registering_needs_the_apps_origin(client):
                     json={"username": "mallory", "password": service.PASSWORD})
 
     assert r.status_code == 403
+
+
+@pytest.mark.parametrize("allowed", [True, False])
+def test_a_password_is_changed_only_where_the_service_allows_it(
+        feed, net, database, allowed):
+    st = dataclasses.replace(service.settings_for(database, ORIGIN),
+                             password_change=allowed)
+    with TestClient(app.build(st, net), base_url=ORIGIN, client=CLIENT) as c:
+        headers = _signed_in(c, "changer")
+
+        said = c.get("/api/me").json()["password_change"]
+        r = c.post("/api/password", headers=headers,
+                   json={"old": service.PASSWORD, "new": service.PASSWORD + "-new"})
+
+    assert said is allowed
+    assert r.status_code == (200 if allowed else 403), r.text
 
 
 def test_the_catalog_lists_the_citys_routes_and_stops(client):

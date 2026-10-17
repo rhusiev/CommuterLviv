@@ -8,6 +8,7 @@ Widget _sheet({
   required double? hurry,
   VoidCallback? onSpeed,
   VoidCallback? onPassword,
+  bool canChangePassword = true,
 }) => MaterialApp(
   home: Scaffold(
     body: AccountSheet(
@@ -20,7 +21,7 @@ Widget _sheet({
       onLanguage: () {},
       onSpeed: onSpeed ?? () {},
       onServer: () {},
-      onPassword: onPassword ?? () {},
+      onPassword: canChangePassword ? onPassword ?? () {} : null,
       onOut: () {},
     ),
   ),
@@ -56,5 +57,13 @@ void main() {
     await tester.tap(find.text(txt.changePassword));
 
     expect(opened, isTrue);
+  });
+
+  testWidgets('no password row where the service does not allow a change', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_sheet(hurry: null, canChangePassword: false));
+
+    expect(find.text(txt.changePassword), findsNothing);
   });
 }

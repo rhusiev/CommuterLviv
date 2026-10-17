@@ -37,7 +37,8 @@ export type Sets = {
   places: Place[];
 };
 
-export type Me = { username: string; sets: Sets };
+// password_change: whether this service lets a password be changed; older ones do not say
+export type Me = { username: string; sets: Sets; password_change?: boolean };
 
 /** `planned`: the vehicle is still finishing its previous trip, so `t` is its
  * timetabled departure or its turnaround, whichever is later */

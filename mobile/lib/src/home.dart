@@ -63,6 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Live? _live;
   Catalog? _catalog;
   Sets? _sets;
+  bool _passwordChange = false;
   String? _error;
 
   final Set<int> _routes = {};
@@ -134,7 +135,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _load() async {
     try {
       final catalog = await widget.api.catalog();
-      final sets = await widget.api.sets();
+      final me = await widget.api.me();
+      final sets = me.sets;
       final active = sets.sets.where((s) => s.id == sets.active).firstOrNull;
       final live = Live(widget.api, onRenewed: _renew)..open();
       if (!mounted) {
@@ -144,6 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _catalog = catalog;
         _sets = sets;
+        _passwordChange = me.passwordChange;
         _live = live;
         _pins = catalog.stopsAt(sets.pins);
         _routes
@@ -725,19 +728,21 @@ class _HomeScreenState extends State<HomeScreen> {
         Navigator.pop(sheet);
         if (await editServer(context, widget.api) && mounted) widget.onOut();
       },
-      onPassword: () async {
-        Navigator.pop(sheet);
-        if (await changePassword(context, widget.api) && mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(txt.passwordChanged)));
-        }
-      },
+      onPassword: _passwordChange ? () => _changePassword(sheet) : null,
       onOut: () {
         Navigator.pop(sheet);
         unawaited(_signOut());
       },
     ),
   );
+
+  Future<void> _changePassword(BuildContext sheet) async {
+    Navigator.pop(sheet);
+    if (await changePassword(context, widget.api) && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(txt.passwordChanged)));
+    }
+  }
 
   Future<void> _signOut() async {
     try {

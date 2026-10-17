@@ -189,7 +189,8 @@ def protected(handler, unsafe=True):
 async def me(request, session):
     app = request.app.state
     return JSONResponse({"username": session["username"],
-                         "sets": await prefs.listing(app.pool, session["user_id"])})
+                         "sets": await prefs.listing(app.pool, session["user_id"]),
+                         "password_change": app.settings.password_change})
 
 
 async def register(request):
@@ -265,6 +266,8 @@ async def logout(request, session):
 
 async def password(request, session):
     app = request.app.state
+    if not app.settings.password_change:
+        return error("Changing the password is turned off", 403)
     data, bad = await body(request)
     if bad:
         return bad

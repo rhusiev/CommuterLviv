@@ -235,7 +235,7 @@ class AccountSheet extends StatefulWidget {
     required this.onLanguage,
     required this.onSpeed,
     required this.onServer,
-    required this.onPassword,
+    this.onPassword,
     required this.onOut,
   });
 
@@ -252,7 +252,9 @@ class AccountSheet extends StatefulWidget {
   final VoidCallback onLanguage;
   final VoidCallback onSpeed;
   final VoidCallback onServer;
-  final VoidCallback onPassword;
+
+  /// Null where the service does not let a password be changed, which hides the row.
+  final VoidCallback? onPassword;
   final VoidCallback onOut;
 
   @override
@@ -303,11 +305,12 @@ class _AccountSheetState extends State<AccountSheet> {
             subtitle: Text(widget.server),
             onTap: widget.onServer,
           ),
-          ListTile(
-            leading: const Icon(Icons.password),
-            title: Text(txt.changePassword),
-            onTap: widget.onPassword,
-          ),
+          if (widget.onPassword case final onPassword?)
+            ListTile(
+              leading: const Icon(Icons.password),
+              title: Text(txt.changePassword),
+              onTap: onPassword,
+            ),
           const Divider(height: 1),
           ListTile(
             leading: Icon(Icons.logout, color: colours.error),

@@ -505,6 +505,7 @@ export function App() {
               <div className="panel absolute right-0 top-12 w-52 p-2">
                 <AccountMenu
                   username={me.username}
+                  passwordChange={me.password_change ?? false}
                   onOut={async () => {
                     // Signed out whether or not the request landed
                     await api.logout().catch(() => undefined);

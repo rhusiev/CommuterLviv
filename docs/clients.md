@@ -158,7 +158,9 @@ toggle and nothing that signs you out sits loose on the map. That is
 `LayersSheet` and `AccountSheet` in `mobile/lib/src/sheets.dart`, and
 `LayersPanel.tsx` and `AccountMenu.tsx` on the web.
 
-Changing the password asks for the current one and the new one, and keeps the
+Changing the password is offered only where the service says it allows it
+(`password_change` in `/api/me`), which it does not by default. Where offered, it
+asks for the current one and the new one, and keeps the
 form open with the service's reason while it refuses. Once taken, every other
 device is signed out and so is this one's remember-me, so this device too signs
 in again once its session lapses. That is `PasswordForm.tsx` on the web and

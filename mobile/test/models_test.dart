@@ -21,4 +21,16 @@ void main() {
     expect(_catalog.routeAt(1), isNull);
     expect(_catalog.routeAt(null), isNull);
   });
+
+  test('a password may be changed only where the service says so', () {
+    Me me(Map<String, dynamic> extra) => Me.fromJson({
+      'username': 'u',
+      'sets': {'sets': <Object>[], 'active': null},
+      ...extra,
+    });
+
+    expect(me({'password_change': true}).passwordChange, isTrue);
+    expect(me({'password_change': false}).passwordChange, isFalse);
+    expect(me({}).passwordChange, isFalse);
+  });
 }

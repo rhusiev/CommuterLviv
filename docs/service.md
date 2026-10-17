@@ -648,7 +648,11 @@ the socket. Passwords are argon2id, sessions are opaque rows in Postgres behind
 a `__Host-` cookie, and remember-me is series+token rotated on every use, where
 a spent token coming back is treated as theft. `POST /api/password` with
 `{"old", "new"}` keeps only the session that asked: every other session and
-every remember-me token, its own included, is dropped. Migrations apply themselves at
+every remember-me token, its own included, is dropped. It answers 403 unless
+`COMMUTERLVIV_PASSWORD_CHANGE` is true, and it is false by default: until an
+account has a second way to prove who owns it, a stolen session could change the
+password and lock the owner out. `/api/me` says which (`password_change`), so
+the clients offer the change only where it works. Migrations apply themselves at
 boot and there is no down direction. The socket is not signed in once and
 trusted forever: it re-asks about its session every minute and closes with 4401
 when it has gone, it takes five messages a second with a burst of sixty, and it

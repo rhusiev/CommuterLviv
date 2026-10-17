@@ -9,6 +9,7 @@ import { Speed } from "./Speed";
 
 type Props = {
   username: string;
+  passwordChange: boolean;
   onOut: () => void;
 };
 
@@ -67,7 +68,7 @@ export function AccountMenu(p: Props) {
         )}
       </div>
       <p className="px-2 text-xs text-slate-500">{t.hurrySpeedHint}</p>
-      <PasswordForm />
+      {p.passwordChange && <PasswordForm />}
       <hr className="my-1 border-hair" />
       <button
         onClick={p.onOut}

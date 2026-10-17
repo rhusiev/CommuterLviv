@@ -176,15 +176,23 @@ class Sets {
 }
 
 class Me {
-  const Me({required this.username, required this.sets});
+  const Me({
+    required this.username,
+    required this.sets,
+    required this.passwordChange,
+  });
 
   factory Me.fromJson(Map<String, dynamic> j) => Me(
     username: j['username'] as String,
     sets: Sets.fromJson(j['sets'] as Map<String, dynamic>),
+    passwordChange: j['password_change'] as bool? ?? false,
   );
 
   final String username;
   final Sets sets;
+
+  /// Whether the service lets the password be changed; older ones do not say.
+  final bool passwordChange;
 }
 
 class Call {

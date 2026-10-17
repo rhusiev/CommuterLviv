@@ -25,11 +25,12 @@ def username(name):
 
 
 def settings_for(database, origin):
-    """Settings for a service at `origin` that anyone may register with, which
-    polls and recomputes every `POLL_S` and `EPOCH_S`."""
+    """Settings for a service at `origin` that anyone may register with and
+    change their password on, which polls and recomputes every `POLL_S` and
+    `EPOCH_S`."""
     return settings.Settings(
         database_url=database, variant="profile", secure_cookies=False,
-        origins=(origin,), web_base=origin, registration="open",
+        origins=(origin,), web_base=origin, registration="open", password_change=True,
         session_idle=3600.0, session_max=86400.0, remember_days=1.0,
         trust_proxy=False, build_planner=False, self_tiles=False, photon_url="",
         places_url="", poll_veh=POLL_S, epoch=EPOCH_S, dev=False, argon2=FAST_ARGON2)

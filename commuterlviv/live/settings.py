@@ -33,6 +33,7 @@ class Settings:
     origins: tuple[str, ...]     # exact origins allowed to make unsafe requests
     web_base: str                # where the web app lives, for invite links
     registration: str            # open | code | closed
+    password_change: bool        # off until accounts have a second way to prove who they are
     session_idle: float          # s of inactivity before a session dies
     session_max: float           # s a session lives however active
     remember_days: float
@@ -72,6 +73,7 @@ def load():
         origins=origins,
         web_base=_env("WEB_BASE", origins[0] if origins else "").rstrip("/"),
         registration=registration,
+        password_change=_flag("PASSWORD_CHANGE", False),
         session_idle=float(_env("SESSION_IDLE_S", 3600 * 12)),
         session_max=float(_env("SESSION_MAX_S", 86400 * 7)),
         remember_days=float(_env("REMEMBER_DAYS", 60)),
