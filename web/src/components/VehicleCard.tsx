@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, EPOCH_MS } from "../lib/api";
 import { countdown } from "../lib/eta";
 import { t } from "../lib/i18n";
 import { RouteBadge } from "./RouteBadge";
@@ -38,8 +38,7 @@ export function VehicleCard({
       }
     };
     void load();
-    // The model's epoch is 60 s, so refetch on the same period
-    const again = window.setInterval(load, 60_000);
+    const again = window.setInterval(load, EPOCH_MS);
     return () => {
       dropped = true;
       clearInterval(again);

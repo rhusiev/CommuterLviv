@@ -28,7 +28,7 @@ import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from "./lib/them
 import { RAMP, useTraffic } from "./lib/traffic";
 import { readUrl, writeUrl, type UrlState } from "./lib/url";
 import { heldFollowed, holdFollowed, type Followed } from "./lib/followed";
-import { hereOnce, type NoFix } from "./lib/position";
+import { hereOnce, ONE_FIX, type NoFix } from "./lib/position";
 import { useFollow } from "./lib/useFollow";
 import { takeRenewed, useLive } from "./lib/useLive";
 import type { Catalog, Journey, Me, Place, RouteSet, Shapes } from "./lib/types";
@@ -345,7 +345,7 @@ export function App() {
   const hereFor = (which: "from" | "to") => {
     const asked = boarded.current;
     if (!navigator.geolocation) return;
-    hereOnce({ enableHighAccuracy: true, timeout: 10_000 }).then(
+    hereOnce(ONE_FIX).then(
       (pos) => {
         const at = { lat: pos.coords.latitude, lon: pos.coords.longitude };
         // A fix asked for before getting on board is no longer the start

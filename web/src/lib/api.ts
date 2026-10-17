@@ -18,6 +18,10 @@ import type {
  * session cookie is first-party either way. */
 export const BASE = import.meta.env.VITE_API_URL ?? "";
 
+/** The server's default model epoch: what it predicts changes no faster, so
+ * what is polled is asked for again on it */
+export const EPOCH_MS = 60_000;
+
 type Failure = { error?: string; retry?: number; preparing?: boolean };
 
 export class ApiError extends Error {

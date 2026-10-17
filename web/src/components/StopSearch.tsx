@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { metres } from "../lib/geo";
 import { MIN_TYPED, score, words } from "../lib/match";
 import { matching } from "../lib/places";
-import { hereOnce, type NoFix } from "../lib/position";
+import { hereOnce, ONE_FIX, type NoFix } from "../lib/position";
 import type { Catalog, Found, Place } from "../lib/types";
 import { t } from "../lib/i18n";
 
@@ -11,6 +11,9 @@ const LIMIT = 8;
 
 /** Metres: past this "near me" is an IP geolocation, not a nearby stop */
 const NEAR = 2000;
+
+/** A fix this old still finds the stops nearby */
+const NEAR_FIX_AGE_MS = 60_000;
 
 /** A keystroke within this cancels the request the one before it started */
 const SETTLE = 250;
@@ -95,7 +98,7 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
       return;
     }
     setLocating(true);
-    hereOnce({ enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }).then(
+    hereOnce({ ...ONE_FIX, maximumAge: NEAR_FIX_AGE_MS }).then(
       (pos) => {
         setLocating(false);
         const me = { lat: pos.coords.latitude, lon: pos.coords.longitude };

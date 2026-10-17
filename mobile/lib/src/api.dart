@@ -15,6 +15,10 @@ import 'models.dart';
 /// Must be listed in the server's `COMMUTERLVIV_ORIGINS`.
 const appOrigin = 'app://commuterlviv';
 
+/// The server's default model epoch: what it predicts changes no faster, so
+/// what is polled is asked for again on it
+const epoch = Duration(seconds: 60);
+
 /// Overridden for development with
 /// `--dart-define=COMMUTERLVIV_BASE=http://10.0.2.2:8099`, the host machine as
 /// the Android emulator sees it.
