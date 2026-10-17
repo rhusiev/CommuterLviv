@@ -51,10 +51,21 @@ NEED_ROWS = 20_000  # before a fitted model is trusted over the rule
 LEAN = 0.4
 ITERS = 300
 RATE = 0.05
-PENDING = 6 * localtime.HOUR_S # s a stand's rows wait for its departure before dropped
+PENDING = 6 * localtime.HOUR_S  # s a stand's rows wait for its departure before dropped
 FEATURES = ("in for", "to timetable", "slack", "waited share", "kept", "ahead q25",
             "ahead q50", "ahead q75", "since last left", "timetable gap",
             "last ahead", "habit", "after last", "after last early", "hour")
+
+
+class _On:
+    """The trip a vehicle is on, as `Layovers.follow` sees it."""
+    __slots__ = ("trip", "away", "came", "seen")
+
+    def __init__(self, trip, ts):
+        self.trip = trip
+        self.away = False    # been away from the trip's end
+        self.came = None     # when it then got to the end
+        self.seen = ts       # its latest fix
 
 
 class Layovers:
@@ -67,7 +78,7 @@ class Layovers:
         self.last = {}       # (route, first stop) -> (departure, timetabled) of its latest
         self._rows = ring.Ring(ROWS, len(FEATURES) + 1)
         self.model = None
-        self._on = {}        # veh -> [trip, been away from its end, time in, last fix]
+        self._on = {}        # veh -> _On
         self._out = {}       # veh -> (timetabled departure, in early), until it leaves
         self._asked = {}     # trip -> [(time, features)] of its stand, until it leaves
         self._batch = []     # this epoch's stands: (trip, soonest, features)
@@ -78,23 +89,23 @@ class Layovers:
         if tr.s is None:
             return
         on = self._on.get(veh)
-        if on is not None and tr.ts - on[3] > GAP_RESET:
+        if on is not None and tr.ts - on.seen > GAP_RESET:
             # unseen for so long - as through an air raid alert - that it may
             # have left, or been to the depot and back: no stand or departure
             # can be timed until it comes in again
             self._out.pop(veh, None)
-            on = self._on[veh] = [tr.trip, False, None, tr.ts]
-        if on is None or on[0] != tr.trip:
-            came = on[2] if on is not None \
-                and self.net.trip_next.get(on[0]) == tr.trip else None
+            on = self._on[veh] = _On(tr.trip, tr.ts)
+        if on is None or on.trip != tr.trip:
+            came = on.came if on is not None \
+                and self.net.trip_next.get(on.trip) == tr.trip else None
             sched = clock(tr.sched[0], tr.ts, self.tz)
             self._out[veh] = sched, came is not None and came + TURN < sched
-            on = self._on[veh] = [tr.trip, False, None, tr.ts]
+            on = self._on[veh] = _On(tr.trip, tr.ts)
         if tr.s < tr.sdist[-1] - AT_END:
-            on[1] = True
-        elif on[1] and on[2] is None:
-            on[2] = tr.ts
-        on[3] = tr.ts
+            on.away = True
+        elif on.away and on.came is None:
+            on.came = tr.ts
+        on.seen = tr.ts
         out = self._out.get(veh)
         if out is not None and AWAY <= tr.s - tr.sdist[0] <= STRAY:
             del self._out[veh]
@@ -122,7 +133,7 @@ class Layovers:
     def came(self, veh, trip):
         """When this vehicle got to the end of `trip`, if it is in."""
         on = self._on.get(veh)
-        return on[2] if on is not None and on[0] == trip else None
+        return on.came if on is not None and on.trip == trip else None
 
     def stand(self, trip, sched, ready, now):
         """A vehicle in at `ready` stands to leave on `trip`, which the
