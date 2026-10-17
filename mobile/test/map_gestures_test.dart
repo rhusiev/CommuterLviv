@@ -3,9 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:latlong2/latlong.dart';
 
 import 'package:commuterlviv/src/map_controls.dart';
+import 'package:commuterlviv/src/map_tab.dart' show lviv;
 
 const _center = Offset(400, 300);
 
@@ -21,7 +21,7 @@ Future<MapController> pump(WidgetTester tester) async {
       home: FlutterMap(
         mapController: map,
         options: MapOptions(
-          initialCenter: const LatLng(49.8397, 24.0297),
+          initialCenter: lviv,
           initialZoom: 13,
           minZoom: minZoom,
           maxZoom: maxZoom,
