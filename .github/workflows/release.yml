@@ -7,8 +7,11 @@
 # When the pubspec carries the same version, the annotated tag is created only
 # once the APKs have built and verified, because F-Droid builds from that tag
 # the moment it sees it. When the pubspec is behind, the app is still the one
-# released under that older tag, so `mobile/` must not have changed since it,
-# and the release is the tag alone.
+# released under that older tag, so `mobile/` must not have changed since it
+# and that tag's release must still carry its three APKs, and the release is
+# the tag alone. A tag pushed by hand while the APKs build is taken as it
+# stands when it is this commit's, rather than failing the push and losing the
+# release it was meant to publish.
 #
 # Reproducibility note: both this workflow and F-Droid's recipe physically
 # `mv` their checkout to `/tmp/build/nl.r1a.commuterlviv` before building,
@@ -64,6 +67,8 @@ jobs:
           fetch-depth: 0
 
       - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           ver=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' commuterlviv/__init__.py)
           app=$(sed -n 's/^version: \(.*\)+.*$/\1/p' mobile/pubspec.yaml)
@@ -79,6 +84,21 @@ jobs:
               ':(exclude)mobile/fdroid' ':(exclude)mobile/README.md'; then
             echo "mobile/ changed since v$app, so the app needs a version of its own"
             exit 1
+          fi
+          # A server-only release rests on the app's own release already being
+          # out: the F-Droid recipe names the app's tag and its three APKs. On
+          # 2026-10-17 a v0.19.0 tag pushed by hand while the APKs built ate
+          # that release, and v0.19.1 then shipped alone on the hole. A version
+          # the app never published is a version to stop on, not step over
+          if [ "$app" != "$ver" ]; then
+            names=$(gh release view "v$app" --json assets --jq '.assets[].name' \
+                    2>/dev/null) || names=""
+            for abi in armeabi-v7a arm64-v8a x86_64; do
+              echo "$names" | grep -qx "commuterlviv-$app-$abi.apk" || {
+                echo "the app's v$app has no $abi APK - it was never released"
+                exit 1
+              }
+            done
           fi
 
   # The app is unchanged since its own version's release: the tag and a release
@@ -97,8 +117,21 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "v$VERSION" -m "v$VERSION"
-          git push origin "v$VERSION"
+          # The version job saw no tag, but the APKs take minutes to build and
+          # one can be pushed by hand meanwhile - on 2026-10-17 exactly that
+          # ate v0.19.0's release. Take a tag already at this commit as it
+          # stands; refuse one that points anywhere else
+          if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q .; then
+            git fetch --depth=1 origin "refs/tags/v$VERSION:refs/tags/v$VERSION"
+            [ "$(git rev-parse "refs/tags/v$VERSION^{commit}")" = "$(git rev-parse HEAD)" ] || {
+              echo "v$VERSION already exists at another commit - refusing to release"
+              exit 1
+            }
+            echo "v$VERSION already exists at this commit - leaving it as it is"
+          else
+            git tag -a "v$VERSION" -m "v$VERSION"
+            git push origin "v$VERSION"
+          fi
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
@@ -215,8 +248,21 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "v$VERSION" -m "v$VERSION"
-          git push origin "v$VERSION"
+          # The version job saw no tag, but the APKs took minutes to build and
+          # one can be pushed by hand meanwhile - on 2026-10-17 exactly that
+          # ate v0.19.0's release. Take a tag already at this commit as it
+          # stands; refuse one that points anywhere else
+          if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q .; then
+            git fetch --depth=1 origin "refs/tags/v$VERSION:refs/tags/v$VERSION"
+            [ "$(git rev-parse "refs/tags/v$VERSION^{commit}")" = "$(git rev-parse HEAD)" ] || {
+              echo "v$VERSION already exists at another commit - refusing to release"
+              exit 1
+            }
+            echo "v$VERSION already exists at this commit - leaving it as it is"
+          else
+            git tag -a "v$VERSION" -m "v$VERSION"
+            git push origin "v$VERSION"
+          fi
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
