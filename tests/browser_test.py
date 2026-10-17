@@ -2,7 +2,8 @@
 through the sign-in screen, a stop found by name, the bus on its board, and a
 journey planned from on board it and followed, one followed on foot that
 misses its bus searched again, a refused location, a changed password and a
-cancelled one, and a shared link that opens its stop or route.
+cancelled one, one that cannot be cancelled while under way, none offered
+where the service turns it off, and a shared link that opens its stop or route.
 
 Needs the built web app (`npm run build` in `web/`), Playwright for Python and a
 Chromium. Skipped when any of them is missing."""
@@ -353,6 +354,34 @@ def test_a_cancelled_password_change_forgets_what_was_typed(page):
     playwright.expect(page.get_by_label("Current password")).to_have_value("")
     playwright.expect(page.get_by_label("New password")).to_have_value("")
 
+
+def test_a_password_change_under_way_cannot_be_cancelled(page):
+    _register(page, "patient")
+    held = []
+    page.route("**/api/password", lambda route: held.append(route))
+    page.get_by_role("button", name="Account", exact=True).click()
+    page.get_by_role("button", name="Change password").click()
+    page.get_by_label("Current password").fill(service.PASSWORD)
+    page.get_by_label("New password").fill(service.PASSWORD + "-renewed")
+    page.get_by_role("button", name="Change password").click()
+
+    playwright.expect(page.get_by_role("button", name="Cancel")).to_be_disabled()
+    held[0].continue_()
+    playwright.expect(page.get_by_text("Password changed")).to_be_visible(timeout=SEE_MS)
+
+
+def test_changing_the_password_is_not_offered_where_the_service_turns_it_off(page):
+    def turned_off(route):
+        got = route.fetch()
+        route.fulfill(response=got, json={**got.json(), "password_change": False})
+
+    page.route("**/api/me", turned_off)
+    _register(page, "unoffered")
+    page.get_by_role("button", name="Account", exact=True).click()
+
+    expect = playwright.expect
+    expect(page.get_by_role("button", name="Sign out")).to_be_visible()
+    expect(page.get_by_role("button", name="Change password")).to_have_count(0)
 
 def test_a_shared_link_opens_its_stop_or_route(page):
     _register(page, "linked")
