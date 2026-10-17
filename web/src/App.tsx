@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Banner } from "./components/Banner";
 import { Icon } from "./components/Icon";
 import { MapCanvas } from "./components/MapCanvas";
 import { RoutePanel } from "./components/RoutePanel";
 import { SignIn } from "./components/SignIn";
 import { FollowCard } from "./components/FollowCard";
-import { JourneyPanel, type Origin, type Point } from "./components/JourneyPanel";
+import { JourneyPanel } from "./components/JourneyPanel";
 import { StopCard } from "./components/StopCard";
 import { AccountMenu } from "./components/AccountMenu";
 import { LayersPanel } from "./components/LayersPanel";
@@ -16,23 +16,19 @@ import { StopSearch } from "./components/StopSearch";
 import { RouteBadge } from "./components/RouteBadge";
 import { VehicleCard } from "./components/VehicleCard";
 import { Timetable } from "./components/Timetable";
-import {
-  api,
-  ApiError,
-  catalog as fetchCatalog,
-  catalogTag,
-  shapes as fetchShapes,
-} from "./lib/api";
+import { api, catalog as fetchCatalog, catalogTag } from "./lib/api";
 import { useIndex, usePositions } from "./lib/catalog";
 import { saved } from "./lib/places";
 import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from "./lib/theme";
 import { RAMP, useTraffic } from "./lib/traffic";
 import { readUrl, writeUrl, type UrlState } from "./lib/url";
 import { heldFollowed, holdFollowed, type Followed } from "./lib/followed";
-import { hereOnce, ONE_FIX, type NoFix } from "./lib/position";
 import { useFollow } from "./lib/useFollow";
 import { takeRenewed, useLive } from "./lib/useLive";
-import type { Catalog, Journey, Me, Place, RouteSet, Shapes } from "./lib/types";
+import { useMapLayers } from "./lib/useMapLayers";
+import { usePlanner } from "./lib/usePlanner";
+import { useSession } from "./lib/useSession";
+import type { Catalog, Journey, Me } from "./lib/types";
 import { t } from "./lib/i18n";
 
 const LINES_KEY = "commuterlviv.lines";
@@ -79,17 +75,11 @@ const TAB_NAMES: Record<UrlState["tab"], string> = {
 };
 
 export function App() {
-  const [me, setMe] = useState<Me | null | undefined>(undefined);
-  const [cat, setCat] = useState<Catalog | null>(null);
   // Read once, at mount: from here on the address bar follows this component
   const [opened] = useState(readUrl);
-  const [picked, setPicked] = useState<Set<string>>(
-    new Set(opened.routes ?? []),
-  );
-  const [sets, setSets] = useState<RouteSet[]>([]);
-  const [active, setActive] = useState<string | null>(null);
-  const [pinIds, setPinIds] = useState<string[]>([]);
-  const [places, setPlaces] = useState<Place[]>([]);
+  const session = useSession(opened.routes);
+  const { me, failed, notice, setNotice, picked, places, keepPlaces } = session;
+  const [cat, setCat] = useState<Catalog | null>(null);
   const [stop, setStop] = useState<number | null>(null);
   const [veh, setVeh] = useState<number | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lon: number } | null>(null);
@@ -98,22 +88,14 @@ export function App() {
   );
   const [route, setRoute] = useState<number | null>(null);
   const [allLines, setAllLines] = useState(() => loadFlag(LINES_KEY));
-  const [geo, setGeo] = useState<Shapes | null>(null);
-  const [from, setFrom] = useState<Origin | null>(null);
-  /** Times got on board, so a fix asked for before it does not move the start */
-  const boarded = useRef(0);
-  const [to, setTo] = useState<Point | null>(null);
+  const planner = usePlanner(tab === "plan", (why) => setNotice(t.noFix[why]));
   const [journey, setJourney] = useState<Journey | null>(null);
   /** Being travelled: it keeps the map, whichever tab is open, and a reload */
   const [followed, setFollowed] = useState<Followed | null>(null);
   const following = followed?.journey ?? null;
-  /** The planner is to search as soon as both ends are set */
-  const [ask, setAsk] = useState(false);
-  const [picking, setPicking] = useState<"from" | "to" | null>(null);
   const [folded, setFolded] = useState(false);
   const [panel, setPanel] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme);
-  const [notice, setNotice] = useState<string | null>(null);
   /** Not a failure: news worth a line, such as the city changing */
   const [info, setInfo] = useState<string | null>(null);
   /** The quiet banner closed; it comes back the next time the vehicles go quiet */
@@ -126,8 +108,7 @@ export function App() {
 
   const openTab = (next: UrlState["tab"]) => {
     setTab(next);
-    // On board lasts only while planning: the vehicle goes on without the planner
-    if (next !== "plan") setFrom((was) => (was && "veh" in was ? null : was));
+    if (next !== "plan") planner.leave();
   };
 
   const code = JOIN.exec(location.pathname)?.[1] ?? null;
@@ -136,37 +117,10 @@ export function App() {
   // Asked for again every minute, and only while the view is open
   const traffic = useTraffic(jams);
 
-  const failed = useCallback((err: unknown) => {
-    if (err instanceof ApiError && err.status === 401) {
-      setMe(null);
-      return;
-    }
-    setNotice(err instanceof Error ? err.message : t.noService);
-  }, []);
-
-  const load = useCallback(
-    () =>
-      api.me().then((who) => {
-        setMe(who);
-        setSets(who.sets.sets);
-        setActive(who.sets.active);
-        // The account's active set only decides when the link names no routes
-        const set = who.sets.sets.find((s) => s.id === who.sets.active);
-        if (set && opened.routes === null) setPicked(new Set(set.routes));
-        setPinIds(who.sets.pins);
-        setPlaces(who.sets.places);
-        setNotice(null);
-      }, failed),
-    [failed, opened.routes],
-  );
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
   /** The catalog, and everything that waited for it: where the address pointed,
    * the journey followed before the page loaded and the pins from before the
    * server kept them */
+  const { showPins } = session;
   const loadCatalog = useCallback(
     (who: Me) =>
       fetchCatalog().then((got) => {
@@ -186,9 +140,9 @@ export function App() {
           setFocus({ lat: got.stops[i]!.lat, lon: got.stops[i]!.lon });
         }
         const old = carryOldPins(got, who);
-        if (old.length > 0) setPinIds(old);
+        if (old.length > 0) showPins(old);
       }, failed),
-    [failed, opened],
+    [failed, opened, showPins],
   );
 
   useEffect(() => {
@@ -199,7 +153,7 @@ export function App() {
 
   /** The socket and every panel address a stop by catalog position; only what
    * is stored is an id. */
-  const pins = usePositions(stopIndex, pinIds);
+  const pins = usePositions(stopIndex, session.pinIds);
 
   useEffect(() => {
     if (!cat) return;
@@ -227,50 +181,15 @@ export function App() {
   // against the one followed
   const drawn = (tab === "plan" ? journey : null) ?? following;
 
-  /** While a journey is shown, only its rides are on the map */
-  const journeyRoutes = useMemo(() => {
-    if (!drawn) return null;
-    const out = new Set<number>();
-    for (const leg of drawn.legs) {
-      if (leg.route !== undefined) out.add(leg.route);
-    }
-    return [...out].sort((a, b) => a - b);
-  }, [drawn]);
-
-  /** The socket's own filter: while one route is open it is the only one sent */
-  const indexes = useMemo(
-    () => journeyRoutes ?? (tab === "route" && route !== null ? [route] : chosen),
-    [journeyRoutes, tab, route, chosen],
-  );
-
-  const lines = useMemo(() => {
-    if (tab === "route" && route !== null) return [route];
-    if (!allLines || !cat) return [];
-    return cat.routes.map((_, i) => i);
-  }, [tab, route, allLines, cat]);
-
-  const fit = useMemo((): [number, number, number, number] | null => {
-    const shape = tab === "route" && route !== null ? geo?.routes[route] : null;
-    if (!shape) return null;
-    let w = 180,
-      s = 90,
-      e = -180,
-      n = -90;
-    for (const line of shape.lines) {
-      for (const [lat, lon] of line.pts) {
-        w = Math.min(w, lon);
-        e = Math.max(e, lon);
-        s = Math.min(s, lat);
-        n = Math.max(n, lat);
-      }
-    }
-    return w > e ? null : [w, s, e, n];
-  }, [tab, route, geo]);
-
-  useEffect(() => {
-    if (!lines.length || geo) return;
-    void fetchShapes().then(setGeo, failed);
-  }, [lines, geo, failed]);
+  const { geo, indexes, lines, fit, stops } = useMapLayers({
+    cat,
+    tab,
+    route,
+    drawn,
+    chosen,
+    allLines,
+    onError: failed,
+  });
 
   useEffect(() => {
     if (cat) live.setRoutes(indexes);
@@ -310,64 +229,20 @@ export function App() {
   const searchAgain = () => {
     if (!followed || progress === null || progress === "denied") return;
     const { stage } = progress;
-    setTo(followed.to);
+    planner.setTo(followed.to);
     if (stage.kind === "ride" && stage.veh !== null) {
-      boarded.current += 1;
-      setFrom({ veh: stage.veh, route: followed.journey.legs[stage.leg]!.route ?? null });
+      planner.board({ veh: stage.veh, route: followed.journey.legs[stage.leg]!.route ?? null });
     } else {
-      setFrom(null);
-      hereFor("from");
+      planner.setFrom(null);
+      planner.hereFor("from");
     }
-    setAsk(true);
+    planner.setAsk(true);
     openTab("plan");
-  };
-
-  /** Only the stops of the routes on the map are drawn or clickable */
-  const stops = useMemo(() => {
-    if (!cat) return [];
-    const on = new Set(indexes);
-    const out: number[] = [];
-    cat.stops.forEach((s, i) => {
-      if (s.routes.some((r) => on.has(r))) out.push(i);
-    });
-    return out;
-  }, [cat, indexes]);
-
-  const marks = useMemo(() => {
-    const out: { lat: number; lon: number; label: string }[] = [];
-    if (tab !== "plan") return out;
-    if (from && !("veh" in from)) out.push({ ...from, label: "A" });
-    if (to) out.push({ ...to, label: "B" });
-    return out;
-  }, [tab, from, to]);
-
-  /** Asked separately from the map's own locate button, so a refusal here does
-   * not turn the map's dot off */
-  const hereFor = (which: "from" | "to") => {
-    const asked = boarded.current;
-    if (!navigator.geolocation) return;
-    hereOnce(ONE_FIX).then(
-      (pos) => {
-        const at = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        // A fix asked for before getting on board is no longer the start
-        if (which === "to") setTo(at);
-        else if (asked === boarded.current) setFrom(at);
-      },
-      (why: NoFix) => setNotice(t.noFix[why]),
-    );
   };
 
   const setPinned = (next: number[]) => {
     if (!cat) return;
-    const ids = next.map((i) => cat.stops[i]!.id);
-    setPinIds(ids);
-    // Optimistic: a failed save comes back at the next sign-in
-    void api.setPins(ids).catch(() => undefined);
-  };
-
-  const keepPlaces = (next: Place[]) => {
-    setPlaces(next);
-    void api.setPlaces(next).catch(() => undefined);
+    session.savePins(next.map((i) => cat.stops[i]!.id));
   };
 
   const showPlace = (at: { lat: number; lon: number }) => {
@@ -381,11 +256,7 @@ export function App() {
     openTab("route");
   };
 
-  const refreshSets = async () => {
-    const s = await api.sets();
-    setSets(s.sets);
-    setActive(s.active);
-  };
+  const { load } = session;
 
   if (code !== null && !me)
     return <SignIn code={code} onIn={() => void load()} />;
@@ -431,17 +302,13 @@ export function App() {
         onPickVehicle={setVeh}
         focus={focus}
         fit={fit}
-        picking={picking !== null}
-        onPickPoint={(lat, lon) => {
-          if (picking === "from") setFrom({ lat, lon });
-          if (picking === "to") setTo({ lat, lon });
-          setPicking(null);
-        }}
+        picking={planner.picking !== null}
+        onPickPoint={planner.pickAt}
         onHoldPoint={(lat, lon) => {
           const name = prompt(t.namePlace)?.trim();
           if (name) keepPlaces(saved(places, name, lat, lon));
         }}
-        marks={marks}
+        marks={planner.marks}
         journey={drawn}
         locate={following !== null}
         pinned={pins}
@@ -496,11 +363,7 @@ export function App() {
             <AccountMenu
               username={me.username}
               passwordChange={me.password_change ?? false}
-              onOut={async () => {
-                // Signed out whether or not the request landed
-                await api.logout().catch(() => undefined);
-                setMe(null);
-              }}
+              onOut={session.signOut}
             />
           </Menu>
         </div>
@@ -567,36 +430,30 @@ export function App() {
       {tab === "plan" && (
         <aside
           className={`panel absolute right-3 top-19 z-20 w-96 max-w-[calc(100vw-1.5rem)] overflow-y-auto p-3 ${
-            folded || picking ? "" : "bottom-20"
+            folded || planner.picking ? "" : "bottom-20"
           }`}
         >
           <JourneyPanel
             catalog={cat}
-            from={from}
-            to={to}
-            picking={picking}
-            onPick={setPicking}
-            onSwap={() => {
-              if (from && "veh" in from) return;
-              setFrom(to);
-              setTo(from);
-            }}
-            onHere={hereFor}
+            from={planner.from}
+            to={planner.to}
+            picking={planner.picking}
+            onPick={planner.setPicking}
+            onSwap={planner.swap}
+            onHere={planner.hereFor}
             onShow={setJourney}
             onFollow={(j) => {
-              follow({ journey: j, to: to!, tag: catalogTag() ?? "" });
+              follow({ journey: j, to: planner.to!, tag: catalogTag() ?? "" });
               openTab("map");
             }}
-            ask={ask}
-            onAsked={() => setAsk(false)}
+            ask={planner.ask}
+            onAsked={() => planner.setAsk(false)}
             folded={folded}
             onFold={setFolded}
             onLine={openRoute}
             places={places}
             onPlaces={keepPlaces}
-            onPoint={(which, at) =>
-              which === "from" ? setFrom(at) : setTo(at)
-            }
+            onPoint={planner.setEnd}
             onStop={showStop}
           />
         </aside>
@@ -684,8 +541,7 @@ export function App() {
               }}
               onRoute={openRoute}
               onAboard={(on) => {
-                boarded.current += 1;
-                setFrom(on);
+                planner.board(on);
                 setVeh(null);
                 openTab("plan");
               }}
@@ -740,34 +596,15 @@ export function App() {
           <RoutePanel
             catalog={cat}
             picked={picked}
-            onToggle={(id) =>
-              setPicked((was) => {
-                const next = new Set(was);
-                if (!next.delete(id)) next.add(id);
-                return next;
-              })
-            }
-            onClear={() => setPicked(new Set())}
+            onToggle={session.togglePicked}
+            onClear={session.clearPicked}
             onRoute={openRoute}
-            sets={sets}
-            active={active}
-            onActivate={(s) => {
-              setPicked(new Set(s.routes));
-              setActive(s.id);
-              void api.activateSet(s.id).catch(failed);
-            }}
-            onCreate={async (name) => {
-              await api.createSet(name, [...picked]);
-              await refreshSets();
-            }}
-            onUpdate={async (s) => {
-              await api.updateSet(s.id, s.name, [...picked]);
-              await refreshSets();
-            }}
-            onDelete={async (s) => {
-              await api.deleteSet(s.id);
-              await refreshSets();
-            }}
+            sets={session.routeSets.sets}
+            active={session.routeSets.active}
+            onActivate={session.routeSets.activate}
+            onCreate={session.routeSets.create}
+            onUpdate={session.routeSets.update}
+            onDelete={session.routeSets.remove}
           />
         </aside>
       )}
