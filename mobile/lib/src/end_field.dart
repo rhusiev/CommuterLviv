@@ -8,7 +8,7 @@ import 'package:latlong2/latlong.dart';
 import 'api.dart';
 import 'models.dart';
 import 'route_badge.dart';
-import 'sheets.dart' show askName;
+import 'sheets.dart' show askPlaceName;
 import 'stop_search.dart';
 import 'strings.dart';
 
@@ -150,8 +150,8 @@ class EndField extends StatelessWidget {
   }
 
   Future<void> _name(BuildContext context, LatLng where) async {
-    final name = await askName(context, txt.namePlace, action: txt.saveHere);
-    if (name != null && name.isNotEmpty) onSave(name, where);
+    final name = await askPlaceName(context);
+    if (name != null) onSave(name, where);
   }
 
   Widget _label(String where) {

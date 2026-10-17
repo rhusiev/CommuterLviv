@@ -15,6 +15,9 @@ import 'route_badge.dart';
 import 'strings.dart';
 import 'theme.dart';
 
+/// The share of the screen the route sheet opens to.
+const _routeSheetShare = 0.7;
+
 /// A sheet that floats rather than docks. `showModalBottomSheet` is docked by
 /// construction, so the sheet itself is transparent and the gap is padding
 /// inside it; the handle is drawn here for the same reason. The bottom inset is
@@ -47,6 +50,17 @@ Future<T?> showFloatingSheet<T>(
     ),
   ),
 );
+
+/// What to call a place at a point, proposing [was]; null unless a name was given.
+Future<String?> askPlaceName(BuildContext context, {String? was}) async {
+  final name = await askName(
+    context,
+    txt.namePlace,
+    was: was,
+    action: txt.saveHere,
+  );
+  return name == null || name.isEmpty ? null : name;
+}
 
 /// The one-field dialog behind every name in the app.
 Future<String?> askName(
@@ -497,7 +511,7 @@ class _RouteSheetState extends State<RouteSheet> {
             !active.routes.toSet().containsAll(_ids));
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.7,
+      initialChildSize: _routeSheetShare,
       builder: (context, controller) => ListView(
         controller: controller,
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),

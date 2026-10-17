@@ -42,6 +42,9 @@ import 'strings.dart';
 /// How far a tap may land from a stop and still count.
 const _hitRadius = 22.0;
 
+/// The share of the screen the planner may grow to, the map keeping the rest.
+const _plannerShare = 0.6;
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
@@ -283,8 +286,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _places([..._withoutPlace(name), Place(name: name, at: at)]);
 
   Future<void> _nameSpot(LatLng at) async {
-    final name = await askName(context, txt.namePlace, action: txt.saveHere);
-    if (name != null && name.isNotEmpty) await _savePlace(name, at);
+    final name = await askPlaceName(context);
+    if (name != null) await _savePlace(name, at);
   }
 
   Future<void> _places(List<Place> next) async {
@@ -860,7 +863,7 @@ class _HomeScreenState extends State<HomeScreen> {
               bottom: floatingBottom(context),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.sizeOf(context).height * 0.6,
+                  maxHeight: MediaQuery.sizeOf(context).height * _plannerShare,
                 ),
                 child: JourneyPanel(
                   api: widget.api,

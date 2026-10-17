@@ -14,7 +14,7 @@ import 'api.dart';
 import 'here.dart';
 import 'match.dart';
 import 'models.dart';
-import 'sheets.dart' show askName;
+import 'sheets.dart' show askPlaceName;
 import 'strings.dart';
 
 /// How long the typing has to stop before the service is asked.
@@ -121,13 +121,8 @@ Future<void> _saveAs(
   String was,
   LatLng at,
 ) async {
-  final name = await askName(
-    context,
-    txt.namePlace,
-    was: was,
-    action: txt.saveHere,
-  );
-  if (name != null && name.isNotEmpty) onSave(name, at);
+  final name = await askPlaceName(context, was: was);
+  if (name != null) onSave(name, at);
 }
 
 /// The stops nearest the phone. Nothing is asked of it until the row is
