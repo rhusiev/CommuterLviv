@@ -13,12 +13,11 @@ feed keeps everything learned on the shapes and streets it did not change.
 Age needs no check. Every weight is stamped with the time it was earned and
 decays from that stamp, so an old snapshot fades back to the prior on its own.
 """
-import os
 import time
 
 import numpy as np
 
-from . import gtfs, layover
+from . import files, gtfs, layover
 from .model import PaceModel
 
 PATH = gtfs.DATA / "model.npz"
@@ -127,9 +126,8 @@ def restore_rows(model, data):
 
 
 def save(data, path=PATH):
-    tmp = path.with_suffix(".tmp.npz")     # savez appends .npz unless it is there
-    np.savez(tmp, **data)
-    os.replace(tmp, path)
+    with files.replacing(path) as fresh:   # savez appends .npz unless it is there
+        np.savez(fresh, **data)
 
 
 def load(model, path=PATH):

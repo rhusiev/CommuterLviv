@@ -10,7 +10,7 @@ Table fitting runs during the replay warmup and stops when `replay` sets
 """
 import numpy as np
 
-from .model import SLOTS, BaseModel, Ewma, PaceModel, group
+from .model import SLOTS, BaseModel, Ewma, PaceModel, between_slots, decay, group
 
 
 class TableModel(BaseModel):
@@ -62,16 +62,10 @@ class TableModel(BaseModel):
     def refresh(self, now):
         pace, hold = self._frozen()
         k = self._hours(now)
-        ratio = self._between(pace, k)
+        ratio = between_slots(pace, k)
         if self.live is not None:
             ratio = ratio * self.live.read(now)[0][0]
-        self._apply(ratio, self._between(hold, k), now)
-
-    @staticmethod
-    def _between(table, k):
-        """The table at a fractional hour, interpolated the way the prior is."""
-        i, f = int(k), k - int(k)
-        return (1.0 - f) * table[i] + f * table[(i + 1) % SLOTS]
+        self._apply(ratio, between_slots(hold, k), now)
 
 
 class KnnModel(BaseModel):
@@ -149,7 +143,7 @@ class Ring:
         two medians is not a median.
         """
         age = now - self.t
-        left = sum(np.exp(-np.minimum(age / tau, 700.0)) for tau in self.taus)
+        left = sum(decay(age, tau) for tau in self.taus)
         return self.w * left / len(self.taus)
 
 

@@ -102,7 +102,7 @@ class Boost:
         day = localtime.DAY_S
         late = (day_s - sched_now + day / 2) % day - day / 2
         route, kind = self._route.get(self.net.trip_route.get(tr.trip), (np.nan,) * 2)
-        same = (tr.v, now - tr.ts, local.hour + local.minute / 60, local.weekday(),
+        same = (tr.v, now - tr.ts, localtime.hours(local), local.weekday(),
                 route, kind)
         lately = self.recent.features(veh, tr, now, s_now, time_between)
         return np.column_stack([dt[k], sched, np.full(len(k), late),

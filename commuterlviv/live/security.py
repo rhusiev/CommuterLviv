@@ -16,6 +16,7 @@ from argon2.exceptions import InvalidHashError, VerifyMismatchError
 TOKEN_BYTES = 32
 MIN_PASSWORD = 10
 MAX_PASSWORD = 128           # argon2 is slow: a client must not pick how slow
+SWEEP_EVERY_S = 300.0       # how often a rate limiter drops full keys idle this long
 USERNAME = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{1,30}[a-z0-9])$")
 
 # burned when a username does not exist, so a miss costs the same as a hit
@@ -94,7 +95,7 @@ class Bucket:
     def take(self, key, cost=1.0):
         """True if the request may proceed."""
         now = time.monotonic()
-        if now - self.sweep_at > 300.0:
+        if now - self.sweep_at > SWEEP_EVERY_S:
             self._sweep(now)
         tokens, at = self.seen.get(key, (self.burst, now))
         tokens = min(self.burst, tokens + (now - at) * self.rate)
@@ -110,5 +111,5 @@ class Bucket:
 
     def _sweep(self, now):
         self.seen = {k: v for k, v in self.seen.items()
-                     if v[0] < self.burst or now - v[1] < 300.0}
+                     if v[0] < self.burst or now - v[1] < SWEEP_EVERY_S}
         self.sweep_at = now

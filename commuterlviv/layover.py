@@ -195,7 +195,7 @@ class Layovers:
         return (now - ready, sched - now, sched - ready,
                 np.mean([w for w, _ in got]) if got else np.nan, len(got), *qs,
                 now - dep, sched - was, was - dep, habit[0] - now, after - now,
-                habit[1] - now, local.hour + local.minute / 60)
+                habit[1] - now, localtime.hours(local))
 
     def export(self):
         """The turnarounds as flat arrays, oldest first within a key."""

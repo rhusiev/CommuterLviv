@@ -27,6 +27,20 @@ HOLD_CLIP = (0.0, 240.0)     # s standing per crossing
 RATIO_CLIP = (0.15, 8.0)     # observed pace over timetabled pace
 PACE0 = 1 / 7.0              # s/m, fallback where the timetable says nothing
 SLOTS = 24                   # timetable prior resolution: one slot per hour
+EXP_CAP = 700.0              # the largest exponent np.exp takes without overflowing
+
+
+def decay(age, tau):
+    """Weight left after `age` s of exponential decay with time constant
+    `tau`; an infinite age gives zero."""
+    return np.exp(-np.minimum(age / tau, EXP_CAP))
+
+
+def between_slots(table, k):
+    """The hourly `table` at fractional hour `k`, interpolated, so it does not
+    jump on the hour."""
+    i, f = int(k), k - int(k)
+    return (1.0 - f) * table[i] + f * table[(i + 1) % SLOTS]
 
 
 def group(keys, vals, weights):
@@ -56,9 +70,8 @@ class Ewma:
         self.t = np.full(n, -np.inf)
 
     def _decay(self, t, now):
-        """Weight left from an observation made at t; t = -inf gives zero and the
-        cap only keeps exp from overflowing."""
-        return np.exp(-np.minimum((now - t) / self.tau, 700.0))
+        """Weight left from an observation made at t; t = -inf gives zero."""
+        return decay(now - t, self.tau)
 
     def update(self, idx, val, now, weight):
         idx, val, weight = group(idx, val, weight)
@@ -273,8 +286,7 @@ class BaseModel:
     @staticmethod
     def _hours(now):
         """The local time of day as a fractional hour."""
-        local = datetime.datetime.fromtimestamp(now, localtime.TZ)
-        return local.hour + local.minute / 60.0
+        return localtime.hours(datetime.datetime.fromtimestamp(now, localtime.TZ))
 
     def slot(self, now):
         return int(self._hours(now))
@@ -286,10 +298,7 @@ class BaseModel:
         hour.
         """
         if now != self._prior_t:
-            k = self._hours(now)
-            i, f = int(k), k - int(k)
-            self._prior_row = ((1.0 - f) * self.prior[i]
-                               + f * self.prior[(i + 1) % SLOTS])
+            self._prior_row = between_slots(self.prior, self._hours(now))
             self._prior_t = now
         return self._prior_row
 
