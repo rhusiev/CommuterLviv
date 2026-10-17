@@ -56,20 +56,19 @@ const RESTS: Record<
   quiet: { word: t.quietPart, tone: "text-amber-400", why: t.quietWhy },
 };
 
-/** As far ahead as the server plans */
-const AHEAD_S = 30 * 86400;
-
-/** What `<input type="datetime-local">` wants: local wall clock, no zone */
-const onClock = (at: number) => {
-  const d = new Date(at * 1000);
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-};
-
 /** The same place: 1e-4 degrees is about 11 m */
 const same = (a: Point, b: Place) =>
   Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lon - b.lon) < 1e-4;
 
 const key = (p: Point) => `${p.lat},${p.lon}`;
+
+/** What the panel keeps of a search beyond its options: its name for its
+ *  backups, which reporting it leaves alone; the backups fetched as options of
+ *  their own, by the option, leg and backup they came from; and the option of
+ *  the search's each was built from */
+type Held = { id: string | null; built: Map<string, Journey>; from: Map<Journey, number> };
+
+const fresh = (id: string | null): Held => ({ id, built: new Map(), from: new Map() });
 
 export function JourneyPanel({
   catalog,
@@ -137,18 +136,9 @@ export function JourneyPanel({
   /** How reporting it went */
   const [reported, setReported] = useState<string | null>(null);
   const reportSaid = current ? reported : null;
-  /** The search's name for its backups, which reporting it leaves alone; the
-   *  backups fetched as options of their own, by the option, leg and backup
-   *  they came from; and the option of the search's each was built from */
-  const held = useRef<{
-    id: string | null;
-    built: Map<string, Journey>;
-    from: Map<Journey, number>;
-  }>({ id: null, built: new Map(), from: new Map() });
+  const held = useRef(fresh(null));
   /** Unix seconds, or null for now - which is what the service assumes */
   const [at, setAt] = useState<number | null>(null);
-  /** Unix seconds the departure picker counts from, renewed as it is opened */
-  const [now, setNow] = useState(() => Date.now() / 1000);
   const [prefer, setPrefer] = useState<Prefer>(heldPrefer);
   /** km/h, starting at the one kept as the default */
   const [speed, setSpeed] = useState(heldSpeed);
@@ -156,7 +146,7 @@ export function JourneyPanel({
   const [names, setNames] = useState(() => new Map<string, string>());
   // Options found for other ends are not these ends' options
   useEffect(() => {
-    held.current = { id: null, built: new Map(), from: new Map() };
+    held.current = fresh(null);
     onShow(null);
   }, [from, to, onShow]);
   const aboard = from && "veh" in from ? from : null;
@@ -181,7 +171,7 @@ export function JourneyPanel({
       );
       setFound(got.options);
       setReportable(got.report ?? null);
-      held.current = { id: got.report ?? null, built: new Map(), from: new Map() };
+      held.current = fresh(got.report ?? null);
     } catch (err) {
       setFailure(
         err instanceof ApiError && err.preparing
@@ -230,19 +220,19 @@ export function JourneyPanel({
    *  same, or else that way fetched and listed as an option of its own */
   const takeWay = async (j: Journey, pick: WayPick) => {
     if (pick === null) return draw(j);
-    const same = options?.[j.legs[pick.leg]?.backups?.[pick.n]?.option ?? -1];
-    if (same) return draw(same);
-    const search = held.current;
-    const from = search.from.get(j) ?? options?.indexOf(j) ?? -1;
-    const key = `${from} ${pick.leg} ${pick.n}`;
-    let got = search.built.get(key);
+    const riding = options?.[j.legs[pick.leg]?.backups?.[pick.n]?.option ?? -1];
+    if (riding) return draw(riding);
+    const kept = held.current;
+    const option = kept.from.get(j) ?? options?.indexOf(j) ?? -1;
+    const way = `${option} ${pick.leg} ${pick.n}`;
+    let got = kept.built.get(way);
     if (!got) {
-      if (!search.id) throw new Error(t.searchAgain);
-      got = await api.backup(search.id, from, pick.leg, pick.n);
+      if (!kept.id) throw new Error(t.searchAgain);
+      got = await api.backup(kept.id, option, pick.leg, pick.n);
       // a search made meanwhile has options of its own
-      if (held.current !== search) return;
-      search.built.set(key, got);
-      search.from.set(got, from);
+      if (held.current !== kept) return;
+      kept.built.set(way, got);
+      kept.from.set(got, option);
       setFound((o) => o && [...o, got!]);
     }
     draw(got);
@@ -331,26 +321,7 @@ export function JourneyPanel({
       {field("from", start, aboard)}
       {field("to", to)}
 
-      <div className={`flex items-center gap-2 ${aboard ? "hidden" : ""}`}>
-        <Label text={t.leaveAt} icon="clock" />
-        <input
-          type="datetime-local"
-          value={at === null ? "" : onClock(at)}
-          min={onClock(now)}
-          max={onClock(now + AHEAD_S)}
-          onFocus={() => setNow(Date.now() / 1000)}
-          onChange={(e) =>
-            setAt(e.target.value === "" ? null : Math.round(new Date(e.target.value).getTime() / 1000))
-          }
-          className="field min-w-0 flex-1 py-1.5"
-        />
-        <button
-          onClick={() => setAt(null)}
-          className={`btn-quiet shrink-0 px-2 text-xs ${at === null ? "text-accent" : ""}`}
-        >
-          {t.leaveNow}
-        </button>
-      </div>
+      {!aboard && <Departure at={at} onAt={setAt} />}
 
       <div className="flex items-center gap-2">
         <Label text={t.walkSpeed} icon="walk" />
@@ -467,6 +438,45 @@ function Order({
 }
 
 /** An icon standing for a row's name, which it keeps as a tooltip */
+/** As far ahead as the server plans */
+const AHEAD_S = 30 * 86400;
+
+const MINUTE_MS = 60_000;
+
+/** What `<input type="datetime-local">` wants: local wall clock, no zone */
+const onClock = (at: number) => {
+  const d = new Date(at * 1000);
+  return new Date(d.getTime() - d.getTimezoneOffset() * MINUTE_MS).toISOString().slice(0, 16);
+};
+
+/** When to leave: unix seconds, or null for now */
+function Departure({ at, onAt }: { at: number | null; onAt: (at: number | null) => void }) {
+  /** Unix seconds the picker counts from, renewed as it is opened */
+  const [now, setNow] = useState(() => Date.now() / 1000);
+  return (
+    <div className="flex items-center gap-2">
+      <Label text={t.leaveAt} icon="clock" />
+      <input
+        type="datetime-local"
+        value={at === null ? "" : onClock(at)}
+        min={onClock(now)}
+        max={onClock(now + AHEAD_S)}
+        onFocus={() => setNow(Date.now() / 1000)}
+        onChange={(e) =>
+          onAt(e.target.value === "" ? null : Math.round(new Date(e.target.value).getTime() / 1000))
+        }
+        className="field min-w-0 flex-1 py-1.5"
+      />
+      <button
+        onClick={() => onAt(null)}
+        className={`btn-quiet shrink-0 px-2 text-xs ${at === null ? "text-accent" : ""}`}
+      >
+        {t.leaveNow}
+      </button>
+    </div>
+  );
+}
+
 function Label({ text, icon }: { text: string; icon: IconName }) {
   return (
     <span title={text} className="flex w-6 shrink-0 justify-center text-slate-500">
