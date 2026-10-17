@@ -1,7 +1,7 @@
 # The live service, and the collector: one image, two commands. They share a
 # `data/` directory and every line of the package, so building them twice would
 # only be a way for the two to drift apart.
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 ENV PYTHONUNBUFFERED=1
 
