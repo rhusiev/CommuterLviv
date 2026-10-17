@@ -3,6 +3,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart' hide Theme;
 import 'package:flutter/material.dart' as material show Theme;
@@ -481,10 +482,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _watch();
     if (fly) {
       final s = _catalog!.stops[stop];
-      _map.move(
-        LatLng(s.lat, s.lon),
-        _map.camera.zoom < 15 ? 16 : _map.camera.zoom,
-      );
+      _fly(LatLng(s.lat, s.lon));
     }
     showFloatingSheet<void>(
       context,
@@ -654,8 +652,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _fly(LatLng at) =>
-      _map.move(at, _map.camera.zoom < 15 ? 16 : _map.camera.zoom);
+  /// Moves to [at], zooming in to [nearZoom] if further out, as the web does.
+  void _fly(LatLng at) => _map.move(at, math.max(_map.camera.zoom, nearZoom));
 
   void _openSaved() => showFloatingSheet<void>(
     context,
