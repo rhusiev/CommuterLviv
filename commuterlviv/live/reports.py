@@ -18,7 +18,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from .. import __version__, gtfs, localtime, network, plan, replay
+from .. import __version__, files, gtfs, localtime, network, plan, replay
 from . import journeys
 from .state import Arrivals, Catalog
 
@@ -88,10 +88,9 @@ def write(search, note, user, folder=DIR):
             "from": _sent(search["from"])}
     stamp = datetime.datetime.now(localtime.TZ).strftime("%Y%m%d-%H%M%S")
     path = folder / f"{stamp}-{uuid.uuid4().hex[:6]}.npz"
-    tmp = path.with_suffix(".tmp.npz")
-    np.savez_compressed(tmp, eta=arrivals.eta, start=arrivals.start,
-                        arrivals_t=arrivals.t, meta=json.dumps(meta))
-    tmp.replace(path)
+    with files.replacing(path) as fresh:
+        np.savez_compressed(fresh, eta=arrivals.eta, start=arrivals.start,
+                            arrivals_t=arrivals.t, meta=json.dumps(meta))
     return path.name
 
 

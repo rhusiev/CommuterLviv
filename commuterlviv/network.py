@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from . import gtfs, overrides
+from . import files, gtfs, overrides
 
 LAT0, LON0 = 49.84, 24.03
 KX = gtfs.LAT_M * np.cos(np.radians(LAT0))
@@ -261,8 +261,6 @@ def _load(rebuild):
             return net
     net = build()
     net.source = src
-    tmp = CACHE + ".tmp"
-    with open(tmp, "wb") as f:
+    with files.replacing(CACHE) as fresh, open(fresh, "wb") as f:
         pickle.dump(net, f, pickle.HIGHEST_PROTOCOL)
-    os.replace(tmp, CACHE)
     return net

@@ -14,14 +14,13 @@ away: point COMMUTERLVIV_PHOTON_URL at it.
 
 Either source alone is enough to search; with neither the endpoint answers 503.
 """
-import os
 import threading
 import time
 import urllib.parse
 
 import requests
 
-from .. import __version__, gtfs, localtime, walk
+from .. import __version__, files, gtfs, localtime, walk
 from ..mapidx import search as mapidx
 from . import wire
 
@@ -147,8 +146,7 @@ def index_age(path=INDEX):
 def renew_index(url, path=INDEX):
     """Downloads the index beside the one held and swaps it in once it answers.
     Searches open the file per query, so one in flight keeps reading the old."""
-    fresh = path.with_name("lviv-search.next.sqlite")
-    try:
+    with files.replacing(path) as fresh:
         with requests.get(url, stream=True, timeout=60,
                           headers={"user-agent": AGENT}) as r:
             r.raise_for_status()
@@ -157,9 +155,6 @@ def renew_index(url, path=INDEX):
                     f.write(chunk)
         if not mapidx.search(str(fresh), "львів", limit=1):
             raise ValueError("the downloaded index does not find Lviv")
-        os.replace(fresh, path)
-    finally:
-        fresh.unlink(missing_ok=True)
 
 
 def _same(a, b):

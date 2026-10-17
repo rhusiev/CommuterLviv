@@ -28,7 +28,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import gtfs, localtime, network, replay, walk as footpaths
+from . import files, gtfs, localtime, network, replay, walk as footpaths
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 TRANSFERS = DATA / "transfers.npz"
@@ -345,16 +345,15 @@ def build_transfers(tt, walk, cap=TRANSFER_CAP, path=TRANSFERS):
         start.append(len(to))
     path.parent.mkdir(parents=True, exist_ok=True)
     # beside the one held and swapped in, as a running service may read it
-    fresh = path.with_name(path.stem + ".next.npz")
-    np.savez_compressed(fresh,
-                        **{f"at_{k}": a for k, a in stands._asdict().items()},
-                        to=np.array(to, dtype=np.int32),
-                        cost=np.array(cost, dtype=np.float32),
-                        start=np.array(start, dtype=np.int64),
-                        model=np.array(walk.model),
-                        graph=np.array(walk.graph),
-                        stops=np.array(_stops_digest(tt)))
-    fresh.replace(path)
+    with files.replacing(path) as fresh:
+        np.savez_compressed(fresh,
+                            **{f"at_{k}": a for k, a in stands._asdict().items()},
+                            to=np.array(to, dtype=np.int32),
+                            cost=np.array(cost, dtype=np.float32),
+                            start=np.array(start, dtype=np.int64),
+                            model=np.array(walk.model),
+                            graph=np.array(walk.graph),
+                            stops=np.array(_stops_digest(tt)))
     return path
 
 
@@ -1162,10 +1161,8 @@ def load(net=None):
     if (getattr(tt, "version", 0) != Timetable.VERSION
             or getattr(tt.net, "source", None) != net.source):
         tt = Timetable(net)
-        tmp = cache.with_suffix(".tmp")
-        with open(tmp, "wb") as fh:
+        with files.replacing(cache) as fresh, open(fresh, "wb") as fh:
             pickle.dump(tt, fh, protocol=5)
-        tmp.replace(cache)
     walk, transfers = footpaths.load(), Transfers.load()
     if why := transfers.stale(tt, walk):
         raise FileNotFoundError(

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import requests
 
+from . import files
 from .localtime import DAY_S
 
 BASE = "https://track.ua-gis.com/gtfs/lviv"
@@ -50,11 +51,10 @@ def refetch():
         missing = {"a zip"}
     if missing:
         raise ValueError(f"the feed came without {', '.join(sorted(missing))}")
-    tmp = DATA / "static.zip.tmp"
-    tmp.write_bytes(body)
-    if ZIP.exists():
-        ZIP.replace(PREV)
-    tmp.replace(ZIP)
+    with files.replacing(ZIP) as fresh:
+        fresh.write_bytes(body)
+        if ZIP.exists():
+            ZIP.replace(PREV)
     return True
 
 

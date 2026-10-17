@@ -20,7 +20,7 @@ import requests
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components, dijkstra
 
-from . import network
+from . import files, network
 from .gtfs import LAT_M
 
 DATA = Path(__file__).resolve().parent.parent / "data"
@@ -202,8 +202,7 @@ def renew(path=CACHE, keep=0.9):
     """Refetches the graph and its heights beside the one held, then swaps it
     in. One with under `keep` of the nodes held is refused: that is Overpass
     cut short, not the city shrinking."""
-    fresh = path.with_name("walk.next.npz")
-    try:
+    with files.replacing(path) as fresh:
         save(fresh)
         climb(fresh)
         if path.exists():
@@ -212,9 +211,6 @@ def renew(path=CACHE, keep=0.9):
             if got < keep * held:
                 raise ValueError(f"Overpass gave {got} footpath nodes, "
                                  f"against {held} held")
-        fresh.replace(path)
-    finally:
-        fresh.unlink(missing_ok=True)
 
 
 def age(path=CACHE):
