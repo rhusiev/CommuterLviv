@@ -109,22 +109,38 @@ def error(message, status=400, **extra):
     return JSONResponse({"error": message, **extra}, status_code=status)
 
 
+class BadBodyError(Exception):
+    """A request body refused before its handler sees it; answered as
+    `error(message, status)`."""
+
+    def __init__(self, message, status=400):
+        super().__init__(message)
+        self.message, self.status = message, status
+
+
+async def _bad_body(request, exc):
+    return error(exc.message, exc.status)
+
+
 async def body(request):
+    """The request's JSON object, or BadBodyError."""
     # checked before reading: buffering first would already cost the memory
     declared = request.headers.get("content-length", "")
     if declared.isdecimal() and (len(declared) > MAX_ID_DIGITS
                                  or int(declared) > MAX_BODY):
-        return None, error("Request too large", 413)
+        raise BadBodyError("Request too large", 413)
     raw = b""
     async for chunk in request.stream():
         raw += chunk
         if len(raw) > MAX_BODY:
-            return None, error("Request too large", 413)
+            raise BadBodyError("Request too large", 413)
     try:
         data = json.loads(raw or b"{}")
-    except json.JSONDecodeError:
-        return None, error("Expected JSON")
-    return (data, None) if isinstance(data, dict) else (None, error("Expected an object"))
+    except json.JSONDecodeError as exc:
+        raise BadBodyError("Expected JSON") from exc
+    if not isinstance(data, dict):
+        raise BadBodyError("Expected an object")
+    return data
 
 
 async def resolve(request):
@@ -201,9 +217,7 @@ async def register(request):
     if not g.auth_ip.take(g.ip(request)):
         return error("Too many attempts", 429,
                      retry=round(g.auth_ip.retry_after(g.ip(request))))
-    data, bad = await body(request)
-    if bad:
-        return bad
+    data = await body(request)
     # the code may arrive in the path, since what an admin hands out is a link
     code = request.path_params.get("code") or data.get("code")
     uid, why = await auth.register(app.pool, app.hasher, data.get("username"),
@@ -221,9 +235,7 @@ async def login(request):
     if not g.origin_ok(request):
         return error("Bad origin", 403)
     ip = g.ip(request)
-    data, bad = await body(request)
-    if bad:
-        return bad
+    data = await body(request)
     name = security.clean_username(data.get("username")) or "?"
     if not g.auth_ip.take(ip) or not g.auth_user.take((ip, name)):
         return error("Too many attempts", 429,
@@ -268,9 +280,7 @@ async def password(request, session):
     app = request.app.state
     if not app.settings.password_change:
         return error("Changing the password is turned off", 403)
-    data, bad = await body(request)
-    if bad:
-        return bad
+    data = await body(request)
     why = await auth.change_password(app.pool, app.hasher, session["user_id"],
                                      data.get("old"), data.get("new"),
                                      session["id"])
@@ -505,9 +515,7 @@ async def report(request, session):
     """Keeps a search just made, with what it ran on, for a look later; see
     `reports`."""
     app = request.app.state
-    data, bad = await body(request)
-    if bad:
-        return bad
+    data = await body(request)
     note = data.get("note") or ""
     if not isinstance(note, str) or len(note) > reports.NOTE:
         return error(f"A note is text of at most {reports.NOTE} characters")
@@ -550,9 +558,7 @@ async def pins(request, session):
     uid = session["user_id"]
     if request.method == "GET":
         return JSONResponse({"pins": await prefs.pins(app.pool, uid)})
-    data, bad = await body(request)
-    if bad:
-        return bad
+    data = await body(request)
     stops, why = prefs.clean_pins(data.get("pins"), app.svc.live.cat.stop_i)
     if why:
         return error(why)
@@ -566,9 +572,7 @@ async def places(request, session):
     uid = session["user_id"]
     if request.method == "GET":
         return JSONResponse({"places": await prefs.places(app.pool, uid)})
-    data, bad = await body(request)
-    if bad:
-        return bad
+    data = await body(request)
     saved, why = prefs.clean_places(data.get("places"))
     if why:
         return error(why)
@@ -581,9 +585,7 @@ async def sets(request, session):
     uid = session["user_id"]
     if request.method == "GET":
         return JSONResponse(await prefs.listing(app.pool, uid))
-    data, bad = await body(request)
-    if bad:
-        return bad
+    data = await body(request)
     valid = app.svc.live.cat.route_i
     ok, why = prefs.clean(data.get("name"), data.get("routes") or [], valid)
     if why:
@@ -598,9 +600,7 @@ async def one_set(request, session):
     if request.method == "DELETE":
         return (JSONResponse({"ok": True}) if await prefs.delete(app.pool, sid, uid)
                 else error(NO_SUCH_SET, 404))
-    data, bad = await body(request)
-    if bad:
-        return bad
+    data = await body(request)
     ok, why = prefs.clean(data.get("name"), data.get("routes") or [],
                           app.svc.live.cat.route_i)
     if why:
@@ -613,9 +613,7 @@ async def one_set(request, session):
 
 async def active(request, session):
     app = request.app.state
-    data, bad = await body(request)
-    if bad:
-        return bad
+    data = await body(request)
     sid = data.get("id")
     try:
         sid = uuidlib.UUID(sid) if sid else None
@@ -767,7 +765,8 @@ def build(st=None, net=None):
     # gzip only ever sees complete HTTP responses; the websocket's packed bytes
     # are untouched
     return Starlette(routes=routes(), lifespan=lifespan,
-                     middleware=[Middleware(GZipMiddleware, minimum_size=1024)])
+                     middleware=[Middleware(GZipMiddleware, minimum_size=1024)],
+                     exception_handlers={BadBodyError: _bad_body})
 
 
 async def sweeper(pool, every=3600.0):

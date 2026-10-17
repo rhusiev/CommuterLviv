@@ -100,6 +100,18 @@ def test_a_password_is_changed_only_where_the_service_allows_it(
     assert r.status_code == (200 if allowed else 403), r.text
 
 
+@pytest.mark.parametrize(("sent", "status", "said"), [
+    (b"not json", 400, "Expected JSON"),
+    (b"[]", 400, "Expected an object"),
+    (b" " * (app.MAX_BODY + 1), 413, "Request too large"),
+], ids=["not json", "not an object", "too large"])
+def test_a_body_that_is_not_a_small_json_object_is_refused(client, sent, status, said):
+    headers = _signed_in(client, "sender")
+
+    r = client.post("/api/pins", headers=headers, content=sent)
+
+    assert (r.status_code, r.json()) == (status, {"error": said})
+
 def test_the_catalog_lists_the_citys_routes_and_stops(client):
     _signed_in(client, "catalog")
 
