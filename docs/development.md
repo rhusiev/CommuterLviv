@@ -24,9 +24,9 @@ stepped over rather than failing the run.
 
 `.github/workflows/check.yml` runs it on every pull request and every push to
 `dev`. There `CI` is set, and with it a missing toolchain fails the run, and so
-does a skipped test: the browser tests drive the runner's Chrome and the
-database tests start their Postgres in its Docker, so neither has a reason to
-skip.
+does a skipped test: the browser tests drive the Chromium or Chrome the runner
+image ships, and the database tests start their Postgres with its podman or
+docker, so neither has a reason to skip.
 
 ## Tests
 
