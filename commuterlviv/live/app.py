@@ -354,7 +354,7 @@ async def vehicle(request, session):
 
 def _point(raw):
     """A "lat,lon" query parameter, or None; points outside the city's box are
-    refused, since the footpath graph stops at the city limit."""
+    refused, since the footpath graph ends there."""
     parts = (raw or "").split(",")
     if len(parts) != 2:
         return None

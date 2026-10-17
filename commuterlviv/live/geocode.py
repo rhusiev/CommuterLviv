@@ -28,10 +28,12 @@ from . import wire
 INDEX = gtfs.DATA / "lviv-search.sqlite"
 INDEX_EVERY = 30 * localtime.DAY_S  # s between index refetches
 
-# the city's box: the one the map frames can place a vehicle in, so a place
-# outside it is past the end of every line
-SOUTH, WEST = wire.LAT0, wire.LON0
-NORTH, EAST = wire.LAT0 + wire.DLAT, wire.LON0 + wire.DLON
+# the city's box: every stop lies in the one the map frames can place a vehicle
+# in, and the footpaths reach walk.MARGIN past the stops, so a place outside it
+# is past the end of every walk to a line
+SOUTH, WEST = wire.LAT0 - walk.MARGIN, wire.LON0 - walk.MARGIN
+NORTH = wire.LAT0 + wire.DLAT + walk.MARGIN
+EAST = wire.LON0 + wire.DLON + walk.MARGIN
 CENTRE = (49.8419, 24.0315)  # Rynok Square, where both clients' maps open
 
 TTL = localtime.DAY_S

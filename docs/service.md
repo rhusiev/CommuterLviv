@@ -475,8 +475,9 @@ code is vendored as `commuterlviv/mapidx/`. It forgives typos and Latin
 transliteration, and leads for queries without a digit. The second is Photon
 over OpenStreetMap, biased to the city, which leads when the query has a digit,
 since house numbers are what it is best at. Both are clamped to the box the map
-frames can place a vehicle in (`wire.py`), which `/api/plan` also refuses
-points outside of: past it there is no line to ride. The same name
+frames can place a vehicle in (`wire.py`), widened by the footpaths' reach past
+the stops (`walk.MARGIN`), which `/api/plan` also refuses points outside of:
+past it there is no walk to a line. The same name
 within 100 m is kept once. Answers are cached for a day.
 The index is not in the image. `.github/workflows/places.yml` rebuilds it from
 OpenStreetMap on the 3rd of every month and publishes it on this repository's
