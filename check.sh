@@ -83,7 +83,12 @@ run import . python3 -c "import commuterlviv.live.app, commuterlviv.cli"
 
 step "web: types, lint, tests and build"
 if command -v npm >/dev/null; then
-  [ -d "$root/web/node_modules" ] || run npm-ci web npm ci
+  # npm records what it installed in node_modules/.package-lock.json, so a lock
+  # newer than that record means a dependency was added since
+  web=$root/web
+  if [ ! "$web/node_modules/.package-lock.json" -nt "$web/package-lock.json" ]; then
+    run npm-ci web npm ci
+  fi
   run typecheck web npm run typecheck
   run lint web npm run lint
   run vitest web npm test
