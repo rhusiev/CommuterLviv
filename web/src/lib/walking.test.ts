@@ -1,16 +1,7 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import { HURRY_KMH, heldHurry, holdHurry } from "./walking";
 
-const kept = new Map<string, string>();
-vi.stubGlobal("localStorage", {
-  getItem: (k: string) => kept.get(k) ?? null,
-  setItem: (k: string, v: string) => kept.set(k, v),
-  removeItem: (k: string) => kept.delete(k),
-});
-
 describe("hurry pace", () => {
-  beforeEach(() => kept.clear());
-
   test("is off until set", () => {
     expect(heldHurry()).toBeNull();
   });

@@ -1,12 +1,5 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import { heldFollowed, holdFollowed, holdStage, type Followed } from "./followed";
-
-const kept = new Map<string, string>();
-vi.stubGlobal("localStorage", {
-  getItem: (k: string) => kept.get(k) ?? null,
-  setItem: (k: string, v: string) => kept.set(k, v),
-  removeItem: (k: string) => kept.delete(k),
-});
 
 const TAG = '"city-1"';
 const ARR = 10_000;
@@ -17,8 +10,6 @@ const followed: Followed = {
 };
 
 describe("the journey followed", () => {
-  beforeEach(() => kept.clear());
-
   test("is there after a reload, where it had got to", () => {
     holdFollowed(followed);
     holdStage({ kind: "wait", leg: 1 });
@@ -44,7 +35,7 @@ describe("the journey followed", () => {
 
   test("is none when what is stored is not a journey", () => {
     for (const junk of ["{not json", "null", '{"tag":"\\"city-1\\""}']) {
-      kept.set("commuterlviv.following", junk);
+      localStorage.setItem("commuterlviv.following", junk);
 
       expect(heldFollowed(TAG, ARR)).toBeNull();
     }

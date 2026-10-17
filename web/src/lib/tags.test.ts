@@ -1,10 +1,7 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import { clock } from "./eta";
 import { journeyTags, SHORT_WALK_S } from "./tags";
 import type { Leg } from "./types";
-
-// `clock` lives beside the strings, which read `localStorage` as they load
-vi.hoisted(() => vi.stubGlobal("localStorage", { getItem: () => null }));
 
 // on a minute, so a few seconds later is still the same one on the clock
 const T0 = 1_790_000_040;
