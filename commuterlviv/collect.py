@@ -148,6 +148,11 @@ def writer():
         db.close()
 
 
+def _polled(t0, feed, header, n, err):
+    """Records a poll started at `t0`, with how many ms it took."""
+    emit("poll", (t0, feed, header, n, int((time.time() - t0) * 1000), err))
+
+
 def poll_loop(feed, period, once):
     """Run `once` forever; each consecutive failure doubles the wait, one
     success clears it."""
@@ -156,12 +161,11 @@ def poll_loop(feed, period, once):
         t0 = time.time()
         try:
             n, header = once()
-            emit("poll", (t0, feed, header, n, int((time.time() - t0) * 1000), None))
+            _polled(t0, feed, header, n, None)
             count(**{f"{feed}_rows": n, f"{feed}_polls": 1})
             fails = 0
         except Exception as exc:
-            emit("poll", (t0, feed, 0, 0, int((time.time() - t0) * 1000),
-                          brief(exc)))
+            _polled(t0, feed, 0, 0, brief(exc))
             count(**{f"{feed}_errors": 1})
             fails += 1
             if fails in (1, 5) or fails % 50 == 0:
@@ -272,12 +276,11 @@ def collect_lad(period, limit):
                                  e.get("vehicle_id"), 1 if e.get("scheduled") else 0,
                                  int(when.timestamp()), e.get("end_stop_name"),
                                  e.get("direction_id")))
-                emit("poll", (t0, "lad", 0, len(rows), int((time.time() - t0) * 1000),
-                              None if r.status_code == 200 else str(r.status_code)))
+                _polled(t0, "lad", 0, len(rows),
+                        None if r.status_code == 200 else str(r.status_code))
                 count(lad_rows=len(rows), lad_polls=1)
             except Exception as exc:
-                emit("poll", (t0, "lad", 0, 0, int((time.time() - t0) * 1000),
-                              brief(exc)))
+                _polled(t0, "lad", 0, 0, brief(exc))
                 count(lad_errors=1)
             stop_flag.wait(max(0.05, gap - (time.time() - t0)))
         stop_flag.wait(max(0.5, period - (time.time() - cycle)))
