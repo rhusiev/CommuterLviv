@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { metres } from "../lib/geo";
 import { MIN_TYPED, score, words } from "../lib/match";
@@ -59,10 +59,7 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
 
   useEffect(() => {
     const q = query.trim();
-    if (near !== null || q.length < MIN_TYPED) {
-      setFound([]);
-      return;
-    }
+    if (near !== null || q.length < MIN_TYPED) return;
     const stop = new AbortController();
     const timer = window.setTimeout(() => {
       api.search(q, stop.signal).then(
@@ -83,7 +80,12 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
     };
   }, [query, near]);
 
-  useEffect(() => setCursor(0), [query, near]);
+  // A new query or a new list of stops near starts at the top
+  const [listed, setListed] = useState({ query, near });
+  if (listed.query !== query || listed.near !== near) {
+    setListed({ query, near });
+    setCursor(0);
+  }
 
   const locate = () => {
     setQuery("");
@@ -112,8 +114,7 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
     );
   };
 
-  const dismiss = useRef(inline?.onDismiss);
-  dismiss.current = inline?.onDismiss;
+  const dismiss = useEffectEvent(() => inline?.onDismiss());
 
   useEffect(() => {
     const away = (e: PointerEvent) => {
@@ -121,7 +122,7 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
       setQuery("");
       setNear(null);
       setWhy("");
-      dismiss.current?.();
+      dismiss();
     };
     document.addEventListener("pointerdown", away);
     return () => document.removeEventListener("pointerdown", away);
@@ -132,7 +133,11 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
       ? [
           { title: t.places, rows: mine.map((saved) => ({ saved })) },
           { title: t.stopHits, rows: hits.map((stop) => ({ stop })) },
-          { title: t.placeHits, rows: found.map((place) => ({ place })) },
+          // Those of a query since cut too short are no longer what was asked
+          {
+            title: t.placeHits,
+            rows: query.trim().length < MIN_TYPED ? [] : found.map((place) => ({ place })),
+          },
         ]
       : [{ title: t.stopHits, rows: near.map((h) => ({ stop: h.stop, away: h.away })) }]
   ).filter((s) => s.rows.length > 0);

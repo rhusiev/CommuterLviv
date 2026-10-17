@@ -2,7 +2,7 @@
 through the sign-in screen, a stop found by name, the bus on its board, and a
 journey planned from on board it and followed, one followed on foot that
 misses its bus searched again, a refused location, a changed password and a
-cancelled one.
+cancelled one, and a shared link that opens its stop or route.
 
 Needs the built web app (`npm run build` in `web/`), Playwright for Python and a
 Chromium. Skipped when any of them is missing."""
@@ -352,3 +352,16 @@ def test_a_cancelled_password_change_forgets_what_was_typed(page):
 
     playwright.expect(page.get_by_label("Current password")).to_have_value("")
     playwright.expect(page.get_by_label("New password")).to_have_value("")
+
+
+def test_a_shared_link_opens_its_stop_or_route(page):
+    _register(page, "linked")
+    expect = playwright.expect
+    # signed in once the map is up
+    expect(page.get_by_text("0 vehicles")).to_be_visible()
+
+    page.goto("/?stop=s4")
+    expect(page.get_by_role("heading", name="Stop 4")).to_be_visible()
+
+    page.goto(f"/?route={city.ROUTE}&tab=route")
+    expect(page.get_by_text("Stop 0 - Stop 4")).to_be_visible()

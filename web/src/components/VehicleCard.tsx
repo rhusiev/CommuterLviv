@@ -21,13 +21,12 @@ export function VehicleCard({
   onAboard: (from: Aboard) => void;
   onClose: () => void;
 }) {
+  // Keyed by `veh` where it is used, so these start afresh for each vehicle
   const [calls, setCalls] = useState<Call[] | null>(null);
   const [gone, setGone] = useState(false);
 
   useEffect(() => {
     let dropped = false;
-    setCalls(null);
-    setGone(false);
     const load = async () => {
       try {
         const answer = await api.vehicle(veh);

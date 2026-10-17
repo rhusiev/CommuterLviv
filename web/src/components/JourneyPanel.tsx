@@ -114,20 +114,29 @@ export function JourneyPanel({
   folded: boolean;
   onFold: (folded: boolean) => void;
 }) {
-  const [options, setOptions] = useState<Journey[] | null>(null);
-  const [shown, setShown] = useState<Journey | null>(null);
+  /** The ends of the last search: what it found is shown only while they are
+   *  still these ends */
+  const [searched, setSearched] = useState<{ from: Origin; to: Point } | null>(null);
+  const current = searched?.from === from && searched?.to === to;
+  const [found, setFound] = useState<Journey[] | null>(null);
+  const options = current ? found : null;
+  const [picked, setPicked] = useState<Journey | null>(null);
+  const shown = current ? picked : null;
   const show = (j: Journey | null) => {
-    setShown(j);
+    setPicked(j);
     onShow(j);
   };
   // Leaving the planner takes its journey off the map
   useEffect(() => () => onShow(null), [onShow]);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const failed = current ? failure : null;
   /** The search's name for reporting it, until it is reported */
-  const [report, setReport] = useState<string | null>(null);
+  const [reportable, setReportable] = useState<string | null>(null);
+  const report = current ? reportable : null;
   /** How reporting it went */
-  const [reportSaid, setReportSaid] = useState<string | null>(null);
+  const [reported, setReported] = useState<string | null>(null);
+  const reportSaid = current ? reported : null;
   /** The search's name for its backups, which reporting it leaves alone; the
    *  backups fetched as options of their own, by the option, leg and backup
    *  they came from; and the option of the search's each was built from */
@@ -138,19 +147,16 @@ export function JourneyPanel({
   }>({ id: null, built: new Map(), from: new Map() });
   /** Unix seconds, or null for now - which is what the service assumes */
   const [at, setAt] = useState<number | null>(null);
+  /** Unix seconds the departure picker counts from, renewed as it is opened */
+  const [now, setNow] = useState(() => Date.now() / 1000);
   const [prefer, setPrefer] = useState<Prefer>(heldPrefer);
   /** km/h, starting at the one kept as the default */
   const [speed, setSpeed] = useState(heldSpeed);
   /** What the points picked by name were called, so they keep reading so */
-  const names = useRef(new Map<string, string>());
+  const [names, setNames] = useState(() => new Map<string, string>());
   // Options found for other ends are not these ends' options
   useEffect(() => {
-    setOptions(null);
-    setFailed(null);
-    setReport(null);
-    setReportSaid(null);
     held.current = { id: null, built: new Map(), from: new Map() };
-    setShown(null);
     onShow(null);
   }, [from, to, onShow]);
   const aboard = from && "veh" in from ? from : null;
@@ -158,10 +164,11 @@ export function JourneyPanel({
 
   const search = async () => {
     if (!from || !to) return;
+    setSearched({ from, to });
     setBusy(true);
-    setFailed(null);
-    setReport(null);
-    setReportSaid(null);
+    setFailure(null);
+    setReportable(null);
+    setReported(null);
     show(null);
     try {
       // On board is now: the vehicle is tracked only as it goes
@@ -172,18 +179,18 @@ export function JourneyPanel({
         speed,
         heldHurry(),
       );
-      setOptions(got.options);
-      setReport(got.report ?? null);
+      setFound(got.options);
+      setReportable(got.report ?? null);
       held.current = { id: got.report ?? null, built: new Map(), from: new Map() };
     } catch (err) {
-      setFailed(
+      setFailure(
         err instanceof ApiError && err.preparing
           ? t.plannerPreparing
           : err instanceof Error
             ? err.message
             : t.failed,
       );
-      setOptions(null);
+      setFound(null);
     } finally {
       setBusy(false);
     }
@@ -195,6 +202,9 @@ export function JourneyPanel({
     void search();
   });
   useEffect(() => {
+    // A search is what the parent asked for, and the panel may only now have
+    // mounted to hear it, so it cannot be started from the parent's handler
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (ask && from && to) searchAsked();
   }, [ask, from, to]);
 
@@ -204,10 +214,10 @@ export function JourneyPanel({
     if (note === null || !id) return;
     try {
       await api.report(id, note);
-      setReport((r) => (r === id ? null : r));
-      setReportSaid(t.reported);
+      setReportable((r) => (r === id ? null : r));
+      setReported(t.reported);
     } catch (err) {
-      setReportSaid(err instanceof Error ? err.message : t.failed);
+      setReported(err instanceof Error ? err.message : t.failed);
     }
   };
 
@@ -233,7 +243,7 @@ export function JourneyPanel({
       if (held.current !== search) return;
       search.built.set(key, got);
       search.from.set(got, from);
-      setOptions((o) => o && [...o, got!]);
+      setFound((o) => o && [...o, got!]);
     }
     draw(got);
   };
@@ -293,13 +303,13 @@ export function JourneyPanel({
       end={which}
       point={point}
       aboard={on}
-      name={point && names.current.get(key(point))}
+      name={point && names.get(key(point))}
       catalog={catalog}
       onPick={() => onPick(which)}
       onHere={() => onHere(which)}
       places={places}
       onPlace={(p, name) => {
-        if (name) names.current.set(key(p), name);
+        if (name) setNames((n) => new Map(n).set(key(p), name));
         onPoint(which, p);
       }}
       onSave={(name, p) => onPlaces(saved(places, name, p.lat, p.lon))}
@@ -326,8 +336,9 @@ export function JourneyPanel({
         <input
           type="datetime-local"
           value={at === null ? "" : onClock(at)}
-          min={onClock(Date.now() / 1000)}
-          max={onClock(Date.now() / 1000 + AHEAD_S)}
+          min={onClock(now)}
+          max={onClock(now + AHEAD_S)}
+          onFocus={() => setNow(Date.now() / 1000)}
           onChange={(e) =>
             setAt(e.target.value === "" ? null : Math.round(new Date(e.target.value).getTime() / 1000))
           }

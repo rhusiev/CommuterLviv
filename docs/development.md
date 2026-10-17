@@ -55,7 +55,8 @@ the wall clock, in a time zone pinned so that it is noon there whatever the hour
 test process on the made-up city. A user registers through the sign-in screen,
 finds a stop and sees the bus on its board, and picks the route and sees the
 bus on the map. Another boards the bus from its card, plans to a point picked
-on the map, follows the journey and opens its list of steps. It needs `npm run build` first, and a Chromium -
+on the map, follows the journey and opens its list of steps. A link with `?stop=` or
+`?route=` opens that stop or route. It needs `npm run build` first, and a Chromium -
 `chromium-browser`, `chromium` or `google-chrome` on the PATH, or
 `COMMUTERLVIV_TEST_CHROMIUM`. Playwright's own browser download is not needed.
 Map tiles and fonts are blocked, so the map itself stays blank.

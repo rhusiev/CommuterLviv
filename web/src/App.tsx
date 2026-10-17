@@ -26,7 +26,6 @@ import { saved } from "./lib/places";
 import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from "./lib/theme";
 import { RAMP, useTraffic } from "./lib/traffic";
 import { readUrl, writeUrl, type UrlState } from "./lib/url";
-import type { Stage } from "./lib/follow";
 import { heldFollowed, holdFollowed, type Followed } from "./lib/followed";
 import { hereOnce, type NoFix } from "./lib/position";
 import { useFollow } from "./lib/useFollow";
@@ -41,6 +40,33 @@ const JOIN = /^\/join\/([\w-]+)\/?$/;
 /** Pins from before the server kept them, as catalog positions. Read once per
  * account against whatever catalog is loaded now, then deleted. */
 const oldPinKey = (user: string) => `commuterlviv.pins.${user}`;
+
+/** The old pins of `who` as ids of `cat`'s stops, sent to the server, which
+ * forgets them locally once it has them. None once the account has pins of its
+ * own. */
+function carryOldPins(cat: Catalog, who: Me): string[] {
+  const key = oldPinKey(who.username);
+  const held = localStorage.getItem(key);
+  if (held === null) return [];
+  try {
+    const ids =
+      who.sets.pins.length === 0
+        ? (JSON.parse(held) as number[])
+            .map((i) => cat.stops[i]?.id)
+            .filter((id): id is string => id !== undefined)
+        : [];
+    if (ids.length === 0) {
+      localStorage.removeItem(key);
+      return [];
+    }
+    // Dropped only once the server has them
+    void api.setPins(ids).then(() => localStorage.removeItem(key));
+    return ids;
+  } catch {
+    localStorage.removeItem(key);
+    return [];
+  }
+}
 
 const TAB_NAMES: Record<UrlState["tab"], string> = {
   map: t.map,
@@ -79,8 +105,6 @@ export function App() {
   /** Being travelled: it keeps the map, whichever tab is open, and a reload */
   const [followed, setFollowed] = useState<Followed | null>(null);
   const following = followed?.journey ?? null;
-  /** Where a journey followed before the page loaded had got to */
-  const resumed = useRef<Stage | undefined>(undefined);
   /** The planner is to search as soon as both ends are set */
   const [ask, setAsk] = useState(false);
   const [picking, setPicking] = useState<"from" | "to" | null>(null);
@@ -96,6 +120,12 @@ export function App() {
   const [layers, setLayers] = useState(false);
   const [account, setAccount] = useState(false);
 
+  const openTab = (next: UrlState["tab"]) => {
+    setTab(next);
+    // On board lasts only while planning: the vehicle goes on without the planner
+    if (next !== "plan") setFrom((was) => (was && "veh" in was ? null : was));
+  };
+
   const code = JOIN.exec(location.pathname)?.[1] ?? null;
   const { live, connection, count, quiet } = useLive();
   if (!quiet && quietShut) setQuietShut(false);
@@ -110,37 +140,55 @@ export function App() {
     setNotice(err instanceof Error ? err.message : t.noService);
   }, []);
 
-  const load = useCallback(async () => {
-    try {
-      const who = await api.me();
-      setMe(who);
-      setSets(who.sets.sets);
-      setActive(who.sets.active);
-      // The account's active set only decides when the link names no routes
-      const set = who.sets.sets.find((s) => s.id === who.sets.active);
-      if (set && opened.routes === null) setPicked(new Set(set.routes));
-      setPinIds(who.sets.pins);
-      setPlaces(who.sets.places);
-      setNotice(null);
-    } catch (err) {
-      failed(err);
-    }
-  }, [failed, opened.routes]);
+  const load = useCallback(
+    () =>
+      api.me().then((who) => {
+        setMe(who);
+        setSets(who.sets.sets);
+        setActive(who.sets.active);
+        // The account's active set only decides when the link names no routes
+        const set = who.sets.sets.find((s) => s.id === who.sets.active);
+        if (set && opened.routes === null) setPicked(new Set(set.routes));
+        setPinIds(who.sets.pins);
+        setPlaces(who.sets.places);
+        setNotice(null);
+      }, failed),
+    [failed, opened.routes],
+  );
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const loadCatalog = useCallback(() => {
-    setNotice(null);
-    void fetchCatalog().then((got) => {
-      setCat(got);
-      if (takeRenewed()) setInfo(t.renewed);
-    }, failed);
-  }, [failed]);
+  /** The catalog, and everything that waited for it: where the address pointed,
+   * the journey followed before the page loaded and the pins from before the
+   * server kept them */
+  const loadCatalog = useCallback(
+    (who: Me) =>
+      fetchCatalog().then((got) => {
+        setCat(got);
+        if (takeRenewed()) setInfo(t.renewed);
+        const tag = catalogTag();
+        const held = tag ? heldFollowed(tag, Date.now() / 1000) : null;
+        if (held) setFollowed(held);
+        if (opened.route !== null) {
+          const i = got.routes.findIndex((r) => r.id === opened.route);
+          if (i >= 0) setRoute(i);
+          else setTab("map");
+        }
+        const i = got.stops.findIndex((x) => x.id === opened.stop);
+        if (i >= 0) {
+          setStop(i);
+          setFocus({ lat: got.stops[i]!.lat, lon: got.stops[i]!.lon });
+        }
+        const old = carryOldPins(got, who);
+        if (old.length > 0) setPinIds(old);
+      }, failed),
+    [failed, opened],
+  );
 
   useEffect(() => {
-    if (me) loadCatalog();
+    if (me) void loadCatalog(me);
   }, [me, loadCatalog]);
 
   const stopIndex = useIndex(cat?.stops);
@@ -148,60 +196,6 @@ export function App() {
   /** The socket and every panel address a stop by catalog position; only what
    * is stored is an id. */
   const pins = usePositions(stopIndex, pinIds);
-
-  useEffect(() => {
-    if (!cat || !me) return;
-    const key = oldPinKey(me.username);
-    const held = localStorage.getItem(key);
-    if (held === null) return;
-    try {
-      const ids =
-        pinIds.length === 0
-          ? (JSON.parse(held) as number[])
-              .map((i) => cat.stops[i]?.id)
-              .filter((id): id is string => id !== undefined)
-          : [];
-      if (ids.length === 0) {
-        localStorage.removeItem(key);
-        return;
-      }
-      setPinIds(ids);
-      // Dropped only once the server has them
-      void api.setPins(ids).then(() => localStorage.removeItem(key));
-    } catch {
-      localStorage.removeItem(key);
-    }
-    // Must not re-run when the pins change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cat, me]);
-
-  useEffect(() => {
-    const tag = catalogTag();
-    if (!cat || !tag) return;
-    const held = heldFollowed(tag, Date.now() / 1000);
-    if (!held) return;
-    resumed.current = held.stage;
-    setFollowed(held);
-  }, [cat]);
-
-  useEffect(() => {
-    if (!cat || opened.route === null) return;
-    const i = cat.routes.findIndex((r) => r.id === opened.route);
-    if (i >= 0) setRoute(i);
-    else setTab("map");
-    // Once, when the catalog arrives: after that the address bar follows
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cat]);
-
-  useEffect(() => {
-    if (!cat || opened.stop === null) return;
-    const i = stopIndex.get(opened.stop);
-    if (i === undefined) return;
-    setStop(i);
-    setFocus({ lat: cat.stops[i]!.lat, lon: cat.stops[i]!.lon });
-    // Once, when the catalog arrives: after that the address bar follows
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cat]);
 
   useEffect(() => {
     if (!cat) return;
@@ -220,7 +214,7 @@ export function App() {
   const showStop = (i: number) => {
     const s = cat?.stops[i];
     if (!s) return;
-    setTab("map");
+    openTab("map");
     setStop(i);
     setFocus({ lat: s.lat, lon: s.lon });
   };
@@ -294,10 +288,15 @@ export function App() {
   }, [live, cat, watched]);
 
   // Here rather than in its card, which a change of tab unmounts
-  const { progress, caught } = useFollow(following, live, cat ?? undefined, resumed.current);
+  const { progress, caught } = useFollow(
+    following,
+    live,
+    cat ?? undefined,
+    // where a journey followed before the page loaded had got to
+    followed?.stage,
+  );
 
   const follow = (next: Followed | null) => {
-    resumed.current = undefined;
     holdFollowed(next);
     setFollowed(next);
   };
@@ -316,7 +315,7 @@ export function App() {
       hereFor("from");
     }
     setAsk(true);
-    setTab("plan");
+    openTab("plan");
   };
 
   /** Only the stops of the routes on the map are drawn or clickable */
@@ -337,11 +336,6 @@ export function App() {
     if (to) out.push({ ...to, label: "B" });
     return out;
   }, [tab, from, to]);
-
-  // On board lasts only while planning: the vehicle goes on without the planner
-  useEffect(() => {
-    if (tab !== "plan") setFrom((was) => (was && "veh" in was ? null : was));
-  }, [tab]);
 
   /** Asked separately from the map's own locate button, so a refusal here does
    * not turn the map's dot off */
@@ -373,14 +367,14 @@ export function App() {
   };
 
   const showPlace = (at: { lat: number; lon: number }) => {
-    setTab("map");
+    openTab("map");
     setStop(null);
     setFocus({ lat: at.lat, lon: at.lon });
   };
 
   const openRoute = (i: number) => {
     setRoute(i);
-    setTab("route");
+    openTab("route");
   };
 
   const refreshSets = async () => {
@@ -402,7 +396,13 @@ export function App() {
     return notice === null ? (
       <Splash text={t.loading} />
     ) : (
-      <Splash text={notice} onRetry={loadCatalog} />
+      <Splash
+        text={notice}
+        onRetry={() => {
+          setNotice(null);
+          void loadCatalog(me);
+        }}
+      />
     );
 
   // 12 px + the drawer's 320 + 12, so panels centre on the map left over. Only
@@ -616,7 +616,7 @@ export function App() {
             onShow={setJourney}
             onFollow={(j) => {
               follow({ journey: j, to: to!, tag: catalogTag() ?? "" });
-              setTab("map");
+              openTab("map");
             }}
             ask={ask}
             onAsked={() => setAsk(false)}
@@ -677,7 +677,7 @@ export function App() {
           <button
             onClick={() => {
               setRoute(null);
-              setTab("map");
+              openTab("map");
             }}
             className="px-1 text-slate-500 hover:text-slate-200"
           >
@@ -708,6 +708,8 @@ export function App() {
             />
           ) : veh === null ? null : (
             <VehicleCard
+              // Another vehicle is another card, not this one's calls kept
+              key={veh}
               catalog={cat}
               veh={veh}
               onStop={(i) => {
@@ -719,7 +721,7 @@ export function App() {
                 boarded.current += 1;
                 setFrom(on);
                 setVeh(null);
-                setTab("plan");
+                openTab("plan");
               }}
               onClose={() => setVeh(null)}
             />
@@ -753,7 +755,7 @@ export function App() {
           <button
             key={v}
             onClick={() => {
-              setTab(v);
+              openTab(v);
               setLayers(false);
               setAccount(false);
             }}

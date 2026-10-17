@@ -5,6 +5,9 @@ import { t } from "../lib/i18n";
 import { RouteBadge } from "./RouteBadge";
 import { Icon } from "./Icon";
 
+/** How often the countdowns move on */
+const TICK_MS = 5000;
+
 /** The clock ticks locally between epochs: the predictions change once a
  * minute, but a countdown that only moves once a minute looks broken. */
 export function Timetable({
@@ -20,9 +23,9 @@ export function Timetable({
   onUnpin: (i: number) => void;
   onRoute: (i: number) => void;
 }) {
-  const [now, setNow] = useState(Date.now() / 1000);
+  const [now, setNow] = useState(() => Date.now() / 1000);
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now() / 1000), 5000);
+    const id = setInterval(() => setNow(Date.now() / 1000), TICK_MS);
     return () => clearInterval(id);
   }, []);
 

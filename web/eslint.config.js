@@ -17,12 +17,6 @@ export default defineConfig([
     ],
     languageOptions: { globals: globals.browser },
     rules: {
-      // The React Compiler's own rules. Nothing here is compiled by it, and
-      // the patterns they flag - state reset when a prop changes, the latest
-      // prop held in a ref - are sound without it
-      "react-hooks/set-state-in-effect": "off",
-      "react-hooks/refs": "off",
-      "react-hooks/purity": "off",
       // As tsc's noUnusedParameters reads them
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
     },

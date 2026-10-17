@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Map as MapLibre } from "maplibre-gl";
 import WORKER from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import {
@@ -116,12 +116,21 @@ export function MapCanvas(props: Props) {
   const keep = useRef(false);
   /** What the basemap's own layers draw, read again on every `styledata` */
   const beneath = useRef({ shapes, directed, traffic, dark: theme.dark });
-  const [locating, setLocating] = useState<Locating>("off");
+  const [locating, setLocating] = useState<Locating>(locate ? "waiting" : "off");
   const [ready, setReady] = useState(false);
+  // Turning `locate` on starts the dot as the button would; off, it stays
+  const [wasLocate, setWasLocate] = useState(locate);
+  if (locate !== wasLocate) {
+    setWasLocate(locate);
+    if (locate) setLocating((was) => (was === "off" ? "waiting" : was));
+  }
 
-  latest.current = props;
-  paint.current = ink(theme.dark);
-  beneath.current = { shapes, directed, traffic, dark: theme.dark };
+  // First of the effects, so every other one reads this render's
+  useLayoutEffect(() => {
+    latest.current = props;
+    paint.current = ink(theme.dark);
+    beneath.current = { shapes, directed, traffic, dark: theme.dark };
+  });
 
   useEffect(() => {
     const el = canvas.current!;
@@ -539,7 +548,6 @@ export function MapCanvas(props: Props) {
 
   useEffect(() => {
     keep.current = locate;
-    if (locate) setLocating((was) => (was === "off" ? "waiting" : was));
   }, [locate]);
 
   // A boolean and not the state: the watch must not restart when the first fix

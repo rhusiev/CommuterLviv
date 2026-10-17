@@ -14,6 +14,14 @@ const OK: Catch = { kind: "ok" };
  * time left counts down. Chosen, not derived */
 const JUDGE_EVERY_MS = 1000;
 
+type Said = {
+  /** What it was said of: anything else is not followed yet */
+  journey: Journey | null;
+  catalog: Catalog | undefined;
+  progress: Progress | "denied" | null;
+  caught: Catch;
+};
+
 /** Follows `journey` from the device's own fixes until it is null: null until
  * the first fix, "denied" once the browser refuses them - a fix it could not
  * get is only waited out. The fixes go nowhere but the follower. `catalog`
@@ -26,12 +34,17 @@ export function useFollow(
   catalog: Catalog | undefined,
   stage?: Stage,
 ): { progress: Progress | "denied" | null; caught: Catch } {
-  const [progress, setProgress] = useState<Progress | "denied" | null>(null);
-  const [caught, setCaught] = useState<Catch>(OK);
+  const [said, setSaid] = useState<Said>({ journey, catalog, progress: null, caught: OK });
   useEffect(() => {
-    setProgress(null);
-    setCaught(OK);
     if (!journey) return;
+    const fresh: Said = { journey, catalog, progress: null, caught: OK };
+    const say = (next: Partial<Said>) =>
+      setSaid((was) => ({
+        ...(was.journey === journey && was.catalog === catalog ? was : fresh),
+        ...next,
+      }));
+    const setProgress = (progress: Said["progress"]) => say({ progress });
+    const setCaught = (caught: Catch) => say({ caught });
     const follower = new Follower(journey, catalog, stage);
     const watch = new Watch();
     let at = follower.progress.stage;
@@ -77,5 +90,6 @@ export function useFollow(
     // `stage` only starts the follower, which then moves on from it
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [journey, live, catalog]);
-  return { progress, caught };
+  const current = said.journey === journey && said.catalog === catalog;
+  return current ? { progress: said.progress, caught: said.caught } : { progress: null, caught: OK };
 }
