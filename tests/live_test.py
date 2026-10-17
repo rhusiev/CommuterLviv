@@ -123,3 +123,14 @@ def test_positions_carry_the_vehicle_on_its_route(live):
     assert live.cat.routes[v["route"]] == city.ROUTE
     assert (v["lat"], v["lon"]) == pytest.approx((mid.lat, mid.lon), abs=1e-4)
     assert v["flags"] & state.MOVING
+
+
+def test_a_vehicle_reports_until_its_last_fix_is_stale(live):
+    fixes = city.ride("t1")
+    mid = fixes[len(fixes) // 2]
+    _run(live, [f for f in fixes if f.ts <= mid.ts], mid.ts)
+
+    live.epoch(mid.ts + replay.STALE)
+    assert live.reporting == 1
+    live.epoch(mid.ts + replay.STALE + live.epoch_s)
+    assert live.reporting == 0

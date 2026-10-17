@@ -141,6 +141,7 @@ class Live:
         self.wire, self.free, self.next_wire = {}, collections.deque(), 0
         self.next_epoch = None
         self.epochs = 0
+        self.reporting = 0       # vehicles with a fix within `replay.STALE`
         self.positions = Positions(0.0)
         self.arrivals = Arrivals(0.0)
         self.started = time.time()
@@ -199,6 +200,8 @@ class Live:
             self.free.append(self.wire.pop(veh))
         self.model.refresh(now)
         self.epochs += 1
+        self.reporting = sum(tr.ts is not None and now - tr.ts <= replay.STALE
+                             for tr in self.tracks.values())
         self.arrivals = self._arrivals(now)
         return self.arrivals
 
@@ -325,6 +328,7 @@ class Live:
                 "tracks": len(self.tracks),
                 "vehicles": int(len(self.positions.veh)),
                 "arrivals": int(len(self.arrivals.eta)),
+                "reporting": self.reporting,
                 "positions_age": round(time.time() - self.positions.t, 1),
                 "arrivals_age": round(time.time() - self.arrivals.t, 1),
                 "uptime": round(time.time() - self.started, 1)}

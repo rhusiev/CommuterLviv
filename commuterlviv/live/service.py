@@ -14,6 +14,7 @@ import time
 from concurrent.futures import ProcessPoolExecutor
 
 from .. import boost, collect, layover, replay, snapshot
+from . import quiet
 from .state import Live
 
 WARM_HOURS = 2.0         # of recorded history replayed at most, if it is fresh
@@ -34,6 +35,7 @@ class Service:
         self.persist = persist and snapshot.supported(self.live.model)
         self.lock = asyncio.Lock()
         self.hub = None          # set by the app, which owns the connections
+        self.timetable = lambda: None    # the planner's, once the app has one
         self.errors = 0
         self.polls = 0
         self._seen = {}
@@ -221,6 +223,8 @@ class Service:
             try:
                 async with self.lock:
                     await asyncio.to_thread(self.live.epoch)
+                self.hub.quiet = await asyncio.to_thread(
+                    quiet.judge, self.live.reporting, self.timetable(), t)
                 self.hub.publish(epoch=True)
             except Exception as exc:
                 self.errors += 1

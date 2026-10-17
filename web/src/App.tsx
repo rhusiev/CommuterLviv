@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Banner } from "./components/Banner";
 import { Icon } from "./components/Icon";
 import { MapCanvas } from "./components/MapCanvas";
 import { RoutePanel } from "./components/RoutePanel";
@@ -89,12 +90,15 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   /** Not a failure: news worth a line, such as the city changing */
   const [info, setInfo] = useState<string | null>(null);
+  /** The quiet banner closed; it comes back the next time the vehicles go quiet */
+  const [quietShut, setQuietShut] = useState(false);
   const [jams, setJams] = useState(() => loadFlag(TRAFFIC_KEY));
   const [layers, setLayers] = useState(false);
   const [account, setAccount] = useState(false);
 
   const code = JOIN.exec(location.pathname)?.[1] ?? null;
-  const { live, connection, count } = useLive();
+  const { live, connection, count, quiet } = useLive();
+  if (!quiet && quietShut) setQuietShut(false);
   // Asked for again every minute, and only while the view is open
   const traffic = useTraffic(jams);
 
@@ -581,23 +585,16 @@ export function App() {
         </div>
       )}
 
-      {(notice ?? info) !== null && (
-        <p
-          className={`panel absolute left-1/2 top-19 z-40 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-2 px-3 py-2 text-sm ${notice !== null ? "text-rose-200" : "text-sky-200"}`}
-        >
-          {notice ?? info}
-          <button
-            onClick={() => (notice !== null ? setNotice(null) : setInfo(null))}
-            className={
-              notice !== null
-                ? "text-rose-400 hover:text-rose-200"
-                : "text-sky-400 hover:text-sky-200"
-            }
-          >
-            ✕
-          </button>
-        </p>
-      )}
+      <div className="absolute left-1/2 top-19 z-40 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-col items-center gap-2">
+        {notice !== null ? (
+          <Banner tone="error" text={notice} onClose={() => setNotice(null)} />
+        ) : (
+          info !== null && <Banner tone="info" text={info} onClose={() => setInfo(null)} />
+        )}
+        {quiet && !quietShut && (
+          <Banner tone="warn" text={t.quiet} onClose={() => setQuietShut(true)} />
+        )}
+      </div>
 
       {tab === "plan" && (
         <aside

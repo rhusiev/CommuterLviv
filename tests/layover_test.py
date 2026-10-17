@@ -5,7 +5,7 @@ import datetime
 import numpy as np
 import pytest
 
-from commuterlviv import layover, model
+from commuterlviv import layover, model, track
 
 from . import city
 
@@ -14,6 +14,8 @@ READY = SCHED - 1200.0      # in and turned round, twenty minutes early
 NOW = SCHED - 1000.0
 AHEAD_S = 300.0
 RING_ROWS = 4
+IN = city.at(city.DEPARTS["t1"]) + city.LENGTH / city.SPEED
+OUT_S = 180.0               # into the next trip when the vehicle is seen again
 
 
 @pytest.fixture
@@ -74,6 +76,42 @@ def test_turnarounds_survive_export_and_restore(lay, net):
     again.restore(**lay.export())
 
     assert again.seen == lay.seen
+
+
+def _follow(lay, net, tr, fixes):
+    for f in fixes:
+        track.observe(tr, net, f.ts, f.lat, f.lon, f.speed, f.odometer, f.trip)
+        lay.follow(tr.veh, tr)
+
+
+def _in_early(lay, net, stand=0.0):
+    """A vehicle in at the end of t1 long before t2, the trip it runs next,
+    is timetabled to leave, and seen standing there `stand` s."""
+    tr = track.Track(veh="v1")
+    _follow(lay, net, tr, city.ride("t1", stand=stand))
+    assert lay.came("v1", "t1") + layover.TURN < SCHED
+    return tr
+
+
+def test_a_vehicle_in_early_is_timed_leaving_on_its_next_trip(lay, net):
+    tr = _in_early(lay, net, stand=SCHED - IN)
+
+    _follow(lay, net, tr, city.drive("t2", SCHED)[1:])
+
+    dep, sched = lay.last[_key(net)]
+    assert sched == SCHED
+    assert SCHED < dep <= SCHED + layover.STRAY / city.SPEED
+    assert len(lay.seen[_key(net)]) == 1
+
+
+def test_no_departure_is_timed_off_a_vehicle_back_from_a_long_silence(lay, net):
+    tr = _in_early(lay, net)
+    back = [f for f in city.drive("t2", SCHED) if f.ts >= SCHED + OUT_S]
+
+    assert back[0].ts - tr.ts > track.GAP_RESET
+    _follow(lay, net, tr, back)
+
+    assert _key(net) not in lay.last and _key(net) not in lay.seen
 
 
 @pytest.mark.parametrize("n", [RING_ROWS - 1, RING_ROWS, RING_ROWS + 2])

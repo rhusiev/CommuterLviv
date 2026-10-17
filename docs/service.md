@@ -113,6 +113,39 @@ thread every 6 hours. Correcting the morning peak's 7 600 stops takes about
 0.12 s of CPU a minute, 0.05 s of it for what the last minutes said. The
 500 000 notes take 46 MB.
 
+## When the vehicles go quiet
+
+During an air raid alert in Lviv the vehicles stop reporting where they are,
+and the map empties while the buses still run. The feed itself failing looks
+the same, so the service only says the vehicles have gone quiet and both
+clients word it as a possibility: few vehicles are reporting, possibly an air
+raid alert, positions and arrival times may be missing or off.
+
+Every epoch the service counts the vehicles with a fix in the last 120 s
+(`replay.STALE`) against the trips the planner's timetable has between leaving
+their first stop and reaching their last (`commuterlviv/live/quiet.py`). Under
+half of them reporting is quiet (`QUIET_SHARE`), but only while at least 50
+trips are under way (`MIN_RUNNING`): at night the timetable has next to nothing
+running, and an empty feed then means nothing. Until the planner is built
+nothing is judged. On the recording of 2026-09-13..17 in 10-minute samples, a
+vehicle reported for 0.83-1.2 of the trips under way in normal service, for
+0.00-0.21 through four blackouts and 0.40-0.43 at their edges, and night had
+fewer than 50 trips under way. Both thresholds are chosen in that gap, not
+derived.
+
+The `hello` frame carries `quiet`, and a `{"type": "quiet", "quiet": ...}` frame
+follows each change. `/api/status` shows `quiet` and the count `reporting`.
+
+A blackout also misleads the tracks. Through it many vehicles go on reporting
+with fresh timestamps while their place, odometer and speed stop changing, then
+the place jumps kilometres ahead while the odometer barely moves - see
+[the filter](how-it-works.md#3-the-fix-is-folded-into-a-filter-not-used-directly)
+for what the tracker does about that. A vehicle back from a silence longer
+than 300 s (`track.GAP_RESET`) may have left its terminus, or been to the
+depot and back, unseen, so no stand or departure is timed off it until it next
+gets in (`Layovers.follow`). That drops 25 of 1052 departures replaying
+2026-09-15 19:00-21:00 and almost none in normal service.
+
 ## The journey planner
 
 `GET /api/plan?from=lat,lon&to=lat,lon` answers the door-to-door question:

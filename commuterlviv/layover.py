@@ -23,6 +23,8 @@ import datetime
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingRegressor
 
+from .track import GAP_RESET
+
 TURN = 120.0        # s at least between reaching a terminus and leaving it
 KEEP = 50           # recent turnarounds kept per route and terminus
 NEED = 10           # of them before the route's own habit is believed
@@ -66,7 +68,7 @@ class Layovers:
         self._rows = np.zeros((ROWS, len(FEATURES) + 1), dtype=np.float32)
         self._wrote = 0      # rows ever written; the ring keeps the last `ROWS`
         self.model = None
-        self._on = {}        # veh -> [trip, been away from its end, time in]
+        self._on = {}        # veh -> [trip, been away from its end, time in, last fix]
         self._out = {}       # veh -> (timetabled departure, in early), until it leaves
         self._asked = {}     # trip -> [(time, features)] of its stand, until it leaves
         self._batch = []     # this epoch's stands: (trip, soonest, features)
@@ -77,16 +79,23 @@ class Layovers:
         if tr.s is None:
             return
         on = self._on.get(veh)
+        if on is not None and tr.ts - on[3] > GAP_RESET:
+            # unseen for so long - as through an air raid alert - that it may
+            # have left, or been to the depot and back: no stand or departure
+            # can be timed until it comes in again
+            self._out.pop(veh, None)
+            on = self._on[veh] = [tr.trip, False, None, tr.ts]
         if on is None or on[0] != tr.trip:
             came = on[2] if on is not None \
                 and self.net.trip_next.get(on[0]) == tr.trip else None
             sched = clock(tr.sched[0], tr.ts, self.tz)
             self._out[veh] = sched, came is not None and came + TURN < sched
-            on = self._on[veh] = [tr.trip, False, None]
+            on = self._on[veh] = [tr.trip, False, None, tr.ts]
         if tr.s < tr.sdist[-1] - AT_END:
             on[1] = True
         elif on[1] and on[2] is None:
             on[2] = tr.ts
+        on[3] = tr.ts
         out = self._out.get(veh)
         if out is not None and AWAY <= tr.s - tr.sdist[0] <= STRAY:
             del self._out[veh]

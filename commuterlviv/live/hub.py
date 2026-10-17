@@ -55,7 +55,7 @@ def _watch(cat, want):
 
 class Client:
     __slots__ = ("ws", "user_id", "live", "routes", "stops", "last", "frames",
-                 "bytes", "wake", "tokens", "at", "refused")
+                 "bytes", "wake", "tokens", "at", "refused", "quiet")
 
     def __init__(self, ws, user_id, live):
         self.ws = ws
@@ -68,6 +68,7 @@ class Client:
         self.wake = asyncio.Event()
         self.tokens, self.at = MSG_BURST, time.monotonic()
         self.refused = 0
+        self.quiet = False      # what this client was last told of `Hub.quiet`
 
     def spend(self):
         """Whether this client may send one more message just now."""
@@ -92,6 +93,7 @@ class Hub:
         self.clients = set()
         self.seq = 0
         self.epoch_seq = 0
+        self.quiet = False      # `quiet.judge`, set by the service each epoch
 
     def publish(self, epoch=False):
         self.seq += 1
@@ -117,6 +119,7 @@ class Hub:
             return
         live = self.live
         client = Client(ws, user_id, live)
+        client.quiet = self.quiet
         self.clients.add(client)
         tasks = []
         try:
@@ -125,7 +128,8 @@ class Hub:
                 "epoch": live.epoch_s,
                 "routes": len(live.cat.routes),
                 "stops": len(live.cat.stops),
-                "catalog": live.cat.tag}))
+                "catalog": live.cat.tag,
+                "quiet": client.quiet}))
             # whichever half stops first ends the connection, so a dead pusher
             # cannot leave a socket that reads fine and never updates
             tasks = [asyncio.create_task(self._read(client)),
@@ -189,6 +193,10 @@ class Hub:
                 await client.ws.close(code=RENEWED)
                 return
             seen = self.seq
+            if client.quiet != self.quiet:
+                client.quiet = self.quiet
+                await client.ws.send_text(json.dumps({"type": "quiet",
+                                                      "quiet": client.quiet}))
             await self._send_positions(client)
             if self.epoch_seq != seen_epoch:
                 seen_epoch = self.epoch_seq
@@ -216,7 +224,8 @@ class Hub:
             {"type": "arrivals", **due(arr, client.stops)}))
 
     def stats(self):
-        return {"clients": len(self.clients),
+        return {"quiet": self.quiet,
+                "clients": len(self.clients),
                 "frames": sum(c.frames for c in self.clients),
                 "bytes": sum(c.bytes for c in self.clients),
                 "refused": sum(c.refused for c in self.clients)}
