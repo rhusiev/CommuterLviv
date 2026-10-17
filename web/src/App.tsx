@@ -9,6 +9,7 @@ import { JourneyPanel, type Origin, type Point } from "./components/JourneyPanel
 import { StopCard } from "./components/StopCard";
 import { AccountMenu } from "./components/AccountMenu";
 import { LayersPanel } from "./components/LayersPanel";
+import { Menu } from "./components/Menu";
 import { SavedPanel } from "./components/SavedPanel";
 import { StopSearch } from "./components/StopSearch";
 import { RouteBadge } from "./components/RouteBadge";
@@ -117,8 +118,10 @@ export function App() {
   /** The quiet banner closed; it comes back the next time the vehicles go quiet */
   const [quietShut, setQuietShut] = useState(false);
   const [jams, setJams] = useState(() => loadFlag(TRAFFIC_KEY));
-  const [layers, setLayers] = useState(false);
-  const [account, setAccount] = useState(false);
+  /** The one header menu open, as opening either closes the other */
+  const [menu, setMenu] = useState<"layers" | "account" | null>(null);
+  const toggle = (which: "layers" | "account") => (open: boolean) =>
+    setMenu(open ? which : null);
 
   const openTab = (next: UrlState["tab"]) => {
     setTab(next);
@@ -483,86 +486,51 @@ export function App() {
           {t.vehicles(count)}
         </span>
         <div className="pointer-events-auto relative">
-          <button
-            onClick={() => {
-              setAccount((v) => !v);
-              setLayers(false);
-            }}
-            title={t.account}
-            aria-label={t.account}
-            className={`fab ${account ? "text-accent" : "text-slate-300 hover:text-slate-100"}`}
+          <Menu
+            icon="account"
+            label={t.account}
+            open={menu === "account"}
+            onToggle={toggle("account")}
           >
-            <Icon name="account" />
-          </button>
-          {account && (
-            <>
-              <button
-                aria-hidden
-                tabIndex={-1}
-                onClick={() => setAccount(false)}
-                className="fixed inset-0 cursor-default"
-              />
-              <div className="panel absolute right-0 top-12 w-52 p-2">
-                <AccountMenu
-                  username={me.username}
-                  passwordChange={me.password_change ?? false}
-                  onOut={async () => {
-                    // Signed out whether or not the request landed
-                    await api.logout().catch(() => undefined);
-                    setMe(null);
-                  }}
-                />
-              </div>
-            </>
-          )}
+            <AccountMenu
+              username={me.username}
+              passwordChange={me.password_change ?? false}
+              onOut={async () => {
+                // Signed out whether or not the request landed
+                await api.logout().catch(() => undefined);
+                setMe(null);
+              }}
+            />
+          </Menu>
         </div>
       </header>
 
       <div className="absolute right-3 top-31 z-20">
-        <button
-          onClick={() => {
-            setLayers((v) => !v);
-            setAccount(false);
-          }}
-          title={t.layers}
-          aria-label={t.layers}
-          className={`fab ${
-            allLines || jams
-              ? "text-accent"
-              : "text-slate-300 hover:text-slate-100"
-          }`}
+        <Menu
+          icon="layers"
+          label={t.layers}
+          open={menu === "layers"}
+          lit={allLines || jams}
+          onToggle={toggle("layers")}
         >
-          <Icon name="layers" />
-        </button>
-        {layers && (
-          <>
-            <button
-              aria-hidden
-              tabIndex={-1}
-              onClick={() => setLayers(false)}
-              className="fixed inset-0 cursor-default"
-            />
-            <div className="panel absolute right-0 top-12 w-52 p-2">
-              <LayersPanel
-                lines={allLines}
-                onLines={(on) => {
-                  setAllLines(on);
-                  saveFlag(LINES_KEY, on);
-                }}
-                traffic={jams}
-                onTraffic={(on) => {
-                  setJams(on);
-                  saveFlag(TRAFFIC_KEY, on);
-                }}
-                theme={theme}
-                onTheme={(next) => {
-                  setTheme(next);
-                  saveTheme(next);
-                }}
-              />
-            </div>
-          </>
-        )}
+          <LayersPanel
+            lines={allLines}
+            onLines={(on) => {
+              setAllLines(on);
+              saveFlag(LINES_KEY, on);
+            }}
+            traffic={jams}
+            onTraffic={(on) => {
+              setJams(on);
+              saveFlag(TRAFFIC_KEY, on);
+            }}
+            theme={theme}
+            onTheme={(next) => {
+              setTheme(next);
+              saveTheme(next);
+            }}
+          />
+        </Menu>
       </div>
 
       {jams && (
@@ -756,8 +724,7 @@ export function App() {
             key={v}
             onClick={() => {
               openTab(v);
-              setLayers(false);
-              setAccount(false);
+              setMenu(null);
             }}
             className={`rounded-full px-2 py-1.5 font-medium transition-colors sm:px-4 ${
               tab === v
