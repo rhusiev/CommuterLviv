@@ -61,7 +61,8 @@ on the map, follows the journey and opens its list of steps. A link with `?stop=
 `COMMUTERLVIV_TEST_CHROMIUM`. Playwright's own browser download is not needed.
 Map tiles and fonts are blocked, so the map itself stays blank.
 
-`npm test` in `web/` runs the web app's unit tests (vitest). Those of
+`npm test` in `web/` runs the web app's unit tests (vitest), each file with an
+in-memory `localStorage` emptied before every test (`web/src/test/storage.ts`). Those of
 `mobile/test` that test logic both apps share are ported line for line, so
 the two implementations are checked against the same cases. The binary map frame is
 checked across all three languages from one file, `tests/wire_frame.json`: the
