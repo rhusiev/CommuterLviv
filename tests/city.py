@@ -189,14 +189,19 @@ class Feed:
     def __call__(self, endpoint, tries=3):
         assert endpoint == "vehicle_position"
         now = time.time()
-        fix = self.lap[int(now - self.start) % len(self.lap)]
+        # The lap's own clock: the bus steps once per second, so its timestamp
+        # must step with it. Polling at 0.5 s with a fresh `int(now)` would
+        # instead report the same place and odometer twice, 1 s apart, and the
+        # tracker reads that as a crawl - every ETA then much too long
+        step = int(now - self.start)
+        fix = self.lap[step % len(self.lap)]
         msg = rt.FeedMessage()
         msg.header.gtfs_realtime_version = "2.0"
         msg.header.timestamp = int(now)
         v = msg.entity.add(id="1").vehicle
         v.vehicle.id = "bus-1"
         v.trip.trip_id = fix.trip
-        v.timestamp = int(now)
+        v.timestamp = int(self.start) + step
         v.position.latitude, v.position.longitude = fix.lat, fix.lon
         v.position.speed, v.position.odometer = fix.speed, fix.odometer
         return msg
