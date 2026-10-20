@@ -78,6 +78,12 @@ class StopSearch extends SearchDelegate<Hit?> {
   /// Where the phone is, for the stops near it, when [idle] is not shown
   final Here? here;
 
+  /// The default paints the bar grey whatever the app's theme says
+  @override
+  ThemeData appBarTheme(BuildContext context) => super
+      .appBarTheme(context)
+      .copyWith(appBarTheme: Theme.of(context).appBarTheme);
+
   @override
   List<Widget> buildActions(BuildContext context) => [
     if (query.isNotEmpty)
