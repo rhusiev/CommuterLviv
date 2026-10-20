@@ -45,6 +45,8 @@ const FLY_SPEED = 1.6;
 
 const HIT = 14;
 const TAU = Math.PI * 2;
+/** Phone width: the `sm` breakpoint app.css hides the zoom buttons under */
+const NARROW = "(width < 40rem)";
 
 type Locating = "off" | "waiting" | "on" | "denied";
 type Fix = { lat: number; lon: number; accuracy: number };
@@ -81,6 +83,9 @@ type Props = {
   directed: number | null;
   traffic: Pace | null;
   theme: Theme;
+  /** A panel lies over the map's corner, which on a phone hides the locate
+   * button under it */
+  covered: boolean;
 };
 
 const viewOf = (m: MapLibre): View => {
@@ -99,6 +104,7 @@ export function MapCanvas(props: Props) {
     directed,
     traffic,
     theme,
+    covered,
   } = props;
   const box = useRef<HTMLDivElement>(null);
   const under = useRef<HTMLDivElement>(null);
@@ -433,6 +439,13 @@ export function MapCanvas(props: Props) {
       // No compass: the overlay projects from centre and zoom alone, so
       // rotation is disabled and the map is held at north
       map.addControl(new NavigationControl({ showCompass: false }), "bottom-right");
+      // A compact attribution opens on its own and stays open until the first
+      // drag; on a phone it then runs under the tab bar. The (i) still opens it
+      if (matchMedia(NARROW).matches) {
+        map.once("idle", () =>
+          map?.getContainer().querySelector(".maplibregl-compact-show")?.classList.remove("maplibregl-compact-show"),
+        );
+      }
 
       map.on("error", (e) => console.warn("basemap:", e.error?.message ?? e));
       map.on("moveend", () => saveView(viewOf(map!)));
@@ -596,7 +609,7 @@ export function MapCanvas(props: Props) {
           }
         }}
         title={locating === "denied" ? t.noFix.refused : t.whereAmI}
-        className={`fab absolute right-3 top-19 z-10 ${
+        className={`fab absolute right-3 top-19 z-10 ${covered ? "max-sm:hidden" : ""} ${
           locating === "denied"
             ? "text-slate-600"
             : locating === "on"

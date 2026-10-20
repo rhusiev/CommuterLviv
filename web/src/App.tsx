@@ -283,6 +283,12 @@ export function App() {
   // 12 px + the drawer's 320 + 12, so panels centre on the map left over. Only
   // from `md`, because below that the drawer covers the map anyway
   const clear = panel ? "left-3 md:left-86" : "left-3";
+  // Top 19 and bottom 20: a panel grows with what it holds down to the tab bar,
+  // rather than standing full height around one line
+  const tall = "max-h-[calc(100%-9.75rem)]";
+  // On a phone the other tabs' panels span the width, so the map's corner
+  // controls would only show blurred through them
+  const mapOnly = tab === "map" ? "" : "max-sm:hidden";
 
   return (
     // Everything floats over the map, so `pointer-events-none` on the strips
@@ -318,6 +324,7 @@ export function App() {
         directed={tab === "route" ? route : null}
         traffic={traffic}
         theme={theme}
+        covered={tab !== "map"}
       />
 
       <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start gap-2 p-3">
@@ -344,14 +351,16 @@ export function App() {
         </div>
         <span
           className="bar pointer-events-auto ml-auto flex h-10 items-center gap-2 px-3.5 text-xs text-slate-400"
-          title={connection}
+          title={`${t.connection[connection]} - ${t.vehicles(count)}`}
         >
           <span
             className={`size-2 rounded-full ${
               connection === "live" ? "bg-emerald-500" : "bg-amber-500"
             }`}
           />
-          {t.vehicles(count)}
+          {/* On a phone the search field needs the room more than the word does */}
+          <span className="sm:hidden">{count}</span>
+          <span className="max-sm:hidden">{t.vehicles(count)}</span>
         </span>
         <div className="pointer-events-auto relative">
           <Menu
@@ -369,7 +378,7 @@ export function App() {
         </div>
       </header>
 
-      <div className="absolute right-3 top-31 z-20">
+      <div className={`absolute right-3 top-31 z-20 ${mapOnly}`}>
         <Menu
           icon="layers"
           label={t.layers}
@@ -398,7 +407,7 @@ export function App() {
       </div>
 
       {jams && (
-        <div className="panel absolute right-3 top-43 z-10 w-44 p-2.5 text-xs text-slate-400">
+        <div className={`panel absolute right-3 top-43 z-10 w-44 p-2.5 text-xs text-slate-400 ${mapOnly}`}>
           <div className="flex h-1.5 overflow-hidden rounded-full">
             {RAMP.map(([, colour]) => (
               <span
@@ -465,7 +474,7 @@ export function App() {
 
       {tab === "times" && (
         <section
-          className={`panel absolute ${clear} right-3 top-19 bottom-20 z-20 mx-auto max-w-lg overflow-hidden`}
+          className={`panel absolute ${clear} right-3 top-19 z-20 mx-auto flex max-w-lg flex-col overflow-hidden ${tall}`}
         >
           <Timetable
             catalog={cat}
@@ -479,7 +488,7 @@ export function App() {
 
       {tab === "saved" && (
         <section
-          className={`panel absolute ${clear} right-3 top-19 bottom-20 z-20 mx-auto max-w-md p-3`}
+          className={`panel absolute ${clear} right-3 top-19 z-20 mx-auto flex max-w-md flex-col p-3 ${tall}`}
         >
           <SavedPanel
             catalog={cat}

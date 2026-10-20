@@ -1,6 +1,7 @@
 /** Ukrainian and English, chosen once per load. `t` is read at module level
  * rather than through a context, so changing the language reloads the page. */
 
+import type { Connection } from "./live";
 import type { NoFix } from "./position";
 
 export type Lang = "uk" | "en";
@@ -66,6 +67,11 @@ const en = {
   waiting: "…",
   tryAgain: "Try again",
   close: "Close",
+  connection: {
+    connecting: "Connecting",
+    live: "Live",
+    offline: "Offline - reconnecting",
+  } satisfies Record<Connection, string>,
   noService: "The service is not answering",
   renewed: "Routes and timetables were updated, so the page reloaded",
   quietTitle: "Possibly an air raid alert",
@@ -249,6 +255,11 @@ const uk: Strings = {
   waiting: "…",
   tryAgain: "Спробувати ще",
   close: "Закрити",
+  connection: {
+    connecting: "Підключення",
+    live: "Наживо",
+    offline: "Немає зв'язку - підключаємося знову",
+  } satisfies Record<Connection, string>,
   noService: "Сервіс не відповідає",
   renewed: "Маршрути й розклади оновилися, тож сторінку перезавантажено",
   quietTitle: "Можливо, повітряна тривога",

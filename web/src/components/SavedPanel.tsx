@@ -34,7 +34,7 @@ export function SavedPanel({
   const pinned = useReorder(pins, onPins);
   const empty = places.length === 0 && pins.length === 0;
   return (
-    <div className="flex h-full flex-col gap-3 overflow-y-auto">
+    <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
       {empty && <p className="text-sm text-slate-500">{t.nothingSaved}</p>}
 
       {places.length > 0 && (

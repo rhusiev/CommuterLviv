@@ -34,7 +34,7 @@ export function Timetable({
   }
 
   return (
-    <div className="h-full space-y-4 overflow-y-auto p-4">
+    <div className="min-h-0 space-y-4 overflow-y-auto p-4">
       {stops.map((i) => {
         const s = catalog.stops[i];
         if (!s) return null;
