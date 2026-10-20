@@ -36,6 +36,7 @@ class Strings {
     required this.server,
     required this.signOut,
     required this.routes,
+    required this.kinds,
     required this.routeLine,
     required this.showRoute,
     required this.everyRoute,
@@ -211,6 +212,9 @@ class Strings {
   final String server;
   final String signOut;
   final String routes;
+
+  /// Headings over the route chips, by `TransitRoute.type`
+  final Map<String, String> kinds;
 
   /// A second word for "route": Ukrainian already spends one on `plan`.
   final String routeLine;
@@ -407,6 +411,7 @@ const _en = Strings(
   server: 'Server',
   signOut: 'Sign out',
   routes: 'Routes',
+  kinds: {'bus': 'Buses', 'tram': 'Trams', 'trolleybus': 'Trolleybuses'},
   routeLine: 'Line',
   showRoute: 'Show this route on the map',
   everyRoute: 'Every route',
@@ -629,6 +634,7 @@ const _uk = Strings(
   server: 'Сервер',
   signOut: 'Вийти',
   routes: 'Маршрути',
+  kinds: {'bus': 'Автобуси', 'tram': 'Трамваї', 'trolleybus': 'Тролейбуси'},
   routeLine: 'Лінія',
   showRoute: 'Показати цей маршрут на мапі',
   everyRoute: 'Усі маршрути',

@@ -28,6 +28,8 @@ const en = {
   wantAccount: "Create an account",
   wrong: "Something went wrong",
   routes: "Routes",
+  /** Headings over the route chips, by `Route.type` */
+  kinds: { bus: "Buses", tram: "Trams", trolleybus: "Trolleybuses" } as Record<string, string>,
   map: "Map",
   times: "Times",
   sets: "Sets",
@@ -217,6 +219,7 @@ const uk: Strings = {
   wantAccount: "Створити акаунт",
   wrong: "Щось пішло не так",
   routes: "Маршрути",
+  kinds: { bus: "Автобуси", tram: "Трамваї", trolleybus: "Тролейбуси" },
   map: "Мапа",
   times: "Час",
   sets: "Набори",

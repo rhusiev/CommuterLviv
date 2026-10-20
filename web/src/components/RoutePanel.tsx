@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { Catalog, RouteSet } from "../lib/types";
+import type { Catalog, Route, RouteSet } from "../lib/types";
 import { t } from "../lib/i18n";
 import { RouteBadge } from "./RouteBadge";
 import { Icon } from "./Icon";
@@ -31,13 +31,17 @@ export function RoutePanel(p: Props) {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
 
-  const shown = useMemo(() => {
+  // Grouped by vehicle type, in catalog order: tram 1 and bus 1 are
+  // different lines that would otherwise sit in one undivided grid
+  const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const all = p.catalog.routes.map((r, i) => [r, i] as const);
-    if (!q) return all;
-    return all.filter(
-      ([r]) => r.short.toLowerCase().includes(q) || r.long.toLowerCase().includes(q),
-    );
+    const out = new Map<string, (readonly [Route, number])[]>();
+    p.catalog.routes.forEach((r, i) => {
+      if (q && !r.short.toLowerCase().includes(q) && !r.long.toLowerCase().includes(q))
+        return;
+      out.set(r.type, [...(out.get(r.type) ?? []), [r, i] as const]);
+    });
+    return [...out];
   }, [p.catalog, query]);
 
   const guard = (fn: () => Promise<void>) => async () => {
@@ -108,9 +112,11 @@ export function RoutePanel(p: Props) {
             {t.routes}
             <span className="ml-2 normal-case text-slate-600">{t.on(p.picked.size)}</span>
           </h2>
-          <button onClick={p.onClear} title={t.clear} className="text-slate-500 hover:text-slate-300">
-            <Icon name="clear" className="size-4" />
-          </button>
+          {p.picked.size > 0 && (
+            <button onClick={p.onClear} title={t.clear} className="text-slate-500 hover:text-slate-300">
+              <Icon name="clear" className="size-4" />
+            </button>
+          )}
         </div>
         <input
           value={query}
@@ -118,29 +124,36 @@ export function RoutePanel(p: Props) {
           placeholder={t.filter}
           className="field mt-2 py-1.5"
         />
-        <div data-chips className="mt-2 flex flex-wrap content-start gap-1 overflow-y-auto">
-          {shown.map(([r, i]) => {
-            const on = p.picked.has(r.id);
-            return (
-              <button
-                key={r.id}
-                onClick={() => p.onToggle(r.id)}
-                // `onContextMenu` covers both right-click and touch long-press
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  p.onRoute(i);
-                }}
-              >
-                <RouteBadge
-                  route={r}
-                  muted={!on}
-                  className={`px-2 py-1 text-sm ${
-                    on ? "" : "bg-raised/70 text-slate-400 hover:bg-raised"
-                  }`}
-                />
-              </button>
-            );
-          })}
+        <div data-chips className="mt-2 min-h-0 space-y-2 overflow-y-auto">
+          {groups.map(([type, routes]) => (
+            <div key={type}>
+              <h3 className="mb-1 text-xs text-slate-500">{t.kinds[type] ?? type}</h3>
+              <div className="flex flex-wrap gap-1">
+                {routes.map(([r, i]) => {
+                  const on = p.picked.has(r.id);
+                  return (
+                    <button
+                      key={r.id}
+                      onClick={() => p.onToggle(r.id)}
+                      // `onContextMenu` covers both right-click and touch long-press
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        p.onRoute(i);
+                      }}
+                    >
+                      <RouteBadge
+                        route={r}
+                        muted={!on}
+                        className={`px-2 py-1 text-sm ${
+                          on ? "" : "bg-raised/70 text-slate-400 hover:bg-raised"
+                        }`}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
         <p className="mt-1.5 text-xs text-slate-500">{t.holdForLine}</p>
       </section>

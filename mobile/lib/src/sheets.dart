@@ -492,17 +492,50 @@ class _RouteSheetState extends State<RouteSheet> {
     setState(() => _active = set.id);
   }
 
+  Widget _chip(int i, double width) => SizedBox(
+    width: width,
+    child: GestureDetector(
+      onLongPress: () {
+        Navigator.pop(context);
+        widget.onRoute(i);
+      },
+      child: FilterChip(
+        label: Center(
+          child: RouteBadge(
+            route: widget.catalog.routes[i],
+            muted: !widget.picked.contains(i),
+          ),
+        ),
+        // No tooltip: a chip's own tooltip fires on long press
+        // and wins the gesture arena, so the line would never
+        // open
+        showCheckmark: false,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        labelPadding: EdgeInsets.zero,
+        selected: widget.picked.contains(i),
+        onSelected: (_) {
+          widget.onToggle(i);
+          setState(() {});
+        },
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final catalog = widget.catalog;
     final needle = _filter.toLowerCase();
-    final shown = [
-      for (var i = 0; i < catalog.routes.length; i++)
-        if (needle.isEmpty ||
-            catalog.routes[i].short.toLowerCase().contains(needle) ||
-            catalog.routes[i].long.toLowerCase().contains(needle))
-          i,
-    ];
+    // Grouped by vehicle type, in catalog order: tram 1 and bus 1 are
+    // different lines that would otherwise sit in one undivided grid
+    final groups = <String, List<int>>{};
+    for (var i = 0; i < catalog.routes.length; i++) {
+      final r = catalog.routes[i];
+      if (needle.isEmpty ||
+          r.short.toLowerCase().contains(needle) ||
+          r.long.toLowerCase().contains(needle)) {
+        groups.putIfAbsent(r.type, () => []).add(i);
+      }
+    }
     final sets = _sets;
     final active = sets.where((s) => s.id == _active).firstOrNull;
     final changed =
@@ -557,37 +590,29 @@ class _RouteSheetState extends State<RouteSheet> {
                 ((box.maxWidth + _gap) / (_cell + _gap)).floor(),
               );
               final width = (box.maxWidth - _gap * (cols - 1)) / cols;
-              return Wrap(
-                spacing: _gap,
-                runSpacing: 4,
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final i in shown)
-                    SizedBox(
-                      width: width,
-                      child: GestureDetector(
-                        onLongPress: () {
-                          Navigator.pop(context);
-                          widget.onRoute(i);
-                        },
-                        child: FilterChip(
-                          label: Center(
-                            child: RouteBadge(
-                              route: catalog.routes[i],
-                              muted: !widget.picked.contains(i),
-                            ),
+                  for (final MapEntry(key: type, value: shown)
+                      in groups.entries)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            txt.kinds[type] ?? type,
+                            style: material.Theme.of(context)
+                                .textTheme
+                                .labelMedium,
                           ),
-                          // No tooltip: a chip's own tooltip fires on long press
-                          // and wins the gesture arena, so the line would never
-                          // open
-                          showCheckmark: false,
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          labelPadding: EdgeInsets.zero,
-                          selected: widget.picked.contains(i),
-                          onSelected: (_) {
-                            widget.onToggle(i);
-                            setState(() {});
-                          },
-                        ),
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: _gap,
+                            runSpacing: 4,
+                            children: [for (final i in shown) _chip(i, width)],
+                          ),
+                        ],
                       ),
                     ),
                 ],

@@ -22,9 +22,10 @@ const _catalog = Catalog(
   stopIndex: {},
 );
 
-/// The sheet over [_catalog] with [sets], opening a line with [onRoute].
+/// The sheet over [catalog] with [sets], opening a line with [onRoute].
 Future<void> _pump(
   WidgetTester tester, {
+  Catalog catalog = _catalog,
   Sets? sets,
   Set<int> picked = const {},
   String? server,
@@ -39,7 +40,7 @@ Future<void> _pump(
       home: Scaffold(
         body: RouteSheet(
           api: api,
-          catalog: _catalog,
+          catalog: catalog,
           sets: sets,
           picked: picked,
           onToggle: (_) {},
@@ -91,6 +92,30 @@ Future<HttpServer> _refusingActivation() async {
 }
 
 void main() {
+  testWidgets('routes are grouped under their vehicle type', (tester) async {
+    const mixed = Catalog(
+      routes: [
+        TransitRoute(id: 'b1', short: 'А01', long: 'A to B', type: 'bus'),
+        TransitRoute(id: 't1', short: 'Т01', long: 'C to D', type: 'tram'),
+      ],
+      stops: [],
+      index: {'b1': 0, 't1': 1},
+      stopIndex: {},
+    );
+    await _pump(tester, catalog: mixed);
+    expect(find.text(txt.kinds['bus']!), findsOneWidget);
+    expect(find.text(txt.kinds['tram']!), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text(txt.kinds['tram']!)).dy,
+      greaterThan(tester.getTopLeft(find.byType(FilterChip).first).dy),
+    );
+
+    await tester.enterText(find.byType(TextField), 'C to');
+    await tester.pump();
+    expect(find.text(txt.kinds['bus']!), findsNothing);
+    expect(find.byType(FilterChip), findsOneWidget);
+  });
+
   testWidgets('the route sheet opens a line on a long press', (tester) async {
     var opened = -1;
     await _pump(tester, onRoute: (i) => opened = i);

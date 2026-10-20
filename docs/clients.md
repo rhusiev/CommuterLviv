@@ -26,7 +26,8 @@ Vehicles are coloured circles carrying their route number, with a wedge on the
 rim pointing where they are going - solid while the vehicle is under way, an
 outline while it stands, so a marker always says which way it faces without
 claiming it is moving. Stops are small circles, drawn only for the routes you
-have picked. Clicking one lists every route through it with the next
+have picked. The routes to pick are grouped under buses, trams and trolleybuses,
+because tram 1 and bus 1 are different lines. Clicking one lists every route through it with the next
 arrival for each, and pinning it puts it in the Times tab. Clicking a vehicle
 asks the opposite question: `GET /api/vehicle?veh=<id>` answers with every stop
 that vehicle is predicted to reach and when, out to the model's 45-minute
