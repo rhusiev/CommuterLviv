@@ -604,11 +604,15 @@ class _RouteSheetState extends State<RouteSheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            txt.kinds[type] ?? type,
-                            style: material.Theme.of(context)
-                                .textTheme
-                                .labelMedium,
+                          Semantics(
+                            container: true,
+                            header: true,
+                            child: Text(
+                              txt.kinds[type] ?? type,
+                              style: material.Theme.of(context)
+                                  .textTheme
+                                  .labelMedium,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Wrap(

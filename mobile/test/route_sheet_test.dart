@@ -22,6 +22,17 @@ const _catalog = Catalog(
   stopIndex: {},
 );
 
+/// A bus and a tram, for the grouping under vehicle types
+const _mixed = Catalog(
+  routes: [
+    TransitRoute(id: 'b1', short: 'А01', long: 'A to B', type: 'bus'),
+    TransitRoute(id: 't1', short: 'Т01', long: 'C to D', type: 'tram'),
+  ],
+  stops: [],
+  index: {'b1': 0, 't1': 1},
+  stopIndex: {},
+);
+
 /// The sheet over [catalog] with [sets], opening a line with [onRoute].
 Future<void> _pump(
   WidgetTester tester, {
@@ -93,16 +104,7 @@ Future<HttpServer> _refusingActivation() async {
 
 void main() {
   testWidgets('routes are grouped under their vehicle type', (tester) async {
-    const mixed = Catalog(
-      routes: [
-        TransitRoute(id: 'b1', short: 'А01', long: 'A to B', type: 'bus'),
-        TransitRoute(id: 't1', short: 'Т01', long: 'C to D', type: 'tram'),
-      ],
-      stops: [],
-      index: {'b1': 0, 't1': 1},
-      stopIndex: {},
-    );
-    await _pump(tester, catalog: mixed);
+    await _pump(tester, catalog: _mixed);
     expect(find.text(txt.kinds['bus']!), findsOneWidget);
     expect(find.text(txt.kinds['tram']!), findsOneWidget);
     expect(
@@ -114,6 +116,20 @@ void main() {
     await tester.pump();
     expect(find.text(txt.kinds['bus']!), findsNothing);
     expect(find.byType(FilterChip), findsOneWidget);
+  });
+
+  testWidgets('a screen reader hears each vehicle type as its own heading', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester, catalog: _mixed);
+    for (final kind in ['bus', 'tram']) {
+      expect(
+        tester.getSemantics(find.text(txt.kinds[kind]!)),
+        isSemantics(label: txt.kinds[kind]!, isHeader: true),
+      );
+    }
+    semantics.dispose();
   });
 
   testWidgets('the route sheet opens a line on a long press', (tester) async {
