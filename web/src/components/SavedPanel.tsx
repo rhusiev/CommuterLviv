@@ -73,7 +73,7 @@ export function SavedPanel({
                 >
                   {stopName(catalog, i)}
                 </button>
-                <Remove onClick={() => onPins(pins.filter((p) => p !== i))} />
+                <Remove title={t.unpin} onClick={() => onPins(pins.filter((p) => p !== i))} />
               </li>
             ))}
           </ul>
@@ -150,7 +150,7 @@ function PlaceRow({
       >
         {t.rename}
       </button>
-      <Remove onClick={onForget} />
+      <Remove title={t.deletePlace} onClick={onForget} />
     </li>
   );
 }
