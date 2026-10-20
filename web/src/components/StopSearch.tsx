@@ -244,12 +244,14 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
                   <button
                     onClick={() => go(row)}
                     data-hit={it.name}
-                    className={`min-w-0 flex-1 px-2.5 py-1.5 text-left text-sm ${
+                    // Flex items: as inline text, name and address had no
+                    // break between them and ran out under the star
+                    className={`flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 px-2.5 py-1.5 text-left text-sm ${
                       n === cursor ? "text-accent" : "text-slate-300"
                     }`}
                   >
-                    <span className="truncate">{it.name}</span>
-                    <span className="ml-2 text-xs text-slate-500">{it.where}</span>
+                    <span className="max-w-full truncate">{it.name}</span>
+                    <span className="text-xs text-slate-500">{it.where}</span>
                   </button>
                   {"saved" in row ? (
                     <span className="shrink-0 px-2 py-1.5 text-sm text-accent">★</span>
