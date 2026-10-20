@@ -113,12 +113,16 @@ class _StopCardState extends State<StopCard> {
                 for (final r in s.routes)
                   GestureDetector(
                     onLongPress: () => widget.onLine(r),
-                    child: ActionChip(
-                      label: RouteBadge(route: catalog.routes[r], muted: true),
-                      avatar: widget.watching.contains(r)
-                          ? const Icon(Icons.check, size: 16)
-                          : null,
-                      onPressed: () => widget.onRoute(r),
+                    // As in the route sheet: a watched route is in colour. A
+                    // checkmark widened its chip and broke the rows apart
+                    child: FilterChip(
+                      label: RouteBadge(
+                        route: catalog.routes[r],
+                        muted: !widget.watching.contains(r),
+                      ),
+                      showCheckmark: false,
+                      selected: widget.watching.contains(r),
+                      onSelected: (_) => widget.onRoute(r),
                     ),
                   ),
               ],
