@@ -8,6 +8,7 @@ Widget _sheet({
   required double? hurry,
   VoidCallback? onSpeed,
   VoidCallback? onPassword,
+  VoidCallback? onOut,
   bool canChangePassword = true,
 }) => MaterialApp(
   home: Scaffold(
@@ -22,7 +23,7 @@ Widget _sheet({
       onSpeed: onSpeed ?? () {},
       onServer: () {},
       onPassword: canChangePassword ? onPassword ?? () {} : null,
-      onOut: () {},
+      onOut: onOut ?? () {},
     ),
   ),
 );
@@ -65,5 +66,18 @@ void main() {
     await tester.pumpWidget(_sheet(hurry: null, canChangePassword: false));
 
     expect(find.text(txt.changePassword), findsNothing);
+  });
+
+  testWidgets('sign out is reachable on a short screen', (tester) async {
+    tester.view.physicalSize = const Size(360, 480);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    var out = false;
+    await tester.pumpWidget(_sheet(hurry: null, onOut: () => out = true));
+
+    await tester.ensureVisible(find.text(txt.signOut));
+    await tester.tap(find.text(txt.signOut));
+
+    expect(out, isTrue);
   });
 }

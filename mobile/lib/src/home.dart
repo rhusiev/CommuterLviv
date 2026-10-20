@@ -733,6 +733,7 @@ class _HomeScreenState extends State<HomeScreen> {
         unawaited(_signOut());
       },
     ),
+    scrollControlled: true,
   );
 
   Future<void> _changePassword(BuildContext sheet) async {

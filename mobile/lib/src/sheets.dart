@@ -29,6 +29,8 @@ Future<T?> showFloatingSheet<T>(
 }) => showModalBottomSheet<T>(
   context: context,
   isScrollControlled: scrollControlled,
+  // A scroll-controlled sheet may grow to the full height, under the status bar
+  useSafeArea: true,
   backgroundColor: Colors.transparent,
   builder: (context) => Padding(
     padding: const EdgeInsets.all(floatingGap),
@@ -282,56 +284,58 @@ class _AccountSheetState extends State<AccountSheet> {
   Widget build(BuildContext context) {
     final colours = material.Theme.of(context).colorScheme;
     return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.bookmark_outline),
-            title: Text(txt.saved),
-            onTap: widget.onSaved,
-          ),
-          ListTile(
-            leading: const Icon(Icons.translate),
-            title: Text(txt.language),
-            trailing: Text(lang == Lang.uk ? 'Українська' : 'English'),
-            onTap: widget.onLanguage,
-          ),
-          ListTile(
-            leading: const Icon(Icons.directions_walk),
-            title: Text(txt.paces),
-            subtitle: Text(txt.pacesNow(widget.speed, widget.hurry)),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: widget.onSpeed,
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.notifications_outlined),
-            title: Text(txt.followAway),
-            subtitle: Text(txt.followAwayHint),
-            value: _followAway,
-            onChanged: (on) {
-              setState(() => _followAway = on);
-              widget.onFollowAway(on);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.dns_outlined),
-            title: Text(txt.server),
-            subtitle: Text(widget.server),
-            onTap: widget.onServer,
-          ),
-          if (widget.onPassword case final onPassword?)
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             ListTile(
-              leading: const Icon(Icons.password),
-              title: Text(txt.changePassword),
-              onTap: onPassword,
+              leading: const Icon(Icons.bookmark_outline),
+              title: Text(txt.saved),
+              onTap: widget.onSaved,
             ),
-          const Divider(height: 1),
-          ListTile(
-            leading: Icon(Icons.logout, color: colours.error),
-            title: Text(txt.signOut, style: TextStyle(color: colours.error)),
-            onTap: widget.onOut,
-          ),
-        ],
+            ListTile(
+              leading: const Icon(Icons.translate),
+              title: Text(txt.language),
+              trailing: Text(lang == Lang.uk ? 'Українська' : 'English'),
+              onTap: widget.onLanguage,
+            ),
+            ListTile(
+              leading: const Icon(Icons.directions_walk),
+              title: Text(txt.paces),
+              subtitle: Text(txt.pacesNow(widget.speed, widget.hurry)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: widget.onSpeed,
+            ),
+            SwitchListTile(
+              secondary: const Icon(Icons.notifications_outlined),
+              title: Text(txt.followAway),
+              subtitle: Text(txt.followAwayHint),
+              value: _followAway,
+              onChanged: (on) {
+                setState(() => _followAway = on);
+                widget.onFollowAway(on);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.dns_outlined),
+              title: Text(txt.server),
+              subtitle: Text(widget.server),
+              onTap: widget.onServer,
+            ),
+            if (widget.onPassword case final onPassword?)
+              ListTile(
+                leading: const Icon(Icons.password),
+                title: Text(txt.changePassword),
+                onTap: onPassword,
+              ),
+            const Divider(height: 1),
+            ListTile(
+              leading: Icon(Icons.logout, color: colours.error),
+              title: Text(txt.signOut, style: TextStyle(color: colours.error)),
+              onTap: widget.onOut,
+            ),
+          ],
+        ),
       ),
     );
   }
