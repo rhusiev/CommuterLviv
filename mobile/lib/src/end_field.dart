@@ -175,7 +175,7 @@ class EndField extends StatelessWidget {
         _saved?.name ??
         name ??
         (at == null
-            ? txt.findStop
+            ? endLabel(end)
             : '${at!.latitude.toStringAsFixed(4)}, '
                   '${at!.longitude.toStringAsFixed(4)}');
     return Row(

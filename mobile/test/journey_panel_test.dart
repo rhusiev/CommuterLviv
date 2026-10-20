@@ -258,7 +258,7 @@ void main() {
     End? picked;
     await pump(tester, onPick: (end) => picked = end);
 
-    await tester.tap(find.text(txt.findStop).last);
+    await tester.tap(find.text(txt.to));
     await tester.pumpAndSettle();
     expect(find.text(txt.useHere), findsOneWidget);
     expect(find.text(txt.noPlaces), findsOneWidget);
