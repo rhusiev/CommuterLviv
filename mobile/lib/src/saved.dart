@@ -75,14 +75,25 @@ class _SavedSheetState extends State<SavedSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = material.Theme.of(context);
+    // Empty, it says how to fill it in a sheet its own size, rather than in
+    // six tenths of the screen with hints about rows that are not there
+    if (_places.isEmpty && _pins.isEmpty) {
+      return SafeArea(
+        child: CustomScrollView(
+          shrinkWrap: true,
+          slivers: [
+            _Line(txt.nothingSaved, theme.textTheme.bodyMedium),
+            _Line(txt.saveHow, theme.textTheme.bodySmall, bottom: 24),
+          ],
+        ),
+      );
+    }
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: _sheetShare,
       builder: (context, controller) => CustomScrollView(
         controller: controller,
         slivers: [
-          if (_places.isEmpty && _pins.isEmpty)
-            _Line(txt.nothingSaved, theme.textTheme.bodyMedium),
           if (_places.isNotEmpty) ...[
             _Line(txt.places, theme.textTheme.labelLarge),
             SliverReorderableList(

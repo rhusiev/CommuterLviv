@@ -100,6 +100,8 @@ void main() {
 
     expect(written, isEmpty);
     expect(find.text(txt.nothingSaved), findsOneWidget);
+    expect(find.text(txt.saveHow), findsOneWidget);
+    expect(find.text(txt.holdToManage), findsNothing);
   });
 
   testWidgets('a tap shows the place on the map', (tester) async {

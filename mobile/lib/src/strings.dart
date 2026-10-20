@@ -59,6 +59,7 @@ class Strings {
     required this.saved,
     required this.pinnedStops,
     required this.nothingSaved,
+    required this.saveHow,
     required this.showOnMap,
     required this.holdToManage,
     required this.foundStops,
@@ -239,6 +240,10 @@ class Strings {
   final String saved;
   final String pinnedStops;
   final String nothingSaved;
+
+  /// Where things get saved from, for an empty saved sheet
+  final String saveHow;
+
   final String showOnMap;
   final String holdToManage;
   final String foundStops;
@@ -434,6 +439,9 @@ const _en = Strings(
   saved: 'Saved',
   pinnedStops: 'Pinned stops',
   nothingSaved: 'Nothing saved yet',
+  saveHow:
+      'Save a place with the star in the search or by holding the map, '
+      'and pin a stop from its card',
   showOnMap: 'Tap a row to show it on the map',
   holdToManage: 'Hold one to rename or remove it',
   foundStops: 'Stops',
@@ -657,6 +665,9 @@ const _uk = Strings(
   saved: 'Збережене',
   pinnedStops: 'Закріплені зупинки',
   nothingSaved: 'Поки нічого не збережено',
+  saveHow:
+      'Збережіть місце зірочкою в пошуку або утримавши мапу, '
+      'а зупинку закріпіть з її картки',
   showOnMap: 'Торкніться рядка, щоб показати на мапі',
   holdToManage: 'Утримуйте, щоб перейменувати або видалити',
   foundStops: 'Зупинки',
