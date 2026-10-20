@@ -160,8 +160,8 @@ const en = {
   hurrySpeed: "Hurrying speed",
   hurrySpeedHint:
     "How fast you would walk to catch a bus. Off, only a bus you would miss by seconds is offered as one to hurry for",
-  hurryOn: "Set",
-  hurryOff: "Off",
+  hurryOn: "Turn on",
+  hurryOff: "Turn off",
   hurry: "Hurry",
   hurryHint: "Only hurrying to the first stop catches this bus",
   hurryAt: (pace: string) => `Hurry: ${pace}`,
@@ -350,7 +350,7 @@ const uk: Strings = {
   hurrySpeed: "Швидкість, коли поспішаєте",
   hurrySpeedHint:
     "Як швидко ви йшли б, щоб встигнути на автобус. Вимкнено - пропонуємо поспішити лише на той, що ви пропустили б на секунди",
-  hurryOn: "Задати",
+  hurryOn: "Увімкнути",
   hurryOff: "Вимкнути",
   hurry: "Поспішіть",
   hurryHint: "На цей автобус встигнете, лише якщо поспішите до першої зупинки",
