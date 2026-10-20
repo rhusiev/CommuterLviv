@@ -190,9 +190,10 @@ the service is not answering, which is the truth: the times come from the socket
 
 When the service says the vehicles have gone quiet - too few reporting for the
 trips the timetable has under way, see
-[the service](service.md#when-the-vehicles-go-quiet) - an amber banner over the
-map says that few vehicles are reporting, possibly because of an air raid alert,
-and that positions and arrival times may be missing or off. It says "possibly":
+[the service](service.md#when-the-vehicles-go-quiet) - an amber banner with a
+siren over the map is titled "Possibly an air raid alert", and below the title
+says that few vehicles are reporting, so positions and arrival times may be
+missing or off. It says "possibly":
 a failing feed looks the same. Closing it hides it until the vehicles report
 again and go quiet anew, and it is never shown while the socket is down, when
 the service cannot say either way.

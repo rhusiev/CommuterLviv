@@ -89,7 +89,8 @@ class Strings {
     required this.whereAmI,
     required this.noLocation,
     required this.renewed,
-    required this.quiet,
+    required this.quietTitle,
+    required this.quietDetail,
     required this.plannerPreparing,
     required this.stopsAhead,
     required this.vehicleGone,
@@ -273,7 +274,8 @@ class Strings {
   final String renewed;
 
   /// Too few vehicles report for what the timetable has running.
-  final String quiet;
+  final String quietTitle;
+  final String quietDetail;
 
   final String plannerPreparing;
   final String stopsAhead;
@@ -458,9 +460,10 @@ const _en = Strings(
   whereAmI: 'Where I am',
   noLocation: "Location is off or not allowed for the app - turn it on in the phone's settings",
   renewed: "The city's routes and timetables were updated",
-  quiet:
-      'Few vehicles are reporting where they are - possibly an air raid alert. '
-      'Positions and arrival times may be missing or off',
+  quietTitle: 'Possibly an air raid alert',
+  quietDetail:
+      'Few vehicles are reporting where they are, so positions and arrival '
+      'times may be missing or off',
   plannerPreparing:
       'The journey planner is getting ready - try again in a few minutes',
   plan: 'Journey',
@@ -679,9 +682,10 @@ const _uk = Strings(
   whereAmI: 'Де я',
   noLocation: 'Геолокацію вимкнено або не дозволено застосунку - увімкніть її в налаштуваннях телефона',
   renewed: 'Маршрути й розклади міста оновилися',
-  quiet:
-      'Мало транспорту передає, де він є - можливо, через повітряну тривогу. '
-      'Розташування й час прибуття можуть бути неповні або неточні',
+  quietTitle: 'Можливо, повітряна тривога',
+  quietDetail:
+      'Мало транспорту передає, де він є, тож розташування й час прибуття '
+      'можуть бути неповні або неточні',
   plannerPreparing:
       'Планувальник поїздок готується - спробуйте за кілька хвилин',
   plan: 'Маршрут',

@@ -35,15 +35,16 @@ void main() {
     tester,
   ) async {
     final live = await _pump(tester);
-    expect(find.text(txt.quiet), findsNothing);
+    expect(find.text(txt.quietTitle), findsNothing);
 
     live.say(true);
     await tester.pump();
-    expect(find.text(txt.quiet), findsOneWidget);
+    expect(find.text(txt.quietTitle), findsOneWidget);
+    expect(find.text(txt.quietDetail), findsOneWidget);
 
     live.say(false);
     await tester.pump();
-    expect(find.text(txt.quiet), findsNothing);
+    expect(find.text(txt.quietTitle), findsNothing);
   });
 
   testWidgets(
@@ -55,16 +56,16 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.close));
       await tester.pump();
-      expect(find.text(txt.quiet), findsNothing);
+      expect(find.text(txt.quietTitle), findsNothing);
       live.say(true);
       await tester.pump();
-      expect(find.text(txt.quiet), findsNothing);
+      expect(find.text(txt.quietTitle), findsNothing);
 
       live.say(false);
       await tester.pump();
       live.say(true);
       await tester.pump();
-      expect(find.text(txt.quiet), findsOneWidget);
+      expect(find.text(txt.quietTitle), findsOneWidget);
     },
   );
 }

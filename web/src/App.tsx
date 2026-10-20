@@ -416,22 +416,26 @@ export function App() {
         </div>
       )}
 
-      <div className="absolute left-1/2 top-19 z-40 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-col items-center gap-2">
+      <div className="pointer-events-none absolute inset-x-3 top-19 z-40 flex flex-col items-center gap-2 max-sm:right-16">
         {notice !== null ? (
           <Banner tone="error" text={notice} onClose={() => setNotice(null)} />
         ) : (
           info !== null && <Banner tone="info" text={info} onClose={() => setInfo(null)} />
         )}
         {quiet && !quietShut && (
-          <Banner tone="warn" text={t.quiet} onClose={() => setQuietShut(true)} />
+          <Banner
+            tone="warn"
+            icon="siren"
+            text={t.quietTitle}
+            detail={t.quietDetail}
+            onClose={() => setQuietShut(true)}
+          />
         )}
       </div>
 
       {tab === "plan" && (
         <aside
-          className={`panel absolute right-3 top-19 z-20 w-96 max-w-[calc(100vw-1.5rem)] overflow-y-auto p-3 ${
-            folded || planner.picking ? "" : "bottom-20"
-          }`}
+          className={`panel absolute right-3 top-19 z-20 w-96 max-w-[calc(100vw-1.5rem)] overflow-y-auto p-3 ${tall}`}
         >
           <JourneyPanel
             catalog={cat}
