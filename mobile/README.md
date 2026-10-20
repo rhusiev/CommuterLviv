@@ -304,13 +304,14 @@ the panel folds to a strip saying so, and a tap is that point and not the
 nearest stop, because a door rarely is one. The arrow in the panel's corner
 folds it to a strip too, showing the picked option's length and routes, so the
 option can be read on the map; tapping the strip opens the panel again. The
-planner is left through the bottom tabs. Two chips beside the two fields say
-when to leave: the day, `Today` until another is picked in the next 30 days, and
-the time, `Now` until one is picked. They are passed as `at=<unix seconds>`. A
-time already past on today is meant for tomorrow. Below them a stepper sets
-how fast this search walks on the level, 0.5 to 8 km/h in halves, passed as
-`speed=`. It starts from the usual speed, kept on the device under
-`commuterlviv.walk` and set from `Walking and hurrying` in the account menu;
+planner is left through the bottom tabs or with back, which from any tab but the
+map returns to the map rather than leaving the app. Two chips beside the two
+fields say when to leave: the day, `Today` until another is picked in the next
+30 days, and the time, `Now` until one is picked. They are passed as
+`at=<unix seconds>`. A time already past on today is meant for tomorrow. Below
+them a stepper sets how fast this search walks on the level, 0.5 to 8 km/h in
+halves, passed as `speed=`. It starts from the usual speed, kept on the device
+under `commuterlviv.walk` and set from `Walking and hurrying` in the account menu;
 stepping it in the panel changes that search only. The server already slows
 walks uphill and speeds them down gentle slopes.
 

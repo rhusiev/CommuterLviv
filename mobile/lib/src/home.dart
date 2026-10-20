@@ -772,66 +772,75 @@ class _HomeScreenState extends State<HomeScreen> {
         body: Center(child: CircularProgressIndicator.adaptive()),
       );
     }
+    final selected = _onRoute ? 3 : (_planning ? 2 : _tab);
     // No app bar or navigation bar: the chrome floats over a full-screen map,
     // so each piece is stacked with its own inset
-    return Scaffold(
-      body: Stack(
-        children: [
-          IndexedStack(
-            index: _tab,
-            children: [
-              _mapTab(catalog, live),
-              TimesTab(
-                catalog: catalog,
-                live: live,
-                pins: _pins,
-                onUnpin: _pin,
-                onOpen: (stop) {
-                  setState(() => _tab = 0);
-                  _openStop(stop, fly: true);
-                },
-                onLine: _openRoute,
-              ),
-            ],
-          ),
-          if (_planning && _tab == 0) _planner(catalog),
-          Positioned(
-            left: floatingGap,
-            right: floatingGap,
-            top: MediaQuery.paddingOf(context).top + floatingGap,
-            child: _onRoute && _route != null
-                ? _RouteStrip(
-                    route: catalog.routes[_route!],
-                    onClose: _closeRoute,
-                  )
-                : _TopBar(
-                    onSearch: _search,
-                    onRoutes: () => _openRoutes(catalog),
-                    onLayers: _openLayers,
-                    onAccount: _openAccount,
-                    layered: _allLines || _traffic,
-                  ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: MediaQuery.paddingOf(context).bottom + floatingGap,
-            child: Center(
-              child: _Tabs(
-                selected: _onRoute ? 3 : (_planning ? 2 : _tab),
-                route: _route == null ? null : catalog.routes[_route!],
-                onPick: _pickTab,
+    return PopScope(
+      // Back from another tab returns to the map, as Android's tabs do, rather
+      // than leaving the app
+      canPop: selected == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _pickTab(0);
+      },
+      child: Scaffold(
+        body: Stack(
+          children: [
+            IndexedStack(
+              index: _tab,
+              children: [
+                _mapTab(catalog, live),
+                TimesTab(
+                  catalog: catalog,
+                  live: live,
+                  pins: _pins,
+                  onUnpin: _pin,
+                  onOpen: (stop) {
+                    setState(() => _tab = 0);
+                    _openStop(stop, fly: true);
+                  },
+                  onLine: _openRoute,
+                ),
+              ],
+            ),
+            if (_planning && _tab == 0) _planner(catalog),
+            Positioned(
+              left: floatingGap,
+              right: floatingGap,
+              top: MediaQuery.paddingOf(context).top + floatingGap,
+              child: _onRoute && _route != null
+                  ? _RouteStrip(
+                      route: catalog.routes[_route!],
+                      onClose: _closeRoute,
+                    )
+                  : _TopBar(
+                      onSearch: _search,
+                      onRoutes: () => _openRoutes(catalog),
+                      onLayers: _openLayers,
+                      onAccount: _openAccount,
+                      layered: _allLines || _traffic,
+                    ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: MediaQuery.paddingOf(context).bottom + floatingGap,
+              child: Center(
+                child: _Tabs(
+                  selected: selected,
+                  route: _route == null ? null : catalog.routes[_route!],
+                  onPick: _pickTab,
+                ),
               ),
             ),
-          ),
-          Positioned(
-            left: floatingGap,
-            right: floatingGap,
-            top: floatingTop(context),
-            child: QuietBanner(live: live),
-          ),
-          _Status(live: live),
-        ],
+            Positioned(
+              left: floatingGap,
+              right: floatingGap,
+              top: floatingTop(context),
+              child: QuietBanner(live: live),
+            ),
+            _Status(live: live),
+          ],
+        ),
       ),
     );
   }
