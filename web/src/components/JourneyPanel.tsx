@@ -437,7 +437,6 @@ function Order({
   );
 }
 
-/** An icon standing for a row's name, which it keeps as a tooltip */
 /** As far ahead as the server plans */
 const AHEAD_S = 30 * 86400;
 
@@ -453,30 +452,45 @@ const onClock = (at: number) => {
 function Departure({ at, onAt }: { at: number | null; onAt: (at: number | null) => void }) {
   /** Unix seconds the picker counts from, renewed as it is opened */
   const [now, setNow] = useState(() => Date.now() / 1000);
+  const [editing, setEditing] = useState(false);
+  // An empty picker shows the locale's blank pattern (`mm/dd/yyyy, --:--`),
+  // so until it is opened it reads "leaving now" instead
+  const blank = at === null && !editing;
   return (
     <div className="flex items-center gap-2">
       <Label text={t.leaveAt} icon="clock" />
-      <input
-        type="datetime-local"
-        value={at === null ? "" : onClock(at)}
-        min={onClock(now)}
-        max={onClock(now + AHEAD_S)}
-        onFocus={() => setNow(Date.now() / 1000)}
-        onChange={(e) =>
-          onAt(e.target.value === "" ? null : Math.round(new Date(e.target.value).getTime() / 1000))
-        }
-        className="field min-w-0 flex-1 py-1.5"
-      />
-      <button
-        onClick={() => onAt(null)}
-        className={`btn-quiet shrink-0 px-2 text-xs ${at === null ? "text-accent" : ""}`}
-      >
-        {t.leaveNow}
-      </button>
+      <div className="relative min-w-0 flex-1">
+        <input
+          type="datetime-local"
+          value={at === null ? "" : onClock(at)}
+          min={onClock(now)}
+          max={onClock(now + AHEAD_S)}
+          onFocus={() => {
+            setNow(Date.now() / 1000);
+            setEditing(true);
+          }}
+          onBlur={() => setEditing(false)}
+          onChange={(e) =>
+            onAt(e.target.value === "" ? null : Math.round(new Date(e.target.value).getTime() / 1000))
+          }
+          className={`field py-1.5 ${blank ? "text-transparent" : ""}`}
+        />
+        {blank && (
+          <span className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-sm text-slate-300">
+            {t.leavingNow}
+          </span>
+        )}
+      </div>
+      {at !== null && (
+        <button onClick={() => onAt(null)} className="btn-quiet shrink-0 px-2 text-xs">
+          {t.leaveNow}
+        </button>
+      )}
     </div>
   );
 }
 
+/** An icon standing for a row's name, which it keeps as a tooltip */
 function Label({ text, icon }: { text: string; icon: IconName }) {
   return (
     <span title={text} className="flex w-6 shrink-0 justify-center text-slate-500">
