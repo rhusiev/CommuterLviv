@@ -107,7 +107,7 @@ export function RoutePanel(p: Props) {
       </section>
 
       <section className="flex min-h-0 flex-1 flex-col">
-        <div className="flex items-baseline justify-between">
+        <div className="flex min-h-5 items-center justify-between">
           <h2 className="text-xs uppercase tracking-wide text-slate-500">
             {t.routes}
             <span className="ml-2 normal-case text-slate-600">{t.on(p.picked.size)}</span>
@@ -128,7 +128,8 @@ export function RoutePanel(p: Props) {
           {groups.map(([type, routes]) => (
             <div key={type}>
               <h3 className="mb-1 text-xs text-slate-500">{t.kinds[type] ?? type}</h3>
-              <div className="flex flex-wrap gap-1">
+              {/* Columns, so a chip wider than the rest does not shift the ones after it */}
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(4rem,1fr))] gap-1">
                 {routes.map(([r, i]) => {
                   const on = p.picked.has(r.id);
                   return (
@@ -144,7 +145,7 @@ export function RoutePanel(p: Props) {
                       <RouteBadge
                         route={r}
                         muted={!on}
-                        className={`px-2 py-1 text-sm ${
+                        className={`w-full px-2 py-1 text-sm ${
                           on ? "" : "bg-raised/70 text-slate-400 hover:bg-raised"
                         }`}
                       />
