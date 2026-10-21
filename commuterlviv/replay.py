@@ -282,9 +282,9 @@ def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True):
     # recording agree on event numbering
     idx = [(_idx(veh_idx, res.veh_ids, veh), _idx(trip_idx, res.trip_ids, tr.trip))
            for veh, tr in asked]
-    etas = all_etas(model, asked, now)
-    _stands(model, tracks, dict(zip((veh for veh, _ in asked), etas)), now)
-    for (veh, tr), (vi, ti), got in zip(asked, idx, etas):
+    found = all_etas(model, asked, now)
+    _stands(model, tracks, dict(zip((veh for veh, _ in asked), found)), now)
+    for (veh, tr), (vi, ti), got in zip(asked, idx, found):
         if got is None or not res.keep:
             continue
         i, s_now, dt, k = got
