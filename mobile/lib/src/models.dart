@@ -52,6 +52,20 @@ class Stop {
   final double lat;
   final double lon;
   final List<int> routes;
+
+  /// The city writes most stops' codes into their names too, "ТРЦ Кінг Кросс
+  /// (320)", and some stops' codes only there
+  static final _codeInName = RegExp(r'\s*\(([\d-]+)\)$');
+
+  /// The name and code for where both are shown, the code said once.
+  ({String name, String code}) get title {
+    final inName = _codeInName.firstMatch(name);
+    if (inName == null) return (name: name, code: code);
+    return (
+      name: name.substring(0, inName.start),
+      code: code.isNotEmpty ? code : inName.group(1)!,
+    );
+  }
 }
 
 class Catalog {

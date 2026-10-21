@@ -16,7 +16,7 @@ const _catalog = Catalog(
   stops: [
     Stop(
       id: 's1',
-      name: 'Square',
+      name: 'Square (482)',
       code: '',
       lat: 49.84,
       lon: 24.03,
@@ -34,7 +34,7 @@ bool _picked(WidgetTester tester, String short) =>
     tester.widget<FilterChip>(_chip(short)).selected;
 
 void main() {
-  testWidgets('a watched route that calls here is picked, the rest are not', (
+  testWidgets('the card names the stop once and picks the watched routes', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -58,6 +58,8 @@ void main() {
       ),
     );
 
+    expect(find.text('Square'), findsOneWidget);
+    expect(find.text('482'), findsOneWidget);
     expect(_picked(tester, '1'), isTrue);
     expect(_picked(tester, '9'), isFalse);
     expect(find.byIcon(Icons.check), findsNothing);

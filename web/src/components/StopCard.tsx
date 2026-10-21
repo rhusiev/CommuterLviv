@@ -1,3 +1,4 @@
+import { stopTitle } from "../lib/catalog";
 import { countdown, nextPerRoute } from "../lib/eta";
 import { RouteBadge } from "./RouteBadge";
 import type { Arrival, Catalog } from "../lib/types";
@@ -26,15 +27,16 @@ export function StopCard({
 }) {
   const s = catalog.stops[stop];
   if (!s) return null;
+  const { name, code } = stopTitle(s);
   const due = new Map(nextPerRoute(arrivals ?? []).map((a) => [a.route, a]));
 
   return (
     <div className="panel pointer-events-auto p-3">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-medium text-slate-100">{s.name}</h3>
+          <h3 className="truncate font-medium text-slate-100">{name}</h3>
           <p className="text-xs text-slate-500">
-            {s.code} · {t.routeCount(s.routes.length)}
+            {[code, t.routeCount(s.routes.length)].filter(Boolean).join(" · ")}
           </p>
         </div>
         {/* An icon rather than a word, whose length would change on tap and

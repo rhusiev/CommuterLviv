@@ -33,4 +33,41 @@ void main() {
     expect(me({'password_change': false}).passwordChange, isFalse);
     expect(me({}).passwordChange, isFalse);
   });
+
+  group('a stop title', () {
+    ({String name, String code}) titled(String name, String code) => Stop(
+      id: 's',
+      name: name,
+      code: code,
+      lat: 0,
+      lon: 0,
+      routes: const [],
+    ).title;
+
+    test('says a code the name repeats once, as the code', () {
+      expect(titled('ТРЦ Кінг Кросс (320)', '0320'), (
+        name: 'ТРЦ Кінг Кросс',
+        code: '0320',
+      ));
+    });
+
+    test('moves a code only in the name out of it', () {
+      expect(titled('Кордуби (265)', ''), (name: 'Кордуби', code: '265'));
+      expect(titled('ТРЦ Кінг Кросс (320-01)', ''), (
+        name: 'ТРЦ Кінг Кросс',
+        code: '320-01',
+      ));
+    });
+
+    test('leaves a name without a code, or with words in brackets', () {
+      expect(titled('ПЛ. СОБОРНА', '0074-01'), (
+        name: 'ПЛ. СОБОРНА',
+        code: '0074-01',
+      ));
+      expect(titled('Ринок (на вимогу)', ''), (
+        name: 'Ринок (на вимогу)',
+        code: '',
+      ));
+    });
+  });
 }

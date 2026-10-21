@@ -50,6 +50,7 @@ class _StopCardState extends State<StopCard> {
     final catalog = widget.catalog;
     final stop = widget.stop;
     final s = catalog.stops[stop];
+    final title = s.title;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -61,7 +62,7 @@ class _StopCardState extends State<StopCard> {
               children: [
                 Expanded(
                   child: Text(
-                    s.name,
+                    title.name,
                     style: material.Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
@@ -77,7 +78,7 @@ class _StopCardState extends State<StopCard> {
                 ),
               ],
             ),
-            if (s.code.isNotEmpty) Text(s.code),
+            if (title.code.isNotEmpty) Text(title.code),
             const SizedBox(height: 8),
             AnimatedBuilder(
               animation: widget.live,

@@ -228,6 +228,11 @@ bar, the app's search before anything is typed), traffic drawn over the streets
 the model can see, following a journey as you travel it, and the banner that
 warns when the vehicles go quiet.
 
+The city writes most stops' codes into their names as well, "ТРЦ Кінг Кросс
+(320)", and some stops' codes only there. Both stop cards take the code out of
+the title and show it once, under it. Everywhere else a name keeps its code, which
+is what tells two stops of one name apart.
+
 ```sh
 cd mobile && flutter pub get
 flutter test     # the wire decoder, against bytes commuterlviv/live/wire.py made
