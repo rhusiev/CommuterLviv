@@ -63,9 +63,29 @@ scheduled time interpolated between its neighbours for each trip separately,
 and listed in the catalogue because the catalogue is built from the stop lists.
 A rule only applies to patterns whose line passes within 50 m, `within` moves
 that, and `toward` - matched against the last stop's name - is what keeps a
-one-way platform off the pattern going the other way. Editing the file rebuilds
-`data/network.pkl` on the next start, because the cache is keyed by
-`network.source()`, a digest of the feed and this file both.
+one-way platform off the pattern going the other way.
+
+The feed also lists stops a route drives past, and it has no pickup or
+drop-off columns to say so. А16 and А53 northbound list Колодзінського (0800)
+and do not stop there. A `[[remove]]` rule takes such a stop off one route:
+
+```toml
+[[remove]]
+route = "А16"
+stop = "0800"
+toward = "Приміський вокзал"      # off the trips that way only
+```
+
+The stop and its scheduled time drop out of every matching pattern before the
+distances are solved, so the route neither times it nor lists it in the
+catalogue, and journeys are not planned to board or leave it there. The stop
+itself stays, with every other route through it. A stop a rule both adds and
+removes stays removed. `python -m commuterlviv skipped` searches the recording
+for the stops a remove rule might be wanted at
+([stops the vehicles drive past](service.md#stops-the-vehicles-drive-past)).
+
+Editing the file rebuilds `data/network.pkl` on the next start, because the
+cache is keyed by `network.source()`, a digest of the feed and this file both.
 `check_overrides.py` on the `development-archive` branch builds from scratch and
 asserts every rule still lands where it says.
 

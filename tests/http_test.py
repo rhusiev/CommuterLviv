@@ -10,7 +10,7 @@ from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from commuterlviv import network
-from commuterlviv.live import app, journeys, quiet, wire
+from commuterlviv.live import admin, app, journeys, quiet, wire
 
 from . import city, service
 
@@ -74,6 +74,20 @@ def test_health_is_public_and_says_how_to_register(client):
 
 def test_the_data_needs_a_session(client):
     assert client.get("/api/catalog").status_code == 401
+
+
+def test_an_operator_reads_the_nights_skipped_stops_in_the_status(client, database):
+    name = service.username("operator")
+    client.post("/api/register", headers={"Origin": ORIGIN},
+                json={"username": name, "password": service.PASSWORD})
+    assert admin.run(admin.operator(name, st=service.settings_for(database, ORIGIN)))
+    found = {"at": 1790000000, "stops": [{"route": "А1", "stop": "s2"}]}
+    client.app.state.skipped = found
+
+    r = client.get("/api/status")
+
+    assert r.status_code == 200, r.text
+    assert r.json()["skipped"] == found
 
 
 def test_registering_needs_the_apps_origin(client):

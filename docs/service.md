@@ -601,6 +601,50 @@ The planner is also missing while it is first built (see above). Then
 `/api/plan` answers 503 with `"preparing": true`, and both clients say the
 planner is getting ready, rather than that there is none.
 
+## Stops the vehicles drive past
+
+The feed lists every stop of a trip and has no pickup or drop-off columns, so a
+stop a route never calls at looks like any other. The recording shows it. A
+vehicle that calls at a stop stands near it on most trips, and one that drives
+past does not (`commuterlviv/skipped.py`):
+
+1. After each night's check (above), the last 7 days of the recording are read
+   in a worker thread - only the fixes slower than 0.5 m/s that name a trip,
+   through the `veh_ts` index. A week of them is about 4.8 million rows and,
+   on a spinning disk, takes about 2 minutes to read and judge.
+2. Each fix goes to its trip's pattern - one route and one stop list - and,
+   within 40 m, to the nearest stop of that pattern. A stop's count is the
+   number of trips that stood there at least once.
+3. A pattern's usual count is the median over its stops. The first and last
+   stops are left out: a vehicle takes its next trip's id only once it leaves
+   the first, and often stands away from the last one's pole. A pattern
+   under 30 trips at its usual stop is not judged.
+4. A stop under a tenth of the usual count is flagged, for that route and
+   direction alone. Another route through the same pole is judged on its own
+   pattern.
+5. The service logs the count and the first 20, and `/api/status` carries all
+   of them under `skipped`, with the time of the check (`null` until the first
+   night).
+
+It only reports. A flagged stop is not always one the route skips: a pole
+drawn away from where vehicles stand, or a stretch the route was diverted off
+that week, looks the same. A person looks, and takes a stop off a route with a
+`[[remove]]` rule in `overrides.toml` ([how it works](how-it-works.md)). The
+network is built with those rules, so a removed stop is no longer on that
+route's patterns to be flagged again. `python -m commuterlviv skipped` runs the
+same check from the command line, `--days` and `--until` choosing the window.
+
+On the week of 2026-09-16..23, with the rules in `overrides.toml` applied, 223
+stops of a pattern were flagged: 110 stops on 47 routes. Колодзінського (0800)
+northbound is the one a rider reported. Before its two rules, А16 stood there
+on 0 trips of 367 at its usual stop and А53 on 3 of 349. It is still flagged
+for А23, А32, А40 and А41, which have no rule. The opposite pole, 801, came out
+at 0.13-0.14 of the usual count and is not flagged: southbound buses partly
+stand 20-40 m short of it. Some flags gather on one stop across several
+routes. Ребілітаційний центр Незламні (632, 633) is flagged on seven, whose
+lines pass within 7 m of its poles while their slow fixes lie 200-550 m away.
+That reads as a diversion that week, and is not checked.
+
 ## The model across restarts
 
 What the model has learned is kept in `data/model.npz` (`commuterlviv/snapshot.py`).

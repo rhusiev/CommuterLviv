@@ -650,12 +650,13 @@ async def health(request):
 
 
 async def status(request, session):
-    """Engine health and socket counts; operators only
-    (`python -m commuterlviv admin operator <name>` grants it)."""
+    """Engine health, socket counts and the last night's skipped stops;
+    operators only (`python -m commuterlviv admin operator <name>` grants it)."""
     if not session["operator"]:
         return error("Not found", 404)
     app = request.app.state
-    return JSONResponse({**app.svc.health(), **app.hub.stats()})
+    return JSONResponse({**app.svc.health(), **app.hub.stats(),
+                         "skipped": app.skipped})
 
 
 async def socket(ws):
@@ -749,6 +750,7 @@ def build(st=None, net=None):
         refresh.install(s, refresh.served(loaded, s.svc.live))
         s.planner = journeys.Planner.maybe(loaded, cat, log)
         s.preparing = False
+        s.skipped = None        # until the first night's check
         # read each epoch, since a renew or `arrange` replaces the planner
         s.svc.timetable = lambda: s.planner and s.planner.tt
         s.geocoder = geocode.Geocoder(st.photon_url)

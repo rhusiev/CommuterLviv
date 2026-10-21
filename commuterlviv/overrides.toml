@@ -1,23 +1,34 @@
-# Stops the city's feed leaves off a route that serves them anyway.
+# Where the city's feed and its routes disagree: stops the feed leaves off a
+# route that serves them anyway (`[[add]]`), and stops it lists on a route
+# that drives past them (`[[remove]]`).
 #
 # Read at startup by `overrides.py` and folded into the network as the feed's
 # own `stop_times` rows are, so an added stop is an ordinary stop everywhere
 # after that: it gets a position on the shape, a scheduled time, a place in the
-# catalogue and arrival times of its own.
+# catalogue and arrival times of its own. A removed stop loses all of that on
+# that route alone; the other routes through it keep it.
 #
 # Each rule is checked against the feed on every build. One that no longer
-# applies - because the stop is listed now, or the route no longer passes it -
-# is skipped with a line on stderr rather than failing the build, so a fixed
-# feed never takes the service down. Delete the rule when that line appears.
+# applies - because the stop is listed now, or no longer listed, or the route
+# no longer passes it - is skipped with a line on stderr rather than failing
+# the build, so a fixed feed never takes the service down. Delete the rule when
+# that line appears.
 #
 #   route   the short name, as a rider reads it: "А16", "Т04"
 #   stop    the code on the sign, as `stops.txt` spells it: "0711"
 #   toward  optional, and needed whenever the route passes the stop in both
 #           directions: a substring of the last stop's name on the pattern to
-#           add it to. Without it the stop is added to every pattern that
-#           passes, which on a two-way street means the wrong platform too.
-#   within  optional, metres: how close the pattern's line must come to the
-#           stop for the rule to apply to it. 50 by default.
+#           add it to or remove it from. Without it the rule applies to every
+#           pattern of the route, which on a two-way street means the wrong
+#           platform too.
+#   within  add only, optional, metres: how close the pattern's line must come
+#           to the stop for the rule to apply to it. 50 by default.
+#   why     what was seen, and when, so the next reader can tell whether it
+#           still holds.
+#
+# `python -m commuterlviv skipped` lists the listed stops the recorded
+# vehicles seldom stood at, candidates for a `[[remove]]` rule; the service
+# logs the same every night. Neither removes anything itself.
 
 [[add]]
 route = "А16"
@@ -35,3 +46,20 @@ toward = "Кавалерідзе"
 why = """The other platform of the same stop, missing А16 for the same reason
 and confirmed by the same rider on 2026-09-08. Two patterns run this way,
 37997 and 38109, and both call here."""
+
+[[remove]]
+route = "А16"
+stop = "0800"
+toward = "Приміський вокзал"
+why = """Колодзінського northbound, reported by a rider in 2026-10: А16 does not
+stop there although every trip that way lists it. In the recording of
+2026-09-16..23, 498 of those trips passed it and none left a fix under 0.5 m/s
+within 20 m of the pole - 5 slow fixes in all within 250 m - while 358 of
+them stood at Шувар (450), the stop before."""
+
+[[remove]]
+route = "А53"
+stop = "0800"
+toward = "Галицьке перехрестя"
+why = """The same stop and report as А16's: in the same week 2 of the 627 А53
+trips that way stood within 20 m of the pole, 482 at Шувар (450)."""
