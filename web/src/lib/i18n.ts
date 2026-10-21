@@ -200,7 +200,8 @@ const en = {
   noPlaces: "Save a place and it is offered here",
   saved: "Saved",
   pinnedStops: "Pinned stops",
-  nothingSaved: "Nothing saved yet. Save a place from the search or the journey fields.",
+  nothingSaved:
+    "Nothing saved yet. Save a place from the search, the journey fields or by right-clicking or holding the map, and pin a stop from its card.",
   rename: "Rename",
   keepName: "Keep the new name",
   showOnMap: "Show on the map",
@@ -404,7 +405,8 @@ const uk: Strings = {
   noPlaces: "Збережене місце зʼявиться тут",
   saved: "Збережене",
   pinnedStops: "Закріплені зупинки",
-  nothingSaved: "Поки нічого немає. Збережіть місце з пошуку або з полів маршруту.",
+  nothingSaved:
+    "Поки нічого немає. Збережіть місце з пошуку, з полів маршруту або правим кліком чи утримавши мапу, а зупинку закріпіть з її картки.",
   rename: "Перейменувати",
   keepName: "Зберегти нову назву",
   showOnMap: "Показати на мапі",
