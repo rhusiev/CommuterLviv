@@ -60,6 +60,10 @@ ROUNDS = 3      # rides per journey; a fourth round costs as much as the first t
 WALK_CAPS = (600.0, 300.0)
 
 LONGEST_WALK = 4 * 3600.0   # s past which the ends count as not joined on foot
+# s: the first bound on walking the whole way is the straight line's time
+# times DETOUR, but never under FIRST_WALK
+DETOUR = 1.3
+FIRST_WALK = 300.0
 
 # s before the forecast horizon within which a vehicle's last prediction counts
 # as cut off by it rather than as the end of its line
@@ -605,7 +609,7 @@ def _walk_through(walk, origin, dest, ceiling=LONGEST_WALK):
     start, goal = walk.attach(*origin), walk.attach(*dest)
     ends = goal.ends() if goal else []
     direct = start.along(goal) if start and goal else math.inf
-    limit = max(walk.flat(footpaths.metres(*origin, *dest)) * 1.3, 300.0)
+    limit = max(walk.flat(footpaths.metres(*origin, *dest)) * DETOUR, FIRST_WALK)
     while True:
         seen = _reach(walk, start, limit)
         # a plain float: as an np.float64 this cap makes the profile scan
