@@ -189,14 +189,15 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
         }}
         placeholder={inline?.placeholder ?? t.findStop}
         autoFocus={inline !== undefined}
-        className={inline ? "field w-full py-1.5" : "field-bar py-2.5 pr-8"}
+        className={inline ? "field w-full py-1.5" : "field-bar py-2.5 pr-10"}
       />
       {!inline && (
         <button
           onClick={locate}
           disabled={locating}
           title={t.nearMe}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-1 text-sm text-slate-500 hover:text-accent disabled:text-slate-600"
+          aria-label={t.nearMe}
+          className="absolute right-1 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-full text-sm text-slate-500 hover:text-accent disabled:text-slate-600"
         >
           ◎
         </button>
@@ -210,7 +211,8 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
         </p>
       )}
       {rows.length > 0 && (
-        <ul className="panel absolute inset-x-0 top-full z-30 mt-2 overflow-hidden p-1">
+        // Down to the tab bar, as the panels are; past that the list scrolls
+        <ul className="panel absolute inset-x-0 top-full z-30 mt-2 max-h-[calc(100dvh-9rem)] overflow-y-auto p-1">
           {rows.map((row, n) => {
             const heading = headings.get(n);
             const it = "saved" in row
@@ -250,7 +252,7 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
                       n === cursor ? "text-accent" : "text-slate-300"
                     }`}
                   >
-                    <span className="max-w-full truncate">{it.name}</span>
+                    <span className="min-w-0 break-words">{it.name}</span>
                     <span className="text-xs text-slate-500">{it.where}</span>
                   </button>
                   {"saved" in row ? (
