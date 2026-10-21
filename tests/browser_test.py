@@ -1,7 +1,9 @@
 """The web app in a real browser against the real service: an account created
-through the sign-in screen, a stop found by name, the bus on its board, and a
-journey planned from on board it and followed, a place found by name planned
-to and a name that matches nothing, what opens on an option only once it is picked, one followed on foot that misses its bus searched again, a refused
+through the sign-in screen, a stop found by name, the bus on its board, a route
+watched from the stop's card, a journey planned from on board the bus and
+followed, a place found by name planned to and a name
+that matches nothing, what opens on an option only once
+it is picked, one followed on foot that misses its bus searched again, a refused
 location, a changed password and a cancelled one, one that cannot be cancelled
 while under way, none offered where the service turns it off, and a shared link
 that opens its stop or route.
@@ -183,6 +185,26 @@ def test_a_new_user_finds_a_stop_and_sees_the_bus_coming(page):
     # letter, and a countdown
     expect(page.get_by_role("button", name=re.compile(r"^1 \d+ min$"))).to_be_visible(
         timeout=SEE_MS)
+
+
+def test_a_route_that_calls_at_a_stop_is_watched_from_its_card(page):
+    _register(page, "caller")
+    expect = playwright.expect
+    expect(page.get_by_text("0 vehicles")).to_be_visible()
+    page.get_by_placeholder("Find a stop or a place").fill("Stop 4")
+    page.get_by_role("button", name="Stop 4").first.click()
+    expect(page.get_by_text("Calls here")).to_be_visible()
+    chip = page.get_by_role("button", name="1", exact=True)
+
+    chip.click()
+    expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
+    chip.click()
+    expect(page.get_by_text("0 vehicles")).to_be_visible()
+
+    chip.click(button="right")
+    expect(page.get_by_text("Stop 0 - Stop 4")).to_be_visible()
+    page.get_by_role("button", name="Routes").click()
+    expect(page.get_by_text("0 on")).to_be_visible()
 
 
 def test_a_saved_place_is_offered_above_the_stops_it_matches(page):

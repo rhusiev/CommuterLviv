@@ -6,14 +6,17 @@ import { t } from "../lib/i18n";
 import { Icon } from "./Icon";
 import { Close } from "./Cross";
 
-/** The route list is complete; the times only cover the routes on the map,
- * because only those are being predicted for. */
+/** What is due here, then every route that calls here, which a click watches
+ * or stops watching. The times only cover the routes on the map, because only
+ * those are being predicted for. */
 export function StopCard({
   catalog,
   stop,
   arrivals,
   pinned,
   onPin,
+  watching,
+  onToggle,
   onRoute,
   onClose,
 }: {
@@ -22,13 +25,18 @@ export function StopCard({
   arrivals: Arrival[] | undefined;
   pinned: boolean;
   onPin: () => void;
+  /** The routes picked, by id */
+  watching: Set<string>;
+  onToggle: (id: string) => void;
+  /** The line, from a click on what is due; a click on a route that calls
+   *  here already toggles it, so there this is on `onContextMenu` */
   onRoute: (i: number) => void;
   onClose: () => void;
 }) {
   const s = catalog.stops[stop];
   if (!s) return null;
   const { name, code } = stopTitle(s);
-  const due = new Map(nextPerRoute(arrivals ?? []).map((a) => [a.route, a]));
+  const due = nextPerRoute(arrivals ?? []).filter((a) => catalog.routes[a.route]);
 
   return (
     <div className="panel pointer-events-auto p-3">
@@ -55,27 +63,55 @@ export function StopCard({
         <Close onClick={onClose} />
       </div>
 
-      <ul className="mt-2 flex flex-wrap gap-1">
-        {s.routes.map((i) => {
-          const r = catalog.routes[i];
-          if (!r) return null;
-          const a = due.get(i);
-          return (
-            <li key={i}>
+      {due.length === 0 ? (
+        <p className="mt-2 text-xs text-slate-500">{t.nothingDue}</p>
+      ) : (
+        <ul className="mt-2 flex flex-wrap gap-1">
+          {due.map((a) => (
+            <li key={a.route}>
               <button
-                onClick={() => onRoute(i)}
+                onClick={() => onRoute(a.route)}
                 title={t.showLine}
                 className="flex items-center gap-1 rounded-control bg-raised/70 py-0.5 pl-0.5 pr-1.5 hover:bg-raised"
               >
-                <RouteBadge route={r} className="px-1.5 py-0.5 text-xs" />
-                <span className={`text-xs text-slate-400 ${a?.planned ? "italic" : ""}`}>
-                  {a ? countdown(a.t) : "-"}
+                <RouteBadge route={catalog.routes[a.route]!} className="px-1.5 py-0.5 text-xs" />
+                <span className={`text-xs text-slate-400 ${a.planned ? "italic" : ""}`}>
+                  {countdown(a.t)}
                 </span>
               </button>
             </li>
+          ))}
+        </ul>
+      )}
+
+      <h4 className="mt-3 text-xs uppercase tracking-wide text-slate-500">{t.callsHere}</h4>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {s.routes.map((i) => {
+          const r = catalog.routes[i];
+          if (!r) return null;
+          const on = watching.has(r.id);
+          return (
+            <button
+              key={r.id}
+              onClick={() => onToggle(r.id)}
+              // `onContextMenu` covers both right-click and touch long-press
+              onContextMenu={(e) => {
+                e.preventDefault();
+                onRoute(i);
+              }}
+            >
+              <RouteBadge
+                route={r}
+                muted={!on}
+                className={`px-2 py-1 text-sm ${
+                  on ? "" : "bg-raised/70 text-slate-400 hover:bg-raised"
+                }`}
+              />
+            </button>
           );
         })}
-      </ul>
+      </div>
+      <p className="mt-1.5 text-xs text-slate-500">{t.holdForLine}</p>
     </div>
   );
 }

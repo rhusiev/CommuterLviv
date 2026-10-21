@@ -28,8 +28,11 @@ rim pointing where they are going - solid while the vehicle is under way, an
 outline while it stands, so a marker always says which way it faces without
 claiming it is moving. Stops are small circles, drawn only for the routes you
 have picked. The routes to pick are grouped under buses, trams and trolleybuses,
-because tram 1 and bus 1 are different lines. Clicking one lists every route through it with the next
-arrival for each, and pinning it puts it in the Times tab. Clicking a vehicle
+because tram 1 and bus 1 are different lines. Clicking one opens its card: the
+next arrival of each route due there, each opening its line, and under "Calls
+here" every route through it, which a click watches or stops watching and a
+right click or a long press opens as a line, as in the routes panel. Pinning it
+puts it in the Times tab. Clicking a vehicle
 asks the opposite question: `GET /api/vehicle?veh=<id>` answers with every stop
 that vehicle is predicted to reach and when, out to the model's 45-minute
 horizon, read off the same predictions the stop card shows - so the two cannot

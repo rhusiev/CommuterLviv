@@ -565,6 +565,8 @@ export function App() {
                     : [...pins, stop],
                 )
               }
+              watching={picked}
+              onToggle={session.togglePicked}
               onRoute={openRoute}
               onClose={() => setStop(null)}
             />
