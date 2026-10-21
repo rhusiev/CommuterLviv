@@ -346,7 +346,7 @@ def test_a_refused_location_says_how_to_allow_it(page):
     _register(page, "hidden")
     page.context.clear_permissions()
 
-    page.get_by_title("Stops near me").click()
+    page.get_by_role("button", name="Stops near me").click()
 
     playwright.expect(page.get_by_text(
         "Location is blocked for this page")).to_be_visible(timeout=SEE_MS)
