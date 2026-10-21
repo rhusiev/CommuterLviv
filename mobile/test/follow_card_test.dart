@@ -255,6 +255,22 @@ void main() {
     expect(find.widgetWithText(HurryPill, txt.kmh(10)), findsOneWidget);
   });
 
+  testWidgets('the pace a ride needs says why when tapped', (tester) async {
+    final here = await pump(
+      tester,
+      away: false,
+      hurrySpeed: 2 * walkKmh.usual,
+      following: leaving(_hurryAheadS),
+    );
+    here.move(0, 0);
+    await tester.pump();
+
+    await tester.tap(find.byType(HurryPill));
+    await tester.pumpAndSettle();
+
+    expect(find.text(txt.paceHint), findsOneWidget);
+  });
+
   testWidgets('a word held back is said once its hold ends, with no fix to '
       'prompt it', (tester) async {
     final here = await pump(

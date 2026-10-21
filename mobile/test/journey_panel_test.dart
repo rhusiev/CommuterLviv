@@ -447,45 +447,83 @@ void main() {
     return shown;
   }
 
-  testWidgets("a ride's note explains itself before its option is picked", (
+  testWidgets("a ride's note explains itself once its option is picked", (
     tester,
   ) async {
     final shown = await searched(tester, confidence: 'terminus');
+    final info = find.byIcon(Icons.info_outline);
+    expect(info, findsNothing);
 
     await tester.tap(find.text(txt.terminusPart));
     await tester.pumpAndSettle();
-
-    expect(find.text(txt.terminusWhy), findsOneWidget);
+    expect(find.text(txt.terminusWhy), findsNothing);
     expect(shown.last, isNotNull);
+    expect(info, findsWidgets);
+
+    await tester.tap(find.text(txt.terminusPart));
+    await tester.pumpAndSettle();
+    expect(find.text(txt.terminusWhy), findsOneWidget);
   });
 
-  testWidgets("a ride's line opens before its option is picked", (
-    tester,
-  ) async {
+  testWidgets("a ride's line opens once its option is picked", (tester) async {
     final lines = <int>[];
     final shown = await searched(tester, onLine: lines.add);
 
     await tester.tap(find.byType(RouteBadge));
     await tester.pump();
-
-    expect(lines, [0]);
+    expect(lines, isEmpty);
     expect(shown.last, isNotNull);
+
+    await tester.tap(find.byType(RouteBadge));
+    await tester.pump();
+    expect(lines, [0]);
   });
 
-  testWidgets('a tap on a stop picks its option first, then opens the stop', (
+  testWidgets('a stop opens once its option is picked, as its chevron says', (
     tester,
   ) async {
     final stops = <int>[];
     final shown = await searched(tester, onStop: stops.add);
+    final chevron = find.byIcon(Icons.chevron_right);
+    expect(chevron, findsNothing);
 
     await tester.tap(find.text('Work stop'));
     await tester.pump();
     expect(stops, isEmpty);
     expect(shown.last, isNotNull);
+    expect(chevron, findsWidgets);
 
     await tester.tap(find.text('Work stop'));
     await tester.pump();
     expect(stops, [1]);
+  });
+
+  testWidgets('the hurry pill says why once its option is picked', (
+    tester,
+  ) async {
+    allowRealHttp();
+    final server = (await tester.runAsync(() => _serve([])))!;
+    addTearDown(() => server.close(force: true));
+    await pump(
+      tester,
+      prefs: {'commuterlviv.hurry': 9.0},
+      server: 'http://${server.address.host}:${server.port}',
+      catalog: _twoLines,
+      from: const LatLng(49.84, 24.03),
+      to: const LatLng(49.81, 24.05),
+    );
+    await tester.tap(find.text(txt.findRoute));
+    final pill = find.byType(HurryPill);
+    await pumpUntil(tester, () => tester.any(pill));
+    final why = find.text('${txt.hurryHint}. ${txt.paceHint}');
+
+    await tester.tap(pill);
+    await tester.pumpAndSettle();
+    expect(why, findsNothing);
+
+    await tester.tap(pill);
+    await tester.pumpAndSettle();
+    expect(why, findsOneWidget);
   });
 
   testWidgets('a backup that is no option is fetched and drawn as one', (
@@ -509,6 +547,10 @@ void main() {
     await tester.tap(find.text(txt.findRoute));
     final backups = find.text('· ${txt.backupCount(1)}');
     await pumpUntil(tester, () => backups.evaluate().isNotEmpty);
+    // The first tap picks the option, the second opens its backups
+    await tester.tap(backups);
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
     await tester.tap(backups);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip(txt.showWay).last);
@@ -543,6 +585,9 @@ void main() {
     await tester.tap(find.text(txt.findRoute));
     final backups = find.text('· ${txt.backupCount(1)}');
     await pumpUntil(tester, () => backups.evaluate().isNotEmpty);
+    // The first tap picks the option, the second opens its backups
+    await tester.tap(backups);
+    await tester.pump();
     await tester.tap(backups);
     await tester.pumpAndSettle();
 

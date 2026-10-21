@@ -318,11 +318,12 @@ walks uphill and speeds them down gentle slopes.
 
 `GET /api/plan` answers with options ranked by arrival. A ride on a tracked
 vehicle says nothing more; one resting on the timetable says so, and one on a
-line nothing has been seen running on says that in the error colour. Tapping
-either word explains what it means. That word and a ride's route open on any
-option and draw it as well; a ride's stop opens its card only on the option
-already drawn, and on any other a tap picks the option. The browser does the
-same. The option's backup count opens a dialog
+line nothing has been seen running on says that in the error colour. An option
+not yet drawn is one tap target: a tap anywhere on it draws it, and nothing on
+it opens anything else. Only the drawn option marks what opens: a stop's row
+has a chevron and opens its card, a note and the hurry pill have an ⓘ and
+explain themselves, the backup count is underlined, and a route's badge opens
+its line. The browser does the same. That backup count opens a dialog
 that, under each ride's stop, puts the planned way first and then the ride's
 backups - the other ways to the door from that stop, each with its routes,
 where it changes and when it gets there, at most half an hour after the option
