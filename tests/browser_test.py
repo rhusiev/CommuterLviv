@@ -1,9 +1,10 @@
 """The web app in a real browser against the real service: an account created
 through the sign-in screen, a stop found by name, the bus on its board, and a
-journey planned from on board it and followed, one followed on foot that
-misses its bus searched again, a refused location, a changed password and a
-cancelled one, one that cannot be cancelled while under way, none offered
-where the service turns it off, and a shared link that opens its stop or route.
+journey planned from on board it and followed, a place found by name planned
+to, one followed on foot that misses its bus searched again, a refused
+location, a changed password and a cancelled one, one that cannot be cancelled
+while under way, none offered where the service turns it off, and a shared link
+that opens its stop or route.
 
 Needs the built web app (`npm run build` in `web/`), Playwright for Python and a
 Chromium. Skipped when any of them is missing."""
@@ -196,6 +197,27 @@ def test_a_saved_place_is_offered_above_the_stops_it_matches(page):
     expect(rows.first).to_contain_text("Stop 4")
     expect(rows.first.get_by_title("Save this place")).to_have_count(0)
     expect(rows.nth(1)).to_contain_text("Stops")
+
+
+def test_a_place_found_by_name_is_shown_and_the_way_there_planned(page):
+    _register(page, "visitor")
+    found = {"name": "Town hall", "where": "Market square",
+             "lat": END[0], "lon": END[1], "kind": None}
+    # the geocoder is OpenStreetMap's, which the test does not reach
+    page.route("**/api/search?**", lambda route: route.fulfill(json={"places": [found]}))
+    page.get_by_placeholder("Find a stop or a place").fill("Town hall")
+    page.get_by_role("button", name=re.compile(r"^Town hall")).click()
+
+    expect = playwright.expect
+    expect(page.get_by_role("heading", name="Town hall")).to_be_visible()
+    expect(page.get_by_text("Market square")).to_be_visible()
+    with page.expect_request(lambda r: "/api/plan?from=" in r.url) as asked:
+        page.get_by_role("button", name="Get here").click()
+
+    ends = dict(part.split("=") for part in asked.value.url.split("?")[1].split("&"))
+    assert tuple(map(float, ends["from"].split(","))) == pytest.approx((city.LAT, city.LON))
+    assert tuple(map(float, ends["to"].split(","))) == pytest.approx(END)
+    expect(page.get_by_text("Town hall", exact=True)).to_be_visible()
 
 
 def _pick_route(page):
