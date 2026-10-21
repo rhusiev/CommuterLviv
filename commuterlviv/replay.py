@@ -144,6 +144,11 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
     return model, res
 
 
+def recording(db):
+    """The recording at `db`, opened read-only, to be closed by a `with`."""
+    return contextlib.closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True))
+
+
 def _fixes(db, t_from, t_to):
     """The recording's on-trip fixes between `t_from` and `t_to` (either may
     be None), in time order."""
@@ -156,7 +161,7 @@ def _fixes(db, t_from, t_to):
     if t_to:
         sql += " AND veh_ts <= ?"
         args.append(t_to)
-    with contextlib.closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True)) as con:
+    with recording(db) as con:
         yield from con.execute(sql + " ORDER BY veh_ts", args)
 
 

@@ -9,7 +9,6 @@ This does not write `feed.db` - the collector owns it - so the two poll the same
 endpoint independently.
 """
 import asyncio
-import contextlib
 import multiprocessing
 import os
 import sqlite3
@@ -71,7 +70,7 @@ class Service:
         timetable."""
         live, db = live or self.live, db or replay.DB
         try:
-            with contextlib.closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True)) as con:
+            with replay.recording(db) as con:
                 last = con.execute("SELECT max(veh_ts) FROM veh").fetchone()[0]
         except sqlite3.Error as exc:
             self.log("no recording to warm from:", brief(exc))
