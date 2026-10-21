@@ -592,17 +592,21 @@ async def places(request, session):
     return JSONResponse({"places": saved})
 
 
+def _set_fields(app, data):
+    """A set's name and routes from a request body, checked; or None and why not."""
+    return prefs.clean(data.get("name"), data.get("routes") or [],
+                       app.svc.live.cat.route_i)
+
+
 async def sets(request, session):
     app = request.app.state
     uid = session["user_id"]
     if request.method == "GET":
         return JSONResponse(await prefs.listing(app.pool, uid))
-    data = await body(request)
-    valid = app.svc.live.cat.route_i
-    ok, why = prefs.clean(data.get("name"), data.get("routes") or [], valid)
+    fields, why = _set_fields(app, await body(request))
     if why:
         return error(why)
-    row, why = await prefs.create(app.pool, uid, *ok)
+    row, why = await prefs.create(app.pool, uid, *fields)
     return error(why) if why else JSONResponse(row, status_code=201)
 
 
@@ -612,12 +616,10 @@ async def one_set(request, session):
     if request.method == "DELETE":
         return (JSONResponse({"ok": True}) if await prefs.delete(app.pool, sid, uid)
                 else error(NO_SUCH_SET, 404))
-    data = await body(request)
-    ok, why = prefs.clean(data.get("name"), data.get("routes") or [],
-                          app.svc.live.cat.route_i)
+    fields, why = _set_fields(app, await body(request))
     if why:
         return error(why)
-    row, why = await prefs.update(app.pool, sid, uid, *ok)
+    row, why = await prefs.update(app.pool, sid, uid, *fields)
     if why:
         return error(why)
     return JSONResponse(row) if row else error(NO_SUCH_SET, 404)
