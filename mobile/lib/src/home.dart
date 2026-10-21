@@ -24,6 +24,7 @@ import 'map_tab.dart';
 import 'map_theme.dart';
 import 'models.dart';
 import 'password_dialog.dart';
+import 'place_card.dart';
 import 'quiet_banner.dart';
 import 'route_badge.dart';
 import 'saved.dart';
@@ -44,6 +45,9 @@ const _hitRadius = 22.0;
 
 /// The share of the screen the planner may grow to, the map keeping the rest.
 const _plannerShare = 0.6;
+
+/// A dot in the planner's A/B ring: a place, but neither end of a journey
+const _placeMark = '•';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -106,6 +110,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// The planner is to search as soon as both ends are set
   bool _ask = false;
+
+  /// Picked by name, and marked on the map while its card is up
+  LatLng? _place;
+
+  /// What ends were called where they were chosen, for the planner to show
+  final _named = <LatLng, String>{};
 
   /// Which end is waiting on a fix that has been asked for but not arrived.
   End? _wantHere;
@@ -649,9 +659,44 @@ class _HomeScreenState extends State<HomeScreen> {
     switch (hit) {
       case StopHit(:final stop):
         _openStop(stop, fly: true);
-      case PlaceHit(:final at):
-        _fly(at);
+      case PlaceHit(:final at, :final name, :final where):
+        _openPlace(name, at, where: where);
     }
+  }
+
+  void _openPlace(String name, LatLng at, {String where = ''}) {
+    setState(() {
+      _tab = 0;
+      _place = at;
+    });
+    _fly(at);
+    showFloatingSheet<void>(
+      context,
+      (_) => PlaceCard(
+        name: name,
+        where: where,
+        saved: _sets?.places.any((p) => p.isAt(at)) ?? false,
+        onSave: () => unawaited(_savePlace(name, at)),
+        onGo: () {
+          Navigator.pop(context);
+          _planTo(name, at);
+        },
+      ),
+    ).whenComplete(() {
+      if (mounted) setState(() => _place = null);
+    });
+  }
+
+  /// The planner, to [at] and from wherever it already starts - or from where
+  /// you are, which is asked for only now.
+  void _planTo(String name, LatLng at) {
+    setState(() {
+      _to = at;
+      _named[at] = name;
+      _ask = true;
+    });
+    _pickTab(2);
+    if (_from == null && _aboard == null) unawaited(_hereFor(End.from));
   }
 
   /// Moves to [at], zooming in to [nearZoom] if further out, as the web does.
@@ -665,10 +710,7 @@ class _HomeScreenState extends State<HomeScreen> {
       pins: _pins,
       onPlaces: _places,
       onPins: _savePins,
-      onShowPlace: (at) {
-        setState(() => _tab = 0);
-        _fly(at);
-      },
+      onShowPlace: (place) => _openPlace(place.name, place.at),
       onShowStop: (stop) {
         setState(() => _tab = 0);
         _openStop(stop, fly: true);
@@ -859,10 +901,11 @@ class _HomeScreenState extends State<HomeScreen> {
       here: _here,
       onLocate: _following != null ? _tracking.start : null,
       card: _followCard(catalog, live),
-      empty: _shown.isEmpty,
+      empty: _shown.isEmpty && _place == null,
       marks: [
         if (_planning && _from != null) (at: _from!, label: 'A'),
         if (_planning && _to != null) (at: _to!, label: 'B'),
+        if (_place != null && !_planning) (at: _place!, label: _placeMark),
       ],
       journey: _onMap,
       pins: _pins,
@@ -932,6 +975,7 @@ class _HomeScreenState extends State<HomeScreen> {
           onStop: (stop) => _openStop(stop, fly: true),
           onLine: _openRoute,
           places: _sets?.places ?? const [],
+          named: _named,
           onPlace: (end, at) => setState(() => _at(end, at)),
           onSave: _savePlace,
           onShow: (journey) {

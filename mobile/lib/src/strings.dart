@@ -54,6 +54,7 @@ class Strings {
     required this.holdForLine,
     required this.places,
     required this.savePlace,
+    required this.getHere,
     required this.namePlace,
     required this.noPlaces,
     required this.saved,
@@ -235,6 +236,9 @@ class Strings {
   final String holdForLine;
   final String places;
   final String savePlace;
+
+  /// Plans the way to a place shown on the map
+  final String getHere;
   final String namePlace;
   final String noPlaces;
   final String saved;
@@ -434,6 +438,7 @@ const _en = Strings(
   holdForLine: 'Hold a route to see its line',
   places: 'Saved places',
   savePlace: 'Save this place',
+  getHere: 'Get here',
   namePlace: 'Name this place',
   noPlaces: 'Save a place and it is offered here',
   saved: 'Saved',
@@ -660,6 +665,7 @@ const _uk = Strings(
   holdForLine: 'Утримуйте маршрут, щоб побачити лінію',
   places: 'Збережені місця',
   savePlace: 'Зберегти це місце',
+  getHere: 'Маршрут сюди',
   namePlace: 'Назва місця',
   noPlaces: 'Збережене місце зʼявиться тут',
   saved: 'Збережене',

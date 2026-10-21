@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useEffectEvent, useMemo, useRef, useState } 
 import { api } from "../lib/api";
 import { metres } from "../lib/geo";
 import { MIN_TYPED, score, words } from "../lib/match";
-import { matching } from "../lib/places";
+import { matching, type Shown } from "../lib/places";
 import { hereOnce, ONE_FIX, type NoFix } from "../lib/position";
 import type { Catalog, Found, Place } from "../lib/types";
 import { t } from "../lib/i18n";
@@ -28,7 +28,7 @@ type Section = { title: string; rows: Row[] };
 type Props = {
   catalog: Catalog;
   onGo: (stop: number) => void;
-  onPlace: (place: Place) => void;
+  onPlace: (place: Shown) => void;
   places: Place[];
   onSave: (name: string, lat: number, lon: number) => void;
   /** Set when the search stands in for a field: it opens focused, offers

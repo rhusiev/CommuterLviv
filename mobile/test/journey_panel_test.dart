@@ -31,6 +31,7 @@ Future<void> pump(
   LatLng? from,
   Aboard? aboard,
   LatLng? to,
+  Map<LatLng, String> named = const {},
   void Function(Journey? journey)? onShow,
   bool ask = false,
   VoidCallback? onAsked,
@@ -60,6 +61,7 @@ Future<void> pump(
             onStop: (_) {},
             onLine: (_) {},
             places: const [],
+            named: named,
             onSave: (_, _) {},
             onPlace: (_, _) {},
             onShow: onShow ?? (_) {},
@@ -250,6 +252,16 @@ void main() {
 
     expect(asked.single.queryParameters['hurry'], '9.0');
     expect(pill, findsOneWidget);
+  });
+
+  testWidgets('an end chosen outside the panel reads by its name there', (
+    tester,
+  ) async {
+    const rynok = LatLng(49.8419, 24.0315);
+    await pump(tester, to: rynok, named: {rynok: 'Rynok'});
+
+    expect(find.text('Rynok'), findsOneWidget);
+    expect(find.textContaining('49.8419'), findsNothing);
   });
 
   testWidgets('an end offers where I am and the map before a search', (

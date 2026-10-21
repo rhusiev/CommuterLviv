@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 
 import 'package:commuterlviv/src/models.dart';
 
@@ -32,6 +33,13 @@ void main() {
     expect(me({'password_change': true}).passwordChange, isTrue);
     expect(me({'password_change': false}).passwordChange, isFalse);
     expect(me({}).passwordChange, isFalse);
+  });
+
+  test('a place is at a point a few metres off, not one a street away', () {
+    const home = Place(name: 'Home', at: LatLng(49.84, 24.03));
+
+    expect(home.isAt(const LatLng(49.84005, 24.02995)), isTrue);
+    expect(home.isAt(const LatLng(49.841, 24.03)), isFalse);
   });
 
   group('a stop title', () {

@@ -65,17 +65,8 @@ class EndField extends StatelessWidget {
   final void Function(LatLng at, String? name) onPlace;
   final void Function(String name, LatLng at) onSave;
 
-  /// Within about eleven metres.
-  static const _same = 1e-4;
-
-  Place? get _saved => places
-      .where(
-        (p) =>
-            at != null &&
-            (p.at.latitude - at!.latitude).abs() < _same &&
-            (p.at.longitude - at!.longitude).abs() < _same,
-      )
-      .firstOrNull;
+  Place? get _saved =>
+      places.where((p) => at != null && p.isAt(at!)).firstOrNull;
 
   /// A search whose empty query offers where I am, the map, and the saved
   /// places - the way to an end that is not typed.

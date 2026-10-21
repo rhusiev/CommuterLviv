@@ -51,10 +51,13 @@ class StopHit extends Hit {
 }
 
 class PlaceHit extends Hit {
-  const PlaceHit(this.at, this.name);
+  const PlaceHit(this.at, this.name, {this.where = ''});
 
   final LatLng at;
   final String name;
+
+  /// The line under a place found by name; none for a saved one
+  final String where;
 }
 
 class StopSearch extends SearchDelegate<Hit?> {
@@ -344,7 +347,8 @@ class _ResultsState extends State<_Results> {
                 icon: Icons.place_outlined,
                 title: p.name,
                 under: p.where,
-                onTap: () => widget.onPick(PlaceHit(p.at, p.name)),
+                onTap: () =>
+                    widget.onPick(PlaceHit(p.at, p.name, where: p.where)),
                 onSave: () => _save(p.name, p.at),
               );
             },

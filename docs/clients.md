@@ -233,6 +233,13 @@ The city writes most stops' codes into their names as well, "ТРЦ Кінг К�
 the title and show it once, under it. Everywhere else a name keeps its code, which
 is what tells two stops of one name apart.
 
+A place picked from the search or the saved list gets a card of its own and a
+dot on the map, both gone once the card is closed or a stop or vehicle is picked
+instead. The card names the place over its address, or says it is saved, keeps
+it by its star, and plans the way there: the place becomes the destination under
+its name, the start stays whatever it was or becomes where you are, and the
+search runs as soon as both ends are set.
+
 ```sh
 cd mobile && flutter pub get
 flutter test     # the wire decoder, against bytes commuterlviv/live/wire.py made

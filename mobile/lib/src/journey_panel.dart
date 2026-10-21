@@ -49,6 +49,7 @@ class JourneyPanel extends StatefulWidget {
     required this.onStop,
     required this.onLine,
     required this.places,
+    this.named = const {},
     required this.onSave,
     required this.onPlace,
     required this.onShow,
@@ -80,6 +81,9 @@ class JourneyPanel extends StatefulWidget {
   final void Function(int route) onLine;
 
   final List<Place> places;
+
+  /// What ends were called where they were chosen, outside the panel
+  final Map<LatLng, String> named;
   final void Function(String name, LatLng at) onSave;
   final void Function(End end, LatLng at) onPlace;
 
@@ -116,6 +120,8 @@ class _JourneyPanelState extends State<JourneyPanel> {
 
   /// What the points picked by name were called, so they keep reading so
   final _names = <LatLng, String>{};
+
+  String? _nameOf(LatLng? at) => _names[at] ?? widget.named[at];
 
   /// Unix seconds to leave at; null is now, which is what the server assumes.
   int? _at;
@@ -361,7 +367,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
               catalog: widget.catalog,
               onPick: () => widget.onPick(end),
               onHere: () => widget.onHere(end),
-              name: _names[end == End.from ? widget.from : widget.to],
+              name: _nameOf(end == End.from ? widget.from : widget.to),
               places: widget.places,
               onPlace: (at, name) {
                 if (name != null) _names[at] = name;

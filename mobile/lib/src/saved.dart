@@ -6,7 +6,6 @@ library;
 
 import 'package:flutter/material.dart' hide Theme;
 import 'package:flutter/material.dart' as material show Theme;
-import 'package:latlong2/latlong.dart';
 
 import 'models.dart';
 import 'sheets.dart' show askName, manage;
@@ -35,7 +34,7 @@ class SavedSheet extends StatefulWidget {
 
   final void Function(List<Place> places) onPlaces;
   final void Function(List<int> pins) onPins;
-  final void Function(LatLng at) onShowPlace;
+  final void Function(Place place) onShowPlace;
   final void Function(int stop) onShowStop;
 
   @override
@@ -110,7 +109,7 @@ class _SavedSheetState extends State<SavedSheet> {
                   under:
                       '${p.at.latitude.toStringAsFixed(4)}, '
                       '${p.at.longitude.toStringAsFixed(4)}',
-                  onTap: () => _show(() => widget.onShowPlace(p.at)),
+                  onTap: () => _show(() => widget.onShowPlace(p)),
                   onRename: () => _rename(p),
                   onDelete: () async => _putPlaces([
                     for (final q in _places)

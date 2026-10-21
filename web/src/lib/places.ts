@@ -1,6 +1,13 @@
 import { MIN_TYPED, score, words } from "./match";
 import type { Place } from "./types";
 
+/** A place shown on the map: one saved, or one found by name with the line under it */
+export type Shown = Place & { where?: string };
+
+/** The same place: 1e-4 degrees is about 11 m */
+export const samePlace = (a: { lat: number; lon: number }, b: Place) =>
+  Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lon - b.lon) < 1e-4;
+
 /** The name is the identity server-side and the list is written whole, so every
  * change here is the old list with one name taken out and at most one put back.
  * A rename is exactly that, which is why it lands as one atomic write. */

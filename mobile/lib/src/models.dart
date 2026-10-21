@@ -157,6 +157,14 @@ class Place {
     'lat': at.latitude,
     'lon': at.longitude,
   };
+
+  /// Within about eleven metres.
+  static const _same = 1e-4;
+
+  /// Whether [point] is this place.
+  bool isAt(LatLng point) =>
+      (at.latitude - point.latitude).abs() < _same &&
+      (at.longitude - point.longitude).abs() < _same;
 }
 
 class Sets {

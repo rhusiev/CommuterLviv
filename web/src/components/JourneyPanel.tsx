@@ -4,7 +4,7 @@ import { stopName } from "../lib/catalog";
 import { clock, mins } from "../lib/eta";
 import { followable, plannedKmh } from "../lib/follow";
 import { t } from "../lib/i18n";
-import { saved } from "../lib/places";
+import { samePlace, saved } from "../lib/places";
 import {
   heldPrefer,
   holdPrefer,
@@ -21,7 +21,8 @@ import { Speed } from "./Speed";
 import { StopSearch } from "./StopSearch";
 import type { Aboard, Catalog, Confidence, Journey, Leg, Place } from "../lib/types";
 
-export type Point = { lat: number; lon: number };
+/** `name` is what it was called where it was chosen, outside the planner */
+export type Point = { lat: number; lon: number; name?: string };
 /** Where a journey starts: a point, or on board a vehicle */
 export type Origin = Point | Aboard;
 
@@ -55,10 +56,6 @@ const RESTS: Record<
   },
   quiet: { word: t.quietPart, tone: "text-amber-400", why: t.quietWhy },
 };
-
-/** The same place: 1e-4 degrees is about 11 m */
-const same = (a: Point, b: Place) =>
-  Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lon - b.lon) < 1e-4;
 
 const key = (p: Point) => `${p.lat},${p.lon}`;
 
@@ -293,7 +290,7 @@ export function JourneyPanel({
       end={which}
       point={point}
       aboard={on}
-      name={point && names.get(key(point))}
+      name={point && (names.get(key(point)) ?? point.name)}
       catalog={catalog}
       onPick={() => onPick(which)}
       onHere={() => onHere(which)}
@@ -527,7 +524,7 @@ function Field({
   onSave: (name: string, at: Point) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const known = point && places.find((p) => same(point, p));
+  const known = point && places.find((p) => samePlace(point, p));
   const then = (act: () => void) => () => {
     setOpen(false);
     act();

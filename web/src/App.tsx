@@ -7,6 +7,7 @@ import { SignIn } from "./components/SignIn";
 import { FollowCard } from "./components/FollowCard";
 import { JourneyPanel } from "./components/JourneyPanel";
 import { StopCard } from "./components/StopCard";
+import { PlaceCard } from "./components/PlaceCard";
 import { AccountMenu } from "./components/AccountMenu";
 import { LayersPanel } from "./components/LayersPanel";
 import { Close } from "./components/Cross";
@@ -18,7 +19,7 @@ import { VehicleCard } from "./components/VehicleCard";
 import { Timetable } from "./components/Timetable";
 import { api, catalog as fetchCatalog, catalogTag } from "./lib/api";
 import { useIndex, usePositions } from "./lib/catalog";
-import { saved } from "./lib/places";
+import { samePlace, saved, type Shown } from "./lib/places";
 import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from "./lib/theme";
 import { RAMP, useTraffic } from "./lib/traffic";
 import { readUrl, writeUrl, type UrlState } from "./lib/url";
@@ -34,6 +35,8 @@ import { t } from "./lib/i18n";
 const LINES_KEY = "commuterlviv.lines";
 const TRAFFIC_KEY = "commuterlviv.traffic";
 const JOIN = /^\/join\/([\w-]+)\/?$/;
+/** A dot in the planner's A/B ring: a place, but neither end of a journey */
+const PLACE_MARK = "•";
 
 /** Pins from before the server kept them, as catalog positions. Read once per
  * account against whatever catalog is loaded now, then deleted. */
@@ -82,6 +85,8 @@ export function App() {
   const [cat, setCat] = useState<Catalog | null>(null);
   const [stop, setStop] = useState<number | null>(null);
   const [veh, setVeh] = useState<number | null>(null);
+  /** Picked by name, so it gets a card and a mark of its own */
+  const [place, setPlace] = useState<Shown | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lon: number } | null>(null);
   const [tab, setTab] = useState<UrlState["tab"]>(
     opened.route === null && opened.tab === "route" ? "map" : opened.tab,
@@ -174,6 +179,7 @@ export function App() {
     if (!s) return;
     openTab("map");
     setStop(i);
+    setPlace(null);
     setFocus({ lat: s.lat, lon: s.lon });
   };
 
@@ -245,10 +251,22 @@ export function App() {
     session.savePins(next.map((i) => cat.stops[i]!.id));
   };
 
-  const showPlace = (at: { lat: number; lon: number }) => {
+  const showPlace = (at: Shown) => {
     openTab("map");
     setStop(null);
+    setVeh(null);
+    setPlace(at);
     setFocus({ lat: at.lat, lon: at.lon });
+  };
+
+  /** The planner, to the place shown and from wherever it already starts - or
+   *  from where you are, which is asked for only now */
+  const planTo = (at: Shown) => {
+    planner.setTo({ lat: at.lat, lon: at.lon, name: at.name });
+    if (planner.from === null) planner.hereFor("from");
+    planner.setAsk(true);
+    setPlace(null);
+    openTab("plan");
   };
 
   const openRoute = (i: number) => {
@@ -302,10 +320,14 @@ export function App() {
         selected={stop}
         onPickStop={(i) => {
           setStop(i);
+          setPlace(null);
           if (i !== null) setVeh(null);
         }}
         vehicle={veh}
-        onPickVehicle={setVeh}
+        onPickVehicle={(i) => {
+          setVeh(i);
+          setPlace(null);
+        }}
         focus={focus}
         fit={fit}
         picking={planner.picking !== null}
@@ -314,7 +336,11 @@ export function App() {
           const name = prompt(t.namePlace)?.trim();
           if (name) keepPlaces(saved(places, name, lat, lon));
         }}
-        marks={planner.marks}
+        marks={
+          place && tab === "map"
+            ? [...planner.marks, { lat: place.lat, lon: place.lon, label: PLACE_MARK }]
+            : planner.marks
+        }
         journey={drawn}
         locate={following !== null}
         pinned={pins}
@@ -522,7 +548,7 @@ export function App() {
         </aside>
       )}
 
-      {tab === "map" && (stop !== null || veh !== null || following) && (
+      {tab === "map" && (stop !== null || veh !== null || place || following) && (
         <div
           className={`pointer-events-none absolute ${clear} bottom-20 right-3 z-10 mx-auto flex max-w-md flex-col gap-2`}
         >
@@ -542,7 +568,17 @@ export function App() {
               onRoute={openRoute}
               onClose={() => setStop(null)}
             />
-          ) : veh === null ? null : (
+          ) : veh === null ? (
+            place && (
+              <PlaceCard
+                place={place}
+                isSaved={places.some((p) => samePlace(place, p))}
+                onSave={() => keepPlaces(saved(places, place.name, place.lat, place.lon))}
+                onGo={() => planTo(place)}
+                onClose={() => setPlace(null)}
+              />
+            )
+          ) : (
             <VehicleCard
               // Another vehicle is another card, not this one's calls kept
               key={veh}

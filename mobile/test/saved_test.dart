@@ -105,7 +105,7 @@ void main() {
   });
 
   testWidgets('a tap shows the place on the map', (tester) async {
-    LatLng? shown;
+    Place? shown;
     await pump(
       tester,
       SavedSheet(
@@ -114,7 +114,7 @@ void main() {
         pins: const [],
         onPlaces: (_) {},
         onPins: (_) {},
-        onShowPlace: (at) => shown = at,
+        onShowPlace: (place) => shown = place,
         onShowStop: (_) {},
       ),
     );
@@ -122,6 +122,6 @@ void main() {
     await tester.tap(find.text('Home'));
     await tester.pumpAndSettle();
 
-    expect(shown, const LatLng(49.8, 24.0));
+    expect((shown?.name, shown?.at), ('Home', const LatLng(49.8, 24.0)));
   });
 }
