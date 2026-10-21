@@ -110,6 +110,7 @@ function CatchLine({
   caught: Exclude<Catch, { kind: "ok" }>;
   onSearch: () => void;
 }) {
+  const [why, setWhy] = useState(false);
   const leg = journey.legs[caught.leg]!;
   const route = leg.route === undefined ? "" : (catalog.routes[leg.route]?.short ?? "");
   const stop = stopName(catalog, leg.a);
@@ -120,18 +121,23 @@ function CatchLine({
       ? t.hurryAhead(route, stop)
       : t.hurryNow(route, countdown(caught.dep));
   return (
-    <div className="mt-2 flex items-center gap-2 border-t border-raised pt-2">
-      {caught.kmh !== null && (
-        <HurryPill hint={t.paceHint}>{t.kmh(caught.kmh)}</HurryPill>
-      )}
-      <p className={`min-w-0 flex-1 text-xs ${missed ? "text-rose-300" : "text-amber-300"}`}>
-        {said}
-      </p>
-      {(missed || caught.riding) && (
-        <button onClick={onSearch} className="btn shrink-0">
-          {missed ? t.planAgain : t.findAnother}
-        </button>
-      )}
+    <div className="mt-2 border-t border-raised pt-2">
+      <div className="flex items-center gap-2">
+        {caught.kmh !== null && (
+          <HurryPill hint={t.paceHint} onWhy={() => setWhy(!why)}>
+            {t.kmh(caught.kmh)}
+          </HurryPill>
+        )}
+        <p className={`min-w-0 flex-1 text-xs ${missed ? "text-rose-300" : "text-amber-300"}`}>
+          {said}
+        </p>
+        {(missed || caught.riding) && (
+          <button onClick={onSearch} className="btn shrink-0">
+            {missed ? t.planAgain : t.findAnother}
+          </button>
+        )}
+      </div>
+      {why && caught.kmh !== null && <p className="mt-1 text-xs text-slate-400">{t.paceHint}</p>}
     </div>
   );
 }

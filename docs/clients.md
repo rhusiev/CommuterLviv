@@ -44,6 +44,14 @@ one for work, one for home - live on the server, so they follow the account
 rather than the browser. Serve `dist/` with a history fallback: every path has to
 return `index.html`, or `/join/<code>` is a 404 and the invite link is dead.
 
+An option the planner lists is one click target until it is drawn on the map: a
+click anywhere on it draws it, and nothing on it opens anything else. Only the
+drawn option marks what opens. A stop's row has a chevron and opens the stop's
+card, a ride's note on how sure its time is and the hurry pill have an ⓘ and say
+why under them, the backup count is underlined and lists the backups, and a
+route's badge opens its line. A click anywhere else on it takes it off the map
+again. The app does the same (`mobile/README.md`).
+
 An option can be followed. Follow on it moves to the map, turns on the dot
 where you are and puts a card at the bottom that says what to do now: walk to
 the stop, wait there, with when the vehicle is due, get off at the next, or that
@@ -98,6 +106,7 @@ change that far ahead (`CHANGE_AHEAD`/`CHANGE_SLACK`, copied from
 pace is over 12 km/h (`HURRY_KMH`), the pill gives the one that gets there as
 the vehicle leaves; either is rounded up to 0.5 km/h. A hurry option in the
 planner carries the same pill for its walk to the first stop (`plannedKmh`).
+On the follow card, too, its ⓘ says why under it.
 The pace is only said: whether the ride is caught is judged at the hurrying
 speed set, as above. On a ride the card warns ahead that the change will need it, with
 "Find another way". A missed ride says the journey no longer works, with

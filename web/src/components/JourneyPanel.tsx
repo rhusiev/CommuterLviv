@@ -1,4 +1,11 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import { api, ApiError } from "../lib/api";
 import { stopName } from "../lib/catalog";
 import { clock, mins } from "../lib/eta";
@@ -56,6 +63,9 @@ const RESTS: Record<
   },
   quiet: { word: t.quietPart, tone: "text-amber-400", why: t.quietWhy },
 };
+
+/** A ride's note, beside its stop */
+const NOTE = "flex shrink-0 items-center gap-0.5 self-center text-xs";
 
 const key = (p: Point) => `${p.lat},${p.lon}`;
 
@@ -364,7 +374,7 @@ export function JourneyPanel({
             key={keyOf(j)}
             journey={j}
             shown={j === shown}
-            onShow={() => show(j)}
+            onShow={() => show(j === shown ? null : j)}
             onFollow={() => onFollow(j)}
             onWay={(pick) => takeWay(j, pick)}
             prefer={prefer}
@@ -637,9 +647,10 @@ function Option({
   onLine,
 }: {
   journey: Journey;
-  /** Drawn on the map. Until then a click anywhere on the card draws it, and
-   *  its stops are not yet links. Its lines and notes, which look like what
-   *  they are, open at any time and draw it as well */
+  /** Drawn on the map; a click on the card toggles it. Until it is, the card
+   *  is one click target and nothing on it opens anything else. Once it is,
+   *  what opens something says so: a stop's row by its chevron, a note and the
+   *  hurry pill by their ⓘ, the backups by their underline, a line by its badge */
   shown: boolean;
   onShow: () => void;
   onFollow: () => void;
@@ -652,6 +663,17 @@ function Option({
 }) {
   const changes = Math.max(0, journey.rides - 1);
   const [backups, setBackups] = useState(false);
+  const [hurryWhy, setHurryWhy] = useState(false);
+  const hurry = journey.hurry ? hurried(journey) : null;
+  /** What a click on something the picked card opens does, kept from also
+   *  toggling the card; nothing while it is not picked */
+  const opens = (then: () => void) =>
+    shown
+      ? (e: MouseEvent) => {
+          e.stopPropagation();
+          then();
+        }
+      : undefined;
   return (
     <div
       onClick={onShow}
@@ -670,29 +692,38 @@ function Option({
             : changes === 0
               ? t.noChange
               : t.changeCount(changes)}
-          {journey.hurry && (
+          {hurry && (
             <>
               {" · "}
-              <Hurried journey={journey} />
+              <HurryPill
+                hint={hurry.hint}
+                onWhy={shown ? () => setHurryWhy(!hurryWhy) : undefined}
+              >
+                {hurry.text}
+              </HurryPill>
             </>
           )}
           {journey.rides > 0 && journey.backup > 0 && (
             <>
               {" · "}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setBackups(true);
-                }}
-                title={t.backupHint}
-                className="text-emerald-400 underline decoration-dotted underline-offset-2"
-              >
-                {t.backupCount(journey.backup)}
-              </button>
+              {shown ? (
+                <button
+                  onClick={opens(() => setBackups(true))}
+                  title={t.backupHint}
+                  className="text-emerald-400 underline decoration-dotted underline-offset-2"
+                >
+                  {t.backupCount(journey.backup)}
+                </button>
+              ) : (
+                t.backupCount(journey.backup)
+              )}
             </>
           )}
         </span>
       </div>
+      {hurry && shown && hurryWhy && (
+        <p className="mt-1 text-xs text-slate-400">{hurry.hint}</p>
+      )}
       {backups && (
         <Backups
           journey={journey}
@@ -704,37 +735,42 @@ function Option({
         />
       )}
       <ol className="mt-1.5 space-y-1">
-        {journey.legs.map((leg, i) => (
-          <li key={i} className="flex items-baseline gap-2 text-sm">
-            {leg.kind === "walk" ? (
-              <>
-                <span title={t.walkLeg(mins(leg.arr - leg.dep))} className="flex w-14 shrink-0 items-center gap-0.5 text-xs text-slate-500">
-                  <Icon name="walk" className="size-3.5" />
-                  {t.minutes(mins(leg.arr - leg.dep))}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-slate-400">
-                  {leg.b < 0
-                    ? t.toDoor
-                    : // Consecutive walks are folded before they are sent, so a
-                      // walk with a ride either side is the change itself
-                      i > 0 && i < journey.legs.length - 1
-                      ? t.changeAt(stopName(catalog, leg.b))
-                      : stopName(catalog, leg.b)}
-                </span>
-              </>
-            ) : (
-              <Ride
-                leg={leg}
-                catalog={catalog}
-                onStop={shown ? onStop : undefined}
-                onLine={onLine}
-              />
-            )}
-          </li>
-        ))}
+        {journey.legs.map((leg, i) => {
+          const open = leg.b >= 0 ? opens(() => onStop(leg.b)) : undefined;
+          return (
+            <li key={i} onClick={open} className="flex items-baseline gap-2 text-sm">
+              {leg.kind === "walk" ? (
+                <>
+                  <span title={t.walkLeg(mins(leg.arr - leg.dep))} className="flex w-14 shrink-0 items-center gap-0.5 text-xs text-slate-500">
+                    <Icon name="walk" className="size-3.5" />
+                    {t.minutes(mins(leg.arr - leg.dep))}
+                  </span>
+                  <StopName opens={open !== undefined} className="text-slate-400">
+                    {leg.b < 0
+                      ? t.toDoor
+                      : // Consecutive walks are folded before they are sent, so a
+                        // walk with a ride either side is the change itself
+                        i > 0 && i < journey.legs.length - 1
+                        ? t.changeAt(stopName(catalog, leg.b))
+                        : stopName(catalog, leg.b)}
+                  </StopName>
+                </>
+              ) : (
+                <Ride
+                  leg={leg}
+                  catalog={catalog}
+                  opens={open !== undefined}
+                  onLine={shown ? onLine : undefined}
+                  explains={shown}
+                />
+              )}
+              {open && <Icon name="right" className="mt-0.5 size-4 shrink-0 self-start text-slate-500" />}
+            </li>
+          );
+        })}
       </ol>
       {shown && followable(journey) && (
-        <button onClick={onFollow} title={t.followHint} className="btn mt-2 w-full">
+        <button onClick={opens(onFollow)} title={t.followHint} className="btn mt-2 w-full">
           {t.follow}
         </button>
       )}
@@ -742,27 +778,48 @@ function Option({
   );
 }
 
-/** An option caught only by hurrying, with the pace that catches it */
-function Hurried({ journey }: { journey: Journey }) {
+/** An option caught only by hurrying: what its pill says, with the pace that
+ *  catches it, and why */
+function hurried(journey: Journey) {
   const kmh = plannedKmh(journey);
-  return kmh === null ? (
-    <HurryPill hint={t.hurryHint}>{t.hurry}</HurryPill>
+  return kmh === null
+    ? { text: t.hurry, hint: t.hurryHint }
+    : { text: t.hurryAt(t.kmh(kmh)), hint: `${t.hurryHint}. ${t.paceHint}` };
+}
+
+/** A leg's stop. On a picked card it is a button, so the keyboard reaches it;
+ *  the click that opens it is its row's */
+function StopName({
+  opens,
+  className,
+  children,
+}: {
+  opens: boolean;
+  className: string;
+  children: ReactNode;
+}) {
+  const shape = `min-w-0 flex-1 truncate text-left ${className}`;
+  return opens ? (
+    <button className={`${shape} hover:underline`}>{children}</button>
   ) : (
-    <HurryPill hint={`${t.hurryHint}. ${t.paceHint}`}>{t.hurryAt(t.kmh(kmh))}</HurryPill>
+    <span className={shape}>{children}</span>
   );
 }
 
 function Ride({
   leg,
   catalog,
-  onStop,
+  opens,
   onLine,
+  explains,
 }: {
   leg: Leg;
   catalog: Catalog;
-  /** None until the option is picked, so a click on the stop picks it */
-  onStop?: (i: number) => void;
-  onLine: (i: number) => void;
+  /** Whether its row opens its stop */
+  opens: boolean;
+  /** These are none while the option is not picked, so a click picks it */
+  onLine?: (i: number) => void;
+  explains: boolean;
 }) {
   const [why, setWhy] = useState(false);
   const route = leg.route === undefined ? undefined : catalog.routes[leg.route];
@@ -775,39 +832,42 @@ function Ride({
         <span className="w-14 shrink-0 text-xs tabular-nums text-slate-400">
           {clock(leg.dep)}
         </span>
-        {route && (
-          <button
-            onClick={() => onLine(leg.route!)}
-            title={t.showLine}
-            className="shrink-0"
-          >
-            <RouteBadge route={route} className="px-1.5 text-xs" />
-          </button>
-        )}
-        {onStop ? (
-          <button
-            onClick={() => leg.b >= 0 && onStop(leg.b)}
-            className="min-w-0 flex-1 truncate text-left text-slate-200 hover:underline"
-          >
-            {stopName(catalog, leg.b)}
-          </button>
-        ) : (
-          <span className="min-w-0 flex-1 truncate text-slate-200">
-            {stopName(catalog, leg.b)}
-          </span>
-        )}
-        {rests && (
-          <button
-            onClick={() => setWhy(!why)}
-            title={rests.why}
-            className={`flex shrink-0 items-center gap-0.5 self-center text-xs ${rests.tone}`}
-          >
-            {rests.word}
-            <Icon name="info" className="size-3.5" />
-          </button>
-        )}
+        {route &&
+          (onLine ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onLine(leg.route!);
+              }}
+              title={t.showLine}
+              className="shrink-0"
+            >
+              <RouteBadge route={route} className="px-1.5 text-xs" />
+            </button>
+          ) : (
+            <RouteBadge route={route} className="shrink-0 px-1.5 text-xs" />
+          ))}
+        <StopName opens={opens} className="text-slate-200">
+          {stopName(catalog, leg.b)}
+        </StopName>
+        {rests &&
+          (explains ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setWhy(!why);
+              }}
+              title={rests.why}
+              className={`${NOTE} ${rests.tone}`}
+            >
+              {rests.word}
+              <Icon name="info" className="size-3.5" />
+            </button>
+          ) : (
+            <span className={`${NOTE} ${rests.tone}`}>{rests.word}</span>
+          ))}
       </div>
-      {rests && why && (
+      {rests && explains && why && (
         <p className="ml-16 mt-1 text-xs text-slate-400">{rests.why}</p>
       )}
     </div>
