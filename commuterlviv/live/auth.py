@@ -17,6 +17,7 @@ from . import security
 
 GRACE = 30.0     # s an already-rotated remember-me token stays acceptable
 ARGON2_AT_ONCE = 2  # hashes in flight; each holds `argon2` memory_cost of RAM
+TOUCH_EVERY = 60.0  # s at least between writes of a session's idle expiry
 
 # threads start on first use; a pool, unlike a semaphore, is bound to no loop
 _argon2_pool = ThreadPoolExecutor(ARGON2_AT_ONCE, thread_name_prefix="argon2")
@@ -154,7 +155,7 @@ async def load_session(pool, raw, idle, max_life, touch=True):
     if now - row["created_at"] > _delta(max_life):
         await pool.execute("DELETE FROM sessions WHERE id = $1", row["id"])
         return None
-    if touch and now - row["last_seen"] > _delta(60):
+    if touch and now - row["last_seen"] > _delta(TOUCH_EVERY):
         await pool.execute(
             "UPDATE sessions SET last_seen = now(), expires_at = $2 WHERE id = $1",
             row["id"], min(now + _delta(idle), row["created_at"] + _delta(max_life)))

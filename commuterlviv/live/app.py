@@ -34,6 +34,7 @@ SESSION_RECHECK = 60.0          # s between asking whether an open socket still 
 PLAN_WORKERS = 4                # journey searches running at once, city-wide
 MAX_ID_DIGITS = 9               # `int` raises on a long enough digit string
 NO_SUCH_SET = "No such set"     # missing, or another user's
+PLACE_QUERY = (2, 120)          # characters a place search needs, and is cut to
 
 
 def _address(raw):
@@ -545,12 +546,13 @@ async def places_near(request, session):
     if not app.geocoder.ready():
         return error("This service has no place search", status=503)
     q = (request.query_params.get("q") or "").strip()
-    if len(q) < 2:
+    shortest, longest = PLACE_QUERY
+    if len(q) < shortest:
         return JSONResponse({"places": []})
     if not app.guard.search.take(session["user_id"]):
         return error("Slow down", 429)
     try:
-        found = await asyncio.to_thread(app.geocoder.find, q[:120])
+        found = await asyncio.to_thread(app.geocoder.find, q[:longest])
     except Exception as exc:
         log("geocode:", brief(exc))
         return error("Place search is unavailable", status=502)
