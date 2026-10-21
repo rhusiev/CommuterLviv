@@ -52,6 +52,7 @@ const en = {
   noPlaceSearch: "Place search is not answering",
   noGeolocation: "This browser will not say where it is",
   nothingNear: "No stop within 2 km of where you are",
+  nothingFound: "No stop or place by that name",
   away: (m: number) => `${m} m`,
   whereAmI: "Where I am",
   noFix: {
@@ -244,6 +245,7 @@ const uk: Strings = {
   noPlaceSearch: "Пошук місць не відповідає",
   noGeolocation: "Цей браузер не каже, де він",
   nothingNear: "Немає зупинки ближче ніж за 2 км",
+  nothingFound: "Немає зупинки чи місця з такою назвою",
   away: (m: number) => `${m} м`,
   whereAmI: "Де я",
   noFix: {

@@ -75,15 +75,25 @@ class _Here extends Here {
   }
 }
 
+/// A service whose place search finds nothing
+class _NoPlaces implements Api {
+  @override
+  Future<List<Found>> find(String q) async => const [];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 /// Opens the search over [places]; the hit it closes with lands in [picked]
 Future<void> open(
   WidgetTester tester,
   void Function(Hit?) picked, {
   Here? here,
+  Api? service,
 }) async {
   SharedPreferences.setMockInitialValues({});
   FlutterSecureStorage.setMockInitialValues({});
-  final api = await Api.open();
+  final api = service ?? await Api.open();
   await tester.pumpWidget(
     MaterialApp(
       home: Builder(
@@ -125,6 +135,18 @@ void main() {
     await tester.tap(find.text(_home.name));
     await tester.pumpAndSettle();
     expect(picked, isA<PlaceHit>().having((p) => p.at, 'at', _home.at));
+  });
+
+  testWidgets('a query nothing matches says so once places have been looked '
+      'for', (tester) async {
+    await open(tester, (_) {}, service: _NoPlaces());
+
+    await tester.enterText(find.byType(TextField), 'nowhere');
+    await tester.pump();
+    expect(find.text(txt.nothingFound), findsNothing);
+    await tester.pump(_settled);
+
+    expect(find.text(txt.nothingFound), findsOneWidget);
   });
 
   test('the stops near a point are those within reach, nearest first', () {

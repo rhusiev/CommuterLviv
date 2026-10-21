@@ -43,6 +43,8 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
   const [found, setFound] = useState<Found[]>([]);
   const [locating, setLocating] = useState(false);
   const [why, setWhy] = useState("");
+  // The query the place search last answered, so its silence means no match
+  const [answered, setAnswered] = useState("");
   const box = useRef<HTMLDivElement>(null);
 
   const names = useMemo(() => catalog.stops.map((s) => words(s.name)), [catalog]);
@@ -68,6 +70,7 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
       api.search(q, stop.signal).then(
         (got) => {
           setFound(got.places.slice(0, LIMIT));
+          setAnswered(q);
           setWhy("");
         },
         () => {
@@ -145,6 +148,8 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
       : [{ title: t.stopHits, rows: near.map((h) => ({ stop: h.stop, away: h.away })) }]
   ).filter((s) => s.rows.length > 0);
   const rows = sections.flatMap((s) => s.rows);
+  const unmatched = near === null && query.trim().length >= MIN_TYPED && answered === query.trim();
+  const said = why || (unmatched ? t.nothingFound : "");
   // Named only once the list holds more than one kind of thing
   const headings = new Map<number, string>();
   if (sections.length > 1) {
@@ -205,9 +210,9 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
       {inline && query.trim() === "" && (
         <div className="panel absolute inset-x-0 top-full z-30 mt-1 p-1 text-sm">{inline.idle}</div>
       )}
-      {why !== "" && rows.length === 0 && (
+      {said !== "" && rows.length === 0 && (
         <p className="panel absolute inset-x-0 top-full z-30 mt-2 px-3 py-2 text-xs text-slate-400">
-          {why}
+          {said}
         </p>
       )}
       {rows.length > 0 && (

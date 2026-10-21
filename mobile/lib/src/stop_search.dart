@@ -258,7 +258,7 @@ class _ResultsState extends State<_Results> {
     setState(() {
       _found = const [];
       _failed = false;
-      _busy = widget.query.length >= minTyped;
+      _busy = _asked;
     });
     if (_busy) _timer = Timer(searchDebounce, () => unawaited(_ask()));
   }
@@ -285,6 +285,8 @@ class _ResultsState extends State<_Results> {
 
   Future<void> _save(String was, LatLng at) =>
       _saveAs(context, widget.onSave, was, at);
+
+  bool get _asked => widget.query.length >= minTyped;
 
   @override
   Widget build(BuildContext context) {
@@ -315,6 +317,9 @@ class _ResultsState extends State<_Results> {
       children: [
         if (_busy) const LinearProgressIndicator(minHeight: 2),
         if (_failed) _Said(txt.noSearch),
+        // Only once the place search has answered, as places may yet come
+        if (_asked && !_busy && !_failed && rows.isEmpty)
+          _Said(txt.nothingFound),
         Expanded(
           child: ListView.builder(
             itemCount: rows.length,
