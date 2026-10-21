@@ -210,14 +210,19 @@ async def me(request, session):
                          "password_change": app.settings.password_change})
 
 
+def _too_many(guard, ip):
+    """The refusal of a sign-in or registration over its limit, saying when the
+    address may try again."""
+    return error("Too many attempts", 429, retry=round(guard.auth_ip.retry_after(ip)))
+
+
 async def register(request):
     app = request.app.state
     g, st = app.guard, app.settings
     if not g.origin_ok(request):
         return error("Bad origin", 403)
     if not g.auth_ip.take(g.ip(request)):
-        return error("Too many attempts", 429,
-                     retry=round(g.auth_ip.retry_after(g.ip(request))))
+        return _too_many(g, g.ip(request))
     data = await body(request)
     # the code may arrive in the path, since what an admin hands out is a link
     code = request.path_params.get("code") or data.get("code")
@@ -239,8 +244,7 @@ async def login(request):
     data = await body(request)
     name = security.clean_username(data.get("username")) or "?"
     if not g.auth_ip.take(ip) or not g.auth_user.take((ip, name)):
-        return error("Too many attempts", 429,
-                     retry=round(g.auth_ip.retry_after(ip)))
+        return _too_many(g, ip)
     uid = await auth.login(app.pool, app.hasher, data.get("username"),
                            data.get("password"))
     if uid is None:
