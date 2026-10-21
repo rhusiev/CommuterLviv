@@ -10,6 +10,7 @@ is still disk left. A heartbeat line says which of those is happening.
 """
 import argparse
 import collections
+import contextlib
 import datetime
 import os
 import queue
@@ -117,11 +118,10 @@ def writer():
             except sqlite3.Error as exc:
                 log("write failed", brief(exc))
                 count(write_errors=1)
-                try:
-                    if db is not None:
+                # the failure is logged already; closing what failed may fail too
+                if db is not None:
+                    with contextlib.suppress(sqlite3.Error):
                         db.close()
-                except sqlite3.Error:
-                    pass
                 db = None
                 if attempt:
                     count(dropped=sum(len(r) for r in pending.values()))
