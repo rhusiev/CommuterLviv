@@ -184,6 +184,17 @@ side of the street: without it, a point on the platform steps onto whatever is
 nearest instead - in one reported search a car park's aisle, which joined the
 streets 200 m away and made a stop 13 m off a 5-minute walk.
 
+A road whose pavement is drawn as a way of its own - `sidewalk`, `sidewalk:both`,
+`sidewalk:left` or `sidewalk:right` set to `separate` (`SIDEWALKS`) - is left out,
+unless it says `foot=yes`, `permissive` or `designated`, as OSRM's foot profile
+does. Otherwise the road is a footpath of the same length as the pavement beside
+it, and a walk can cross the street anywhere along it: in one reported search it
+walked 200 m down a three-lane carriageway and turned through the median. Tags
+are fetched only for those roads (141 in Lviv on 2026-10-21, 234 of 241111
+nodes); the rest of the city comes without tags, which would time Overpass out.
+Most of Lviv's pavements are drawn without that tag on the road beside them, so
+the rule fixes a street only once it is tagged in OpenStreetMap.
+
 Walks are Dijkstra on that graph, scipy's (`scipy.sparse.csgraph.dijkstra`),
 about ten times faster than one in Python. A point steps onto the graph
 at the nearest point of the nearest footpath edge with a node within 150 m
