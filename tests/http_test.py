@@ -111,6 +111,51 @@ def test_a_body_that_is_not_a_small_json_object_is_refused(client, sent, status,
 
     assert (r.status_code, r.json()) == (status, {"error": said})
 
+
+@pytest.mark.parametrize(("path", "sent", "said"), [
+    ("/api/password", {"old": "not it", "new": service.PASSWORD + "-new"},
+     "The current password is wrong"),
+    ("/api/password", {"old": service.PASSWORD, "new": "short"},
+     "The password must be between"),
+    ("/api/pins", {"pins": 5}, "Pins must be a list"),
+    ("/api/places", {"places": [{"name": "home"}]}, "A place needs a lat and a lon"),
+    ("/api/sets", {"name": "", "routes": []}, "A name must be 1 to"),
+    ("/api/sets", {"name": "home", "routes": ["nope"]}, "No such route: 'nope'"),
+], ids=["wrong password", "short password", "pins", "place", "set name", "set route"])
+def test_a_refusal_is_said_as_a_sentence(client, path, sent, said):
+    headers = _signed_in(client, "refused")
+
+    r = client.post(path, headers=headers, json=sent)
+
+    assert r.status_code == 400 and r.json()["error"].startswith(said), r.text
+
+
+def test_a_refused_registration_is_said_as_a_sentence(client):
+    def register(username):
+        return client.post("/api/register", headers={"Origin": ORIGIN},
+                           json={"username": username, "password": service.PASSWORD})
+
+    name = service.username("twice")
+
+    bad = register("no spaces allowed")
+    first, again = register(name), register(name)
+
+    assert bad.json()["error"].startswith("A username must be 3-32 characters")
+    assert first.status_code == 200, first.text
+    assert again.json() == {"error": "That username is taken"}
+
+
+@pytest.mark.parametrize(("refused", "said"), [
+    (lambda: app._departure("soon"), "At must be a unix time in seconds"),
+    (lambda: app._departure(str(time.time() + 10 ** 9)), "At must be within the next"),
+    (lambda: app._kmh("99", "speed", app.WALK_KMH), "Speed must be between"),
+], ids=["at not a time", "at too far", "speed"])
+def test_a_refused_plan_is_said_as_a_sentence(refused, said):
+    value, why = refused()
+
+    assert value is None and why.startswith(said)
+
+
 def test_the_catalog_lists_the_citys_routes_and_stops(client):
     _signed_in(client, "catalog")
 

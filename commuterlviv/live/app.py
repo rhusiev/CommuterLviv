@@ -401,10 +401,10 @@ def _departure(raw):
     try:
         at = float(raw)
     except ValueError:
-        return None, "at must be a unix time in seconds"
+        return None, "At must be a unix time in seconds"
     now = time.time()
     if at < now - PLAN_PAST_S or at > now + PLAN_AHEAD_DAYS * localtime.DAY_S:
-        return None, f"at must be within the next {PLAN_AHEAD_DAYS} days"
+        return None, f"At must be within the next {PLAN_AHEAD_DAYS} days"
     return at, None
 
 
@@ -423,7 +423,7 @@ def _kmh(raw, name, bounds):
         kmh = math.nan
     lo, hi = bounds
     if not lo <= kmh <= hi:
-        return None, f"{name} must be between {lo:g} and {hi:g} km/h"
+        return None, f"{name.capitalize()} must be between {lo:g} and {hi:g} km/h"
     return kmh, None
 
 

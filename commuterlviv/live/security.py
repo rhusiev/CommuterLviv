@@ -72,11 +72,11 @@ def clean_username(name):
 def check_password(password, username=None):
     """None if it will do, otherwise why not."""
     if not isinstance(password, str) or not MIN_PASSWORD <= len(password) <= MAX_PASSWORD:
-        return f"password must be between {MIN_PASSWORD} and {MAX_PASSWORD} characters"
+        return f"The password must be between {MIN_PASSWORD} and {MAX_PASSWORD} characters"
     if username and username in password.lower():
-        return "password must not contain the username"
+        return "The password must not contain the username"
     if len(set(password)) < 5:
-        return "password is too repetitive"
+        return "The password is too repetitive"
     return None
 
 
