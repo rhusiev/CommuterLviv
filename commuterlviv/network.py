@@ -40,6 +40,16 @@ def to_ll(xy):
     return np.stack([xy[..., 1] / KY + LAT0, xy[..., 0] / KX + LON0], axis=-1)
 
 
+def _to_segments(a, b, p):
+    """Where `p` falls on each segment a-b: the fraction along it, clamped to
+    the segment, the segment's squared length, and the squared distance."""
+    ab = b - a
+    l2 = np.maximum((ab * ab).sum(1), 1e-9)
+    t = np.clip(((p - a) * ab).sum(1) / l2, 0.0, 1.0)
+    d2 = ((a + t[:, None] * ab - p) ** 2).sum(1)
+    return t, l2, d2
+
+
 def project(xy, cum, p, lo=None, hi=None):
     """Nearest point on a polyline. Returns (distance along, lateral offset)."""
     a, b = xy[:-1], xy[1:]
@@ -52,11 +62,7 @@ def project(xy, cum, p, lo=None, hi=None):
         base = i0
     else:
         base = 0
-    ab = b - a
-    l2 = np.maximum((ab * ab).sum(1), 1e-9)
-    t = np.clip(((p - a) * ab).sum(1) / l2, 0.0, 1.0)
-    proj = a + t[:, None] * ab
-    d2 = ((proj - p) ** 2).sum(1)
+    t, l2, d2 = _to_segments(a, b, p)
     i = int(np.argmin(d2))
     return cum[base + i] + t[i] * np.sqrt(l2[i]), float(np.sqrt(d2[i]))
 
@@ -112,11 +118,7 @@ class Net:
 def candidates(shape, p, slack=250.0, cap=10):
     """Every plausible place on the shape this point could be: the local minima
     of distance-to-line. A shape that doubles back passes each stop twice."""
-    a, b = shape.xy[:-1], shape.xy[1:]
-    ab = b - a
-    l2 = np.maximum((ab * ab).sum(1), 1e-9)
-    t = np.clip(((p - a) * ab).sum(1) / l2, 0.0, 1.0)
-    d2 = ((a + t[:, None] * ab - p) ** 2).sum(1)
+    t, l2, d2 = _to_segments(shape.xy[:-1], shape.xy[1:], p)
     if len(d2) == 1:
         loc = np.array([0])
     else:
