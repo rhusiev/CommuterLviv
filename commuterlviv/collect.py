@@ -34,6 +34,8 @@ BATCH_S = 2.0            # how often the writer commits
 CHECKPOINT_S = 300.0     # how often the write-ahead log is folded back in
 HEARTBEAT_S = 300.0
 BACKOFF_MAX = 120.0      # s between attempts at a feed that keeps failing
+DOUBLINGS = 16           # of a failing feed's wait at most; BACKOFF_MAX stops it sooner
+LEAST_WAIT_S = 0.5       # between polls, however long the last one took
 PRUNE_EVERY_S = HOUR_S   # between deletions of rows older than --keep-days
 DB_WAIT_S = 60           # a connection waits this long for another's lock
 WRITE_RETRY_S = 2.0      # before a failed batch is tried once more
@@ -159,6 +161,20 @@ def _polled(t0, feed, header, n, err):
     emit("poll", (t0, feed, header, n, int((time.time() - t0) * 1000), err))
 
 
+def next_poll(period, fails, began):
+    """Seconds from now to the next poll of a feed polled every `period` s,
+    whose last poll began at `began` and which has failed `fails` times in a
+    row: each failure doubles the wait, up to BACKOFF_MAX."""
+    wait = min(period * 2 ** min(fails, DOUBLINGS), BACKOFF_MAX) if fails else period
+    return max(LEAST_WAIT_S, wait - (time.time() - began))
+
+
+def worth_logging(fails):
+    """Whether the `fails`-th failure in a row is logged: the first, the fifth
+    and every fiftieth, so a feed down for hours does not flood the log."""
+    return fails in (1, 5) or fails % 50 == 0
+
+
 def poll_loop(feed, period, once):
     """Run `once` forever; each consecutive failure doubles the wait, one
     success clears it."""
@@ -174,10 +190,9 @@ def poll_loop(feed, period, once):
             _polled(t0, feed, 0, 0, brief(exc))
             count(**{f"{feed}_errors": 1})
             fails += 1
-            if fails in (1, 5) or fails % 50 == 0:
+            if worth_logging(fails):
                 log(f"{feed} error x{fails}", brief(exc))
-        wait = min(period * 2 ** min(fails, 16), BACKOFF_MAX) if fails else period
-        stop_flag.wait(max(0.5, wait - (time.time() - t0)))
+        stop_flag.wait(next_poll(period, fails, t0))
 
 
 def rt(endpoint, tries=3):
@@ -291,7 +306,7 @@ def collect_lad(period, limit):
                 _polled(t0, "lad", 0, 0, brief(exc))
                 count(lad_errors=1)
             stop_flag.wait(max(0.05, gap - (time.time() - t0)))
-        stop_flag.wait(max(0.5, period - (time.time() - cycle)))
+        stop_flag.wait(next_poll(period, 0, cycle))
 
 
 def db_bytes():

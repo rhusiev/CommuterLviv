@@ -201,11 +201,9 @@ class Service:
             except Exception as exc:
                 self.errors += 1
                 fails += 1
-                if fails in (1, 5) or fails % 50 == 0:
+                if collect.worth_logging(fails):
                     self.log(f"poll error x{fails}", brief(exc))
-            wait = min(self.set.poll_veh * 2 ** min(fails, 8),
-                       collect.BACKOFF_MAX) if fails else self.set.poll_veh
-            await asyncio.sleep(max(0.5, wait - (time.time() - t0)))
+            await asyncio.sleep(collect.next_poll(self.set.poll_veh, fails, t0))
 
     @staticmethod
     def fetch():
