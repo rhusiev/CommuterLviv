@@ -575,6 +575,10 @@ class _RouteSheetState extends State<RouteSheet> {
                   ),
               ],
             ),
+            Text(
+              txt.holdToManage,
+              style: material.Theme.of(context).textTheme.bodySmall,
+            ),
             const Divider(height: 24),
           ],
           TextField(

@@ -140,6 +140,22 @@ void main() {
     expect(opened, 0);
   });
 
+  testWidgets('saved sets say how to rename or remove them', (tester) async {
+    await _pump(
+      tester,
+      sets: const Sets(
+        sets: [
+          RouteSet(id: 'set-1', name: 'home', routes: ['r48'], ord: 0),
+        ],
+        active: null,
+        pins: [],
+        places: [],
+      ),
+    );
+
+    expect(find.text(txt.holdToManage), findsOneWidget);
+  });
+
   testWidgets('a set the server refuses to show says why', (tester) async {
     // The test binding answers every request 400
     await _pump(
