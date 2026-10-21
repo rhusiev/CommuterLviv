@@ -427,6 +427,19 @@ def _kmh(raw, name, bounds):
     return kmh, None
 
 
+async def _planned(app, what, failed, work, *args):
+    """`work(*args)` on a planning worker, and None; or, should it raise, None
+    and the 500 saying `failed`. Answered as JSON on purpose: an unhandled
+    exception leaves Starlette with a plain-text 500, which every client reads
+    as a JSON.parse failure rather than as what went wrong."""
+    try:
+        async with app.planning:
+            return await asyncio.to_thread(work, *args), None
+    except Exception as exc:
+        log(f"{what} failed:", brief(exc))
+        return None, error(failed, 500)
+
+
 async def journey(request, session):
     """Door to door, ranked by arrival; each leg says whether it came from a
     tracked vehicle or from the timetable."""
@@ -460,16 +473,12 @@ async def journey(request, session):
     if planner.cat is not live.cat:
         return error("The city is being renewed; try again in a moment", 503)
     arrivals, asked = live.arrivals, time.time()
-    try:
-        async with app.planning:
-            found, ways = await asyncio.to_thread(planner.search, origin, dest,
-                                                  arrivals, at, speed, hurry)
-    except Exception as exc:
-        # answered as JSON on purpose: an unhandled exception leaves Starlette
-        # with a plain-text 500, which every client reads as a JSON.parse
-        # failure rather than as what went wrong
-        log("plan failed:", brief(exc))
-        return error("Could not plan that journey", 500)
+    searched, failed = await _planned(app, "plan", "Could not plan that journey",
+                                      planner.search, origin, dest, arrivals, at,
+                                      speed, hurry)
+    if failed is not None:
+        return failed
+    found, ways = searched
     rid = app.recent.hold(session["user_id"], {
         "from": origin, "to": dest, "t": found["t"], "asked": asked,
         "speed": speed, "hurry": hurry, "arrivals": arrivals, "cat": live.cat,
@@ -497,15 +506,12 @@ async def backup(request, session):
         return error("That search has no such backup", 404)
     if app.planning.locked():
         return error("The planner is busy; try that again", 503)
-    try:
-        async with app.planning:
-            found = await asyncio.to_thread(
-                planner.backup, held["from"], held["to"], held["arrivals"],
-                held["speed"], held["hurry"], held["journeys"][option], leg, n)
-    except Exception as exc:
-        # as JSON for the same reason as a failed search's
-        log("backup failed:", brief(exc))
-        return error("Could not draw that way", 500)
+    found, failed = await _planned(
+        app, "backup", "Could not draw that way", planner.backup, held["from"],
+        held["to"], held["arrivals"], held["speed"], held["hurry"],
+        held["journeys"][option], leg, n)
+    if failed is not None:
+        return failed
     if found is None:
         return error("That search has no such backup", 404)
     return JSONResponse(found)
