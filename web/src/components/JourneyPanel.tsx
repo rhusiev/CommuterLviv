@@ -638,7 +638,8 @@ function Option({
 }: {
   journey: Journey;
   /** Drawn on the map. Until then a click anywhere on the card draws it, and
-   *  its stops and lines are not yet links */
+   *  its stops are not yet links. Its lines and notes, which look like what
+   *  they are, open at any time and draw it as well */
   shown: boolean;
   onShow: () => void;
   onFollow: () => void;
@@ -702,7 +703,7 @@ function Option({
           onClose={() => setBackups(false)}
         />
       )}
-      <ol className={`mt-1.5 space-y-1 ${shown ? "" : "pointer-events-none"}`}>
+      <ol className="mt-1.5 space-y-1">
         {journey.legs.map((leg, i) => (
           <li key={i} className="flex items-baseline gap-2 text-sm">
             {leg.kind === "walk" ? (
@@ -722,7 +723,12 @@ function Option({
                 </span>
               </>
             ) : (
-              <Ride leg={leg} catalog={catalog} onStop={onStop} onLine={onLine} />
+              <Ride
+                leg={leg}
+                catalog={catalog}
+                onStop={shown ? onStop : undefined}
+                onLine={onLine}
+              />
             )}
           </li>
         ))}
@@ -754,7 +760,8 @@ function Ride({
 }: {
   leg: Leg;
   catalog: Catalog;
-  onStop: (i: number) => void;
+  /** None until the option is picked, so a click on the stop picks it */
+  onStop?: (i: number) => void;
   onLine: (i: number) => void;
 }) {
   const [why, setWhy] = useState(false);
@@ -777,12 +784,18 @@ function Ride({
             <RouteBadge route={route} className="px-1.5 text-xs" />
           </button>
         )}
-        <button
-          onClick={() => leg.b >= 0 && onStop(leg.b)}
-          className="min-w-0 flex-1 truncate text-left text-slate-200 hover:underline"
-        >
-          {stopName(catalog, leg.b)}
-        </button>
+        {onStop ? (
+          <button
+            onClick={() => leg.b >= 0 && onStop(leg.b)}
+            className="min-w-0 flex-1 truncate text-left text-slate-200 hover:underline"
+          >
+            {stopName(catalog, leg.b)}
+          </button>
+        ) : (
+          <span className="min-w-0 flex-1 truncate text-slate-200">
+            {stopName(catalog, leg.b)}
+          </span>
+        )}
         {rests && (
           <button
             onClick={() => setWhy(!why)}

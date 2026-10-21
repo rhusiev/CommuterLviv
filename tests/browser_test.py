@@ -1,7 +1,7 @@
 """The web app in a real browser against the real service: an account created
 through the sign-in screen, a stop found by name, the bus on its board, and a
 journey planned from on board it and followed, a place found by name planned
-to and a name that matches nothing, one followed on foot that misses its bus searched again, a refused
+to and a name that matches nothing, the note and line of an option not yet picked, one followed on foot that misses its bus searched again, a refused
 location, a changed password and a cancelled one, one that cannot be cancelled
 while under way, none offered where the service turns it off, and a shared link
 that opens its stop or route.
@@ -227,6 +227,45 @@ def test_a_place_found_by_name_is_shown_and_the_way_there_planned(page):
     assert tuple(map(float, ends["from"].split(","))) == pytest.approx((city.LAT, city.LON))
     assert tuple(map(float, ends["to"].split(","))) == pytest.approx(END)
     expect(page.get_by_text("Town hall", exact=True)).to_be_visible()
+
+
+def _plan_a_ride(page, confidence):
+    """Plans the way to END, answered with one option that rides the city's
+    route on what `confidence` names, and leaves that option unpicked."""
+    now = int(time.time())
+    ride = {"kind": "ride", "dep": now + 60, "arr": now + 600, "a": 0, "b": city.STOPS - 1,
+            "route": 0, "live": False, "confidence": confidence, "backups": []}
+    walk = {"kind": "walk", "dep": now, "arr": now + 60, "a": -1, "b": 0, "pts": []}
+    home = {"kind": "walk", "dep": now + 600, "arr": now + 660, "a": city.STOPS - 1,
+            "b": -1, "pts": []}
+    option = {"dep": now, "arr": now + 660, "rides": 1, "live": False, "hurry": False,
+              "confidence": confidence, "backup": 0, "legs": [walk, ride, home]}
+    page.route("**/api/plan?**", lambda route: route.fulfill(
+        json={"t": now, "report": "r1", "options": [option]}))
+    found = {"name": "Town hall", "where": "", "lat": END[0], "lon": END[1], "kind": None}
+    page.route("**/api/search?**", lambda route: route.fulfill(json={"places": [found]}))
+    page.get_by_placeholder("Find a stop or a place").fill("Town hall")
+    page.get_by_role("button", name=re.compile(r"^Town hall")).click()
+    page.get_by_role("button", name="Get here").click()
+    playwright.expect(page.get_by_text(f"Stop {city.STOPS - 1}")).to_be_visible()
+
+
+def test_a_note_on_an_unpicked_option_explains_itself(page):
+    _register(page, "curious")
+    _plan_a_ride(page, "terminus")
+
+    page.get_by_role("button", name="Next trip").click()
+
+    playwright.expect(page.get_by_text("The vehicle has not set off")).to_be_visible()
+
+
+def test_a_line_on_an_unpicked_option_opens(page):
+    _register(page, "liner")
+    _plan_a_ride(page, "live")
+
+    page.get_by_title("Show this line").click()
+
+    playwright.expect(page.get_by_text("Stop 0 - Stop 4")).to_be_visible()
 
 
 def _pick_route(page):

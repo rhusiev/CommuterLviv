@@ -617,7 +617,8 @@ class _Option extends StatelessWidget {
   final Journey journey;
 
   /// Whether this is the option drawn on the map; a tap toggles it. Its stops
-  /// and lines take taps of their own only once it is
+  /// open only once it is, so a tap on the card picks it. Its lines and notes,
+  /// which look like what they are, open at any time and draw it as well
   final bool shown;
   final VoidCallback onShow;
   final Prefer prefer;
@@ -630,6 +631,11 @@ class _Option extends StatelessWidget {
   final void Function(int route) onLine;
   final Future<String?> Function(WayPick? pick) onWay;
   final VoidCallback onFollow;
+
+  void _drawn(VoidCallback then) {
+    if (!shown) onShow();
+    then();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -706,14 +712,12 @@ class _Option extends StatelessWidget {
                   child: _hurried(journey),
                 ),
               for (final leg in journey.legs)
-                IgnorePointer(
-                  ignoring: !shown,
-                  child: _LegRow(
-                    leg: leg,
-                    catalog: catalog,
-                    onStop: onStop,
-                    onLine: onLine,
-                  ),
+                _LegRow(
+                  leg: leg,
+                  catalog: catalog,
+                  onStop: shown ? onStop : null,
+                  onLine: (route) => _drawn(() => onLine(route)),
+                  onNote: () => _drawn(() {}),
                 ),
               if (shown && followable(journey))
                 Padding(
@@ -754,13 +758,17 @@ class _LegRow extends StatelessWidget {
     required this.catalog,
     required this.onStop,
     required this.onLine,
+    required this.onNote,
   });
 
   final Leg leg;
   final Catalog catalog;
-  final void Function(int stop) onStop;
+
+  /// None while the card is not picked, so a tap on the row picks it
+  final void Function(int stop)? onStop;
 
   final void Function(int route) onLine;
+  final VoidCallback onNote;
 
   @override
   Widget build(BuildContext context) {
@@ -770,7 +778,10 @@ class _LegRow extends StatelessWidget {
     // here too: its own duration, and the stop it ends at
     final where = leg.b < 0 ? txt.toDoor : catalog.stopName(leg.b);
     return InkWell(
-      onTap: leg.b < 0 ? null : () => onStop(leg.b),
+      onTap: switch (onStop) {
+        final open? when leg.b >= 0 => () => open(leg.b),
+        _ => null,
+      },
       child: Padding(
         padding: const EdgeInsets.only(top: 6),
         child: Row(
@@ -812,6 +823,7 @@ class _LegRow extends StatelessWidget {
               _Note(
                 part: part,
                 why: why,
+                onTap: onNote,
                 colour: leg.confidence == Confidence.quiet
                     ? theme.colorScheme.error
                     : small?.color,
@@ -825,30 +837,41 @@ class _LegRow extends StatelessWidget {
 
 /// A word on what a ride rests on, which explains itself when tapped.
 class _Note extends StatelessWidget {
-  const _Note({required this.part, required this.why, required this.colour});
+  const _Note({
+    required this.part,
+    required this.why,
+    required this.colour,
+    required this.onTap,
+  });
 
   final String part;
   final String why;
   final Color? colour;
+
+  /// Before it explains itself
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final style = material.Theme.of(context).textTheme.bodySmall
         ?.copyWith(color: colour);
     return InkWell(
-      onTap: () => showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog.adaptive(
-          title: Text(part),
-          content: Text(why),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(MaterialLocalizations.of(context).okButtonLabel),
-            ),
-          ],
-        ),
-      ),
+      onTap: () {
+        onTap();
+        showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog.adaptive(
+            title: Text(part),
+            content: Text(why),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(MaterialLocalizations.of(context).okButtonLabel),
+              ),
+            ],
+          ),
+        );
+      },
       borderRadius: BorderRadius.circular(6),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),

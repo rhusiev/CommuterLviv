@@ -319,7 +319,10 @@ walks uphill and speeds them down gentle slopes.
 `GET /api/plan` answers with options ranked by arrival. A ride on a tracked
 vehicle says nothing more; one resting on the timetable says so, and one on a
 line nothing has been seen running on says that in the error colour. Tapping
-either word explains what it means. The option's backup count opens a dialog
+either word explains what it means. That word and a ride's route open on any
+option and draw it as well; a ride's stop opens its card only on the option
+already drawn, and on any other a tap picks the option. The browser does the
+same. The option's backup count opens a dialog
 that, under each ride's stop, puts the planned way first and then the ride's
 backups - the other ways to the door from that stop, each with its routes,
 where it changes and when it gets there, at most half an hour after the option

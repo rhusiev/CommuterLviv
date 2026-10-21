@@ -33,6 +33,8 @@ Future<void> pump(
   LatLng? to,
   Map<LatLng, String> named = const {},
   void Function(Journey? journey)? onShow,
+  void Function(int stop)? onStop,
+  void Function(int route)? onLine,
   bool ask = false,
   VoidCallback? onAsked,
 }) async {
@@ -58,8 +60,8 @@ Future<void> pump(
             onFold: (to) => setState(() => folded = to),
             onSwap: () {},
             onHere: (_) {},
-            onStop: (_) {},
-            onLine: (_) {},
+            onStop: onStop ?? (_) {},
+            onLine: onLine ?? (_) {},
             places: const [],
             named: named,
             onSave: (_, _) {},
@@ -102,6 +104,7 @@ Map<String, Object> _ride(
   int route,
   int dep, {
   List<Object> backups = const [],
+  String confidence = 'live',
 }) => {
   'kind': 'ride',
   'dep': dep,
@@ -110,6 +113,7 @@ Map<String, Object> _ride(
   'b': 1,
   'route': route,
   'live': true,
+  'confidence': confidence,
   'backups': backups,
 };
 
@@ -141,7 +145,11 @@ Map<String, Object> _journey(
 
 /// Answers a search with one option, riding [route], backed by a ride that is
 /// no option of its own, and that ride's way when asked for it, noting the asks.
-Future<HttpServer> _serve(List<Uri> asked, {int route = 0}) async {
+Future<HttpServer> _serve(
+  List<Uri> asked, {
+  int route = 0,
+  String confidence = 'live',
+}) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   final later = _ride(1, 900);
   server.listen((req) {
@@ -155,6 +163,7 @@ Future<HttpServer> _serve(List<Uri> asked, {int route = 0}) async {
             _ride(
               route,
               60,
+              confidence: confidence,
               backups: [
                 {
                   'rides': [later],
@@ -407,6 +416,76 @@ void main() {
     expect(Prefer.fastest.shortlist(all, n: 2), [dry, mine]);
     expect(Prefer.reliable.shortlist(all, n: 1), [soonest]);
     expect(Prefer.walk.shortlist(all, n: 9), all);
+  });
+
+  /// Searches against [_serve], with the one option it answers not yet picked
+  Future<List<Journey?>> searched(
+    WidgetTester tester, {
+    String confidence = 'live',
+    void Function(int stop)? onStop,
+    void Function(int route)? onLine,
+  }) async {
+    allowRealHttp();
+    final server = (await tester.runAsync(
+      () => _serve([], confidence: confidence),
+    ))!;
+    addTearDown(() => server.close(force: true));
+    final shown = <Journey?>[];
+    await pump(
+      tester,
+      server: 'http://${server.address.host}:${server.port}',
+      catalog: _twoLines,
+      from: const LatLng(49.84, 24.03),
+      to: const LatLng(49.81, 24.05),
+      onShow: shown.add,
+      onStop: onStop,
+      onLine: onLine,
+    );
+    await tester.tap(find.text(txt.findRoute));
+    await pumpUntil(tester, () => find.text('Work stop').evaluate().isNotEmpty);
+    expect(shown.whereType<Journey>(), isEmpty);
+    return shown;
+  }
+
+  testWidgets("a ride's note explains itself before its option is picked", (
+    tester,
+  ) async {
+    final shown = await searched(tester, confidence: 'terminus');
+
+    await tester.tap(find.text(txt.terminusPart));
+    await tester.pumpAndSettle();
+
+    expect(find.text(txt.terminusWhy), findsOneWidget);
+    expect(shown.last, isNotNull);
+  });
+
+  testWidgets("a ride's line opens before its option is picked", (
+    tester,
+  ) async {
+    final lines = <int>[];
+    final shown = await searched(tester, onLine: lines.add);
+
+    await tester.tap(find.byType(RouteBadge));
+    await tester.pump();
+
+    expect(lines, [0]);
+    expect(shown.last, isNotNull);
+  });
+
+  testWidgets('a tap on a stop picks its option first, then opens the stop', (
+    tester,
+  ) async {
+    final stops = <int>[];
+    final shown = await searched(tester, onStop: stops.add);
+
+    await tester.tap(find.text('Work stop'));
+    await tester.pump();
+    expect(stops, isEmpty);
+    expect(shown.last, isNotNull);
+
+    await tester.tap(find.text('Work stop'));
+    await tester.pump();
+    expect(stops, [1]);
   });
 
   testWidgets('a backup that is no option is fetched and drawn as one', (
