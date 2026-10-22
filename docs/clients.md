@@ -15,7 +15,8 @@ npm run preview  # http://localhost:5174, the built files with the same proxy
 Lviv itself is MapLibre GL JS drawing VersaTiles OpenStreetMap vector tiles -
 no key and no account - in one of eight styles picked in the layers panel:
 colorful, natural, muted and gray, each light and dark (`THEMES` in
-`web/src/lib/theme.ts`, `mapThemes` in `mobile/lib/src/map_theme.dart`). They
+`web/src/lib/theme.ts`, `mapThemes` in `mobile/lib/src/map_theme.dart`), named
+in the language's strings (`themeNames`). They
 come from the deployment's own `/tiles` when `/api/health` says it has them,
 and from `tiles.versatiles.org` otherwise - see
 [the basemap](deployment.md#the-basemap). A style saved under one of the names

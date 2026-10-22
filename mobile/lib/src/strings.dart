@@ -33,6 +33,7 @@ class Strings {
     required this.map,
     required this.times,
     required this.mapStyle,
+    required this.themeNames,
     required this.server,
     required this.signOut,
     required this.routes,
@@ -212,6 +213,9 @@ class Strings {
   final String map;
   final String times;
   final String mapStyle;
+
+  /// Each basemap's name, by its [MapTheme.id].
+  final Map<String, String> themeNames;
   final String server;
   final String signOut;
   final String routes;
@@ -419,6 +423,16 @@ const _en = Strings(
   map: 'Map',
   times: 'Times',
   mapStyle: 'Map style',
+  themeNames: {
+    'colorful-dark': 'Colorful dark',
+    'natural-dark': 'Natural dark',
+    'muted-dark': 'Muted dark',
+    'gray-dark': 'Gray dark',
+    'colorful': 'Colorful',
+    'natural': 'Natural',
+    'muted': 'Muted',
+    'gray': 'Gray',
+  },
   server: 'Server',
   signOut: 'Sign out',
   routes: 'Routes',
@@ -647,6 +661,16 @@ const _uk = Strings(
   map: 'Мапа',
   times: 'Час',
   mapStyle: 'Вигляд мапи',
+  themeNames: {
+    'colorful-dark': 'Кольорова темна',
+    'natural-dark': 'Природна темна',
+    'muted-dark': 'Приглушена темна',
+    'gray-dark': 'Сіра темна',
+    'colorful': 'Кольорова',
+    'natural': 'Природна',
+    'muted': 'Приглушена',
+    'gray': 'Сіра',
+  },
   server: 'Сервер',
   signOut: 'Вийти',
   routes: 'Маршрути',

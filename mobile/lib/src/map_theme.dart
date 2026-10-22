@@ -5,11 +5,11 @@ library;
 
 import 'package:flutter/material.dart';
 
+/// Named in the strings (`themeNames`), so the name follows the language.
 class MapTheme {
-  const MapTheme(this.id, this.name, {required this.dark});
+  const MapTheme(this.id, {required this.dark});
 
   final String id;
-  final String name;
   final bool dark;
 
   String get styleUrl => '$_tiles/assets/styles/$id/style.json';
@@ -23,14 +23,14 @@ const _public = 'https://tiles.versatiles.org';
 void setTileOrigin(String? origin) => _tiles = origin ?? _public;
 
 const mapThemes = [
-  MapTheme('colorful-dark', 'Colorful dark', dark: true),
-  MapTheme('natural-dark', 'Natural dark', dark: true),
-  MapTheme('muted-dark', 'Muted dark', dark: true),
-  MapTheme('gray-dark', 'Gray dark', dark: true),
-  MapTheme('colorful', 'Colorful', dark: false),
-  MapTheme('natural', 'Natural', dark: false),
-  MapTheme('muted', 'Muted', dark: false),
-  MapTheme('gray', 'Gray', dark: false),
+  MapTheme('colorful-dark', dark: true),
+  MapTheme('natural-dark', dark: true),
+  MapTheme('muted-dark', dark: true),
+  MapTheme('gray-dark', dark: true),
+  MapTheme('colorful', dark: false),
+  MapTheme('natural', dark: false),
+  MapTheme('muted', dark: false),
+  MapTheme('gray', dark: false),
 ];
 
 /// What VersaTiles renamed the styles a phone may still have saved to.

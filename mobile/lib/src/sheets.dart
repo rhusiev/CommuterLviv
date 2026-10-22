@@ -223,7 +223,7 @@ class _LayersSheetState extends State<LayersSheet> {
               leading: Icon(
                 t.dark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
               ),
-              title: Text(t.name),
+              title: Text(txt.themeNames[t.id] ?? t.id),
               trailing: t.id == _theme.id ? const Icon(Icons.check) : null,
               onTap: () {
                 setState(() => _theme = t);

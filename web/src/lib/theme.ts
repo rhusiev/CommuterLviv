@@ -2,25 +2,35 @@
  * same tiles, so switching is a `setStyle` and no reload. `dark` drives the
  * overlay's own colours, which are drawn on a canvas above the map. */
 
+export type ThemeId =
+  | "colorful-dark"
+  | "natural-dark"
+  | "muted-dark"
+  | "gray-dark"
+  | "colorful"
+  | "natural"
+  | "muted"
+  | "gray";
+
+/** Named in the strings (`themeNames`), so the name follows the language */
 export type Theme = {
-  id: string;
-  name: string;
+  id: ThemeId;
   dark: boolean;
 };
 
 export const THEMES: Theme[] = [
-  { id: "colorful-dark", name: "Colorful dark", dark: true },
-  { id: "natural-dark", name: "Natural dark", dark: true },
-  { id: "muted-dark", name: "Muted dark", dark: true },
-  { id: "gray-dark", name: "Gray dark", dark: true },
-  { id: "colorful", name: "Colorful", dark: false },
-  { id: "natural", name: "Natural", dark: false },
-  { id: "muted", name: "Muted", dark: false },
-  { id: "gray", name: "Gray", dark: false },
+  { id: "colorful-dark", dark: true },
+  { id: "natural-dark", dark: true },
+  { id: "muted-dark", dark: true },
+  { id: "gray-dark", dark: true },
+  { id: "colorful", dark: false },
+  { id: "natural", dark: false },
+  { id: "muted", dark: false },
+  { id: "gray", dark: false },
 ];
 
 /** What VersaTiles renamed the styles a browser may still have saved to */
-const RENAMED: Record<string, string> = {
+const RENAMED: Record<string, ThemeId> = {
   shadow: "gray-dark",
   eclipse: "colorful-dark",
   graybeard: "gray",

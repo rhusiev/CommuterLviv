@@ -3,6 +3,7 @@
 
 import type { Connection } from "./live";
 import type { NoFix } from "./position";
+import type { ThemeId } from "./theme";
 
 export type Lang = "uk" | "en";
 
@@ -43,6 +44,16 @@ const en = {
   filter: "Filter",
   on: (n: number) => `${n} on`,
   basemap: "Map",
+  themeNames: {
+    "colorful-dark": "Colorful dark",
+    "natural-dark": "Natural dark",
+    "muted-dark": "Muted dark",
+    "gray-dark": "Gray dark",
+    colorful: "Colorful",
+    natural: "Natural",
+    muted: "Muted",
+    gray: "Gray",
+  } satisfies Record<ThemeId, string>,
   language: "Language",
   failed: "That did not work",
   findStop: "Find a stop or a place",
@@ -236,6 +247,16 @@ const uk: Strings = {
   filter: "Пошук",
   on: (n: number) => `Увімкнено ${n}`,
   basemap: "Вигляд мапи",
+  themeNames: {
+    "colorful-dark": "Кольорова темна",
+    "natural-dark": "Природна темна",
+    "muted-dark": "Приглушена темна",
+    "gray-dark": "Сіра темна",
+    colorful: "Кольорова",
+    natural: "Природна",
+    muted: "Приглушена",
+    gray: "Сіра",
+  },
   language: "Мова",
   failed: "Не вдалося",
   findStop: "Знайти зупинку чи місце",
