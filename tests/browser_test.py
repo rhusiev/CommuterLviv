@@ -39,6 +39,7 @@ START_S = 30.0
 SEE_MS = 20_000          # the bus reaches the page a few feed polls after it set off
 VIEWPORT = {"width": 1280, "height": 720}
 PHONE = {"width": 393, "height": 852}
+TAP_PX = 44              # the smallest target WCAG 2.5.5 allows, in CSS pixels
 # The whole line fits across the middle of the page, at about 6 m a pixel
 ZOOM = 13.0
 TILE_PX = 512            # maplibre's world is this many pixels across at zoom 0
@@ -251,10 +252,11 @@ def test_a_place_found_by_name_is_shown_and_the_way_there_planned(page):
     expect(page.get_by_text("Town hall", exact=True)).to_be_visible()
 
 
-def _plan_a_ride(page, confidence, hurry=False):
+def _plan_a_ride(page, confidence, hurry=False, backup=0):
     """Plans the way to END, answered with one option that rides the city's
     route on what `confidence` names, caught only by hurrying if `hurry` says
-    so, and leaves that option unpicked."""
+    so, with `backup` backups, and leaves that option unpicked. Its card, and
+    the length on it, which picks and folds it."""
     now = int(time.time())
     ride = {"kind": "ride", "dep": now + 60, "arr": now + 600, "a": 0, "b": city.STOPS - 1,
             "route": 0, "live": False, "confidence": confidence, "backups": []}
@@ -262,7 +264,7 @@ def _plan_a_ride(page, confidence, hurry=False):
     home = {"kind": "walk", "dep": now + 600, "arr": now + 660, "a": city.STOPS - 1,
             "b": -1, "pts": []}
     option = {"dep": now, "arr": now + 660, "rides": 1, "live": False, "hurry": hurry,
-              "confidence": confidence, "backup": 0, "legs": [walk, ride, home]}
+              "confidence": confidence, "backup": backup, "legs": [walk, ride, home]}
     page.route("**/api/plan?**", lambda route: route.fulfill(
         json={"t": now, "report": "r1", "options": [option]}))
     found = {"name": "Town hall", "where": "", "lat": END[0], "lon": END[1], "kind": None}
@@ -270,74 +272,114 @@ def _plan_a_ride(page, confidence, hurry=False):
     page.get_by_placeholder("Find a stop or a place").fill("Town hall")
     page.get_by_role("button", name=re.compile(r"^Town hall")).click()
     page.get_by_role("button", name="Get here").click()
-    playwright.expect(page.get_by_text(f"Stop {city.STOPS - 1}")).to_be_visible()
+    minutes = re.compile(r"^\d+ min$")
+    card = page.locator("aside .inset-panel").filter(has=page.get_by_text(minutes))
+    # the first of them; the walks say theirs too, once it is picked
+    length = card.get_by_text(minutes).first
+    playwright.expect(length).to_be_visible()
+    return card, length
 
 
-def test_a_note_explains_itself_once_its_option_is_picked(page):
-    _register(page, "curious")
-    _plan_a_ride(page, "terminus")
+@pytest.mark.parametrize("word", ["Line unseen", "Hurry", "1 backup"])
+def test_everything_on_an_unpicked_option_picks_it(page, word):
+    _register(page, "picker")
+    card, _ = _plan_a_ride(page, "quiet", hurry=True, backup=1)
     expect = playwright.expect
-    note = page.get_by_text("Next trip")
-    marked = page.get_by_role("button", name="Next trip")
-    why = page.get_by_text("The vehicle has not set off")
-    expect(marked).to_have_count(0)
+    expect(card.get_by_role("button")).to_have_count(1)
 
-    note.click()
+    card.get_by_text(re.compile(f"^{word}")).click()
+
+    expect(card.get_by_role("button", expanded=True)).to_be_visible()
+
+
+def test_a_picked_option_folds_again_from_its_summary(page):
+    _register(page, "folder")
+    card, length = _plan_a_ride(page, "live")
+    expect = playwright.expect
+    stop = card.get_by_role("button", name=f"Stop {city.STOPS - 1}")
+    length.click()
+    expect(stop).to_be_visible()
+
+    length.click()
+
+    expect(card.get_by_role("button", expanded=False)).to_be_visible()
+    expect(stop).to_have_count(0)
+
+
+def test_a_picked_option_says_its_notes_and_hurry_in_place(page):
+    _register(page, "curious")
+    card, length = _plan_a_ride(page, "terminus", hurry=True)
+    expect = playwright.expect
+    why = card.get_by_text("The vehicle has not set off")
+    hint = card.get_by_text("Only hurrying to the first stop catches this bus")
     expect(why).to_have_count(0)
-    expect(marked).to_be_visible()
+    expect(hint).to_have_count(0)
 
-    note.click()
+    length.click()
+
     expect(why).to_be_visible()
+    expect(hint).to_be_visible()
+    expect(card.get_by_role("button", name=re.compile("^(Next trip|Hurry)"))).to_have_count(0)
 
 
-def test_a_line_opens_once_its_option_is_picked(page):
+def test_every_target_on_a_picked_option_is_big_enough_to_tap(page):
+    _register(page, "tapper")
+    card, length = _plan_a_ride(page, "terminus", hurry=True, backup=1)
+    length.click()
+    targets = card.get_by_role("button")
+    # the summary, the two stops, the line and the backups; with no footpaths
+    # to follow it by, the option offers no following
+    playwright.expect(targets.nth(4)).to_be_visible()
+
+    small = [(targets.nth(i).inner_text(), box) for i in range(targets.count())
+             if min((box := targets.nth(i).bounding_box())["width"], box["height"]) < TAP_PX]
+
+    assert small == []
+    assert targets.count() == 5
+
+
+def test_a_line_opens_from_its_badge_marked_with_a_map(page):
     _register(page, "liner")
-    _plan_a_ride(page, "live")
+    card, length = _plan_a_ride(page, "live")
     expect = playwright.expect
     line = page.get_by_text("Stop 0 - Stop 4")
-    # the badge's own title, the route's long name
-    page.get_by_title("Stop 0 - Stop 4").click()
-    expect(page.get_by_title("Show this line")).to_be_visible()
+    badge = card.get_by_title("Show this line")
+    length.click()
+    # its vehicle's, and the map
+    expect(badge.locator("svg")).to_have_count(2)
     expect(line).to_have_count(0)
 
-    page.get_by_title("Show this line").click()
+    badge.click()
 
     expect(line).to_be_visible()
 
 
-def test_a_stop_opens_once_its_option_is_picked_as_its_chevron_says(page):
+def test_a_stop_opens_from_its_row_marked_with_a_chevron(page):
     _register(page, "stopper")
-    _plan_a_ride(page, "live")
+    card, length = _plan_a_ride(page, "live")
     expect = playwright.expect
-    stop = page.get_by_text(f"Stop {city.STOPS - 1}", exact=True)
-    card = page.get_by_role("heading", name=f"Stop {city.STOPS - 1}")
-    chevrons = page.locator("ol li > svg")
-    expect(chevrons).to_have_count(0)
+    heading = page.get_by_role("heading", name=f"Stop {city.STOPS - 1}")
+    row = card.get_by_role("button", name=f"Stop {city.STOPS - 1}")
+    length.click()
+    # its icon, and the chevron
+    expect(row.locator("svg")).to_have_count(2)
+    expect(heading).to_have_count(0)
 
-    stop.click()
-    expect(card).to_have_count(0)
-    # the walk to the first stop and the ride, not the walk to the door
-    expect(chevrons).to_have_count(2)
+    row.click()
 
-    stop.click()
-    expect(card).to_be_visible()
+    expect(heading).to_be_visible()
 
 
-def test_the_hurry_pill_explains_itself_once_its_option_is_picked(page):
-    _register(page, "hurried")
-    _plan_a_ride(page, "live", hurry=True)
-    expect = playwright.expect
-    pill = page.get_by_text(re.compile(r"^Hurry"))
-    marked = page.get_by_role("button", name=re.compile(r"^Hurry"))
-    why = page.get_by_text("Only hurrying to the first stop catches this bus")
-    expect(marked).to_have_count(0)
+def test_an_option_says_its_length_on_one_line_on_a_phone(page):
+    _register(page, "narrow")
+    page.set_viewport_size(PHONE)
+    _, length = _plan_a_ride(page, "quiet", hurry=True, backup=1)
 
-    pill.click()
-    expect(why).to_have_count(0)
-    expect(marked).to_be_visible()
+    tops = length.evaluate(
+        "el => { const r = document.createRange(); r.selectNodeContents(el);"
+        " return new Set([...r.getClientRects()].map((c) => Math.round(c.top))).size }")
 
-    pill.click()
-    expect(why).to_be_visible()
+    assert tops == 1
 
 
 def _pick_route(page):
