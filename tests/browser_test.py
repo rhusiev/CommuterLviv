@@ -413,6 +413,21 @@ def test_changing_the_password_is_not_offered_where_the_service_turns_it_off(pag
     expect(page.get_by_role("button", name="Sign out")).to_be_visible()
     expect(page.get_by_role("button", name="Change password")).to_have_count(0)
 
+def test_the_walking_speed_reads_on_one_line_in_ukrainian(page):
+    _register(page, "walker")
+    # signed in once the map is up
+    playwright.expect(page.get_by_text("0 vehicles")).to_be_visible()
+    page.evaluate("localStorage.setItem('commuterlviv.lang', 'uk')")
+    page.reload()
+    page.get_by_role("button", name="Обліковий запис", exact=True).click()
+
+    speed = page.get_by_text("4,5 км/год", exact=True)
+    playwright.expect(speed).to_be_visible()
+    lines = speed.evaluate("e => { const r = document.createRange();"
+                           " r.selectNodeContents(e); return r.getClientRects().length }")
+    assert lines == 1
+
+
 def test_a_shared_link_opens_its_stop_or_route(page):
     _register(page, "linked")
     expect = playwright.expect
