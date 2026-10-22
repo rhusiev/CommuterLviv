@@ -140,6 +140,9 @@ class Strings {
     required this.alsoOptionHint,
     required this.showWay,
     required this.showLine,
+    required this.lineOf,
+    required this.watchRoute,
+    required this.unwatchRoute,
     required this.searchAgain,
     required this.today,
     required this.tomorrow,
@@ -345,6 +348,11 @@ class Strings {
   final String alsoOptionHint;
   final String showWay;
   final String showLine;
+
+  /// What the `›` of a route chip is called for [route], read out by a screen reader.
+  final String Function(String route) lineOf;
+  final String watchRoute;
+  final String unwatchRoute;
   final String searchAgain;
   final String today;
   final String tomorrow;
@@ -541,6 +549,9 @@ const _en = Strings(
   alsoOptionHint: 'This way is also among the options',
   showWay: 'Show this way on the map',
   showLine: 'Show this line',
+  lineOf: _enLineOf,
+  watchRoute: 'Watch on the map',
+  unwatchRoute: 'Stop watching',
   searchAgain: 'That search is no longer held; search again',
   today: 'Today',
   tomorrow: 'Tomorrow',
@@ -627,6 +638,7 @@ String _enPacesNow(double walk, double? hurry) =>
 
 String _enHurryAt(String pace) => 'Hurry: $pace';
 String _enAlsoOption(int n) => 'Option $n';
+String _enLineOf(String route) => 'Line $route';
 String _enUnreachable(String server) => 'Could not reach $server';
 String _enWalkTo(String stop) => 'Walk to $stop';
 String _enWaitAt(String stop) => 'Wait at $stop';
@@ -780,6 +792,9 @@ const _uk = Strings(
   alsoOptionHint: 'Цей шлях є і серед варіантів',
   showWay: 'Показати цей шлях на мапі',
   showLine: 'Показати лінію',
+  lineOf: _ukLineOf,
+  watchRoute: 'Стежити на мапі',
+  unwatchRoute: 'Не стежити',
   searchAgain: 'Цей пошук уже не збережено; шукайте знову',
   today: 'Сьогодні',
   tomorrow: 'Завтра',
@@ -865,6 +880,7 @@ String _ukPacesNow(double walk, double? hurry) =>
 
 String _ukHurryAt(String pace) => 'Поспішіть: $pace';
 String _ukAlsoOption(int n) => 'Варіант $n';
+String _ukLineOf(String route) => 'Лінія $route';
 String _ukUnreachable(String server) => 'Не вдалося зʼєднатися з $server';
 String _ukWalkTo(String stop) => 'Ідіть до зупинки $stop';
 String _ukWaitAt(String stop) => 'Чекайте на зупинці $stop';
