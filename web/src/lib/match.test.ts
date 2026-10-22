@@ -31,6 +31,11 @@ describe("match", () => {
     expect(of("стрийсь", "Стрийська")).toBeGreaterThan(of("стрийска", "Стрийська"));
   });
 
+  test("a whole word outranks a prefix, so a code finds its own stop first", () => {
+    expect(of("61", "Площа Ринок (61)")).toBeGreaterThan(of("61", "Хімічна (616)"));
+    expect(of("ринок", "Ринок Шувар")).toBeGreaterThan(of("ринок", "Ринковий"));
+  });
+
   test("every letter folds as the app folds it", () => {
     expect(FOLDS.map(([c]) => [c, fold(c)])).toEqual(FOLDS);
   });

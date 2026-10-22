@@ -504,7 +504,8 @@ next night. Without any index the local half is simply absent.
 it leaves the local index alone; with neither, searching falls back to stop
 names. Stop names themselves are matched in the client by word prefix, in any
 order, with й/и, ї/і and apostrophes folded and one typo allowed in a word of
-four letters or more (`match.dart`, `match.ts`).
+four letters or more (`match.dart`, `match.ts`). A word typed whole ranks above
+one it only begins, so the code "61" lists stop 61 before 610 to 619.
 
 ## The planner's caches
 
