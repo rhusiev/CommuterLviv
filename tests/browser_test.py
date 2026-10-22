@@ -428,6 +428,15 @@ def test_the_walking_speed_reads_on_one_line_in_ukrainian(page):
     assert lines == 1
 
 
+def test_the_zoom_buttons_are_not_a_white_square_on_the_dark_map(page):
+    _register(page, "zoomer")
+    zoom = page.locator(".maplibregl-ctrl-group").filter(
+        has=page.get_by_role("button", name="Zoom in"))
+    playwright.expect(zoom).to_be_visible()
+
+    assert zoom.evaluate("e => getComputedStyle(e).backgroundColor") != "rgb(255, 255, 255)"
+
+
 def test_a_shared_link_opens_its_stop_or_route(page):
     _register(page, "linked")
     expect = playwright.expect

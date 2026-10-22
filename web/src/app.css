@@ -90,3 +90,23 @@ body {
     display: none;
   }
 }
+
+/* maplibre's zoom buttons, dressed as the fabs they sit under: white on a
+   dark map otherwise. Specific enough to beat maplibre's own sheet, which loads
+   after this one */
+.maplibregl-map .maplibregl-ctrl-group:not(:empty) {
+  @apply overflow-hidden rounded-full bg-panel/80 shadow-float ring-1 ring-hair backdrop-blur-xl;
+}
+
+.maplibregl-map .maplibregl-ctrl-group button {
+  @apply size-10;
+}
+
+.maplibregl-map .maplibregl-ctrl-group button + button {
+  border-top-color: var(--color-hair);
+}
+
+/* The icons are dark-grey SVGs baked into maplibre's sheet */
+.maplibregl-map .maplibregl-ctrl-group .maplibregl-ctrl-icon {
+  filter: invert(1);
+}
