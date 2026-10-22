@@ -28,9 +28,9 @@ from pathlib import Path
 
 import numpy as np
 
-from . import files, localtime, network, replay, walk as footpaths
+from .. import files, localtime, network, replay, walk as footpaths
 
-DATA = Path(__file__).resolve().parent.parent / "data"
+DATA = Path(__file__).resolve().parents[2] / "data"
 TRANSFERS = DATA / "transfers.npz"
 
 
@@ -1222,7 +1222,3 @@ def main(argv):
 def _clock(t):
     return datetime.datetime.fromtimestamp(t, localtime.TZ).strftime("%H:%M")
 
-
-if __name__ == "__main__":  # pragma: no cover - the CLI entry does this
-    import sys
-    main(sys.argv[1:])
