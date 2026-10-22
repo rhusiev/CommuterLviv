@@ -191,7 +191,7 @@ refused and the map stays empty while everything else works.
 | `lib/src/sheets.dart`        | the route sheet, the basemap sheet, and the dialogs each of them shares |
 | `lib/src/due.dart`           | one route's countdown chip, drawn in three places                       |
 | `lib/src/server_dialog.dart` | which server to talk to, asked from two places                          |
-| `lib/src/map_theme.dart`     | the five basemap styles and the colours drawn over them                 |
+| `lib/src/map_theme.dart`     | the eight basemap styles and the colours drawn over them                |
 | `lib/src/map_controls.dart`  | zoom, and the compass that shows up off north                           |
 | `lib/src/eta.dart`           | an arrival's absolute time, said as a countdown                         |
 | `lib/src/journey_panel.dart` | two points, and the ways between them                                   |
