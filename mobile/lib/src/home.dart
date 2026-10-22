@@ -643,7 +643,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (at == null) {
         _wantHere = which;
       } else {
-        _at(which, at);
+        _atHere(which, at);
       }
     });
   }
@@ -653,9 +653,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final at = _here.fix?.point;
     if (which == null || at == null) return;
     setState(() {
-      _at(which, at);
+      _atHere(which, at);
       _wantHere = null;
     });
+  }
+
+  /// Named, so the field reads as where I was rather than as coordinates.
+  void _atHere(End which, LatLng at) {
+    _named[at] = txt.useHere;
+    _at(which, at);
   }
 
   void _at(End which, LatLng at) {

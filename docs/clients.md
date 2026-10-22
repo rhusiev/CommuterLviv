@@ -46,7 +46,8 @@ that vehicle is predicted to reach and when, out to the model's 45-minute
 horizon, read off the same predictions the stop card shows - so the two cannot
 disagree. A third tab plans a journey: tap where you are and where you are
 going, and it answers with ways to get there, ranked by arrival - walk to a
-stop, ride, maybe change, walk to the door. Already on a vehicle, "I'm on it"
+stop, ride, maybe change, walk to the door. An end put where you are reads
+"Where I am" in its field rather than its coordinates. Already on a vehicle, "I'm on it"
 on its card plans from on board it: the From field shows it, there is no time
 to leave at, and only its id is sent (docs/service.md). It lasts only while
 the planner is open: leaving the planner, or following a journey, drops it, as

@@ -303,7 +303,8 @@ The directions button in the app bar opens `journey_panel.dart` over the map.
 Tapping either end opens the same search as the top bar (`stop_search.dart`):
 typing finds stops, addresses and shops, and before anything is typed it offers
 where I am, choosing on the map, and the saved places. The locate button beside
-each field is where I am in one tap. While an end is being picked on the map
+each field is where I am in one tap, and the field then says so rather than
+giving the coordinates. While an end is being picked on the map
 the panel folds to a strip saying so, and a tap is that point and not the
 nearest stop, because a door rarely is one. The arrow in the panel's corner
 folds it to a strip too, showing the picked option's length and routes, so the

@@ -345,6 +345,20 @@ def test_a_place_found_by_name_is_shown_and_the_way_there_planned(page):
     expect(page.get_by_text("Town hall", exact=True)).to_be_visible()
 
 
+def test_a_start_where_i_am_says_so_rather_than_its_coordinates(page):
+    _register(page, "here")
+    found = {"name": "Town hall", "where": "", "lat": END[0], "lon": END[1], "kind": None}
+    page.route("**/api/search?**", lambda route: route.fulfill(json={"places": [found]}))
+    page.get_by_placeholder("Find a stop or a place").fill("Town hall")
+    page.get_by_role("button", name=re.compile(r"^Town hall")).click()
+    page.get_by_role("button", name="Get here").click()
+
+    panel = page.locator("aside")
+    expect = playwright.expect
+    expect(panel.get_by_text("Where I am", exact=True)).to_be_visible()
+    expect(panel.get_by_text(re.compile(r"^[\d.]+, [\d.]+$"))).to_have_count(0)
+
+
 def _plan_a_ride(page, confidence, hurry=False, backup=0):
     """Plans the way to END, answered with one option that rides the city's
     route on what `confidence` names, caught only by hurrying if `hurry` says
