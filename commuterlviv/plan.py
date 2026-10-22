@@ -28,7 +28,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import files, gtfs, localtime, network, replay, walk as footpaths
+from . import files, localtime, network, replay, walk as footpaths
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 TRANSFERS = DATA / "transfers.npz"
@@ -260,18 +260,20 @@ class Timetable:
     translate.
 
     It holds every trip of every service; a search reads the one day it runs
-    on, from `on`.
+    on, from `on`. The services and their calendar are the network's, never
+    the feed on disk, which may have been fetched again since the network was
+    built from it.
     """
 
-    VERSION = 3
+    VERSION = 4
 
     def __init__(self, net):
         self.version = self.VERSION
         self.net = net
         self.stops = sorted(net.stops)
         self.stop_i = {s: i for i, s in enumerate(self.stops)}
-        self.calendar = gtfs.Calendar()
-        of = {t["trip_id"]: t["service_id"] for t in gtfs.table("trips.txt")}
+        self.calendar = net.calendar
+        of = net.trip_service
         self.services = sorted(set(of.values()))
         service_i = {s: i for i, s in enumerate(self.services)}
         by_key = {}

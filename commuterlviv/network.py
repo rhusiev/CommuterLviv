@@ -112,7 +112,7 @@ class Shape:
 class Net:
     # bump when a field is added or its meaning changes: the cache is keyed by
     # the feed alone, so an older one would otherwise load with fields missing
-    VERSION = 3
+    VERSION = 4
 
     def __init__(self):
         self.version = self.VERSION
@@ -123,6 +123,8 @@ class Net:
         self.trip_shape = {}
         self.trip_route = {}
         self.trip_dir = {}          # trip_id -> 0 or 1, the feed's direction_id
+        self.trip_service = {}      # trip_id -> the feed's service_id
+        self.calendar = gtfs.Calendar()     # which services run on a date
         self.trip_stops = {}        # trip_id -> (stop_ids, dist[], sched_sec[])
         self.pattern_of = {}        # trip_id -> pattern key
         self.trip_next = {}         # trip_id -> the block's next trip, same vehicle
@@ -188,6 +190,7 @@ def build():
     _read_shapes(net)
     _read_stops_and_routes(net)
     blocks = _read_trips(net)
+    net.calendar = gtfs.Calendar.read()
     _solve_patterns(net)
     for trips in blocks.values():
         trips = sorted((t for t in trips if t in net.trip_stops),
@@ -220,7 +223,8 @@ def _read_stops_and_routes(net):
 
 
 def _read_trips(net):
-    """Fills in each trip's shape, route and direction; the trips of each block."""
+    """Fills in each trip's shape, route, direction and service; the trips of
+    each block."""
     blocks = {}
     for t in gtfs.table("trips.txt"):
         if t.get("block_id"):
@@ -228,6 +232,7 @@ def _read_trips(net):
         net.trip_shape[t["trip_id"]] = t["shape_id"]
         net.trip_route[t["trip_id"]] = t["route_id"]
         net.trip_dir[t["trip_id"]] = int(t["direction_id"] or 0)
+        net.trip_service[t["trip_id"]] = t["service_id"]
     return blocks
 
 
