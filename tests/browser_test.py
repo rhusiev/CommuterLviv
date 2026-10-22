@@ -1,9 +1,9 @@
 """The web app in a real browser against the real service: an account created
 through the sign-in screen, a stop found by name, the bus on its board, a route
 watched from the stop's card, a journey planned from on board the bus and
-followed, a place found by name planned to and a name
-that matches nothing, what opens on an option only once
-it is picked, one followed on foot that misses its bus searched again, a refused
+followed, a place found by name planned to and a name that matches nothing,
+what opens on an option only once it is picked, one followed on foot that
+misses its bus searched again, a refused
 location, a changed password and a cancelled one, one that cannot be cancelled
 while under way, none offered where the service turns it off, and a shared link
 that opens its stop or route.
