@@ -259,8 +259,7 @@ void main() {
           find.descendant(of: of, matching: find.byType(Material)).first,
         )
         .shape;
-    final end = drawn(find.byType(OutlinedButton).first);
-    expect(end, isA<StadiumBorder>());
+    expect(drawn(find.byType(OutlinedButton).first), isA<StadiumBorder>());
     expect(drawn(find.byType(ActionChip)), isA<StadiumBorder>());
     expect(drawn(find.byType(InputChip)), isA<StadiumBorder>());
   });

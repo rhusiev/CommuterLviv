@@ -443,10 +443,10 @@ class _JourneyPanelState extends State<JourneyPanel> {
     ],
   );
 
-  /// When to set off - unless already on board - and how to rank the options.
   /// The chips' shape, the same as the fields' above them
   static const _pill = StadiumBorder();
 
+  /// When to set off - unless already on board - and how to rank the options.
   Widget _when() => Row(
     children: [
       if (widget.aboard == null) ...[
