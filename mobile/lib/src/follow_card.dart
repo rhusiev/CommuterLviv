@@ -35,6 +35,9 @@ const _judgeEvery = Duration(seconds: 1);
 /// The steps list scrolls past this height
 const _stepsMaxHeight = 256.0;
 
+/// A long stop name wraps rather than losing its end, as on the web
+const _headLines = 2;
+
 /// Room for a step's `HH:MM - HH:MM`
 const _clockWidth = 96.0;
 
@@ -479,6 +482,7 @@ class _Step extends StatelessWidget {
               child: Text(
                 said.head,
                 style: theme.textTheme.titleSmall,
+                maxLines: _headLines,
                 overflow: TextOverflow.ellipsis,
               ),
             ),

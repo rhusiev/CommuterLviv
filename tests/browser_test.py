@@ -36,6 +36,7 @@ CHROMIUM = ("chromium-browser", "chromium", "google-chrome")
 START_S = 30.0
 SEE_MS = 20_000          # the bus reaches the page a few feed polls after it set off
 VIEWPORT = {"width": 1280, "height": 720}
+PHONE = {"width": 393, "height": 852}
 # The whole line fits across the middle of the page, at about 6 m a pixel
 ZOOM = 13.0
 TILE_PX = 512            # maplibre's world is this many pixels across at zoom 0
@@ -340,6 +341,28 @@ def test_a_missed_bus_is_searched_again_from_the_last_fix(page):
         again.click()
     lat, lon = asked.value.url.split("from=")[1].split("&")[0].split(",")
     assert (float(lat), float(lon)) == pytest.approx(streets.DOOR)
+
+
+def test_the_step_followed_on_a_phone_is_not_cut_short_by_its_buttons(page):
+    _register(page, "reader")
+    expect = playwright.expect
+    _pick_route(page)
+    expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
+    journey, tag = _a_ride_from_the_door(page)
+    held = {"journey": journey, "to": {"lat": END[0], "lon": END[1]}, "tag": tag}
+    page.evaluate("v => localStorage.setItem('commuterlviv.following', v)",
+                  json.dumps(held))
+    page.evaluate("localStorage.setItem('commuterlviv.lang', 'uk')")
+    page.context.set_geolocation(
+        {"latitude": streets.DOOR[0], "longitude": streets.DOOR[1]})
+    page.set_viewport_size(PHONE)
+    page.reload()
+
+    head = page.get_by_text(re.compile("^Ідіть до"))
+    expect(head).to_be_visible(timeout=SEE_MS)
+    clipped = head.evaluate("e => e.scrollWidth > e.clientWidth"
+                            " || e.scrollHeight > e.clientHeight")
+    assert not clipped
 
 
 def test_a_refused_location_says_how_to_allow_it(page):

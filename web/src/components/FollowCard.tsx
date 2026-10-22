@@ -37,7 +37,8 @@ export function FollowCard({
   useAwake(awake && !done);
   return (
     <div className="panel pointer-events-auto p-3">
-      <div className="flex items-start gap-2">
+      {/* The buttons move under the step once it would be left too narrow to read */}
+      <div className="flex flex-wrap items-start gap-2">
         {/* A div, as a button may not hold the paragraphs of the step */}
         <div
           role="button"
@@ -50,7 +51,7 @@ export function FollowCard({
           }}
           aria-expanded={steps}
           title={steps ? t.hideSteps : t.showSteps}
-          className="flex min-w-0 flex-1 cursor-pointer items-start gap-1 text-sm"
+          className="flex min-w-40 flex-1 cursor-pointer items-start gap-1 text-sm"
         >
           <div className="min-w-0 flex-1">
             {progress === null ? (
@@ -63,22 +64,24 @@ export function FollowCard({
           </div>
           <Icon name={steps ? "up" : "down"} className="size-4 shrink-0 text-slate-500" />
         </div>
-        {canKeepAwake() && !done && (
-          <button
-            onClick={() => {
-              holdAwake(!awake);
-              setAwake(!awake);
-            }}
-            aria-pressed={awake}
-            title={t.keepAwakeHint}
-            className={awake ? "btn" : "btn-quiet"}
-          >
-            {t.keepAwake}
+        <div className="ml-auto flex shrink-0 gap-2">
+          {canKeepAwake() && !done && (
+            <button
+              onClick={() => {
+                holdAwake(!awake);
+                setAwake(!awake);
+              }}
+              aria-pressed={awake}
+              title={t.keepAwakeHint}
+              className={awake ? "btn" : "btn-quiet"}
+            >
+              {t.keepAwake}
+            </button>
+          )}
+          <button onClick={onEnd} className={done ? "btn" : "btn-quiet"}>
+            {done ? t.ok : t.endFollow}
           </button>
-        )}
-        <button onClick={onEnd} className={done ? "btn" : "btn-quiet"}>
-          {done ? t.ok : t.endFollow}
-        </button>
+        </div>
       </div>
       {caught.kind !== "ok" && !done && (
         <CatchLine catalog={catalog} journey={journey} caught={caught} onSearch={onSearch} />
@@ -231,7 +234,7 @@ function Step({
         {stage.kind !== "walk" && route && (
           <RouteBadge route={route} className="shrink-0 px-1.5 text-xs" />
         )}
-        <span className="min-w-0 truncate font-medium text-slate-100">{head}</span>
+        <span className="line-clamp-2 min-w-0 font-medium break-words text-slate-100">{head}</span>
       </p>
       <p className="mt-0.5 text-xs text-slate-400">
         {stage.kind === "wait" ? (when ? t.dueIn(countdown(when.t)) : "") : t.toGo(distance(progress.left))}
