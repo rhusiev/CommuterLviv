@@ -18,7 +18,7 @@ class HurryPill extends StatelessWidget {
   /// Said on a tap
   final String hint;
 
-  /// Whether a tap says [hint]. Off on a card that is one tap target
+  /// Whether a tap says [hint]. Off on a journey option, which says it in place
   final bool explains;
 
   @override

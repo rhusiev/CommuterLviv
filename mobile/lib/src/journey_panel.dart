@@ -3,6 +3,7 @@
 library;
 
 export 'end_field.dart' show End;
+export 'journey_option.dart' show legNote;
 
 import 'dart:async';
 
@@ -14,24 +15,13 @@ import 'api.dart';
 import 'backups_dialog.dart';
 import 'end_field.dart';
 import 'eta.dart';
-import 'explain.dart';
-import 'follow.dart' show followable, plannedKmh;
-import 'hurry_pill.dart';
+import 'journey_option.dart';
 import 'models.dart';
 import 'route_badge.dart';
 import 'sheets.dart';
 import 'strings.dart';
 import 'theme.dart';
 import 'walk_speed.dart';
-
-/// A word on a ride not resting on a tracked vehicle, and what it means; null
-/// on one that is.
-(String, String)? legNote(Confidence confidence) => switch (confidence) {
-  Confidence.live => null,
-  Confidence.terminus => (txt.terminusPart, txt.terminusWhy),
-  Confidence.schedule => (txt.schedulePart, txt.scheduleWhy),
-  Confidence.quiet => (txt.quietPart, txt.quietWhy),
-};
 
 class JourneyPanel extends StatefulWidget {
   const JourneyPanel({
@@ -502,7 +492,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
       shrinkWrap: true,
       padding: EdgeInsets.zero,
       itemCount: ranked.length,
-      itemBuilder: (_, i) => _Option(
+      itemBuilder: (_, i) => JourneyOption(
         journey: ranked[i],
         shown: ranked[i] == _shown,
         onShow: () =>
@@ -597,291 +587,6 @@ class _Folded extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _Option extends StatelessWidget {
-  const _Option({
-    required this.journey,
-    required this.shown,
-    required this.onShow,
-    required this.prefer,
-    required this.place,
-    required this.catalog,
-    required this.onStop,
-    required this.onLine,
-    required this.onWay,
-    required this.onFollow,
-  });
-
-  final Journey journey;
-
-  /// Whether this is the option drawn on the map; a tap toggles it. Until it
-  /// is, the card is one tap target that picks it. Once it is, what opens
-  /// something says so: a stop's row by its chevron, a note and the hurry pill
-  /// by their ⓘ, the backups by their underline, a line by its badge
-  final bool shown;
-  final VoidCallback onShow;
-  final Prefer prefer;
-
-  /// Where an option, by its index in the plan, is in the list, from 1.
-  final int Function(int option) place;
-  final Catalog catalog;
-  final void Function(int stop) onStop;
-
-  final void Function(int route) onLine;
-  final Future<String?> Function(WayPick? pick) onWay;
-  final VoidCallback onFollow;
-
-  @override
-  Widget build(BuildContext context) {
-    final changes = journey.rides - 1;
-    return Card(
-      margin: const EdgeInsets.only(top: 8),
-      clipBehavior: Clip.antiAlias,
-      shape: shown
-          ? RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(
-                color: material.Theme.of(context).colorScheme.primary,
-                width: 2,
-              ),
-            )
-          : null,
-      child: InkWell(
-        onTap: onShow,
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    txt.minutes(spanMinutes(journey.arr - journey.dep)),
-                    style: material.Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(width: 8),
-                  Text('${clockTime(journey.dep)} - ${clockTime(journey.arr)}'),
-                  const Spacer(),
-                  Text(
-                    journey.rides == 0
-                        ? txt.wholeWalk
-                        : changes <= 0
-                        ? txt.noChange
-                        : txt.changeCount(changes),
-                    style: material.Theme.of(context).textTheme.bodySmall,
-                  ),
-                  if (journey.rides > 0 && journey.backup > 0)
-                    _backups(context),
-                ],
-              ),
-              if (journey.hurry)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: _hurried(journey, explains: shown),
-                ),
-              for (final leg in journey.legs)
-                _LegRow(
-                  leg: leg,
-                  catalog: catalog,
-                  onStop: shown ? onStop : null,
-                  onLine: shown ? onLine : null,
-                  explains: shown,
-                ),
-              if (shown && followable(journey))
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Tooltip(
-                    message: txt.followHint,
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.tonal(
-                        onPressed: onFollow,
-                        child: Text(txt.follow),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// The count of backups, which lists them once the card is picked
-  Widget _backups(BuildContext context) {
-    final style = material.Theme.of(context).textTheme.bodySmall;
-    final count = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      child: Text(
-        '· ${txt.backupCount(journey.backup)}',
-        style: shown
-            ? style?.copyWith(
-                color: Colors.greenAccent,
-                decoration: TextDecoration.underline,
-                decorationStyle: TextDecorationStyle.dotted,
-                decorationColor: Colors.greenAccent,
-              )
-            : style,
-      ),
-    );
-    if (!shown) return count;
-    return InkWell(
-      onTap: () => showBackups(
-        context,
-        journey: journey,
-        prefer: prefer,
-        catalog: catalog,
-        place: place,
-        onWay: onWay,
-      ),
-      borderRadius: BorderRadius.circular(6),
-      child: count,
-    );
-  }
-}
-
-/// An option caught only by hurrying, with the pace that catches it
-Widget _hurried(Journey journey, {required bool explains}) {
-  final kmh = plannedKmh(journey);
-  return kmh == null
-      ? HurryPill(text: txt.hurry, hint: txt.hurryHint, explains: explains)
-      : HurryPill(
-          text: txt.hurryAt(txt.kmh(kmh)),
-          hint: '${txt.hurryHint}. ${txt.paceHint}',
-          explains: explains,
-        );
-}
-
-class _LegRow extends StatelessWidget {
-  const _LegRow({
-    required this.leg,
-    required this.catalog,
-    required this.onStop,
-    required this.onLine,
-    required this.explains,
-  });
-
-  final Leg leg;
-  final Catalog catalog;
-
-  /// These are none while the card is not picked, so a tap on the row picks it
-  final void Function(int stop)? onStop;
-  final void Function(int route)? onLine;
-
-  /// Whether the note says why when tapped
-  final bool explains;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = material.Theme.of(context);
-    final small = theme.textTheme.bodySmall;
-    // A walk between two rides is a leg of its own on the wire, so it is one
-    // here too: its own duration, and the stop it ends at
-    final where = leg.b < 0 ? txt.toDoor : catalog.stopName(leg.b);
-    final open = switch (onStop) {
-      final open? when leg.b >= 0 => () => open(leg.b),
-      _ => null,
-    };
-    return InkWell(
-      onTap: open,
-      child: Padding(
-        padding: const EdgeInsets.only(top: 6),
-        child: Row(
-          children: [
-            if (leg.walking)
-              SizedBox(
-                width: 92,
-                child: Tooltip(
-                  message: txt.walkLeg(spanMinutes(leg.arr - leg.dep)),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.directions_walk,
-                        size: 16,
-                        color: small?.color,
-                      ),
-                      Text(
-                        txt.minutes(spanMinutes(leg.arr - leg.dep)),
-                        style: small,
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else ...[
-              SizedBox(width: 44, child: Text(clockTime(leg.dep))),
-              // Inside a row that opens the stop, so the badge takes its own
-              // taps
-              if (catalog.routeAt(leg.route) case final route?)
-                InkWell(
-                  onTap: switch (onLine) {
-                    final line? => () => line(leg.route!),
-                    _ => null,
-                  },
-                  borderRadius: BorderRadius.circular(6),
-                  child: RouteBadge(route: route, fontSize: 11),
-                ),
-              const SizedBox(width: 8),
-            ],
-            Expanded(child: Text(where, overflow: TextOverflow.ellipsis)),
-            if (legNote(leg.confidence) case (final part, final why))
-              _Note(
-                part: part,
-                why: why,
-                explains: explains,
-                colour: leg.confidence == Confidence.quiet
-                    ? theme.colorScheme.error
-                    : small?.color,
-              ),
-            if (open != null)
-              Icon(Icons.chevron_right, size: 18, color: small?.color),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// A word on what a ride rests on, which explains itself when tapped.
-class _Note extends StatelessWidget {
-  const _Note({
-    required this.part,
-    required this.why,
-    required this.colour,
-    required this.explains,
-  });
-
-  final String part;
-  final String why;
-  final Color? colour;
-  final bool explains;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = material.Theme.of(context).textTheme.bodySmall
-        ?.copyWith(color: colour);
-    final word = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(part, style: style),
-          if (explains) ...[
-            const SizedBox(width: 2),
-            Icon(Icons.info_outline, size: infoIconSize, color: colour),
-          ],
-        ],
-      ),
-    );
-    if (!explains) return word;
-    return InkWell(
-      onTap: () => explain(context, part, why),
-      borderRadius: BorderRadius.circular(6),
-      child: word,
     );
   }
 }

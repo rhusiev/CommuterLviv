@@ -139,6 +139,7 @@ class Strings {
     required this.faster,
     required this.alsoOptionHint,
     required this.showWay,
+    required this.showLine,
     required this.searchAgain,
     required this.today,
     required this.tomorrow,
@@ -343,6 +344,7 @@ class Strings {
   final String faster;
   final String alsoOptionHint;
   final String showWay;
+  final String showLine;
   final String searchAgain;
   final String today;
   final String tomorrow;
@@ -538,6 +540,7 @@ const _en = Strings(
   faster: 'Faster',
   alsoOptionHint: 'This way is also among the options',
   showWay: 'Show this way on the map',
+  showLine: 'Show this line',
   searchAgain: 'That search is no longer held; search again',
   today: 'Today',
   tomorrow: 'Tomorrow',
@@ -776,6 +779,7 @@ const _uk = Strings(
   faster: 'Швидше',
   alsoOptionHint: 'Цей шлях є і серед варіантів',
   showWay: 'Показати цей шлях на мапі',
+  showLine: 'Показати лінію',
   searchAgain: 'Цей пошук уже не збережено; шукайте знову',
   today: 'Сьогодні',
   tomorrow: 'Завтра',

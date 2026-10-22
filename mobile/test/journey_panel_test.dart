@@ -191,6 +191,40 @@ Future<HttpServer> _serve(
   return server;
 }
 
+/// The length of the one option [_serve] answers: it leaves at 0 and is at the
+/// door 12 minutes later
+final _length = find.text(txt.minutes(12));
+
+/// The smallest target a finger hits reliably, as Material sizes it
+const _tapPx = kMinInteractiveDimension;
+
+/// Scrolls [target] into the panel's view, taps it, and lets what it opens settle
+Future<void> _tapOn(WidgetTester tester, Finder target) async {
+  await tester.ensureVisible(target);
+  await tester.pumpAndSettle();
+  await tester.tap(target);
+  await tester.pumpAndSettle();
+}
+
+/// The option's card, while [_serve]'s one option is listed
+final _card = find.ancestor(of: _length, matching: find.byType(Card));
+
+/// Where on the option's card something does something when tapped
+List<Rect> _targets(WidgetTester tester) => [
+  for (final target
+      in find
+          .descendant(
+            of: find.ancestor(of: _length, matching: find.byType(Card)),
+            matching: find.byWidgetPredicate(
+              (w) =>
+                  (w is InkWell && w.onTap != null) ||
+                  (w is ButtonStyleButton && w.onPressed != null),
+            ),
+          )
+          .evaluate())
+    tester.getRect(find.byWidget(target.widget)),
+];
+
 void main() {
   testWidgets('the depart chip leaves at now until a time is picked', (
     tester,
@@ -442,88 +476,104 @@ void main() {
       onLine: onLine,
     );
     await tester.tap(find.text(txt.findRoute));
-    await pumpUntil(tester, () => find.text('Work stop').evaluate().isNotEmpty);
+    await pumpUntil(tester, () => _length.evaluate().isNotEmpty);
     expect(shown.whereType<Journey>(), isEmpty);
     return shown;
   }
 
-  testWidgets("a ride's note explains itself once its option is picked", (
+  /// Taps the option's length, which picks it or folds it again
+  Future<void> toggle(WidgetTester tester) => _tapOn(tester, _length);
+
+  testWidgets('an unpicked option picks from wherever it is tapped, and its '
+      'summary folds it again', (tester) async {
+    final shown = await searched(tester, confidence: 'terminus');
+    Finder expandedIs(bool open) => find.descendant(
+      of: _card,
+      matching: find.byWidgetPredicate(
+        (w) => w is Semantics && w.properties.expanded == open,
+      ),
+    );
+
+    for (final spot in [
+      find.byType(HurryPill),
+      find.text(txt.terminusPart),
+      find.text(txt.backupCount(1)),
+    ]) {
+      expect(_targets(tester), hasLength(1));
+      expect(expandedIs(false), findsOneWidget);
+      await _tapOn(tester, spot);
+      expect(shown.last, isNotNull);
+      expect(expandedIs(true), findsOneWidget);
+
+      await toggle(tester);
+      expect(shown.last, isNull);
+    }
+  });
+
+  testWidgets('a picked option says its notes and hurry in place, with no '
+      'info to tap', (tester) async {
+    await searched(tester, confidence: 'terminus');
+    expect(find.text(txt.terminusWhy), findsNothing);
+    expect(find.textContaining(txt.hurryHint), findsNothing);
+
+    await toggle(tester);
+
+    expect(find.text(txt.terminusWhy), findsOneWidget);
+    expect(find.textContaining(txt.hurryHint), findsOneWidget);
+    expect(find.byIcon(Icons.info_outline), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
+  });
+
+  testWidgets('every target on a picked option is big enough to tap', (
     tester,
   ) async {
-    final shown = await searched(tester, confidence: 'terminus');
-    final info = find.byIcon(Icons.info_outline);
-    expect(info, findsNothing);
+    await searched(tester, confidence: 'terminus');
+    await toggle(tester);
 
-    await tester.tap(find.text(txt.terminusPart));
-    await tester.pumpAndSettle();
-    expect(find.text(txt.terminusWhy), findsNothing);
-    expect(shown.last, isNotNull);
-    expect(info, findsWidgets);
+    final small = [
+      for (final target in _targets(tester))
+        if (target.shortestSide < _tapPx) target,
+    ];
 
-    await tester.tap(find.text(txt.terminusPart));
-    await tester.pumpAndSettle();
-    expect(find.text(txt.terminusWhy), findsOneWidget);
+    expect(small, isEmpty);
+    // the summary, the two stops, the line and the backups
+    expect(_targets(tester).toSet(), hasLength(5));
   });
 
-  testWidgets("a ride's line opens once its option is picked", (tester) async {
-    final lines = <int>[];
-    final shown = await searched(tester, onLine: lines.add);
+  testWidgets(
+    "a picked option's line opens from its badge, marked with a map",
+    (tester) async {
+      final lines = <int>[];
+      await searched(tester, onLine: lines.add);
+      final map = find.byIcon(Icons.map_outlined);
+      expect(map, findsNothing);
 
-    await tester.tap(find.byType(RouteBadge));
-    await tester.pump();
-    expect(lines, isEmpty);
-    expect(shown.last, isNotNull);
+      await toggle(tester);
+      expect(map, findsOneWidget);
+      await _tapOn(tester, map);
 
-    await tester.tap(find.byType(RouteBadge));
-    await tester.pump();
-    expect(lines, [0]);
-  });
+      expect(lines, [0]);
+    },
+  );
 
-  testWidgets('a stop opens once its option is picked, as its chevron says', (
+  testWidgets("a picked option's stop opens from its row, by its chevron", (
     tester,
   ) async {
     final stops = <int>[];
-    final shown = await searched(tester, onStop: stops.add);
-    final chevron = find.byIcon(Icons.chevron_right);
-    expect(chevron, findsNothing);
-
-    await tester.tap(find.text('Work stop'));
-    await tester.pump();
-    expect(stops, isEmpty);
-    expect(shown.last, isNotNull);
-    expect(chevron, findsWidgets);
-
-    await tester.tap(find.text('Work stop'));
-    await tester.pump();
-    expect(stops, [1]);
-  });
-
-  testWidgets('the hurry pill says why once its option is picked', (
-    tester,
-  ) async {
-    allowRealHttp();
-    final server = (await tester.runAsync(() => _serve([])))!;
-    addTearDown(() => server.close(force: true));
-    await pump(
-      tester,
-      prefs: {'commuterlviv.hurry': 9.0},
-      server: 'http://${server.address.host}:${server.port}',
-      catalog: _twoLines,
-      from: const LatLng(49.84, 24.03),
-      to: const LatLng(49.81, 24.05),
+    await searched(tester, onStop: stops.add);
+    await toggle(tester);
+    final row = find.ancestor(
+      of: find.text('Work stop'),
+      matching: find.byType(InkWell),
     );
-    await tester.tap(find.text(txt.findRoute));
-    final pill = find.byType(HurryPill);
-    await pumpUntil(tester, () => tester.any(pill));
-    final why = find.text('${txt.hurryHint}. ${txt.paceHint}');
+    expect(
+      find.descendant(of: row, matching: find.byIcon(Icons.chevron_right)),
+      findsOneWidget,
+    );
 
-    await tester.tap(pill);
-    await tester.pumpAndSettle();
-    expect(why, findsNothing);
+    await _tapOn(tester, find.text('Work stop'));
 
-    await tester.tap(pill);
-    await tester.pumpAndSettle();
-    expect(why, findsOneWidget);
+    expect(stops, [1]);
   });
 
   testWidgets('a backup that is no option is fetched and drawn as one', (
@@ -545,14 +595,10 @@ void main() {
     );
 
     await tester.tap(find.text(txt.findRoute));
-    final backups = find.text('· ${txt.backupCount(1)}');
-    await pumpUntil(tester, () => backups.evaluate().isNotEmpty);
-    // The first tap picks the option, the second opens its backups
-    await tester.tap(backups);
-    await tester.pumpAndSettle();
+    await pumpUntil(tester, () => _length.evaluate().isNotEmpty);
+    await _tapOn(tester, _length);
     expect(find.byType(AlertDialog), findsNothing);
-    await tester.tap(backups);
-    await tester.pumpAndSettle();
+    await _tapOn(tester, find.widgetWithText(TextButton, txt.backupCount(1)));
     await tester.tap(find.byTooltip(txt.showWay).last);
     await pumpUntil(tester, () => find.byType(AlertDialog).evaluate().isEmpty);
 
@@ -583,13 +629,9 @@ void main() {
     );
 
     await tester.tap(find.text(txt.findRoute));
-    final backups = find.text('· ${txt.backupCount(1)}');
-    await pumpUntil(tester, () => backups.evaluate().isNotEmpty);
-    // The first tap picks the option, the second opens its backups
-    await tester.tap(backups);
-    await tester.pump();
-    await tester.tap(backups);
-    await tester.pumpAndSettle();
+    await pumpUntil(tester, () => _length.evaluate().isNotEmpty);
+    await _tapOn(tester, _length);
+    await _tapOn(tester, find.widgetWithText(TextButton, txt.backupCount(1)));
 
     // the backup rides line 3; the planned ride's line is unknown
     expect(find.widgetWithText(RouteBadge, '3'), findsWidgets);

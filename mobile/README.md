@@ -195,6 +195,7 @@ refused and the map stays empty while everything else works.
 | `lib/src/map_controls.dart`  | zoom, and the compass that shows up off north                           |
 | `lib/src/eta.dart`           | an arrival's absolute time, said as a countdown                         |
 | `lib/src/journey_panel.dart` | two points, and the ways between them                                   |
+| `lib/src/journey_option.dart` | one of those ways, folded to one tap target or opened into its legs    |
 | `lib/src/walk_speed.dart`    | how fast you walk, per search and as the usual                          |
 | `lib/src/map_tiles.dart`     | where the basemap is kept between runs                                  |
 | `lib/src/theme.dart`         | every colour and radius the app uses, once                              |
@@ -319,11 +320,14 @@ walks uphill and speeds them down gentle slopes.
 `GET /api/plan` answers with options ranked by arrival. A ride on a tracked
 vehicle says nothing more; one resting on the timetable says so, and one on a
 line nothing has been seen running on says that in the error colour. An option
-not yet drawn is one tap target: a tap anywhere on it draws it, and nothing on
-it opens anything else. Only the drawn option marks what opens: a stop's row
-has a chevron and opens its card, a note and the hurry pill have an ⓘ and
-explain themselves, the backup count is underlined, and a route's badge opens
-its line. The browser does the same. That backup count opens a dialog
+not yet drawn is one tap target (`journey_option.dart`): a tap anywhere on it
+draws it and opens it, and nothing on it opens anything else. Folded, it says
+the hurry pill, its weakest ride's note and its backup count in words; its
+summary row folds it again and never turns into anything else. Opened, every
+control is drawn as one and as tall as `kMinInteractiveDimension`: a stop's row
+has a chevron and opens its card, a route's badge sits in a ring with a map and
+opens its line, and a note and the hurry pill say why under them, with nothing
+to tap for it. The browser does the same. "N backups ›" opens a dialog
 that, under each ride's stop, puts the planned way first and then the ride's
 backups - the other ways to the door from that stop, each with its routes,
 where it changes and when it gets there, at most half an hour after the option
