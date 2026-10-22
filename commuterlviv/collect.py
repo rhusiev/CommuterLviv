@@ -43,6 +43,7 @@ FEED_TIMEOUT_S = 30      # a fetch of a realtime feed may take
 LAD_TIMEOUT_S = 20       # a fetch of one stop's board may take
 FEED_RETRY_S = 0.5       # before a failed fetch is retried, doubling each time
 DRAIN_S = 1.5            # for the pollers' last rows to reach the writer on stopping
+WAKE_S = 1.0             # the idle writer waits for rows before its batch and checkpoint clocks
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -134,7 +135,7 @@ def writer():
     done = False
     while not done:
         try:
-            item = writes.get(timeout=1.0)
+            item = writes.get(timeout=WAKE_S)
             if item is None:
                 done = True
             else:

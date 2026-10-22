@@ -25,6 +25,9 @@ EARLIER = 1e-4          # per metre along: of two places as close, the earlier
 STOP_GAP = 1.0          # m a stop must lie past the one before it
 OUT_OF_ORDER = 1e3      # for a stop with no place past the one before it
 STOP_SPREAD = 1e-3      # m between stops placed at one point, to keep them in order
+SLACK = 250.0           # m farther than the closest a point's other places may lie
+SLACK_MAX = 400.0       # m of slack however much a caller asks for
+CANDIDATES = 10         # places kept per point, closest first
 
 
 @dataclass(frozen=True)
@@ -125,7 +128,7 @@ class Net:
         self.trip_next = {}         # trip_id -> the block's next trip, same vehicle
 
 
-def candidates(shape, p, slack=250.0, cap=10):
+def candidates(shape, p, slack=SLACK, cap=CANDIDATES):
     """Every plausible place on the shape this point could be: the local minima
     of distance-to-line. A shape that doubles back passes each stop twice."""
     t, l2, d2 = _to_segments(shape.xy[:-1], shape.xy[1:], p)
@@ -135,7 +138,7 @@ def candidates(shape, p, slack=250.0, cap=10):
         pad = np.concatenate([[np.inf], d2, [np.inf]])
         loc = np.nonzero((pad[1:-1] <= pad[:-2]) & (pad[1:-1] <= pad[2:]))[0]
     err = np.sqrt(d2[loc])
-    keep = loc[err <= max(err.min(), EPS) + min(slack, 400.0)]
+    keep = loc[err <= max(err.min(), EPS) + min(slack, SLACK_MAX)]
     err = np.sqrt(d2[keep])
     order = np.argsort(err)[:cap]
     keep, err = keep[order], err[order]
