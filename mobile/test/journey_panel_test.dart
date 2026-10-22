@@ -249,6 +249,22 @@ void main() {
     expect(find.byType(DatePickerDialog), findsOneWidget);
   });
 
+  testWidgets('the day and time chips are the same shape as the ends', (
+    tester,
+  ) async {
+    await pump(tester);
+
+    ShapeBorder? drawn(Finder of) => tester
+        .widget<Material>(
+          find.descendant(of: of, matching: find.byType(Material)).first,
+        )
+        .shape;
+    final end = drawn(find.byType(OutlinedButton).first);
+    expect(end, isA<StadiumBorder>());
+    expect(drawn(find.byType(ActionChip)), isA<StadiumBorder>());
+    expect(drawn(find.byType(InputChip)), isA<StadiumBorder>());
+  });
+
   testWidgets('a search walks at the usual speed, stepped for it alone', (
     tester,
   ) async {

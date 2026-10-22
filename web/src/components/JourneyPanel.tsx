@@ -574,7 +574,8 @@ function Field({
         ) : (
           <button
             onClick={() => setOpen(true)}
-            className="flex w-full min-w-0 items-center gap-2 rounded-md bg-raised/70 px-2 py-1.5 text-left text-sm hover:bg-raised"
+            // A field, as the search it opens into and the time below are
+            className="field flex min-w-0 items-center gap-2 py-1.5 text-left hover:bg-raised"
           >
             <Icon name="search" className="size-4 shrink-0 text-slate-500" />
             {aboard && catalog.routes[aboard.route ?? -1] && (

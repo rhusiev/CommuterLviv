@@ -345,18 +345,36 @@ def test_a_place_found_by_name_is_shown_and_the_way_there_planned(page):
     expect(page.get_by_text("Town hall", exact=True)).to_be_visible()
 
 
-def test_a_start_where_i_am_says_so_rather_than_its_coordinates(page):
-    _register(page, "here")
+def _plan_to_town_hall(page):
+    """Opens the planner from the place card of a place found by name at END,
+    from where the browser is"""
     found = {"name": "Town hall", "where": "", "lat": END[0], "lon": END[1], "kind": None}
     page.route("**/api/search?**", lambda route: route.fulfill(json={"places": [found]}))
     page.get_by_placeholder("Find a stop or a place").fill("Town hall")
     page.get_by_role("button", name=re.compile(r"^Town hall")).click()
     page.get_by_role("button", name="Get here").click()
 
+
+def test_a_start_where_i_am_says_so_rather_than_its_coordinates(page):
+    _register(page, "here")
+    _plan_to_town_hall(page)
+
     panel = page.locator("aside")
     expect = playwright.expect
     expect(panel.get_by_text("Where I am", exact=True)).to_be_visible()
     expect(panel.get_by_text(re.compile(r"^[\d.]+, [\d.]+$"))).to_have_count(0)
+
+
+def test_the_ends_are_the_same_shape_as_the_time_to_leave(page):
+    _register(page, "shaper")
+    _plan_to_town_hall(page)
+
+    panel = page.locator("aside")
+    end = panel.get_by_role("button", name="Town hall")
+    leave = panel.locator("input[type=datetime-local]")
+    playwright.expect(end).to_be_visible()
+    radius = "e => getComputedStyle(e).borderRadius"
+    assert end.evaluate(radius) == leave.evaluate(radius)
 
 
 def _plan_a_ride(page, confidence, hurry=False, backup=0):
@@ -374,11 +392,7 @@ def _plan_a_ride(page, confidence, hurry=False, backup=0):
               "confidence": confidence, "backup": backup, "legs": [walk, ride, home]}
     page.route("**/api/plan?**", lambda route: route.fulfill(
         json={"t": now, "report": "r1", "options": [option]}))
-    found = {"name": "Town hall", "where": "", "lat": END[0], "lon": END[1], "kind": None}
-    page.route("**/api/search?**", lambda route: route.fulfill(json={"places": [found]}))
-    page.get_by_placeholder("Find a stop or a place").fill("Town hall")
-    page.get_by_role("button", name=re.compile(r"^Town hall")).click()
-    page.get_by_role("button", name="Get here").click()
+    _plan_to_town_hall(page)
     minutes = re.compile(r"^\d+ min$")
     card = page.locator("aside .inset-panel").filter(has=page.get_by_text(minutes))
     # the first of them; the walks say theirs too, once it is picked

@@ -444,6 +444,9 @@ class _JourneyPanelState extends State<JourneyPanel> {
   );
 
   /// When to set off - unless already on board - and how to rank the options.
+  /// The chips' shape, the same as the fields' above them
+  static const _pill = StadiumBorder();
+
   Widget _when() => Row(
     children: [
       if (widget.aboard == null) ...[
@@ -453,11 +456,13 @@ class _JourneyPanelState extends State<JourneyPanel> {
           child: ActionChip(
             label: Text(_dayName(_leaving)),
             onPressed: _pickDay,
+            shape: _pill,
           ),
         ),
         const SizedBox(width: 8),
         InputChip(
           label: Text(_at == null ? txt.now : clockTime(_at!)),
+          shape: _pill,
           onPressed: _pickTime,
           onDeleted: _at == null ? null : () => _leave(null),
         ),
