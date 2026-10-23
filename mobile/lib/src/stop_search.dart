@@ -14,6 +14,7 @@ import 'api.dart';
 import 'here.dart';
 import 'match.dart';
 import 'models.dart';
+import 'route_badge.dart';
 import 'sheets.dart' show askPlaceName;
 import 'strings.dart';
 
@@ -226,20 +227,25 @@ class _Around extends StatelessWidget {
         );
 }
 
-/// Stop [i] as a row, with [under] beneath its name.
+/// A stop row names this many of its routes, so a hub's does not fill the list
+const _shownRoutes = 6;
+
+/// Stop [i] as a row, with [under] or the badges of [routes] beneath its name.
 Widget _stop(
   BuildContext context,
   Catalog catalog,
   int i,
   String under,
   void Function(Hit hit) onPick,
-  void Function(String name, LatLng at) onSave,
-) {
+  void Function(String name, LatLng at) onSave, {
+  List<TransitRoute> routes = const [],
+}) {
   final s = catalog.stops[i];
   return _Row(
     icon: Icons.directions_bus_outlined,
     title: s.name,
     under: under,
+    routes: routes,
     onTap: () => onPick(StopHit(i)),
     onSave: () => _saveAs(context, onSave, s.name, LatLng(s.lat, s.lon)),
   );
@@ -369,12 +375,15 @@ class _ResultsState extends State<_Results> {
                   context,
                   catalog,
                   row,
-                  [
-                    for (final r in catalog.stops[row].routes)
-                      catalog.routes[r].short,
-                  ].join(' · '),
+                  '',
                   widget.onPick,
                   widget.onSave,
+                  routes: [
+                    for (final r in catalog.stops[row].routes.take(
+                      _shownRoutes,
+                    ))
+                      catalog.routes[r],
+                  ],
                 );
               }
               if (row is Place) {
@@ -428,6 +437,8 @@ class _Said extends StatelessWidget {
   );
 }
 
+const _badgeGap = 4.0;
+
 class _Row extends StatelessWidget {
   const _Row({
     required this.icon,
@@ -435,12 +446,16 @@ class _Row extends StatelessWidget {
     required this.under,
     required this.onTap,
     this.onSave,
+    this.routes = const [],
   });
 
   final IconData icon;
   final String title;
   final String under;
   final VoidCallback onTap;
+
+  /// Shown as badges in place of [under]
+  final List<TransitRoute> routes;
 
   /// Null for a place already saved
   final VoidCallback? onSave;
@@ -449,7 +464,18 @@ class _Row extends StatelessWidget {
   Widget build(BuildContext context) => ListTile(
     leading: Icon(icon),
     title: Text(title, overflow: TextOverflow.ellipsis),
-    subtitle: under.isEmpty
+    subtitle: routes.isNotEmpty
+        ? Padding(
+            padding: const EdgeInsets.only(top: _badgeGap),
+            child: Wrap(
+              spacing: _badgeGap,
+              runSpacing: _badgeGap,
+              children: [
+                for (final r in routes) RouteBadge(route: r, fontSize: 10),
+              ],
+            ),
+          )
+        : under.isEmpty
         ? null
         : Text(under, overflow: TextOverflow.ellipsis),
     onTap: onTap,

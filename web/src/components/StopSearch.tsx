@@ -6,8 +6,12 @@ import { matching, type Shown } from "../lib/places";
 import { hereOnce, ONE_FIX, type NoFix } from "../lib/position";
 import type { Catalog, Found, Place } from "../lib/types";
 import { t } from "../lib/i18n";
+import { RouteBadge } from "./RouteBadge";
 
 const LIMIT = 8;
+
+/** A stop row names this many of its routes, so a hub's does not fill the list */
+const SHOWN_ROUTES = 6;
 
 /** Metres: past this "near me" is an IP geolocation, not a nearby stop */
 const NEAR = 2000;
@@ -244,16 +248,15 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline, aro
               : "stop" in row
               ? {
                   ...catalog.stops[row.stop]!,
-                  where:
-                    row.away === undefined
-                      ? catalog.stops[row.stop]!.routes
-                          .map((r) => catalog.routes[r]?.short)
-                          .filter(Boolean)
-                          .slice(0, 6)
-                          .join(" ")
-                      : t.away(Math.round(row.away)),
+                  where: row.away === undefined ? "" : t.away(Math.round(row.away)),
                 }
               : row.place;
+            const routes =
+              "stop" in row && row.away === undefined
+                ? catalog.stops[row.stop]!.routes
+                    .flatMap((r) => catalog.routes[r] ?? [])
+                    .slice(0, SHOWN_ROUTES)
+                : [];
             return (
               <li key={n}>
                 {heading !== undefined && (
@@ -278,6 +281,13 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline, aro
                   >
                     <span className="min-w-0 break-words">{it.name}</span>
                     <span className="text-xs text-slate-500">{it.where}</span>
+                    {routes.length > 0 && (
+                      <span className="flex flex-wrap gap-1">
+                        {routes.map((r) => (
+                          <RouteBadge key={r.id} route={r} className="px-1.5 text-xs" />
+                        ))}
+                      </span>
+                    )}
                   </button>
                   {"saved" in row ? (
                     <span className="shrink-0 px-2 py-1.5 text-sm text-accent">★</span>

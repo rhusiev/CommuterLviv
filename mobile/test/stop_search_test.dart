@@ -7,11 +7,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:commuterlviv/src/api.dart';
 import 'package:commuterlviv/src/here.dart';
 import 'package:commuterlviv/src/models.dart';
+import 'package:commuterlviv/src/route_badge.dart';
 import 'package:commuterlviv/src/stop_search.dart';
 import 'package:commuterlviv/src/strings.dart';
 
 const _catalog = Catalog(
-  routes: [],
+  routes: [
+    TransitRoute(
+      id: 'r0',
+      short: 'Тр25',
+      long: 'Market - Depot',
+      type: 'trolleybus',
+    ),
+  ],
   stops: [
     Stop(
       id: 's0',
@@ -19,7 +27,7 @@ const _catalog = Catalog(
       code: '100',
       lat: 49.84,
       lon: 24.03,
-      routes: [],
+      routes: [0],
     ),
     Stop(
       id: 's1',
@@ -137,6 +145,18 @@ void main() {
     await tester.tap(find.text(_home.name));
     await tester.pumpAndSettle();
     expect(picked, isA<PlaceHit>().having((p) => p.at, 'at', _home.at));
+  });
+
+  testWidgets('a stop found names its routes by their badges, not by the '
+      "feed's names", (tester) async {
+    await open(tester, (_) {});
+
+    await tester.enterText(find.byType(TextField), 'mark');
+    await tester.pump(_settled);
+
+    expect(find.byType(RouteBadge), findsOneWidget);
+    expect(find.text('25'), findsOneWidget);
+    expect(find.textContaining('Тр25'), findsNothing);
   });
 
   testWidgets('a query nothing matches says so once places have been looked '

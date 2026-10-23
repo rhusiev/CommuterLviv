@@ -179,9 +179,13 @@ def test_a_new_user_finds_a_stop_and_sees_the_bus_coming(page):
     _register(page, "rider")
 
     page.get_by_placeholder("Find a stop or a place").fill("Stop 4")
-    page.get_by_role("button", name="Stop 4").first.click()
-
     expect = playwright.expect
+    # the row names its routes by their badges, not by the feed's "А1"
+    row = page.get_by_role("button", name="Stop 4 1", exact=True)
+    expect(row).to_be_visible()
+    expect(row).not_to_contain_text("А1")
+    row.click()
+
     expect(page.get_by_role("heading", name="Stop 4")).to_be_visible()
     # its code as a name carries one, not as the feed's bare field
     expect(page.get_by_text("(104)", exact=True)).to_be_visible()
