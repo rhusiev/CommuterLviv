@@ -31,7 +31,7 @@ class Strings {
     required this.wantAccount,
     required this.haveInvite,
     required this.map,
-    required this.times,
+    required this.mine,
     required this.mapStyle,
     required this.themeNames,
     required this.server,
@@ -64,9 +64,7 @@ class Strings {
     required this.noPlaces,
     required this.saved,
     required this.pinnedStops,
-    required this.nothingSaved,
     required this.saveHow,
-    required this.showOnMap,
     required this.holdToManage,
     required this.foundStops,
     required this.foundPlaces,
@@ -83,6 +81,7 @@ class Strings {
     required this.save,
     required this.use,
     required this.sets,
+    required this.noSets,
     required this.pin,
     required this.unpin,
     required this.callsHere,
@@ -218,7 +217,7 @@ class Strings {
   final String wantAccount;
   final String haveInvite;
   final String map;
-  final String times;
+  final String mine;
   final String mapStyle;
 
   /// Each basemap's name, by its [MapTheme.id].
@@ -261,12 +260,10 @@ class Strings {
   final String noPlaces;
   final String saved;
   final String pinnedStops;
-  final String nothingSaved;
 
-  /// Where things get saved from, for an empty saved sheet
+  /// Where places get saved from, for an empty list of them
   final String saveHow;
 
-  final String showOnMap;
   final String holdToManage;
   final String foundStops;
   final String foundPlaces;
@@ -285,6 +282,9 @@ class Strings {
   final String save;
   final String use;
   final String sets;
+
+  /// Where sets are made, for an empty list of them
+  final String noSets;
   final String pin;
   final String unpin;
   final String callsHere;
@@ -439,7 +439,7 @@ const _en = Strings(
   wantAccount: 'Create an account',
   haveInvite: 'I have an invite code',
   map: 'Map',
-  times: 'Times',
+  mine: 'Mine',
   mapStyle: 'Map style',
   themeNames: {
     'colorful-dark': 'Colorful dark',
@@ -481,11 +481,7 @@ const _en = Strings(
   noPlaces: 'Save a place and it is offered here',
   saved: 'Saved',
   pinnedStops: 'Pinned stops',
-  nothingSaved: 'Nothing saved yet',
-  saveHow:
-      'Save a place with the star in the search or by holding the map, '
-      'and pin a stop from its card',
-  showOnMap: 'Tap a row to show it on the map',
+  saveHow: 'Save a place with the star in the search or by holding the map',
   holdToManage: 'Hold one to rename or remove it',
   foundStops: 'Stops',
   foundPlaces: 'Places',
@@ -502,6 +498,7 @@ const _en = Strings(
   save: 'Save',
   use: 'Use',
   sets: 'Sets',
+  noSets: 'Watch some routes and save them as a set from the routes list',
   pin: 'Pin',
   unpin: 'Unpin',
   callsHere: 'Calls here',
@@ -685,7 +682,7 @@ const _uk = Strings(
   wantAccount: 'Створити акаунт',
   haveInvite: 'У мене є код запрошення',
   map: 'Мапа',
-  times: 'Час',
+  mine: 'Моє',
   mapStyle: 'Вигляд мапи',
   themeNames: {
     'colorful-dark': 'Кольорова темна',
@@ -727,11 +724,7 @@ const _uk = Strings(
   noPlaces: 'Збережене місце зʼявиться тут',
   saved: 'Збережене',
   pinnedStops: 'Закріплені зупинки',
-  nothingSaved: 'Поки нічого не збережено',
-  saveHow:
-      'Збережіть місце зірочкою в пошуку або утримавши мапу, '
-      'а зупинку закріпіть з її картки',
-  showOnMap: 'Торкніться рядка, щоб показати на мапі',
+  saveHow: 'Збережіть місце зірочкою в пошуку або утримавши мапу',
   holdToManage: 'Утримуйте, щоб перейменувати або видалити',
   foundStops: 'Зупинки',
   foundPlaces: 'Місця',
@@ -748,6 +741,8 @@ const _uk = Strings(
   save: 'Зберегти',
   use: 'Використати',
   sets: 'Набори',
+  noSets:
+      'Відстежуйте кілька маршрутів і збережіть їх як набір у списку маршрутів',
   pin: 'Закріпити',
   unpin: 'Відкріпити',
   callsHere: 'Тут зупиняються',

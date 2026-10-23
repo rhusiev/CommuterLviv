@@ -31,7 +31,7 @@ picked. From zoom 16 (`ALL_STOPS_ZOOM`, 17 in the app's tiles) every other stop
 is drawn too, faint, and opens its card like the rest, so a stop can be looked
 up without watching a route first. The routes to pick are grouped under buses, trams and trolleybuses,
 because tram 1 and bus 1 are different lines. A route is drawn as the same split
-chip wherever it shows - the routes panel, a stop's card, the Times tab, a
+chip wherever it shows - the routes panel, a stop's card, the Mine tab's pinned stops, a
 vehicle's card: a click on its body watches it or stops watching it, and the `›`
 beside it opens its line. A chip hides nothing behind a right click or a long
 press. On the map itself a right click, or a long press on a phone, opens a
@@ -40,7 +40,7 @@ there or from there, or list the stops within 2 km of it in the search, as ◎
 does for where you are.
 Clicking a stop opens its card: the next arrival of each route due there, and
 under "Calls here" every route through it. Pinning it
-puts it in the Times tab. Clicking a vehicle
+puts it in the Mine tab. Clicking a vehicle
 asks the opposite question: `GET /api/vehicle?veh=<id>` answers with every stop
 that vehicle is predicted to reach and when, out to the model's 45-minute
 horizon, read off the same predictions the stop card shows - so the two cannot
@@ -167,7 +167,7 @@ because the map underneath is the context. Nothing outside `app.css` names a
 
 Nothing is docked to an edge. The map is the whole window in both clients and
 every piece of chrome floats over it: a search bar and a menu at the top, the
-map/times/plan pill at the bottom where a thumb is, round buttons for locate and
+tab pill at the bottom where a thumb is, round buttons for locate and
 zoom (on the web only from the `sm` width up, since below it the cards span the
 window and would cover them), and cards that rise off the bottom rather than out of it. That is why the
 web layout is one `relative` box of absolutely positioned pieces instead of a
@@ -179,12 +179,17 @@ What goes where is decided by what a control does, not by how often it is
 wanted. Routes choose what is tracked and open the routes panel. Layers change
 what the map draws - the route lines, the traffic, the basemap - and live in one
 sheet behind a layers button, whose icon is lit while anything in it is on.
-Everything belonging to the account rather than to the map - what is saved, the
-language, the server, the password, signing out - lives behind an account button, with signing
-out below a rule so it is never the tap next to anything else. Nothing that is a
-toggle and nothing that signs you out sits loose on the map. That is
-`LayersSheet` and `AccountSheet` in `mobile/lib/src/sheets.dart`, and
-`LayersPanel.tsx` and `AccountMenu.tsx` on the web.
+Everything belonging to the account rather than to the map is one tab, Mine:
+the pinned stops with what is due at each, dragged by a grip to reorder, the
+saved places, the route sets (a tap makes one the watched selection), and last a
+row for the account itself - the language, the walking speeds, the server, the
+password, signing out - with signing out below a rule so it is never the tap
+next to anything else. A pinned stop is listed there once, with its arrivals.
+Nothing that is a toggle and nothing that signs you out sits loose on the map.
+That is `LayersSheet` and `AccountSheet` in `mobile/lib/src/sheets.dart` and
+`mine_tab.dart`, and `LayersPanel.tsx`, `MinePanel.tsx` and
+`AccountSettings.tsx` on the web. The web's `?tab=` names the open tab; a link
+from before the Mine tab, `?tab=times` or `?tab=saved`, opens Mine.
 
 Changing the password is offered only where the service says it allows it
 (`password_change` in `/api/me`), which it does not by default. Where offered, it
@@ -248,7 +253,7 @@ uses, so panning moves the city and the vehicles in the same frame.
 endpoint and no model - the browser and the phone see the same city, the same
 route sets and the same predictions, and the same journey planner behind the
 third choice in the tab pill. Both also carry the same three views added since:
-a saved list where a place can be renamed or dropped, a search that finds
+a list of saved places in the Mine tab where a place can be renamed or dropped, a search that finds
 addresses and shops as well as stop names, with matching saved places above
 both, and lists the stops within 2 km of where you are (the web's ◎ in the search
 bar, the app's search before anything is typed), traffic drawn over the streets
@@ -262,7 +267,7 @@ the feed's zero padding ("0320") dropped, and the name's code taken over the
 feed's where the two disagree. Everywhere else a name keeps its code, which is
 what tells two stops of one name apart.
 
-A place picked from the search or the saved list gets a card of its own and a
+A place picked from the search or the Mine tab gets a card of its own and a
 dot on the map, both gone once the card is closed or a stop or vehicle is picked
 instead. The card names the place over its address, or says it is saved, keeps
 it by its star, and plans the way there: the place becomes the destination under

@@ -180,7 +180,7 @@ scaled by it, which costs about a millisecond. The walk caps below
 (`TRANSFER_CAP`, `WALK_CAPS`) are distances in disguise: seconds at `SPEED`,
 scaled by the same pace, so a slower walker is offered the same stops, each
 further away in time. Both clients keep a usual speed on the
-device (the account menu) and step it per search beside the departure time.
+device (the account settings in the Mine tab) and step it per search beside the departure time.
 `&hurry=<km/h>`, from 0.5 to 12 (`HURRY_KMH`, a brisk run, chosen, not
 derived), is how fast they would walk to the first stop to catch a bus; see
 hurry options below. Both clients keep it beside the usual speed, off until

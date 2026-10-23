@@ -9,15 +9,14 @@ import { JourneyPanel } from "./components/JourneyPanel";
 import { StopCard } from "./components/StopCard";
 import { HoldMenu, type Held } from "./components/HoldMenu";
 import { PlaceCard } from "./components/PlaceCard";
-import { AccountMenu } from "./components/AccountMenu";
+import { AccountSettings } from "./components/AccountSettings";
+import { MinePanel } from "./components/MinePanel";
 import { LayersPanel } from "./components/LayersPanel";
 import { Close } from "./components/Cross";
 import { Menu } from "./components/Menu";
-import { SavedPanel } from "./components/SavedPanel";
 import { StopSearch } from "./components/StopSearch";
 import { RouteBadge } from "./components/RouteBadge";
 import { VehicleCard } from "./components/VehicleCard";
-import { Timetable } from "./components/Timetable";
 import { api, catalog as fetchCatalog, catalogTag } from "./lib/api";
 import { useIndex, usePositions } from "./lib/catalog";
 import { samePlace, saved, type Shown } from "./lib/places";
@@ -72,9 +71,8 @@ function carryOldPins(cat: Catalog, who: Me): string[] {
 
 const TAB_NAMES: Record<UrlState["tab"], string> = {
   map: t.map,
-  times: t.times,
   plan: t.plan,
-  saved: t.saved,
+  mine: t.mine,
   route: t.route,
 };
 
@@ -111,10 +109,7 @@ export function App() {
   /** The quiet banner closed; it comes back the next time the vehicles go quiet */
   const [quietShut, setQuietShut] = useState(false);
   const [jams, setJams] = useState(() => loadFlag(TRAFFIC_KEY));
-  /** The one header menu open, as opening either closes the other */
-  const [menu, setMenu] = useState<"layers" | "account" | null>(null);
-  const toggle = (which: "layers" | "account") => (open: boolean) =>
-    setMenu(open ? which : null);
+  const [layersOpen, setLayersOpen] = useState(false);
 
   const openTab = (next: UrlState["tab"]) => {
     setTab(next);
@@ -419,29 +414,15 @@ export function App() {
           <span className="sm:hidden">{count}</span>
           <span className="max-sm:hidden">{t.vehicles(count)}</span>
         </span>
-        <div className="pointer-events-auto relative">
-          <Menu
-            icon="account"
-            label={t.account}
-            open={menu === "account"}
-            onToggle={toggle("account")}
-          >
-            <AccountMenu
-              username={me.username}
-              passwordChange={me.password_change ?? false}
-              onOut={session.signOut}
-            />
-          </Menu>
-        </div>
       </header>
 
       <div className={`absolute right-3 top-31 z-20 ${mapOnly}`}>
         <Menu
           icon="layers"
           label={t.layers}
-          open={menu === "layers"}
+          open={layersOpen}
           lit={allLines || jams}
-          onToggle={toggle("layers")}
+          onToggle={setLayersOpen}
         >
           <LayersPanel
             lines={allLines}
@@ -529,34 +510,33 @@ export function App() {
         </aside>
       )}
 
-      {tab === "times" && (
+      {tab === "mine" && (
         <section
-          className={`panel absolute ${clear} right-3 top-19 z-20 mx-auto flex max-w-lg flex-col overflow-hidden ${tall}`}
+          className={`panel absolute ${clear} right-3 top-19 z-20 mx-auto max-w-lg overflow-y-auto p-4 ${tall}`}
         >
-          <Timetable
+          <MinePanel
             catalog={cat}
-            stops={pins}
             arrivals={live.arrivals}
-            onUnpin={(i) => setPinned(pins.filter((p) => p !== i))}
             watching={picked}
             onToggle={session.togglePicked}
-            onRoute={openRoute}
-          />
-        </section>
-      )}
-
-      {tab === "saved" && (
-        <section
-          className={`panel absolute ${clear} right-3 top-19 z-20 mx-auto flex max-w-md flex-col p-3 ${tall}`}
-        >
-          <SavedPanel
-            catalog={cat}
-            places={places}
-            onPlaces={keepPlaces}
             pins={pins}
             onPins={setPinned}
-            onPlace={showPlace}
             onStop={showStop}
+            onRoute={openRoute}
+            places={places}
+            onPlaces={keepPlaces}
+            onPlace={showPlace}
+            sets={session.routeSets.sets}
+            active={session.routeSets.active}
+            onActivate={session.routeSets.activate}
+            onDelete={session.routeSets.remove}
+            username={me.username}
+            account={
+              <AccountSettings
+                passwordChange={me.password_change ?? false}
+                onOut={session.signOut}
+              />
+            }
           />
         </section>
       )}
@@ -653,18 +633,18 @@ export function App() {
           has room only for each label's own width */}
       <nav
         className={`bar absolute bottom-3 left-1/2 z-30 grid w-max grid-flow-col ${
-          route === null ? "sm:grid-cols-4" : "sm:grid-cols-5"
+          route === null ? "sm:grid-cols-3" : "sm:grid-cols-4"
         } -translate-x-1/2 gap-0.5 p-1 text-sm sm:gap-1`}
       >
         {(route === null
-          ? (["map", "times", "plan", "saved"] as const)
-          : (["map", "times", "plan", "saved", "route"] as const)
+          ? (["map", "plan", "mine"] as const)
+          : (["map", "plan", "mine", "route"] as const)
         ).map((v) => (
           <button
             key={v}
             onClick={() => {
               openTab(v);
-              setMenu(null);
+              setLayersOpen(false);
             }}
             className={`rounded-full px-2 py-1.5 font-medium transition-colors sm:px-4 ${
               tab === v

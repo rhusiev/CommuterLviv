@@ -1,4 +1,4 @@
-/// The map, the times, and the only place the shared state changes.
+/// The map, the Mine tab, and the only place the shared state changes.
 library;
 
 import 'dart:async';
@@ -23,18 +23,17 @@ import 'live.dart';
 import 'map_controls.dart' show nearZoom;
 import 'map_tab.dart';
 import 'map_theme.dart';
+import 'mine_tab.dart';
 import 'models.dart';
 import 'password_dialog.dart';
 import 'place_card.dart';
 import 'quiet_banner.dart';
 import 'route_badge.dart';
-import 'saved.dart';
 import 'server_dialog.dart';
 import 'sheets.dart';
 import 'stop_card.dart';
 import 'stop_search.dart';
 import 'theme.dart';
-import 'times_tab.dart';
 import 'tracking.dart';
 import 'vehicle_card.dart';
 import 'vehicle_layer.dart' show badgeRadius, pickableStops;
@@ -517,6 +516,48 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _activateSet(RouteSet set) async {
+    final catalog = _catalog;
+    final sets = _sets;
+    if (catalog == null || sets == null) return;
+    try {
+      await widget.api.activateSet(set.id);
+    } on Exception catch (e) {
+      _tell(widget.api.failure(e));
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _routes
+        ..clear()
+        ..addAll(catalog.routesAt(set.routes));
+      _sets = Sets(
+        sets: sets.sets,
+        active: set.id,
+        pins: sets.pins,
+        places: sets.places,
+      );
+    });
+    _push();
+  }
+
+  /// Runs [change] against the server's sets and then shows them as the
+  /// server now has them, since a rename or delete can also move the active one.
+  Future<void> _changeSets(Future<Object?> Function() change) async {
+    try {
+      await change();
+      final sets = await widget.api.sets();
+      if (mounted) setState(() => _sets = sets);
+    } on Exception catch (e) {
+      _tell(widget.api.failure(e));
+    }
+  }
+
+  void _tell(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
   void _openStop(int stop, {bool fly = false}) {
     setState(() => _stop = stop);
     _watch();
@@ -737,23 +778,6 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Moves to [at], zooming in to [nearZoom] if further out, as the web does.
   void _fly(LatLng at) => _map.move(at, math.max(_map.camera.zoom, nearZoom));
 
-  void _openSaved() => showFloatingSheet<void>(
-    context,
-    (_) => SavedSheet(
-      catalog: _catalog!,
-      places: _sets?.places ?? const [],
-      pins: _pins,
-      onPlaces: _places,
-      onPins: _savePins,
-      onShowPlace: (place) => _openPlace(place.name, place.at),
-      onShowStop: (stop) {
-        setState(() => _tab = 0);
-        _openStop(stop, fly: true);
-      },
-    ),
-    scrollControlled: true,
-  );
-
   void _openLayers() => showFloatingSheet<void>(
     context,
     (_) => LayersSheet(
@@ -784,10 +808,6 @@ class _HomeScreenState extends State<HomeScreen> {
       onFollowAway: (on) {
         setState(() => _followAway = on);
         unawaited(widget.api.setFollowAway(on));
-      },
-      onSaved: () {
-        Navigator.pop(sheet);
-        _openSaved();
       },
       onLanguage: () {
         Navigator.pop(sheet);
@@ -866,18 +886,30 @@ class _HomeScreenState extends State<HomeScreen> {
               index: _tab,
               children: [
                 _mapTab(catalog, live),
-                TimesTab(
+                MineTab(
                   catalog: catalog,
                   live: live,
                   pins: _pins,
-                  onUnpin: _pin,
-                  onOpen: (stop) {
+                  onPins: _savePins,
+                  onStop: (stop) {
                     setState(() => _tab = 0);
                     _openStop(stop, fly: true);
                   },
                   watching: _routes,
                   onWatch: _toggleRoute,
                   onLine: _openRoute,
+                  places: _sets?.places ?? const [],
+                  onPlaces: _places,
+                  onPlace: (place) => _openPlace(place.name, place.at),
+                  sets: _sets,
+                  onActivate: _activateSet,
+                  onRename: (set, name) => _changeSets(
+                    () => widget.api.updateSet(set.id, name, set.routes),
+                  ),
+                  onDelete: (set) =>
+                      _changeSets(() => widget.api.deleteSet(set.id)),
+                  username: widget.username,
+                  onAccount: _openAccount,
                 ),
               ],
             ),
@@ -895,7 +927,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       onSearch: _search,
                       onRoutes: () => _openRoutes(catalog),
                       onLayers: _openLayers,
-                      onAccount: _openAccount,
                       layered: _allLines || _traffic,
                     ),
             ),
@@ -1107,26 +1138,24 @@ class _RouteStrip extends StatelessWidget {
   );
 }
 
-/// A search pill and the three buttons everything else hangs off, floating over
-/// the map and clear of the status bar.
+/// A search pill and the two buttons that change the map, floating over it and
+/// clear of the status bar.
 ///
 /// The split is by what a thing does, not by how often it is wanted: routes
-/// choose what is tracked, layers change what the map draws, and the account
-/// holds what is kept and how the app is set up. Nothing that is a toggle and
-/// nothing that signs you out sits loose on the map.
+/// choose what is tracked and layers change what the map draws. What is kept
+/// and how the app is set up live in the Mine tab, so nothing that signs you
+/// out sits loose on the map.
 class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.onSearch,
     required this.onRoutes,
     required this.onLayers,
-    required this.onAccount,
     required this.layered,
   });
 
   final VoidCallback onSearch;
   final VoidCallback onRoutes;
   final VoidCallback onLayers;
-  final VoidCallback onAccount;
 
   /// Whether anything inside the layers sheet is on, which is the only sign the
   /// map gives that the sheet is holding something.
@@ -1173,12 +1202,6 @@ class _TopBar extends StatelessWidget {
         onPressed: onLayers,
         child: Icon(Icons.layers_outlined, color: layered ? accent : null),
       ),
-      const SizedBox(width: 8),
-      RoundButton(
-        tooltip: txt.account,
-        onPressed: onAccount,
-        child: const Icon(Icons.person_outline),
-      ),
     ],
   );
 }
@@ -1200,7 +1223,7 @@ class _Tabs extends StatelessWidget {
   Widget build(BuildContext context) {
     final tabs = [
       (Icons.map_outlined, txt.map),
-      (Icons.schedule_outlined, txt.times),
+      (Icons.person_outline, txt.mine),
       (Icons.directions_outlined, txt.plan),
       if (route != null) (Icons.timeline_outlined, txt.routeLine),
     ];

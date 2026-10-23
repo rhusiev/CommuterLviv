@@ -1,5 +1,6 @@
 """The web app in a real browser against the real service: an account created
-through the sign-in screen, a stop found by name, the bus on its board, a route
+through the sign-in screen, a stop found by name, the bus on its board, a
+pinned stop listed once in the Mine tab and an old Times link opening it, a route
 watched from the stop's card and from what is due there, a journey planned from
 on board the bus and followed, a place found by name planned to and a name that
 matches nothing, what opens on an option only once it is picked, one followed
@@ -193,6 +194,30 @@ def test_a_new_user_finds_a_stop_and_sees_the_bus_coming(page):
     # a row per route: its badge, which shows the number without the bus's
     # letter, and a countdown
     expect(page.get_by_role("button", name=re.compile(r"^1 \d+ min$"))).to_be_visible(
+        timeout=SEE_MS)
+
+
+def test_a_pinned_stop_is_listed_once_in_the_mine_tab(page):
+    _register(page, "pinner")
+    page.get_by_placeholder("Find a stop or a place").fill("Stop 4")
+    page.get_by_role("button", name="Stop 4").first.click()
+    page.get_by_role("button", name="Pin", exact=True).click()
+
+    page.get_by_role("button", name="Mine", exact=True).click()
+
+    expect = playwright.expect
+    expect(page.get_by_role("heading", name="Pinned stops")).to_be_visible()
+    expect(page.get_by_role("button", name="Stop 4", exact=True)).to_have_count(1)
+    expect(page.get_by_role("button", name="Account", exact=True)).to_have_count(0)
+
+
+def test_an_old_times_link_opens_the_mine_tab(page):
+    _register(page, "linker")
+    playwright.expect(page.get_by_text("0 vehicles")).to_be_visible()
+
+    page.goto("/?tab=times")
+
+    playwright.expect(page.get_by_role("heading", name="Pinned stops")).to_be_visible(
         timeout=SEE_MS)
 
 
@@ -661,11 +686,17 @@ def test_a_refused_location_says_how_to_allow_it(page):
         "Location is blocked for this page")).to_be_visible(timeout=SEE_MS)
 
 
+def _open_account(page, tab="Mine", row="Account"):
+    """The account is the last row of the Mine tab, named with the username"""
+    page.get_by_role("button", name=tab, exact=True).click()
+    page.get_by_role("button", name=re.compile(f"^{row}")).click()
+
+
 def test_a_changed_password_is_the_one_that_signs_in(page):
     username = _register(page, "changer")
     renewed = service.PASSWORD + "-renewed"
 
-    page.get_by_role("button", name="Account", exact=True).click()
+    _open_account(page)
     page.get_by_role("button", name="Change password").click()
     page.get_by_label("Current password").fill(service.PASSWORD)
     page.get_by_label("New password").fill(renewed)
@@ -682,11 +713,11 @@ def test_a_changed_password_is_the_one_that_signs_in(page):
 
 def test_a_cancelled_password_change_forgets_what_was_typed(page):
     _register(page, "canceller")
-    page.get_by_role("button", name="Account", exact=True).click()
+    _open_account(page)
     page.get_by_role("button", name="Change password").click()
     page.get_by_label("Current password").fill(service.PASSWORD)
     page.get_by_label("New password").fill(service.PASSWORD + "-unsent")
-    page.get_by_role("button", name="Cancel").click()
+    page.get_by_role("button", name="Cancel", exact=True).click()
 
     page.get_by_role("button", name="Change password").click()
 
@@ -698,13 +729,13 @@ def test_a_password_change_under_way_cannot_be_cancelled(page):
     _register(page, "patient")
     held = []
     page.route("**/api/password", lambda route: held.append(route))
-    page.get_by_role("button", name="Account", exact=True).click()
+    _open_account(page)
     page.get_by_role("button", name="Change password").click()
     page.get_by_label("Current password").fill(service.PASSWORD)
     page.get_by_label("New password").fill(service.PASSWORD + "-renewed")
     page.get_by_role("button", name="Change password").click()
 
-    playwright.expect(page.get_by_role("button", name="Cancel")).to_be_disabled()
+    playwright.expect(page.get_by_role("button", name="Cancel", exact=True)).to_be_disabled()
     held[0].continue_()
     playwright.expect(page.get_by_text("Password changed")).to_be_visible(timeout=SEE_MS)
 
@@ -716,7 +747,7 @@ def test_changing_the_password_is_not_offered_where_the_service_turns_it_off(pag
 
     page.route("**/api/me", turned_off)
     _register(page, "unoffered")
-    page.get_by_role("button", name="Account", exact=True).click()
+    _open_account(page)
 
     expect = playwright.expect
     expect(page.get_by_role("button", name="Sign out")).to_be_visible()
@@ -728,7 +759,7 @@ def test_the_walking_speed_reads_on_one_line_in_ukrainian(page):
     playwright.expect(page.get_by_text("0 vehicles")).to_be_visible()
     page.evaluate("localStorage.setItem('commuterlviv.lang', 'uk')")
     page.reload()
-    page.get_by_role("button", name="Обліковий запис", exact=True).click()
+    _open_account(page, tab="Моє", row="Обліковий запис")
 
     speed = page.get_by_text("4,5 км/год", exact=True)
     playwright.expect(speed).to_be_visible()

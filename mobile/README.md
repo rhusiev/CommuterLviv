@@ -182,12 +182,11 @@ refused and the map stays empty while everything else works.
 | `lib/src/vehicle_layer.dart` | one `CustomPaint` for the whole city                                    |
 | `lib/src/home.dart`          | the state both tabs share, and nothing that draws                       |
 | `lib/src/map_tab.dart`       | the basemap, the vehicles and the attribution                           |
-| `lib/src/times_tab.dart`     | the pinned stops and what is due at each                                |
+| `lib/src/mine_tab.dart`      | pinned stops with what is due, places, sets, and the account row        |
 | `lib/src/stop_card.dart`     | one stop, from the bottom of the map                                    |
 | `lib/src/place_card.dart`    | a place picked by name, and the way there                               |
 | `lib/src/hold_sheet.dart`    | what a long press on the map offers for that point                      |
 | `lib/src/stop_search.dart`   | stops by name and near you, and places from the service                 |
-| `lib/src/saved.dart`         | the saved places and the pinned stops, in one list                      |
 | `lib/src/traffic.dart`       | how fast the streets are running, while that is on                      |
 | `lib/src/sheets.dart`        | the route sheet, the basemap sheet, and the dialogs each of them shares |
 | `lib/src/due.dart`           | a route chip with its countdown, drawn in two places                         |
@@ -316,7 +315,7 @@ fields say when to leave: the day, `Today` until another is picked in the next
 `at=<unix seconds>`. A time already past on today is meant for tomorrow. Below
 them a stepper sets how fast this search walks on the level, 0.5 to 8 km/h in
 halves, passed as `speed=`. It starts from the usual speed, kept on the device
-under `commuterlviv.walk` and set from `Walking and hurrying` in the account menu;
+under `commuterlviv.walk` and set from `Walking and hurrying` in the account sheet;
 stepping it in the panel changes that search only. The server already slows
 walks uphill and speeds them down gentle slopes.
 
@@ -348,9 +347,11 @@ because that is how it arrives. A server without the planner caches answers
 
 ## What is saved
 
-`Saved` in the top-bar menu opens `saved.dart`: the named places and the pinned
-stops in one sheet, each row tapping through to the map, held to rename or
-remove, and dragged by its handle to reorder. Both lists are written whole -
+The Mine tab (`mine_tab.dart`) lists the pinned stops with what is due at each,
+the named places and the route sets, each row tapping through to the map (a set
+becomes the watched selection), a place or a set held to rename or remove, and
+a stop or a place dragged by its handle to reorder. Its last row opens the
+account sheet, which no longer sits in the top bar. Both lists are written whole -
 `POST /api/places` and `POST /api/pins` take the entire list - so a rename is a
 delete and a save in one request, which is what keeps it atomic when the name is
 the identity server-side. Search saves too: `GET /api/search?q=` merges

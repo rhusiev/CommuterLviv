@@ -18,7 +18,6 @@ Widget _sheet({
       hurry: hurry,
       followAway: false,
       onFollowAway: (_) {},
-      onSaved: () {},
       onLanguage: () {},
       onSpeed: onSpeed ?? () {},
       onServer: () {},

@@ -162,7 +162,7 @@ class _Handle extends StatelessWidget {
 /// Everything that changes what the map shows, in one place: the overlays as
 /// switches, the basemap as a choice. Anything here is visible on the map the
 /// moment it is touched, which is the rule for what belongs in this sheet
-/// rather than behind the account button.
+/// rather than in the Mine tab.
 class LayersSheet extends StatefulWidget {
   const LayersSheet({
     super.key,
@@ -247,7 +247,6 @@ class AccountSheet extends StatefulWidget {
     required this.hurry,
     required this.followAway,
     required this.onFollowAway,
-    required this.onSaved,
     required this.onLanguage,
     required this.onSpeed,
     required this.onServer,
@@ -264,7 +263,6 @@ class AccountSheet extends StatefulWidget {
   final double? hurry;
   final bool followAway;
   final ValueChanged<bool> onFollowAway;
-  final VoidCallback onSaved;
   final VoidCallback onLanguage;
   final VoidCallback onSpeed;
   final VoidCallback onServer;
@@ -288,11 +286,6 @@ class _AccountSheetState extends State<AccountSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.bookmark_outline),
-              title: Text(txt.saved),
-              onTap: widget.onSaved,
-            ),
             ListTile(
               leading: const Icon(Icons.translate),
               title: Text(txt.language),

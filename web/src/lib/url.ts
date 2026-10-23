@@ -6,10 +6,22 @@ export type UrlState = {
   routes: string[] | null;
   stop: string | null;
   route: string | null;
-  tab: "map" | "times" | "plan" | "saved" | "route";
+  tab: Tab;
 };
 
-const TABS: UrlState["tab"][] = ["map", "times", "plan", "saved", "route"];
+export type Tab = "map" | "plan" | "mine" | "route";
+
+const TABS: Tab[] = ["map", "plan", "mine", "route"];
+
+/** Tabs an older link may name, and the tab that holds what they held now */
+const MOVED: Record<string, Tab> = { times: "mine", saved: "mine" };
+
+/** The tab a link's `tab` names, an old name read as its successor */
+export function tabOf(named: string | null): Tab {
+  if (named === null) return "map";
+  if (Object.hasOwn(MOVED, named)) return MOVED[named]!;
+  return TABS.includes(named as Tab) ? (named as Tab) : "map";
+}
 
 export function readUrl(): UrlState {
   const q = new URLSearchParams(location.search);
@@ -18,7 +30,7 @@ export function readUrl(): UrlState {
     routes: routes === null ? null : routes.split(",").filter(Boolean),
     stop: q.get("stop"),
     route: q.get("route"),
-    tab: TABS.includes(q.get("tab") as UrlState["tab"]) ? (q.get("tab") as UrlState["tab"]) : "map",
+    tab: tabOf(q.get("tab")),
   };
 }
 
