@@ -118,7 +118,7 @@ only on foot, with an amber pill giving the pace that gets to the stop with time
 to spare, from the metres left (`needKmh`). The time to spare is half
 (`MARGIN_SHARE`, chosen, not derived) of the slack the planner keeps for a
 change that far ahead (`CHANGE_AHEAD`/`CHANGE_SLACK`, copied from
-`commuterlviv/plan.py`), as a vehicle comes early as well as late. When that
+`commuterlviv/plan/scan.py`), as a vehicle comes early as well as late. When that
 pace is over 12 km/h (`HURRY_KMH`), the pill gives the one that gets there as
 the vehicle leaves; either is rounded up to 0.5 km/h. A hurry option in the
 planner carries the same pill for its walk to the first stop (`plannedKmh`).

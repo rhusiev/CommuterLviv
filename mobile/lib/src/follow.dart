@@ -129,11 +129,11 @@ class Catch {
 }
 
 /// A tracked vehicle missed by this little is still caught: the driver waits
-/// for somebody waving or running. `GRACE` in `commuterlviv/plan.py`.
+/// for somebody waving or running. `GRACE` in `commuterlviv/plan/scan.py`.
 const graceS = 10.0;
 
 /// Seconds ahead, and the slack a change needs that far ahead: `CHANGE_AHEAD`
-/// and `CHANGE_SLACK` in `commuterlviv/plan.py`
+/// and `CHANGE_SLACK` in `commuterlviv/plan/scan.py`
 const _changeAhead = <double>[60, 210, 450, 750, 1050, 1500, 2250];
 const _changeSlack = <double>[60, 90, 150, 180, 210, 270, 300];
 

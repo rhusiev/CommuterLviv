@@ -4,7 +4,7 @@ Optional: without `data/walk.npz` and `data/transfers.npz` the endpoint answers
 503 and everything else is untouched. `arrange` builds them once in the
 background; COMMUTERLVIV_BUILD_PLANNER=false leaves that to the operator.
 
-This is also where `plan.py`'s stop numbering is translated into the catalog's,
+This is also where `plan`'s stop numbering is translated into the catalog's,
 which is what the wire uses.
 """
 import asyncio
