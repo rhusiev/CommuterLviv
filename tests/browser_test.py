@@ -611,6 +611,11 @@ def test_a_missed_bus_is_searched_again_from_the_last_fix(page):
 
     again = page.get_by_role("button", name="Search again")
     expect(again).to_be_visible(timeout=SEE_MS)
+    # keeping the screen on is a setting, offered as a switch
+    awake = page.get_by_role("switch", name="Keep screen on")
+    expect(awake).to_have_attribute("aria-checked", "false")
+    awake.click()
+    expect(awake).to_have_attribute("aria-checked", "true")
     # The map and the follower watch the position already; asked again, the
     # browser would not answer until it moved
     with page.expect_request(lambda r: "/api/plan?from=" in r.url) as asked:

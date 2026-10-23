@@ -66,15 +66,24 @@ export function FollowCard({
         </div>
         <div className="ml-auto flex shrink-0 gap-2">
           {canKeepAwake() && !done && (
+            // A switch with its track, so it reads as a setting rather than a status
             <button
+              role="switch"
               onClick={() => {
                 holdAwake(!awake);
                 setAwake(!awake);
               }}
-              aria-pressed={awake}
+              aria-checked={awake}
               title={t.keepAwakeHint}
-              className={awake ? "btn" : "btn-quiet"}
+              className="btn-quiet flex items-center gap-2"
             >
+              <span
+                className={`flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors ${
+                  awake ? "justify-end bg-accent" : "justify-start bg-slate-600"
+                }`}
+              >
+                <span className="size-3 rounded-full bg-white" />
+              </span>
               {t.keepAwake}
             </button>
           )}
