@@ -43,7 +43,7 @@ const en = {
   clear: "Clear",
   filter: "Filter",
   on: (n: number) => `${n} on`,
-  basemap: "Map",
+  basemap: "Map style",
   themeNames: {
     "colorful-dark": "Colorful dark",
     "natural-dark": "Natural dark",

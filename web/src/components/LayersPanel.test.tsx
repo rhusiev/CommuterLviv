@@ -32,4 +32,9 @@ describe("LayersPanel", () => {
     expect(html).toContain("Colorful dark");
     expect(html).toContain("Gray");
   });
+
+  test("heads the basemaps as the app does", async () => {
+    expect(await panel("en")).toContain(">Map style<");
+    expect(await panel("uk")).toContain(">Вигляд мапи<");
+  });
 });
