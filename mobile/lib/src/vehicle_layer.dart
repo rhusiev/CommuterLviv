@@ -25,6 +25,22 @@ const badgeRadius = 13.0;
 /// Below this stops overlap into mush, so none are drawn: the web's `STOPS_ZOOM`.
 const stopsZoom = 13.4 + webZoomOffset;
 
+/// From here every stop is drawn and can be tapped, the ones no route on the
+/// map calls at faint: the web's `ALL_STOPS_ZOOM`.
+const allStopsZoom = 16 + webZoomOffset;
+
+/// How strongly a stop no route on the map calls at is drawn.
+const _faintAlpha = 0.35;
+
+/// The stops a tap can pick at [zoom]: none below [stopsZoom], the ones on the
+/// map's routes, and from [allStopsZoom] every other one too.
+List<int> pickableStops(double zoom, List<int> stops, List<int> faint) =>
+    zoom < stopsZoom
+    ? const []
+    : zoom < allStopsZoom
+    ? stops
+    : [...stops, ...faint];
+
 const _stopRadius = 3.5;
 
 /// A pinned stop is ringed at every zoom, a saved place is a dot with its name.
@@ -53,6 +69,7 @@ class VehicleLayer extends StatefulWidget {
     required this.catalog,
     required this.live,
     required this.stops,
+    required this.faint,
     required this.selected,
     required this.theme,
     required this.here,
@@ -73,6 +90,9 @@ class VehicleLayer extends StatefulWidget {
   final int? arrowed;
 
   final List<int> stops;
+
+  /// Every other stop: drawn faint from [allStopsZoom].
+  final List<int> faint;
   final int? selected;
   final MapTheme theme;
 
@@ -156,6 +176,7 @@ class _VehicleLayerState extends State<VehicleLayer>
           catalog: widget.catalog,
           live: widget.live,
           stops: widget.stops,
+          faint: widget.faint,
           selected: widget.selected,
           here: widget.here,
           shapes: widget.shapes,
@@ -179,6 +200,7 @@ class _Painter extends CustomPainter {
     required this.catalog,
     required this.live,
     required this.stops,
+    required this.faint,
     required this.selected,
     required this.here,
     required this.shapes,
@@ -195,6 +217,9 @@ class _Painter extends CustomPainter {
   final Catalog catalog;
   final Live live;
   final List<int> stops;
+
+  /// Every other stop: drawn faint from [allStopsZoom].
+  final List<int> faint;
   final int? selected;
   final Shapes? shapes;
   final List<int> lines;
@@ -213,7 +238,10 @@ class _Painter extends CustomPainter {
     final bounds = Offset.zero & size;
     // Under everything else: a line over a badge hides the number
     _paintLines(canvas, bounds);
-    if (camera.zoom >= stopsZoom) _paintStops(canvas, bounds);
+    if (camera.zoom >= allStopsZoom) {
+      _paintStops(canvas, bounds, faint, _faintAlpha);
+    }
+    if (camera.zoom >= stopsZoom) _paintStops(canvas, bounds, stops, 1);
     _paintSaved(canvas, bounds);
     _paintHere(canvas);
     _paintVehicles(canvas, bounds);
@@ -368,13 +396,13 @@ class _Painter extends CustomPainter {
     canvas.drawCircle(at, 6, Paint()..color = ink.here);
   }
 
-  void _paintStops(Canvas canvas, Rect bounds) {
-    final fill = Paint()..color = ink.stop;
+  void _paintStops(Canvas canvas, Rect bounds, List<int> which, double alpha) {
+    final fill = Paint()..color = ink.stop.withValues(alpha: alpha);
     final edge = Paint()
-      ..color = ink.edge
+      ..color = ink.edge.withValues(alpha: alpha)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
-    for (final i in stops) {
+    for (final i in which) {
       final s = catalog.stops[i];
       final at = camera.latLngToScreenOffset(LatLng(s.lat, s.lon));
       if (!bounds.inflate(_stopRadius).contains(at)) continue;

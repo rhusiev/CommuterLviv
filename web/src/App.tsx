@@ -187,7 +187,7 @@ export function App() {
   // against the one followed
   const drawn = (tab === "plan" ? journey : null) ?? following;
 
-  const { geo, indexes, lines, fit, stops } = useMapLayers({
+  const { geo, indexes, lines, fit, stops, faint } = useMapLayers({
     cat,
     tab,
     route,
@@ -317,6 +317,7 @@ export function App() {
         catalog={cat}
         live={live}
         stops={stops}
+        faint={faint}
         selected={stop}
         onPickStop={(i) => {
           setStop(i);

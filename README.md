@@ -54,8 +54,8 @@ origins in `COMMUTERLVIV_ORIGINS`. Everything it downloads or learns lives in
 ## Using it
 
 - **Map.** Every tracked vehicle, moving smoothly between the five-second
-  updates, with its route number and heading. Pick routes to see their stops;
-  tap a stop for the next arrival of every route through it, tap a vehicle for
+  updates, with its route number and heading. Pick routes to see their stops,
+  or zoom in close to see every stop; tap a stop for the next arrival of every route through it, tap a vehicle for
   every stop it will reach and when.
 - **Times.** Pinned stops and their arrivals, live. Arrivals beyond the current
   trip - the vehicle's next run - are in italics with a schedule mark.

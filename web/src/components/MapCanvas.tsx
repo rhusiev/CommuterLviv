@@ -2,11 +2,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Map as MapLibre } from "maplibre-gl";
 import WORKER from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import {
+  ALL_STOPS_ZOOM,
   BOUNDS,
   loadView,
   MAX_ZOOM,
   metresPerPixel,
   MIN_ZOOM,
+  pickable,
   saveView,
   screen,
   STOPS_ZOOM,
@@ -29,6 +31,8 @@ import { Icon } from "./Icon";
  * reads the camera one frame late. No React state changes during the draw. */
 
 const STOP_R = 3.5;
+/** How strongly a stop no route on the map calls at is drawn */
+const FAINT_ALPHA = 0.35;
 
 /** A pinned stop is ringed at every zoom, a saved place is a dot with its name.
  * The ring is the quieter of the two: a pin marks a stop that is already drawn,
@@ -55,6 +59,8 @@ type Props = {
   catalog: Catalog;
   live: Live;
   stops: number[];
+  /** Every other stop: drawn faint and clickable from `ALL_STOPS_ZOOM` */
+  faint: number[];
   selected: number | null;
   onPickStop: (i: number | null) => void;
   vehicle: number | null;
@@ -172,7 +178,8 @@ export function MapCanvas(props: Props) {
       const m = map!;
       const p = screen(viewOf(m), w, h);
       const now = performance.now();
-      const { lines, stops, selected, pinned, places, journey, marks, vehicle } = latest.current;
+      const { lines, stops, faint, selected, pinned, places, journey, marks, vehicle } =
+        latest.current;
       const c = paint.current;
 
       g.clearRect(0, 0, w, h);
@@ -210,10 +217,10 @@ export function MapCanvas(props: Props) {
         }
       }
 
-      if (m.getZoom() >= STOPS_ZOOM) {
-        // One path for every stop: one fill and one stroke, not two per circle
+      // One path for many stops: one fill and one stroke, not two per circle
+      const rings = (which: number[], alpha: number) => {
         const ring = new Path2D();
-        for (const i of stops) {
+        for (const i of which) {
           const s = catalog.stops[i]!;
           const x = p.x(s.lon);
           const y = p.y(s.lat);
@@ -221,12 +228,17 @@ export function MapCanvas(props: Props) {
           ring.moveTo(x + STOP_R, y);
           ring.arc(x, y, STOP_R, 0, TAU);
         }
+        g.globalAlpha = alpha;
         g.fillStyle = c.stop;
         g.strokeStyle = c.edge;
         g.lineWidth = 1.5;
         g.fill(ring);
         g.stroke(ring);
-
+        g.globalAlpha = 1;
+      };
+      if (m.getZoom() >= ALL_STOPS_ZOOM) rings(faint, FAINT_ALPHA);
+      if (m.getZoom() >= STOPS_ZOOM) {
+        rings(stops, 1);
         if (selected !== null && catalog.stops[selected]) {
           const s = catalog.stops[selected]!;
           g.beginPath();
@@ -482,7 +494,8 @@ export function MapCanvas(props: Props) {
 
         let best: number | null = null;
         let bestD = HIT * HIT;
-        for (const i of latest.current.stops) {
+        const { stops, faint } = latest.current;
+        for (const i of pickable(map!.getZoom(), stops, faint)) {
           const s = catalog.stops[i]!;
           const dx = p.x(s.lon) - e.point.x;
           const dy = p.y(s.lat) - e.point.y;

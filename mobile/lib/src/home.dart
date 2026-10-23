@@ -36,7 +36,7 @@ import 'theme.dart';
 import 'times_tab.dart';
 import 'tracking.dart';
 import 'vehicle_card.dart';
-import 'vehicle_layer.dart' show badgeRadius, stopsZoom;
+import 'vehicle_layer.dart' show badgeRadius, pickableStops;
 import 'walk_speed.dart';
 import 'strings.dart';
 
@@ -81,6 +81,9 @@ class _HomeScreenState extends State<HomeScreen> {
   late bool _allLines = widget.api.showLines;
   Shapes? _shapes;
   List<int> _drawn = const [];
+
+  /// The stops no route on the map calls at, drawn faint from close in.
+  List<int> _faint = const [];
   List<int> _pins = const [];
   int? _stop;
   int _tab = 0;
@@ -245,11 +248,11 @@ class _HomeScreenState extends State<HomeScreen> {
     if (catalog == null || live == null) return;
     final shown = _shown;
     live.setRoutes(shown.toList()..sort());
-    final drawn = <int>[
-      for (var i = 0; i < catalog.stops.length; i++)
-        if (catalog.stops[i].routes.any(shown.contains)) i,
-    ];
-    setState(() => _drawn = drawn);
+    final (:stops, :faint) = catalog.splitStops(shown);
+    setState(() {
+      _drawn = stops;
+      _faint = faint;
+    });
     _watch();
   }
 
@@ -555,10 +558,9 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
-    if (camera.zoom < stopsZoom) return;
     var best = -1;
     var closest = _hitRadius * _hitRadius;
-    for (final i in _drawn) {
+    for (final i in pickableStops(camera.zoom, _drawn, _faint)) {
       final s = catalog.stops[i];
       final d = (camera.latLngToScreenOffset(LatLng(s.lat, s.lon)) - at)
           .distanceSquared;
@@ -897,6 +899,7 @@ class _HomeScreenState extends State<HomeScreen> {
       catalog: catalog,
       live: live,
       stops: _drawn,
+      faint: _faint,
       selected: _stop,
       theme: _theme,
       here: _here,

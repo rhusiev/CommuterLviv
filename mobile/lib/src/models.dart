@@ -107,6 +107,17 @@ class Catalog {
 
   List<int> stopsAt(List<String> ids) => [for (final id in ids) ?stopIndex[id]];
 
+  /// The stops one of [routes] calls at, and every other one, which the map
+  /// draws faint and only from close in.
+  ({List<int> stops, List<int> faint}) splitStops(Set<int> routes) {
+    final stops = <int>[];
+    final faint = <int>[];
+    for (var i = 0; i < this.stops.length; i++) {
+      (this.stops[i].routes.any(routes.contains) ? stops : faint).add(i);
+    }
+    return (stops: stops, faint: faint);
+  }
+
   /// A stop's name, or none for a position this catalog lacks: the server
   /// sends -1 for a stop missing from it, and a newer catalog may be longer
   String stopName(int stop) =>

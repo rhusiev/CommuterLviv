@@ -10,6 +10,14 @@ export const MIN_ZOOM = 11;
 export const MAX_ZOOM = 18;
 /** Below this the stop circles are more clutter than information */
 export const STOPS_ZOOM = 13.4;
+/** From here every stop is drawn and can be clicked, the ones no route on the
+ * map calls at faint: close enough to read the street a stop is on */
+export const ALL_STOPS_ZOOM = 16;
+
+/** The stops a click can pick at `zoom`: the ones on the map's routes, and
+ * from `ALL_STOPS_ZOOM` every other one too */
+export const pickable = (zoom: number, stops: number[], faint: number[]) =>
+  zoom >= ALL_STOPS_ZOOM ? stops.concat(faint) : stops;
 
 /** How far the map pans past the box vehicles can be in, as a share of the
  * box: enough to bring its edge to the middle of a wide screen */

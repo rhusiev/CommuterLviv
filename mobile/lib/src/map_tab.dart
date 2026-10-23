@@ -35,6 +35,7 @@ class MapTab extends StatelessWidget {
     required this.catalog,
     required this.live,
     required this.stops,
+    required this.faint,
     required this.selected,
     required this.theme,
     required this.here,
@@ -64,6 +65,9 @@ class MapTab extends StatelessWidget {
   final Catalog catalog;
   final Live live;
   final List<int> stops;
+
+  /// Every other stop: drawn faint and tappable from close in.
+  final List<int> faint;
   final int? selected;
   final MapTheme theme;
 
@@ -135,6 +139,7 @@ class MapTab extends StatelessWidget {
               catalog: catalog,
               live: live,
               stops: stops,
+              faint: faint,
               selected: selected,
               theme: theme,
               here: here,

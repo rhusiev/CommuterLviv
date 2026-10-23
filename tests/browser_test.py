@@ -42,6 +42,7 @@ PHONE = {"width": 393, "height": 852}
 TAP_PX = 44              # the smallest target WCAG 2.5.5 allows, in CSS pixels
 # The whole line fits across the middle of the page, at about 6 m a pixel
 ZOOM = 13.0
+ALL_STOPS_ZOOM = 16      # the web's own: every stop is drawn and clicked from here
 TILE_PX = 512            # maplibre's world is this many pixels across at zoom 0
 # Clicks along the line from its start, this far apart - closer than the
 # vehicle badge is wide - and no further than the bus gets in a minute
@@ -222,6 +223,30 @@ def test_a_route_due_at_a_stop_is_watched_from_its_countdown(page):
     due.click(timeout=SEE_MS)
     expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
     expect(due).to_have_attribute("aria-pressed", "true")
+
+
+def _zoom_to(page, zoom):
+    """Zooms in from the keyboard, a step at a time, about the centre."""
+    page.locator(".maplibregl-canvas").focus()
+    for z in range(int(ZOOM) + 1, zoom + 1):
+        page.keyboard.press("Equal")
+        page.wait_for_function(
+            f"JSON.parse(localStorage.getItem('commuterlviv.view')).zoom > {z} - 0.01")
+
+
+def test_a_stop_no_watched_route_calls_at_opens_from_close_in(page):
+    _register(page, "stroller")
+    expect = playwright.expect
+    expect(page.get_by_text("0 vehicles")).to_be_visible()
+    card = page.get_by_role("heading", name="Stop 2")
+    at = (VIEWPORT["width"] / 2, VIEWPORT["height"] / 2)
+
+    page.mouse.click(*at)
+    expect(card).not_to_be_visible()
+
+    _zoom_to(page, ALL_STOPS_ZOOM)
+    page.mouse.click(*at)
+    expect(card).to_be_visible()
 
 
 def test_a_saved_place_is_offered_above_the_stops_it_matches(page):

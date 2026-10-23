@@ -26,8 +26,10 @@ successor.
 Vehicles are coloured circles carrying their route number, with a wedge on the
 rim pointing where they are going - solid while the vehicle is under way, an
 outline while it stands, so a marker always says which way it faces without
-claiming it is moving. Stops are small circles, drawn only for the routes you
-have picked. The routes to pick are grouped under buses, trams and trolleybuses,
+claiming it is moving. Stops are small circles, drawn for the routes you have
+picked. From zoom 16 (`ALL_STOPS_ZOOM`, 17 in the app's tiles) every other stop
+is drawn too, faint, and opens its card like the rest, so a stop can be looked
+up without watching a route first. The routes to pick are grouped under buses, trams and trolleybuses,
 because tram 1 and bus 1 are different lines. A route is drawn as the same split
 chip wherever it shows - the routes panel, a stop's card, the Times tab, a
 vehicle's card: a click on its body watches it or stops watching it, and the `›`

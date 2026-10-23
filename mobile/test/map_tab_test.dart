@@ -34,6 +34,7 @@ Future<void> pump(WidgetTester tester, {Widget? card}) async {
           ),
           live: Live(api, onRenewed: () {}),
           stops: const [],
+          faint: const [],
           selected: null,
           theme: mapThemes.first,
           here: Here(onFirstFix: (_) {}),

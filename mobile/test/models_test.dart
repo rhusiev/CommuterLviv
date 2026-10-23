@@ -23,6 +23,24 @@ void main() {
     expect(_catalog.routeAt(null), isNull);
   });
 
+  test('a stop no route asked for calls at is faint, not left out', () {
+    const catalog = Catalog(
+      routes: [],
+      stops: [
+        Stop(id: 's0', name: 'A', code: '', lat: 0, lon: 0, routes: [0]),
+        Stop(id: 's1', name: 'B', code: '', lat: 0, lon: 0, routes: [1]),
+        Stop(id: 's2', name: 'C', code: '', lat: 0, lon: 0, routes: [0, 1]),
+      ],
+      index: {},
+      stopIndex: {},
+    );
+
+    final (:stops, :faint) = catalog.splitStops({1});
+
+    expect(stops, [1, 2]);
+    expect(faint, [0]);
+  });
+
   test('a password may be changed only where the service says so', () {
     Me me(Map<String, dynamic> extra) => Me.fromJson({
       'username': 'u',

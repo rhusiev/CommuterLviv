@@ -94,7 +94,7 @@ class _StopCardState extends State<StopCard> {
               builder: (context, _) {
                 final due = widget.live.arrivals[stop] ?? const <Arrival>[];
                 if (due.isEmpty) {
-                  return Text(txt.nothingDueWatched);
+                  return Text(txt.nothingDue);
                 }
                 return Wrap(
                   spacing: 6,

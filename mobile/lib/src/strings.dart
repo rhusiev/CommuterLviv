@@ -80,7 +80,6 @@ class Strings {
     required this.pin,
     required this.unpin,
     required this.callsHere,
-    required this.nothingDueWatched,
     required this.nothingDue,
     required this.pickARoute,
     required this.pinAStop,
@@ -275,7 +274,6 @@ class Strings {
   final String pin;
   final String unpin;
   final String callsHere;
-  final String nothingDueWatched;
   final String nothingDue;
   final String pickARoute;
   final String pinAStop;
@@ -487,8 +485,7 @@ const _en = Strings(
   pin: 'Pin',
   unpin: 'Unpin',
   callsHere: 'Calls here',
-  nothingDueWatched: 'Nothing due on the routes you are watching',
-  nothingDue: 'Nothing due',
+  nothingDue: 'Nothing due here for now',
   pickARoute: 'Pick a route to see it moving',
   pinAStop: 'Pin a stop and its times show up here',
   language: 'Language',
@@ -728,8 +725,7 @@ const _uk = Strings(
   pin: 'Закріпити',
   unpin: 'Відкріпити',
   callsHere: 'Тут зупиняються',
-  nothingDueWatched: 'На обраних маршрутах нічого не їде',
-  nothingDue: 'Нічого не їде',
+  nothingDue: 'Поки що сюди нічого не їде',
   pickARoute: 'Оберіть маршрут, щоб побачити рух',
   pinAStop: 'Закріпіть зупинку - і час буде тут',
   language: 'Мова',

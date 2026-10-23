@@ -75,16 +75,17 @@ export function useMapLayers({
     void fetchShapes().then(setGeo, onError);
   }, [lines, geo, onError]);
 
-  /** Only the stops of the routes on the map are drawn or clickable */
-  const stops = useMemo(() => {
-    if (!cat) return [];
-    const on = new Set(indexes);
-    const out: number[] = [];
-    cat.stops.forEach((s, i) => {
-      if (s.routes.some((r) => on.has(r))) out.push(i);
-    });
-    return out;
-  }, [cat, indexes]);
+  const { stops, faint } = useMemo(() => splitStops(cat, indexes), [cat, indexes]);
 
-  return { geo, indexes, lines, fit, stops };
+  return { geo, indexes, lines, fit, stops, faint };
+}
+
+/** The stops a route on the map calls at, and every other one, which is drawn
+ * faint and only from close in */
+export function splitStops(cat: Catalog | null, routes: number[]) {
+  const on = new Set(routes);
+  const stops: number[] = [];
+  const faint: number[] = [];
+  cat?.stops.forEach((s, i) => (s.routes.some((r) => on.has(r)) ? stops : faint).push(i));
+  return { stops, faint };
 }
