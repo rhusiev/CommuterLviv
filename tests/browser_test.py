@@ -40,6 +40,7 @@ SEE_MS = 20_000          # the bus reaches the page a few feed polls after it se
 VIEWPORT = {"width": 1280, "height": 720}
 PHONE = {"width": 393, "height": 852}
 TAP_PX = 44              # the smallest target WCAG 2.5.5 allows, in CSS pixels
+DARK = 128               # a colour channel below this reads as dark on the map
 # The whole line fits across the middle of the page, at about 6 m a pixel
 ZOOM = 13.0
 ALL_STOPS_ZOOM = 16      # the web's own: every stop is drawn and clicked from here
@@ -743,6 +744,25 @@ def test_the_zoom_buttons_are_not_a_white_square_on_the_dark_map(page):
     playwright.expect(zoom).to_be_visible()
 
     assert zoom.evaluate("e => getComputedStyle(e).backgroundColor") != "rgb(255, 255, 255)"
+
+
+def test_the_attribution_is_not_a_white_pill_on_the_dark_map(page):
+    _register(page, "credited")
+    credit = page.locator(".maplibregl-ctrl-attrib")
+    # hidden here, as the test's blocked tiles credit no one
+    playwright.expect(credit).to_be_attached()
+
+    # painted over white, the worst a basemap can show through it, by a canvas
+    # that reads any CSS colour, oklab included
+    red, green, blue = credit.evaluate("""e => {
+        const c = document.createElement("canvas").getContext("2d");
+        c.fillStyle = "white";
+        c.fillRect(0, 0, 1, 1);
+        c.fillStyle = getComputedStyle(e).backgroundColor;
+        c.fillRect(0, 0, 1, 1);
+        return [...c.getImageData(0, 0, 1, 1).data.slice(0, 3)];
+    }""")
+    assert max(red, green, blue) < DARK
 
 
 def test_a_shared_link_opens_its_stop_or_route(page):

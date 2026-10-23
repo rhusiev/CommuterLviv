@@ -107,6 +107,20 @@ body {
 }
 
 /* The icons are dark-grey SVGs baked into maplibre's sheet */
-.maplibregl-map .maplibregl-ctrl-group .maplibregl-ctrl-icon {
+.maplibregl-map .maplibregl-ctrl-group .maplibregl-ctrl-icon,
+.maplibregl-map .maplibregl-ctrl-attrib-button {
   filter: invert(1);
+}
+
+/* The attribution, dressed as the zoom buttons are: a white pill otherwise */
+.maplibregl-map .maplibregl-ctrl.maplibregl-ctrl-attrib {
+  @apply bg-panel/80 text-slate-400 ring-1 ring-hair backdrop-blur-xl;
+}
+
+.maplibregl-map .maplibregl-ctrl-attrib a {
+  @apply text-slate-300;
+}
+
+.maplibregl-map .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-button {
+  background-color: transparent;
 }
