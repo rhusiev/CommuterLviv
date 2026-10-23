@@ -59,7 +59,7 @@ def test_rows_are_restored_and_timed_when_no_shape_fits_any_more(net, cfg, learn
 
 
 def test_another_variants_snapshot_is_not_restored(net, learned):
-    other = replay.build(net, config.BY_NAME["slow-day"])
+    other = replay.build(net, config.BY_NAME["full"])
 
     assert snapshot.restore(other, snapshot.export(learned)) is None
 

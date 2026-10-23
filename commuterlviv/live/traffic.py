@@ -155,8 +155,8 @@ def _kinds(net):
 def _termini(net, model, reach=TERMINUS):
     """The units within `reach` of either end of any shape.
 
-    A unit belongs to one shape - cells are numbered per shape and sections are
-    too - so this drops the ends of each shape and nothing else. Where another
+    A unit belongs to one shape - cells are numbered per shape - so this drops
+    the ends of each shape and nothing else. Where another
     route runs down the same street it has its own units there, and those still
     stand for the street.
     """

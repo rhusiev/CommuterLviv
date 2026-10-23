@@ -130,11 +130,9 @@ async def renew(s, log):
     planner = await asyncio.to_thread(journeys.ready, net, live.cat, log,
                                       s.settings.build_planner)
     # last before the swap, so the old model has learned all it will
-    since = None
-    if snapshot.supported(old.model):
-        async with s.svc.lock:
-            held = await asyncio.to_thread(snapshot.export, old.model)
-        since = await asyncio.to_thread(snapshot.restore, live.model, held)
+    async with s.svc.lock:
+        held = await asyncio.to_thread(snapshot.export, old.model)
+    since = await asyncio.to_thread(snapshot.restore, live.model, held)
     await asyncio.to_thread(s.svc.warm, live, since=since)
     async with s.svc.lock:
         await asyncio.to_thread(s.svc.swap, live)

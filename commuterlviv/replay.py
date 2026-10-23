@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from . import baselines, config, gtfs, track
+from . import config, gtfs, track
 from .model import PaceModel
 
 DB = os.path.join(gtfs.DATA, "feed.db")
@@ -34,15 +34,8 @@ class NoData(Exception):
 
 
 def build(net, cfg=None):
-    """The estimator a config asks for."""
-    cfg = cfg or config.FULL
-    if cfg.learn == "knn":
-        return baselines.KnnModel(net, cfg)
-    if cfg.learn == "median":
-        return baselines.MedianModel(net, cfg)
-    if cfg.learn.startswith("table"):
-        return baselines.TableModel(net, cfg)
-    return PaceModel(net, cfg)
+    """The model a config asks for."""
+    return PaceModel(net, cfg or config.FULL)
 
 
 def _window(t_from, t_to):
@@ -194,17 +187,6 @@ def drain(model, tracks, closed, now):
     model.observe(idx[keep], a[:, 0], a[:, 1], a[:, 2], a[:, 3], now)
 
 
-def _lateness_eta(tr, s_now):
-    """Seconds to each remaining stop under the official API's method: one
-    lateness carried unchanged, so the answer is the scheduled travel time.
-
-    Only differences of timetable times are taken, so the service day never has
-    to be resolved.
-    """
-    sched_now = float(np.interp(s_now, tr.sdist, tr.sched))
-    return np.maximum(tr.sched[tr.next_stop:] - sched_now, 0.0)
-
-
 def prune(tracks, runs, now):
     """Forget vehicles that have gone quiet, so `tracks` stops growing.
 
@@ -246,10 +228,7 @@ def etas(model, tr, now):
         return None
     i = tr.next_stop
     s_now = believed(tr, now)
-    if model.cfg.eta == "lateness":
-        dt = _lateness_eta(tr, s_now)
-    else:
-        dt = model.time_between(tr.shape_id, s_now, tr.sdist[i:])
+    dt = model.time_between(tr.shape_id, s_now, tr.sdist[i:])
     k = np.nonzero(dt <= HORIZON)[0]
     return (i, s_now, dt, k) if len(k) else None
 

@@ -35,7 +35,7 @@ class Service:
         self.set = settings
         self.log = log
         self.live = Live(net, settings.cfg, catalog, epoch=settings.epoch)
-        self.persist = persist and snapshot.supported(self.live.model)
+        self.persist = persist
         self.lock = asyncio.Lock()
         self.hub = None          # set by the app, which owns the connections
         self.timetable = lambda: None    # the planner's, once the app has one

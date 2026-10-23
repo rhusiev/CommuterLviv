@@ -697,8 +697,7 @@ two hours of recording cannot replay.
 
 A missing or unreadable snapshot is not an error - the model starts from the
 timetable, as it did before the file existed, and the log says so. The
-snapshot is about 111 MB, and only the per-cell online models
-(`snapshot.supported`) have one. It also carries each route's recent early
+snapshot is about 111 MB. It also carries each route's recent early
 turnarounds at its termini and the minutes of stands its departure model
 learns from ([trips after this one](#trips-after-this-one)) and the passed
 stops the ETA correction learns from
