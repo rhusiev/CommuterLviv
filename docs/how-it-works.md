@@ -205,7 +205,7 @@ otherwise keep only the last of them.
 
 ## 6. An ETA is a subtraction
 
-`replay.py`, `_flush`. Once per epoch, after the model has been updated and
+`replay.py`, `step`. Once per epoch, after the model has been updated and
 before anything is emitted, `model.refresh` recomputes per-cell time for all
 26712 cells and takes one cumulative sum. An arrival time for any stop is then
 the difference of two entries in that array plus a linear term inside the

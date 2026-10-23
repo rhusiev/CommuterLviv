@@ -4,9 +4,19 @@ The same model, on wall time instead of a recording, is `commuterlviv/live/` beh
 `python3 -m commuterlviv serve`. It polls the vehicle feed every five seconds, folds
 each fix into the same tracks, steps the model on the same 60 s grid, and pushes
 positions per poll and arrivals per epoch over a websocket. It shares the code
-rather than resembling it: one epoch in the service is the same four calls
-`replay._flush` makes offline, in the same order, so the numbers it serves are
-the numbers the reports measured.
+rather than resembling it: one epoch in the service is `replay.step`, the call
+the offline replay makes for each of its epochs, so the numbers it serves are
+the numbers the reports measured. That step feeds the model what the tracks
+crossed, forgets vehicles gone quiet, refreshes the model, and forecasts: every
+vehicle that reported within `replay.STALE` (120 s), is placed on its shape and
+still has a stop ahead is timed, and every other vehicle that reported within
+it and that the departure model saw get in at the end of its trip is noted
+standing for its next one.
+Only then does the service drop what the clients cannot show - a vehicle whose
+route the catalog lacks - and add the trips each vehicle runs next
+([trips after this one](#trips-after-this-one)). So a vehicle first seen
+already standing at its last stop is timed by neither: it has no stop ahead,
+and nothing saw when it got in.
 
 ```sh
 pip install -r requirements-live.txt
@@ -47,7 +57,7 @@ That rule is the fallback. Every minute a vehicle stands in early, the service
 also notes what the rule's two halves said, how long ago and how far ahead of
 the timetable the route last left that terminus, the timetable's gap to it,
 the hour, and how long the vehicle has stood, and a replay of the recording
-notes the same (`replay._stands`); once the vehicle leaves, each of
+notes the same (`replay.forecast`); once the vehicle leaves, each of
 those minutes is labelled with how long was really left. A gradient-boosted
 model (scikit-learn's `HistGradientBoostingRegressor`) is fitted on start,
 every 6 hours (`FIT_EVERY`) and after a feed swap, in a worker thread, on

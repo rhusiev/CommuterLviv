@@ -55,6 +55,19 @@ def test_a_vehicle_in_early_runs_its_next_trip_from_the_timetable(live):
         assert planned["t"][0] == pytest.approx(t2 + seq * city.LEG_S, abs=city.ETA_TOL_S)
 
 
+def test_a_vehicle_first_seen_in_at_its_last_stop_is_not_forecast(live):
+    came = city.at(city.DEPARTS["t1"]) + (city.STOPS - 1) * city.LEG_S
+    fixes = [f for f in city.ride("t1", stand=STAND_S) if f.ts > came]
+    now = city.epoch_after(live, fixes[-1].ts)
+
+    arrivals = city.run(live, fixes, now)[now]
+
+    # it has no stop ahead, and when it got in was never seen to time its next
+    # trip from: the replay forecasts nothing for it either
+    assert live.model.layovers.came("v1", "t1") is None
+    assert not len(arrivals.eta)
+
+
 def test_the_chain_stops_at_the_horizon(live, monkeypatch):
     now = city.epoch_after(live, city.at(city.DEPARTS["t1"]) + 1.5 * city.LEG_S)
     t3 = city.at(city.DEPARTS["t3"])

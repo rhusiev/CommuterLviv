@@ -139,7 +139,7 @@ class Live:
         self.wire, self.free, self.next_wire = {}, collections.deque(), 0
         self.next_epoch = None
         self.epochs = 0
-        self.reporting = 0       # vehicles with a fix within `replay.STALE`
+        self.reporting = 0       # vehicles `replay.fresh` at the last epoch
         self.positions = Positions(0.0)
         self.arrivals = Arrivals(0.0)
         self.started = time.time()
@@ -174,8 +174,7 @@ class Live:
         for veh, tr in self.tracks.items():
             if not replay.predictable(tr, now):
                 continue
-            route = self.net.trip_route.get(tr.trip)
-            ri = self.cat.route_i.get(route)
+            ri = self._route_i(tr)
             if ri is None:
                 continue
             moving = self._moving(tr)
@@ -187,55 +186,43 @@ class Live:
         return self.positions
 
     def epoch(self, now=None):
-        """One model step: the same calls `replay._flush` makes, in the same
-        order, then the arrivals they imply."""
+        """One model step - `replay.step`, the same call the offline replay
+        makes - then the arrivals it implies."""
         now = now or time.time()
-        self.model.emitting = True
-        replay.drain(self.model, self.tracks, self.closed, now)
-        replay.prune(self.tracks, self.runs, now)
+        fc = replay.step(self.model, self.tracks, self.runs, self.closed, now)
         for veh in [v for v in self.wire if v not in self.tracks]:
             self.free.append(self.wire.pop(veh))
-        self.model.refresh(now)
         self.epochs += 1
-        self.reporting = sum(tr.ts is not None and now - tr.ts <= replay.STALE
-                             for tr in self.tracks.values())
-        self.arrivals = self._arrivals(now)
+        self.reporting = sum(replay.fresh(tr, now) for tr in self.tracks.values())
+        self.arrivals = self._arrivals(fc, now)
         return self.arrivals
 
-    def _arrivals(self, now):
-        rows, standing = [], []
-        running = {tr.trip for tr in self.tracks.values()}
-        asked = list(self._timed(now))
-        etas = replay.all_etas(self.model, [(veh, tr) for veh, tr, _ in asked], now)
-        for (veh, tr, ri), got in zip(asked, etas):
-            w = self._wire(veh)
-            came = self.model.layovers.came(veh, tr.trip)
-            if got is None and came is not None:
-                self.model.layovers.stand_after(tr.trip, came, now, running)
-                standing.append((tr.trip, came, ri, w))
+    def _arrivals(self, fc, now):
+        """The epoch's forecast as the clients' rows: only here does a track
+        need a route the catalog knows."""
+        rows = []
+        for (veh, tr), got in zip(fc.asked, fc.got):
+            ri = self._route_i(tr)
+            if got is None or ri is None:
                 continue
-            if got is None:
-                ends = now
-            else:
-                i, _, dt, k = got
-                self._rows(rows, tr.stops, i + k, now + dt[k], ri, w, 0)
-                ends = now + float(dt[-1])
-            self._next_trips(rows, tr.trip, ends, now, ri, w, running)
-        self.model.layovers.foretell(now)
-        for trip, came, ri, w in standing:
-            self._next_trips(rows, trip, came, now, ri, w, running)
+            w = self._wire(veh)
+            i, _, dt, k = got
+            self._rows(rows, tr.stops, i + k, now + dt[k], ri, w, 0)
+            self._next_trips(rows, tr.trip, now + float(dt[-1]), now, ri, w,
+                             fc.running)
+        for veh, tr, came in fc.standing:
+            ri = self._route_i(tr)
+            if ri is not None:
+                self._next_trips(rows, tr.trip, came, now, ri, self._wire(veh),
+                                 fc.running)
         eta = np.array(rows, dtype=ETA) if rows else np.zeros(0, ETA)
         eta = eta[np.lexsort((eta["t"], eta["stop"]))]
         start = np.searchsorted(eta["stop"], np.arange(len(self.cat.stops) + 1))
         return Arrivals(now, eta, start.astype(np.int64))
 
-    def _timed(self, now):
-        """Each fresh track on a route the clients know, with its index."""
-        for veh, tr in self.tracks.items():
-            ri = self.cat.route_i.get(self.net.trip_route.get(tr.trip))
-            if ri is not None and tr.ts is not None and tr.s is not None \
-                    and now - tr.ts <= replay.STALE:
-                yield veh, tr, ri
+    def _route_i(self, tr):
+        """The catalog's index of the route this track's trip is on, or None."""
+        return self.cat.route_i.get(self.net.trip_route.get(tr.trip))
 
     def _rows(self, rows, stops, idx, at, ri, w, planned):
         for j, t in zip(idx, np.rint(at).astype("i8")):
