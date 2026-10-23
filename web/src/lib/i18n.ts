@@ -268,7 +268,7 @@ const uk: Strings = {
   },
   language: "Мова",
   failed: "Не вдалося",
-  findStop: "Знайти зупинку чи місце",
+  findStop: "Зупинка або місце",
   nearMe: "Зупинки поруч",
   stopHits: "Зупинки",
   placeHits: "Місця",

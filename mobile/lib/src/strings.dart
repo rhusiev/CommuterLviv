@@ -705,7 +705,7 @@ const _uk = Strings(
   everyRoute: 'Усі маршрути',
   layers: 'Шари',
   account: 'Обліковий запис',
-  findStop: 'Знайти зупинку або місце',
+  findStop: 'Зупинка або місце',
   tryAgain: 'Спробувати ще',
   filterRoutes: 'Пошук маршруту',
   clear: 'Очистити',
