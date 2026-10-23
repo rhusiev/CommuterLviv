@@ -33,7 +33,11 @@ up without watching a route first. The routes to pick are grouped under buses, t
 because tram 1 and bus 1 are different lines. A route is drawn as the same split
 chip wherever it shows - the routes panel, a stop's card, the Times tab, a
 vehicle's card: a click on its body watches it or stops watching it, and the `›`
-beside it opens its line. Nothing hides behind a right click or a long press.
+beside it opens its line. A chip hides nothing behind a right click or a long
+press. On the map itself a right click, or a long press on a phone, opens a
+menu for that point: save it under a name typed into the menu, plan the way
+there or from there, or list the stops within 2 km of it in the search, as ◎
+does for where you are.
 Clicking a stop opens its card: the next arrival of each route due there, and
 under "Calls here" every route through it. Pinning it
 puts it in the Times tab. Clicking a vehicle

@@ -34,9 +34,12 @@ type Props = {
   /** Set when the search stands in for a field: it opens focused, offers
    *  `idle` until something is typed, and asks to be dismissed when done */
   inline?: { placeholder: string; idle: ReactNode; onDismiss: () => void };
+  /** A point to list the stops near, as "near me" does for the device; a new
+   *  object lists them again */
+  around?: { lat: number; lon: number } | null;
 };
 
-export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: Props) {
+export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline, around = null }: Props) {
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const [near, setNear] = useState<{ stop: number; away: number }[] | null>(null);
@@ -86,6 +89,29 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
     };
   }, [query, near]);
 
+  /** The stops within `NEAR` of `at`, nearest first */
+  const nearby = (at: { lat: number; lon: number }) =>
+    catalog.stops
+      .map((s, stop) => ({ stop, away: metres(at, s) }))
+      .filter((h) => h.away <= NEAR)
+      .sort((a, b) => a.away - b.away)
+      .slice(0, LIMIT);
+
+  const showNear = (close: { stop: number; away: number }[], none: string) => {
+    setNear(close);
+    if (close.length === 0) setWhy(none);
+  };
+
+  const [listedAround, setListedAround] = useState(around);
+  if (listedAround !== around) {
+    setListedAround(around);
+    if (around) {
+      setQuery("");
+      setWhy("");
+      showNear(nearby(around), t.nothingNearHere);
+    }
+  }
+
   // A new query or a new list of stops near starts at the top
   const [listed, setListed] = useState({ query, near });
   if (listed.query !== query || listed.near !== near) {
@@ -104,14 +130,7 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
     hereOnce({ ...ONE_FIX, maximumAge: NEAR_FIX_AGE_MS }).then(
       (pos) => {
         setLocating(false);
-        const me = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        const close = catalog.stops
-          .map((s, stop) => ({ stop, away: metres(me, s) }))
-          .filter((h) => h.away <= NEAR)
-          .sort((a, b) => a.away - b.away)
-          .slice(0, LIMIT);
-        setNear(close);
-        if (close.length === 0) setWhy(t.nothingNear);
+        showNear(nearby({ lat: pos.coords.latitude, lon: pos.coords.longitude }), t.nothingNear);
       },
       (why: NoFix) => {
         setLocating(false);

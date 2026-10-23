@@ -55,6 +55,12 @@ class Strings {
     required this.savePlace,
     required this.getHere,
     required this.namePlace,
+    required this.thisPlace,
+    required this.savePlaceAs,
+    required this.toHere,
+    required this.fromHere,
+    required this.nearHere,
+    required this.nothingNearHere,
     required this.noPlaces,
     required this.saved,
     required this.pinnedStops,
@@ -244,6 +250,14 @@ class Strings {
   /// Plans the way to a place shown on the map
   final String getHere;
   final String namePlace;
+
+  /// A point held on the map, and what its sheet offers for it
+  final String thisPlace;
+  final String savePlaceAs;
+  final String toHere;
+  final String fromHere;
+  final String nearHere;
+  final String nothingNearHere;
   final String noPlaces;
   final String saved;
   final String pinnedStops;
@@ -458,6 +472,12 @@ const _en = Strings(
   savePlace: 'Save this place',
   getHere: 'Get here',
   namePlace: 'Name this place',
+  thisPlace: 'This place',
+  savePlaceAs: 'Save this place...',
+  toHere: 'Directions to here',
+  fromHere: 'Directions from here',
+  nearHere: 'Stops near here',
+  nothingNearHere: 'No stop within 2 km of this place',
   noPlaces: 'Save a place and it is offered here',
   saved: 'Saved',
   pinnedStops: 'Pinned stops',
@@ -698,6 +718,12 @@ const _uk = Strings(
   savePlace: 'Зберегти це місце',
   getHere: 'Маршрут сюди',
   namePlace: 'Назва місця',
+  thisPlace: 'Це місце',
+  savePlaceAs: 'Зберегти це місце...',
+  toHere: 'Маршрут сюди',
+  fromHere: 'Маршрут звідси',
+  nearHere: 'Зупинки поблизу',
+  nothingNearHere: 'Немає зупинки ближче ніж за 2 км звідси',
   noPlaces: 'Збережене місце зʼявиться тут',
   saved: 'Збережене',
   pinnedStops: 'Закріплені зупинки',

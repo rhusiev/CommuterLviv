@@ -7,6 +7,7 @@ import { SignIn } from "./components/SignIn";
 import { FollowCard } from "./components/FollowCard";
 import { JourneyPanel } from "./components/JourneyPanel";
 import { StopCard } from "./components/StopCard";
+import { HoldMenu, type Held } from "./components/HoldMenu";
 import { PlaceCard } from "./components/PlaceCard";
 import { AccountMenu } from "./components/AccountMenu";
 import { LayersPanel } from "./components/LayersPanel";
@@ -87,6 +88,10 @@ export function App() {
   const [veh, setVeh] = useState<number | null>(null);
   /** Picked by name, so it gets a card and a mark of its own */
   const [place, setPlace] = useState<Shown | null>(null);
+  /** Where the map was last held, while its menu is open */
+  const [held, setHeld] = useState<Held | null>(null);
+  /** A point to list the stops near in the search; a new object lists them again */
+  const [around, setAround] = useState<{ lat: number; lon: number } | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lon: number } | null>(null);
   const [tab, setTab] = useState<UrlState["tab"]>(
     opened.route === null && opened.tab === "route" ? "map" : opened.tab,
@@ -269,6 +274,17 @@ export function App() {
     openTab("plan");
   };
 
+  /** The planner, from or to a point held on the map; to it, from where you
+   *  are unless it already starts somewhere */
+  const planAt = (which: "from" | "to", at: Held) => {
+    setHeld(null);
+    planner.setEnd(which, { lat: at.lat, lon: at.lon });
+    if (which === "to" && planner.from === null) planner.hereFor("from");
+    planner.setAsk(true);
+    setPlace(null);
+    openTab("plan");
+  };
+
   const openRoute = (i: number) => {
     setRoute(i);
     openTab("route");
@@ -333,10 +349,7 @@ export function App() {
         fit={fit}
         picking={planner.picking !== null}
         onPickPoint={planner.pickAt}
-        onHoldPoint={(lat, lon) => {
-          const name = prompt(t.namePlace)?.trim();
-          if (name) keepPlaces(saved(places, name, lat, lon));
-        }}
+        onHoldPoint={setHeld}
         marks={
           place && tab === "map"
             ? [...planner.marks, { lat: place.lat, lon: place.lon, label: PLACE_MARK }]
@@ -353,6 +366,22 @@ export function App() {
         theme={theme}
         covered={tab !== "map"}
       />
+      {held && (
+        <HoldMenu
+          at={held}
+          onSave={(name) => {
+            keepPlaces(saved(places, name, held.lat, held.lon));
+            setHeld(null);
+          }}
+          onTo={() => planAt("to", held)}
+          onFrom={() => planAt("from", held)}
+          onNear={() => {
+            setAround({ lat: held.lat, lon: held.lon });
+            setHeld(null);
+          }}
+          onClose={() => setHeld(null)}
+        />
+      )}
 
       <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start gap-2 p-3">
         <button
@@ -374,6 +403,7 @@ export function App() {
               keepPlaces(saved(places, name, lat, lon))
             }
             places={places}
+            around={around}
           />
         </div>
         <span

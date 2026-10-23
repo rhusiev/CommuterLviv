@@ -264,6 +264,58 @@ def test_a_saved_place_is_offered_above_the_stops_it_matches(page):
     expect(rows.nth(1)).to_contain_text("Stops")
 
 
+def _hold(page, x=VIEWPORT["width"] / 2, y=VIEWPORT["height"] / 2):
+    """Right-clicks the map at `x`, `y` - by default its middle, CENTRE - once
+    it is up; the menu it opens."""
+    page.locator(".maplibregl-canvas").wait_for()
+    page.mouse.click(x, y, button="right")
+    menu = page.get_by_role("dialog", name="This place")
+    playwright.expect(menu).to_be_visible()
+    return menu
+
+
+def test_a_place_held_on_the_map_is_named_in_its_menu(page):
+    _register(page, "namer")
+    page.on("dialog", lambda dialog: pytest.fail(f"asked in a {dialog.type}"))
+    menu = _hold(page)
+    menu.get_by_role("button", name="Save this place...").click()
+    menu.get_by_label("Name this place").fill("Corner")
+    menu.get_by_role("button", name="Save").click()
+
+    expect = playwright.expect
+    expect(menu).not_to_be_visible()
+    page.get_by_placeholder("Find a stop or a place").fill("Corner")
+    # starred: a saved place, not a stop or a found one
+    expect(page.locator("ul li").first).to_have_text("Corner★")
+
+
+def test_the_way_to_a_place_held_on_the_map_is_planned_from_its_menu(page):
+    _register(page, "wayfarer")
+    with page.expect_request(lambda r: "/api/plan?from=" in r.url) as asked:
+        _hold(page).get_by_role("button", name="Directions to here").click()
+
+    ends = dict(part.split("=") for part in asked.value.url.split("?")[1].split("&"))
+    assert tuple(map(float, ends["to"].split(","))) == pytest.approx(CENTRE, abs=1e-3)
+
+
+def test_the_stops_near_a_place_held_on_the_map_are_listed_from_its_menu(page):
+    _register(page, "browser")
+    _hold(page).get_by_role("button", name="Stops near here").click()
+
+    first = page.locator("ul li").first
+    playwright.expect(first).to_contain_text("Stop 2")
+    playwright.expect(first).to_contain_text(re.compile(r"\d+ m"))
+
+
+def test_a_place_held_far_from_every_stop_is_said_to_have_none_near(page):
+    _register(page, "wanderer")
+    # a corner of the map is some 12 km out at ZOOM; the city is 2 km long
+    _hold(page, 10, VIEWPORT["height"] - 100).get_by_role(
+        "button", name="Stops near here").click()
+
+    playwright.expect(page.get_by_text("No stop within 2 km of this place")).to_be_visible()
+
+
 def test_a_name_nothing_matches_is_said_to_match_nothing(page):
     _register(page, "seeker")
     page.route("**/api/search?**", lambda route: route.fulfill(json={"places": []}))

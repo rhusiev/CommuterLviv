@@ -16,6 +16,7 @@ import 'follow.dart' show Stage, StageKind;
 import 'follow_card.dart';
 import 'followed.dart';
 import 'haptics.dart';
+import 'hold_sheet.dart';
 import 'here.dart';
 import 'journey_panel.dart';
 import 'live.dart';
@@ -298,10 +299,34 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _savePlace(String name, LatLng at) =>
       _places([..._withoutPlace(name), Place(name: name, at: at)]);
 
-  Future<void> _nameSpot(LatLng at) async {
-    final name = await askPlaceName(context);
-    if (name != null) await _savePlace(name, at);
-  }
+  /// What a long press on the map offers for [at].
+  void _hold(LatLng at) => showFloatingSheet<void>(
+    context,
+    (_) => HoldSheet(
+      at: at,
+      onSave: (name) {
+        Navigator.pop(context);
+        unawaited(_savePlace(name, at));
+      },
+      onTo: () {
+        Navigator.pop(context);
+        _planTo(null, at);
+      },
+      onFrom: () {
+        Navigator.pop(context);
+        setState(() {
+          _at(End.from, at);
+          _ask = true;
+        });
+        _pickTab(2);
+      },
+      onNear: () {
+        Navigator.pop(context);
+        unawaited(_search(around: at));
+      },
+    ),
+    scrollControlled: true,
+  );
 
   Future<void> _places(List<Place> next) async {
     final sets = _sets;
@@ -642,7 +667,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _search() async {
+  /// The search, listing the stops near [around] until something is typed.
+  Future<void> _search({LatLng? around}) async {
     final catalog = _catalog;
     if (catalog == null) return;
     final hit = await showSearch<Hit?>(
@@ -653,6 +679,7 @@ class _HomeScreenState extends State<HomeScreen> {
         places: _sets?.places ?? const [],
         onSave: _savePlace,
         here: _here,
+        around: around,
       ),
     );
     if (hit == null || !mounted) return;
@@ -689,11 +716,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// The planner, to [at] and from wherever it already starts - or from where
-  /// you are, which is asked for only now.
-  void _planTo(String name, LatLng at) {
+  /// you are, which is asked for only now. A point held on the map has no
+  /// [name].
+  void _planTo(String? name, LatLng at) {
     setState(() {
       _to = at;
-      _named[at] = name;
+      if (name != null) _named[at] = name;
       _ask = true;
     });
     _pickTab(2);
@@ -918,7 +946,7 @@ class _HomeScreenState extends State<HomeScreen> {
       lines: _lines,
       arrowed: _onRoute ? _route : null,
       onTap: _tap,
-      onHold: _nameSpot,
+      onHold: _hold,
     );
   }
 

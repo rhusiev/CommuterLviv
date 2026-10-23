@@ -90,6 +90,7 @@ Future<void> open(
   void Function(Hit?) picked, {
   Here? here,
   Api? service,
+  LatLng? around,
 }) async {
   SharedPreferences.setMockInitialValues({});
   FlutterSecureStorage.setMockInitialValues({});
@@ -107,6 +108,7 @@ Future<void> open(
                 places: const [_work, _home],
                 onSave: (_, _) {},
                 here: here,
+                around: around,
               ),
             ),
           ),
@@ -211,5 +213,24 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text(txt.nothingNear), findsOneWidget);
+  });
+
+  testWidgets('a point held on the map lists the stops near it, nearest '
+      'first, without asking where the phone is', (tester) async {
+    final here = _Here(null);
+    await open(tester, (_) {}, here: here, around: _me);
+
+    expect(here.started, 0);
+    expect(find.text(txt.nearHere), findsOneWidget);
+    expect(find.text(txt.metres(22)), findsOneWidget);
+    expect(find.text('Airport'), findsNothing);
+    final depot = tester.getTopLeft(find.text('Depot')).dy;
+    expect(tester.getTopLeft(find.text('Market')).dy, greaterThan(depot));
+  });
+
+  testWidgets('a point held far from every stop is told so', (tester) async {
+    await open(tester, (_) {}, around: const LatLng(50.45, 30.52));
+
+    expect(find.text(txt.nothingNearHere), findsOneWidget);
   });
 }

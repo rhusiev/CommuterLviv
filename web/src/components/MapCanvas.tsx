@@ -24,6 +24,7 @@ import { journeyTags } from "../lib/tags";
 import { ink, styleUrl, type Theme } from "../lib/theme";
 import type { Catalog, Journey, Place, Shapes } from "../lib/types";
 import { MOVING_FLAG, STALE_FLAG } from "../lib/wire";
+import type { Held } from "./HoldMenu";
 import { Icon } from "./Icon";
 
 /** The vehicle/stop overlay is a 2D canvas drawn from MapLibre's own `render`
@@ -72,8 +73,8 @@ type Props = {
   /** A click sets a journey end instead of choosing a stop */
   picking: boolean;
   onPickPoint: (lat: number, lon: number) => void;
-  /** A long press or right click, to save the spot */
-  onHoldPoint: (lat: number, lon: number) => void;
+  /** A long press or right click: the point, and where on the page it was */
+  onHoldPoint: (at: Held) => void;
   marks: { lat: number; lon: number; label: string }[];
   /** The planner option picked: walks dotted, rides solid, each leg timed */
   journey: Journey | null;
@@ -466,7 +467,10 @@ export function MapCanvas(props: Props) {
         keep.current = false;
       });
       // Mobile browsers raise a long press as `contextmenu` too
-      map.on("contextmenu", (e) => latest.current.onHoldPoint(e.lngLat.lat, e.lngLat.lng));
+      map.on("contextmenu", (e) => {
+        const { clientX: x, clientY: y } = e.originalEvent;
+        latest.current.onHoldPoint({ lat: e.lngLat.lat, lon: e.lngLat.lng, x, y });
+      });
       map.on("click", (e) => {
         if (latest.current.picking) {
           latest.current.onPickPoint(e.lngLat.lat, e.lngLat.lng);

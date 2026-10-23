@@ -185,6 +185,7 @@ refused and the map stays empty while everything else works.
 | `lib/src/times_tab.dart`     | the pinned stops and what is due at each                                |
 | `lib/src/stop_card.dart`     | one stop, from the bottom of the map                                    |
 | `lib/src/place_card.dart`    | a place picked by name, and the way there                               |
+| `lib/src/hold_sheet.dart`    | what a long press on the map offers for that point                      |
 | `lib/src/stop_search.dart`   | stops by name and near you, and places from the service                 |
 | `lib/src/saved.dart`         | the saved places and the pinned stops, in one list                      |
 | `lib/src/traffic.dart`       | how fast the streets are running, while that is on                      |
@@ -355,7 +356,10 @@ the identity server-side. Search saves too: `GET /api/search?q=` merges
 addresses and shops under their own heading below the stops, a quarter of a
 second after the typing stops, and every row there - stops included - has a star
 that names the point and keeps it. A place picked from either opens
-`place_card.dart` instead of only moving the map.
+`place_card.dart` instead of only moving the map. A long press on the map opens
+`hold_sheet.dart` for that point: the name to save it under is typed into the
+sheet itself, and the sheet also plans the way there or from there, or opens the
+search listing the stops within 2 km of it.
 
 ## Traffic, and which way a line runs
 

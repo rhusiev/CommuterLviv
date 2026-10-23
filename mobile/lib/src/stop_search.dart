@@ -68,6 +68,7 @@ class StopSearch extends SearchDelegate<Hit?> {
     required this.onSave,
     this.idle,
     this.here,
+    this.around,
   }) : super(searchFieldLabel: txt.findStop);
 
   final Api api;
@@ -80,6 +81,9 @@ class StopSearch extends SearchDelegate<Hit?> {
 
   /// Where the phone is, for the stops near it, when [idle] is not shown
   final Here? here;
+
+  /// A point held on the map, whose stops an empty query lists instead
+  final LatLng? around;
 
   /// The default paints the bar grey whatever the app's theme says
   @override
@@ -111,6 +115,14 @@ class StopSearch extends SearchDelegate<Hit?> {
         catalog: catalog,
         places: places,
         query: query.trim(),
+        onPick: pick,
+        onSave: onSave,
+      );
+    }
+    if (around case final around?) {
+      return _Around(
+        near: nearest(catalog, around),
+        catalog: catalog,
         onPick: pick,
         onSave: onSave,
       );
@@ -186,6 +198,32 @@ class _Near extends StatelessWidget {
       ],
     );
   }
+}
+
+/// The stops nearest a point held on the map, [near] them first.
+class _Around extends StatelessWidget {
+  const _Around({
+    required this.near,
+    required this.catalog,
+    required this.onPick,
+    required this.onSave,
+  });
+
+  final List<(int, double)> near;
+  final Catalog catalog;
+  final void Function(Hit hit) onPick;
+  final void Function(String name, LatLng at) onSave;
+
+  @override
+  Widget build(BuildContext context) => near.isEmpty
+      ? _Said(txt.nothingNearHere)
+      : ListView(
+          children: [
+            _Heading(txt.nearHere),
+            for (final (i, m) in near)
+              _stop(context, catalog, i, txt.metres(m.round()), onPick, onSave),
+          ],
+        );
 }
 
 /// Stop [i] as a row, with [under] beneath its name.
