@@ -64,7 +64,7 @@ void main() {
 
     expect(
       tester.getSemantics(find.byType(RouteBadge)),
-      containsSemantics(
+      isSemantics(
         isButton: true,
         isToggled: true,
         hasTapAction: true,

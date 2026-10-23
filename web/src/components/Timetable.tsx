@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { countdown, nextPerRoute } from "../lib/eta";
 import type { Arrival, Catalog } from "../lib/types";
 import { t } from "../lib/i18n";
-import { RouteBadge } from "./RouteBadge";
+import { RouteChip } from "./RouteChip";
 import { Icon } from "./Icon";
 
 /** How often the countdowns move on */
@@ -15,12 +15,18 @@ export function Timetable({
   stops,
   arrivals,
   onUnpin,
+  watching,
+  onToggle,
   onRoute,
 }: {
   catalog: Catalog;
   stops: number[];
   arrivals: Record<string, Arrival[]>;
   onUnpin: (i: number) => void;
+  /** The routes picked, by id */
+  watching: Set<string>;
+  onToggle: (id: string) => void;
+  /** The line, from a chip's `›` */
   onRoute: (i: number) => void;
 }) {
   const [now, setNow] = useState(() => Date.now() / 1000);
@@ -60,11 +66,15 @@ export function Timetable({
                   return (
                     <li key={a.route} className="flex items-center gap-2 py-1.5">
                       {r ? (
-                        <button onClick={() => onRoute(a.route)} title={t.showLine}>
-                          <RouteBadge route={r} className="w-14 px-1.5 py-0.5 text-sm" />
-                        </button>
+                        <RouteChip
+                          route={r}
+                          watched={watching.has(r.id)}
+                          onWatch={() => onToggle(r.id)}
+                          onLine={() => onRoute(a.route)}
+                          className="w-24 shrink-0"
+                        />
                       ) : (
-                        <span className="w-14 text-center text-sm text-slate-500">?</span>
+                        <span className="w-24 text-center text-sm text-slate-500">?</span>
                       )}
                       <span className="flex-1 truncate text-sm text-slate-400">{r?.long}</span>
                       <span

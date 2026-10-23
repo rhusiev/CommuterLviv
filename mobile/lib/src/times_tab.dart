@@ -17,6 +17,8 @@ class TimesTab extends StatelessWidget {
     required this.pins,
     required this.onUnpin,
     required this.onOpen,
+    required this.watching,
+    required this.onWatch,
     required this.onLine,
   });
 
@@ -27,6 +29,8 @@ class TimesTab extends StatelessWidget {
   final void Function(int stop) onUnpin;
   final void Function(int stop) onOpen;
 
+  final Set<int> watching;
+  final void Function(int route) onWatch;
   final void Function(int route) onLine;
 
   @override
@@ -50,6 +54,8 @@ class TimesTab extends StatelessWidget {
               arrivals: live.arrivals[stop] ?? const [],
               onUnpin: () => onUnpin(stop),
               onOpen: () => onOpen(stop),
+              watching: watching,
+              onWatch: onWatch,
               onLine: onLine,
             ),
         ],
@@ -65,6 +71,8 @@ class _StopTile extends StatelessWidget {
     required this.arrivals,
     required this.onUnpin,
     required this.onOpen,
+    required this.watching,
+    required this.onWatch,
     required this.onLine,
   });
 
@@ -73,6 +81,8 @@ class _StopTile extends StatelessWidget {
   final List<Arrival> arrivals;
   final VoidCallback onUnpin;
   final VoidCallback onOpen;
+  final Set<int> watching;
+  final void Function(int route) onWatch;
   final void Function(int route) onLine;
 
   @override
@@ -88,6 +98,8 @@ class _StopTile extends StatelessWidget {
                 Due(
                   route: catalog.routes[a.route],
                   arrival: a,
+                  watched: watching.contains(a.route),
+                  onWatch: () => onWatch(a.route),
                   onLine: () => onLine(a.route),
                 ),
             ],

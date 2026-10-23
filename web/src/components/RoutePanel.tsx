@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Catalog, Route, RouteSet } from "../lib/types";
 import { t } from "../lib/i18n";
-import { RouteBadge } from "./RouteBadge";
+import { RouteChip } from "./RouteChip";
 import { Icon } from "./Icon";
 import { Remove } from "./Cross";
 
@@ -16,7 +16,7 @@ type Props = {
   picked: Set<string>;
   onToggle: (id: string) => void;
   onClear: () => void;
-  /** A click here already toggles the route, so this is on `onContextMenu` */
+  /** The line, from a chip's `›` */
   onRoute: (i: number) => void;
   sets: RouteSet[];
   active: string | null;
@@ -129,34 +129,20 @@ export function RoutePanel(p: Props) {
             <div key={type}>
               <h3 className="mb-1 text-xs text-slate-500">{t.kinds[type] ?? type}</h3>
               {/* Columns, so a chip wider than the rest does not shift the ones after it */}
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(4rem,1fr))] gap-1">
-                {routes.map(([r, i]) => {
-                  const on = p.picked.has(r.id);
-                  return (
-                    <button
-                      key={r.id}
-                      onClick={() => p.onToggle(r.id)}
-                      // `onContextMenu` covers both right-click and touch long-press
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        p.onRoute(i);
-                      }}
-                    >
-                      <RouteBadge
-                        route={r}
-                        muted={!on}
-                        className={`w-full px-2 py-1 text-sm ${
-                          on ? "" : "bg-raised/70 text-slate-400 hover:bg-raised"
-                        }`}
-                      />
-                    </button>
-                  );
-                })}
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-1">
+                {routes.map(([r, i]) => (
+                  <RouteChip
+                    key={r.id}
+                    route={r}
+                    watched={p.picked.has(r.id)}
+                    onWatch={() => p.onToggle(r.id)}
+                    onLine={() => p.onRoute(i)}
+                  />
+                ))}
               </div>
             </div>
           ))}
         </div>
-        <p className="mt-1.5 text-xs text-slate-500">{t.holdForLine}</p>
       </section>
     </div>
   );

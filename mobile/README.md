@@ -189,7 +189,8 @@ refused and the map stays empty while everything else works.
 | `lib/src/saved.dart`         | the saved places and the pinned stops, in one list                      |
 | `lib/src/traffic.dart`       | how fast the streets are running, while that is on                      |
 | `lib/src/sheets.dart`        | the route sheet, the basemap sheet, and the dialogs each of them shares |
-| `lib/src/due.dart`           | one route's countdown chip, drawn in three places                       |
+| `lib/src/due.dart`           | a route chip with its countdown, drawn in two places                         |
+| `lib/src/route_chip.dart`    | a route: its body watches it, its `›` opens the line                    |
 | `lib/src/server_dialog.dart` | which server to talk to, asked from two places                          |
 | `lib/src/map_theme.dart`     | the eight basemap styles and the colours drawn over them                |
 | `lib/src/map_controls.dart`  | zoom, and the compass that shows up off north                           |

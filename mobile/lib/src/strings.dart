@@ -39,7 +39,6 @@ class Strings {
     required this.routes,
     required this.kinds,
     required this.routeLine,
-    required this.showRoute,
     required this.everyRoute,
     required this.layers,
     required this.account,
@@ -52,7 +51,6 @@ class Strings {
     required this.nameSet,
     required this.rename,
     required this.delete,
-    required this.holdForLine,
     required this.places,
     required this.savePlace,
     required this.getHere,
@@ -229,7 +227,6 @@ class Strings {
 
   /// A second word for "route": Ukrainian already spends one on `plan`.
   final String routeLine;
-  final String showRoute;
   final String everyRoute;
   final String layers;
   final String account;
@@ -242,7 +239,6 @@ class Strings {
   final String nameSet;
   final String rename;
   final String delete;
-  final String holdForLine;
   final String places;
   final String savePlace;
 
@@ -448,7 +444,6 @@ const _en = Strings(
   routes: 'Routes',
   kinds: {'bus': 'Buses', 'tram': 'Trams', 'trolleybus': 'Trolleybuses'},
   routeLine: 'Line',
-  showRoute: 'Show this route on the map',
   everyRoute: 'Every route',
   layers: 'Layers',
   account: 'Account',
@@ -461,7 +456,6 @@ const _en = Strings(
   nameSet: 'Name this set',
   rename: 'Rename',
   delete: 'Delete',
-  holdForLine: 'Hold a route to see its line',
   places: 'Saved places',
   savePlace: 'Save this place',
   getHere: 'Get here',
@@ -691,7 +685,6 @@ const _uk = Strings(
   routes: 'Маршрути',
   kinds: {'bus': 'Автобуси', 'tram': 'Трамваї', 'trolleybus': 'Тролейбуси'},
   routeLine: 'Лінія',
-  showRoute: 'Показати цей маршрут на мапі',
   everyRoute: 'Усі маршрути',
   layers: 'Шари',
   account: 'Обліковий запис',
@@ -704,7 +697,6 @@ const _uk = Strings(
   nameSet: 'Назва набору',
   rename: 'Перейменувати',
   delete: 'Видалити',
-  holdForLine: 'Утримуйте маршрут, щоб побачити лінію',
   places: 'Збережені місця',
   savePlace: 'Зберегти це місце',
   getHere: 'Маршрут сюди',

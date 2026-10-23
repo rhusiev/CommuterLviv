@@ -1,14 +1,14 @@
 import { stopTitle } from "../lib/catalog";
 import { countdown, nextPerRoute } from "../lib/eta";
-import { RouteBadge } from "./RouteBadge";
+import { RouteChip } from "./RouteChip";
 import type { Arrival, Catalog } from "../lib/types";
 import { t } from "../lib/i18n";
 import { Icon } from "./Icon";
 import { Close } from "./Cross";
 
-/** What is due here, then every route that calls here, which a click watches
- * or stops watching. The times only cover the routes on the map, because only
- * those are being predicted for. */
+/** What is due here, then every route that calls here. Every route chip on it,
+ * due or not, watches its route or stops watching it, and opens its line from
+ * its `›`. What is due covers every route through the stop, watched or not. */
 export function StopCard({
   catalog,
   stop,
@@ -28,8 +28,7 @@ export function StopCard({
   /** The routes picked, by id */
   watching: Set<string>;
   onToggle: (id: string) => void;
-  /** The line, from a click on what is due; a click on a route that calls
-   *  here already toggles it, so there this is on `onContextMenu` */
+  /** The line, from a chip's `›` */
   onRoute: (i: number) => void;
   onClose: () => void;
 }) {
@@ -67,20 +66,23 @@ export function StopCard({
         <p className="mt-2 text-xs text-slate-500">{t.nothingDue}</p>
       ) : (
         <ul className="mt-2 flex flex-wrap gap-1">
-          {due.map((a) => (
-            <li key={a.route}>
-              <button
-                onClick={() => onRoute(a.route)}
-                title={t.showLine}
-                className="flex items-center gap-1 rounded-control bg-raised/70 py-0.5 pl-0.5 pr-1.5 hover:bg-raised"
-              >
-                <RouteBadge route={catalog.routes[a.route]!} className="px-1.5 py-0.5 text-xs" />
-                <span className={`text-xs text-slate-400 ${a.planned ? "italic" : ""}`}>
-                  {countdown(a.t)}
-                </span>
-              </button>
-            </li>
-          ))}
+          {due.map((a) => {
+            const r = catalog.routes[a.route]!;
+            return (
+              <li key={a.route}>
+                <RouteChip
+                  route={r}
+                  watched={watching.has(r.id)}
+                  onWatch={() => onToggle(r.id)}
+                  onLine={() => onRoute(a.route)}
+                >
+                  <span className={`text-xs text-slate-400 ${a.planned ? "italic" : ""}`}>
+                    {countdown(a.t)}
+                  </span>
+                </RouteChip>
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -89,29 +91,17 @@ export function StopCard({
         {s.routes.map((i) => {
           const r = catalog.routes[i];
           if (!r) return null;
-          const on = watching.has(r.id);
           return (
-            <button
+            <RouteChip
               key={r.id}
-              onClick={() => onToggle(r.id)}
-              // `onContextMenu` covers both right-click and touch long-press
-              onContextMenu={(e) => {
-                e.preventDefault();
-                onRoute(i);
-              }}
-            >
-              <RouteBadge
-                route={r}
-                muted={!on}
-                className={`px-2 py-1 text-sm ${
-                  on ? "" : "bg-raised/70 text-slate-400 hover:bg-raised"
-                }`}
-              />
-            </button>
+              route={r}
+              watched={watching.has(r.id)}
+              onWatch={() => onToggle(r.id)}
+              onLine={() => onRoute(i)}
+            />
           );
         })}
       </div>
-      <p className="mt-1.5 text-xs text-slate-500">{t.holdForLine}</p>
     </div>
   );
 }

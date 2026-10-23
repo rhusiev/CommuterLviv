@@ -507,6 +507,8 @@ export function App() {
             stops={pins}
             arrivals={live.arrivals}
             onUnpin={(i) => setPinned(pins.filter((p) => p !== i))}
+            watching={picked}
+            onToggle={session.togglePicked}
             onRoute={openRoute}
           />
         </section>
@@ -590,6 +592,8 @@ export function App() {
                 setStop(i);
                 setVeh(null);
               }}
+              watching={picked}
+              onToggle={session.togglePicked}
               onRoute={openRoute}
               onAboard={(on) => {
                 planner.board(on);

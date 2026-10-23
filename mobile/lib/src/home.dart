@@ -505,10 +505,7 @@ class _HomeScreenState extends State<HomeScreen> {
         pinned: _pins.contains(stop),
         watching: _routes,
         onPin: () => _pin(stop),
-        onRoute: (route) {
-          Navigator.pop(context);
-          _toggleRoute(route);
-        },
+        onRoute: _toggleRoute,
         onLine: (route) {
           Navigator.pop(context);
           _openRoute(route);
@@ -586,6 +583,8 @@ class _HomeScreenState extends State<HomeScreen> {
           Navigator.pop(context);
           _openStop(stop, fly: true);
         },
+        watching: _routes,
+        onWatch: _toggleRoute,
         onRoute: (route) {
           Navigator.pop(context);
           _openRoute(route);
@@ -840,6 +839,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     setState(() => _tab = 0);
                     _openStop(stop, fly: true);
                   },
+                  watching: _routes,
+                  onWatch: _toggleRoute,
                   onLine: _openRoute,
                 ),
               ],

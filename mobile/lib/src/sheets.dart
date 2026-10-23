@@ -11,7 +11,7 @@ import 'package:flutter/material.dart' as material show Theme;
 import 'api.dart';
 import 'map_theme.dart';
 import 'models.dart';
-import 'route_badge.dart';
+import 'route_chip.dart';
 import 'strings.dart';
 import 'theme.dart';
 
@@ -410,7 +410,7 @@ class RouteSheet extends StatefulWidget {
 
   final void Function(Sets sets) onSets;
 
-  /// The line, opened by a long press: a tap already toggles the route.
+  /// The line, from a chip's `›`.
   final void Function(int route) onRoute;
 
   @override
@@ -419,7 +419,7 @@ class RouteSheet extends StatefulWidget {
 
 class _RouteSheetState extends State<RouteSheet> {
   /// The narrowest a route chip may be, and the space between two.
-  static const _cell = 76.0;
+  static const _cell = 100.0;
   static const _gap = 6.0;
 
   String _filter = '';
@@ -496,33 +496,18 @@ class _RouteSheetState extends State<RouteSheet> {
     setState(() => _active = set.id);
   }
 
-  Widget _chip(int i, double width) => SizedBox(
+  Widget _chip(int i, double width) => RouteChip(
+    route: widget.catalog.routes[i],
+    watched: widget.picked.contains(i),
     width: width,
-    child: GestureDetector(
-      onLongPress: () {
-        Navigator.pop(context);
-        widget.onRoute(i);
-      },
-      child: FilterChip(
-        label: Center(
-          child: RouteBadge(
-            route: widget.catalog.routes[i],
-            muted: !widget.picked.contains(i),
-          ),
-        ),
-        // No tooltip: a chip's own tooltip fires on long press
-        // and wins the gesture arena, so the line would never
-        // open
-        showCheckmark: false,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        labelPadding: EdgeInsets.zero,
-        selected: widget.picked.contains(i),
-        onSelected: (_) {
-          widget.onToggle(i);
-          setState(() {});
-        },
-      ),
-    ),
+    onWatch: () {
+      widget.onToggle(i);
+      setState(() {});
+    },
+    onLine: () {
+      Navigator.pop(context);
+      widget.onRoute(i);
+    },
   );
 
   @override
@@ -630,11 +615,6 @@ class _RouteSheetState extends State<RouteSheet> {
                 ],
               );
             },
-          ),
-          const SizedBox(height: 6),
-          Text(
-            txt.holdForLine,
-            style: material.Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 16),
           Row(

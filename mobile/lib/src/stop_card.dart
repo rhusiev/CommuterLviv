@@ -7,7 +7,7 @@ import 'package:flutter/material.dart' as material show Theme;
 import 'due.dart';
 import 'live.dart';
 import 'models.dart';
-import 'route_badge.dart';
+import 'route_chip.dart';
 import 'strings.dart';
 
 class StopCard extends StatefulWidget {
@@ -31,11 +31,15 @@ class StopCard extends StatefulWidget {
   /// card tracks its own taps from here.
   final bool pinned;
 
+  /// The routes watched: the screen behind changes this set in place on
+  /// [onRoute], and the card rebuilds itself after it.
   final Set<int> watching;
   final VoidCallback onPin;
+
+  /// Watches the route or stops watching it, from a chip's body.
   final void Function(int route) onRoute;
 
-  /// The line, on a long press: a tap picks the route to watch.
+  /// The line, from a chip's `›`.
   final void Function(int route) onLine;
 
   @override
@@ -44,6 +48,11 @@ class StopCard extends StatefulWidget {
 
 class _StopCardState extends State<StopCard> {
   late bool _pinned = widget.pinned;
+
+  void _watch(int route) {
+    widget.onRoute(route);
+    setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +104,8 @@ class _StopCardState extends State<StopCard> {
                       Due(
                         route: catalog.routes[a.route],
                         arrival: a,
+                        watched: widget.watching.contains(a.route),
+                        onWatch: () => _watch(a.route),
                         onLine: () => widget.onLine(a.route),
                       ),
                   ],
@@ -112,26 +123,13 @@ class _StopCardState extends State<StopCard> {
               runSpacing: 4,
               children: [
                 for (final r in s.routes)
-                  GestureDetector(
-                    onLongPress: () => widget.onLine(r),
-                    // As in the route sheet: a watched route is in colour. A
-                    // checkmark widened its chip and broke the rows apart
-                    child: FilterChip(
-                      label: RouteBadge(
-                        route: catalog.routes[r],
-                        muted: !widget.watching.contains(r),
-                      ),
-                      showCheckmark: false,
-                      selected: widget.watching.contains(r),
-                      onSelected: (_) => widget.onRoute(r),
-                    ),
+                  RouteChip(
+                    route: catalog.routes[r],
+                    watched: widget.watching.contains(r),
+                    onWatch: () => _watch(r),
+                    onLine: () => widget.onLine(r),
                   ),
               ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              txt.holdForLine,
-              style: material.Theme.of(context).textTheme.bodySmall,
             ),
           ],
         ),

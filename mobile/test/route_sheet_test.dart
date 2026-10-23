@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:commuterlviv/src/api.dart';
 import 'package:commuterlviv/src/models.dart';
+import 'package:commuterlviv/src/route_chip.dart';
 import 'package:commuterlviv/src/sheets.dart';
 import 'package:commuterlviv/src/strings.dart';
 
@@ -109,13 +110,13 @@ void main() {
     expect(find.text(txt.kinds['tram']!), findsOneWidget);
     expect(
       tester.getTopLeft(find.text(txt.kinds['tram']!)).dy,
-      greaterThan(tester.getTopLeft(find.byType(FilterChip).first).dy),
+      greaterThan(tester.getTopLeft(find.byType(RouteChip).first).dy),
     );
 
     await tester.enterText(find.byType(TextField), 'C to');
     await tester.pump();
     expect(find.text(txt.kinds['bus']!), findsNothing);
-    expect(find.byType(FilterChip), findsOneWidget);
+    expect(find.byType(RouteChip), findsOneWidget);
   });
 
   testWidgets('a screen reader hears each vehicle type as its own heading', (
@@ -132,10 +133,15 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('the route sheet opens a line on a long press', (tester) async {
+  testWidgets('the route sheet opens a line from a chip\'s chevron only', (
+    tester,
+  ) async {
     var opened = -1;
     await _pump(tester, onRoute: (i) => opened = i);
-    await tester.longPress(find.widgetWithText(FilterChip, '48'));
+    await tester.longPress(find.text('48'));
+    await tester.pumpAndSettle();
+    expect(opened, -1);
+    await tester.tap(find.byIcon(Icons.chevron_right));
     await tester.pumpAndSettle();
     expect(opened, 0);
   });
