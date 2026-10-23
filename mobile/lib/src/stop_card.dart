@@ -70,8 +70,22 @@ class _StopCardState extends State<StopCard> {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    title.name,
+                  // The code in brackets, as every other place names the stop
+                  child: Text.rich(
+                    TextSpan(
+                      text: title.name,
+                      children: [
+                        if (title.code.isNotEmpty)
+                          TextSpan(
+                            text: ' (${title.code})',
+                            style: TextStyle(
+                              color: material.Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                          ),
+                      ],
+                    ),
                     style: material.Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
@@ -87,7 +101,6 @@ class _StopCardState extends State<StopCard> {
                 ),
               ],
             ),
-            if (title.code.isNotEmpty) Text(title.code),
             const SizedBox(height: 8),
             AnimatedBuilder(
               animation: widget.live,

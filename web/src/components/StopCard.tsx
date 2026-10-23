@@ -41,10 +41,12 @@ export function StopCard({
     <div className="panel pointer-events-auto p-3">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-medium text-slate-100">{name}</h3>
-          <p className="text-xs text-slate-500">
-            {[code, t.routeCount(s.routes.length)].filter(Boolean).join(" · ")}
-          </p>
+          {/* The code in brackets, as every other place names the stop */}
+          <div className="flex items-baseline gap-1.5">
+            <h3 className="truncate font-medium text-slate-100">{name}</h3>
+            {code && <span className="shrink-0 text-sm text-slate-500">({code})</span>}
+          </div>
+          <p className="text-xs text-slate-500">{t.routeCount(s.routes.length)}</p>
         </div>
         {/* An icon rather than a word, whose length would change on tap and
             shift the ✕ beside it */}

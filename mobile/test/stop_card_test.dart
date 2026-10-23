@@ -46,8 +46,8 @@ void main() {
           watching.contains(r) ? watching.remove(r) : watching.add(r),
     );
 
-    expect(find.text('Square'), findsOneWidget);
-    expect(find.text('482'), findsOneWidget);
+    expect(find.text('Square (482)', findRichText: true), findsOneWidget);
+    expect(find.textContaining('482'), findsOneWidget);
     expect(_picked(tester, '1'), isTrue);
     expect(_picked(tester, '9'), isFalse);
     expect(find.byIcon(Icons.check), findsNothing);

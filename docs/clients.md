@@ -257,8 +257,10 @@ warns when the vehicles go quiet.
 
 The city writes most stops' codes into their names as well, "ТРЦ Кінг Кросс
 (320)", and some stops' codes only there. Both stop cards take the code out of
-the title and show it once, under it. Everywhere else a name keeps its code, which
-is what tells two stops of one name apart.
+the title and show it once, in brackets after the name, as the names write it:
+the feed's zero padding ("0320") dropped, and the name's code taken over the
+feed's where the two disagree. Everywhere else a name keeps its code, which is
+what tells two stops of one name apart.
 
 A place picked from the search or the saved list gets a card of its own and a
 dot on the map, both gone once the card is closed or a stop or vehicle is picked

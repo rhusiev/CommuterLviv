@@ -70,10 +70,14 @@ void main() {
       routes: const [],
     ).title;
 
-    test('says a code the name repeats once, as the code', () {
+    test('says a code the name repeats once, as the name says it', () {
       expect(titled('ТРЦ Кінг Кросс (320)', '0320'), (
         name: 'ТРЦ Кінг Кросс',
-        code: '0320',
+        code: '320',
+      ));
+      expect(titled('Площа Франка (311)', '0280'), (
+        name: 'Площа Франка',
+        code: '311',
       ));
     });
 
@@ -85,11 +89,13 @@ void main() {
       ));
     });
 
-    test('leaves a name without a code, or with words in brackets', () {
+    test('leaves a name without a code, or with words in brackets, and '
+        'unpads the code', () {
       expect(titled('ПЛ. СОБОРНА', '0074-01'), (
         name: 'ПЛ. СОБОРНА',
-        code: '0074-01',
+        code: '74-01',
       ));
+      expect(titled('Ринок', '0'), (name: 'Ринок', code: '0'));
       expect(titled('Ринок (на вимогу)', ''), (
         name: 'Ринок (на вимогу)',
         code: '',

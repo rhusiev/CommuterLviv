@@ -33,9 +33,14 @@ export const stopName = (catalog: Catalog, i: number) =>
  * (320)", and some stops' codes only there */
 const CODE_IN_NAME = /\s*\(([\d-]+)\)$/;
 
-/** A stop's name and code for where both are shown, the code said once */
+/** The feed pads its codes with zeros the names do not: "0074-01" for "74-01" */
+const PADDING = /^0+(?=\d)/;
+
+/** A stop's name and code for where both are shown, the code said once and as
+ * the names say it. The name's own code comes first: the feed's disagrees with
+ * it for a few stops, "Площа Франка (311)" coded 0280 */
 export const stopTitle = (s: Stop) => {
   const inName = CODE_IN_NAME.exec(s.name);
-  if (!inName) return { name: s.name, code: s.code };
-  return { name: s.name.slice(0, inName.index), code: s.code || inName[1] };
+  if (!inName) return { name: s.name, code: s.code.replace(PADDING, "") };
+  return { name: s.name.slice(0, inName.index), code: inName[1]! };
 };

@@ -57,14 +57,18 @@ class Stop {
   /// (320)", and some stops' codes only there
   static final _codeInName = RegExp(r'\s*\(([\d-]+)\)$');
 
-  /// The name and code for where both are shown, the code said once.
+  /// The feed pads its codes with zeros the names do not: "0074-01" for "74-01"
+  static final _padding = RegExp(r'^0+(?=\d)');
+
+  /// The name and code for where both are shown, the code said once and as
+  /// the names say it. The name's own code comes first: the feed's disagrees
+  /// with it for a few stops, "Площа Франка (311)" coded 0280.
   ({String name, String code}) get title {
     final inName = _codeInName.firstMatch(name);
-    if (inName == null) return (name: name, code: code);
-    return (
-      name: name.substring(0, inName.start),
-      code: code.isNotEmpty ? code : inName.group(1)!,
-    );
+    if (inName == null) {
+      return (name: name, code: code.replaceFirst(_padding, ''));
+    }
+    return (name: name.substring(0, inName.start), code: inName.group(1)!);
   }
 }
 

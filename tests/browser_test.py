@@ -183,6 +183,8 @@ def test_a_new_user_finds_a_stop_and_sees_the_bus_coming(page):
 
     expect = playwright.expect
     expect(page.get_by_role("heading", name="Stop 4")).to_be_visible()
+    # its code as a name carries one, not as the feed's bare field
+    expect(page.get_by_text("(104)", exact=True)).to_be_visible()
     # a row per route: its badge, which shows the number without the bus's
     # letter, and a countdown
     expect(page.get_by_role("button", name=re.compile(r"^1 \d+ min$"))).to_be_visible(
