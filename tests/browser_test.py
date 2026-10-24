@@ -765,6 +765,29 @@ def test_the_attribution_is_not_a_white_pill_on_the_dark_map(page):
     assert max(red, green, blue) < DARK
 
 
+def test_the_attribution_takes_the_apps_focus_ring_not_an_inverted_one(page):
+    credited = {
+        "version": 8,
+        "sources": {"credit": {"type": "geojson", "attribution": "© Someone",
+                               "data": {"type": "FeatureCollection", "features": []}}},
+        "layers": [{"id": "credit", "type": "circle", "source": "credit"}],
+    }
+    page.route("**/style.json", lambda route: route.fulfill(json=credited))
+    _register(page, "focused")
+    credit = page.locator(".maplibregl-ctrl-attrib")
+    button = credit.locator(".maplibregl-ctrl-attrib-button")
+    shadow = "e => getComputedStyle(e).boxShadow"
+
+    button.click()
+    # its own ring, blue in maplibre's sheet, would be drawn inverted
+    assert button.evaluate(shadow) == "none"
+    unfocused = credit.evaluate(shadow)
+    page.keyboard.press("Shift+Tab")
+    page.keyboard.press("Tab")
+    playwright.expect(button).to_be_focused()
+    assert credit.evaluate(shadow) != unfocused
+
+
 def test_a_shared_link_opens_its_stop_or_route(page):
     _register(page, "linked")
     expect = playwright.expect
