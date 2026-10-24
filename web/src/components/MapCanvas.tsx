@@ -14,6 +14,7 @@ import {
   STOPS_ZOOM,
   type View,
 } from "../lib/geo";
+import { Hold, listenForHold } from "../lib/hold";
 import { sync } from "../lib/layers";
 import { sample, type Live } from "../lib/live";
 import { watchHere } from "../lib/position";
@@ -150,6 +151,12 @@ export function MapCanvas(props: Props) {
     const g = el.getContext("2d")!;
     let map: MapLibre | null = null;
     let gone = false;
+    const hold = new Hold(({ clientX: x, clientY: y }) => {
+      if (!map) return;
+      const rect = map.getCanvasContainer().getBoundingClientRect();
+      const at = map.unproject([x - rect.left, y - rect.top]);
+      latest.current.onHoldPoint({ lat: at.lat, lon: at.lng, x, y });
+    });
     let w = 0;
     let h = 0;
 
@@ -467,8 +474,12 @@ export function MapCanvas(props: Props) {
       map.on("dragstart", () => {
         keep.current = false;
       });
-      // Mobile browsers raise a long press as `contextmenu` too
+      // Android's browsers raise a long press as `contextmenu` too, iOS Safari
+      // does not, so a long press is also told from the touches
+      listenForHold(map.getCanvasContainer(), hold);
+      map.on("movestart", () => hold.cancel());
       map.on("contextmenu", (e) => {
+        if (hold.menu()) return;
         const { clientX: x, clientY: y } = e.originalEvent;
         latest.current.onHoldPoint({ lat: e.lngLat.lat, lon: e.lngLat.lng, x, y });
       });
@@ -526,6 +537,7 @@ export function MapCanvas(props: Props) {
 
     return () => {
       gone = true;
+      hold.cancel();
       observer.disconnect();
       held.current = null;
       setReady(false);

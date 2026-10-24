@@ -351,6 +351,28 @@ def test_the_way_to_a_place_held_on_the_map_is_planned_from_its_menu(page):
     assert tuple(map(float, ends["to"].split(","))) == pytest.approx(CENTRE, abs=1e-3)
 
 
+def test_a_finger_held_on_the_map_opens_its_menu_without_a_contextmenu(page):
+    # as on iOS Safari, which raises no `contextmenu` for a long press
+    page.add_init_script(
+        "addEventListener('contextmenu', e => e.stopImmediatePropagation(), true)")
+    _register(page, "presser")
+    page.locator(".maplibregl-canvas").wait_for()
+    touch = page.context.new_cdp_session(page)
+    touch.send("Emulation.setTouchEmulationEnabled", {"enabled": True})
+    middle = {"x": VIEWPORT["width"] / 2, "y": VIEWPORT["height"] / 2}
+
+    touch.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [middle]})
+    menu = page.get_by_role("dialog", name="This place")
+    playwright.expect(menu).to_be_visible()
+    # lifting the finger is no tap on the backdrop that opened under it
+    touch.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+    with page.expect_request(lambda r: "/api/plan?from=" in r.url) as asked:
+        menu.get_by_role("button", name="Directions to here").click()
+
+    ends = dict(part.split("=") for part in asked.value.url.split("?")[1].split("&"))
+    assert tuple(map(float, ends["to"].split(","))) == pytest.approx(CENTRE, abs=1e-3)
+
+
 def test_the_stops_near_a_place_held_on_the_map_are_listed_from_its_menu(page):
     _register(page, "browser")
     _hold(page).get_by_role("button", name="Stops near here").click()
