@@ -181,7 +181,7 @@ the corridor, then to the network. That is what carries the city across the
 overnight gap: by 06:00 the 5400 s means have decayed to nothing, and without
 the profile the morning peak would open on the timetable alone.
 
-`config.VARIANTS` keeps three more, each cheaper than `profile` and still good
+`config.VARIANTS` keeps two more, each cheaper than `profile` and still good
 enough: within 5% of its mean error over all horizons and in every horizon band
 (0-2, 2-5, 5-10, 10-20 and 20-45 min ahead). They were measured on the study
 recording `veh-0906-0923.db`, warmed on 14-17 September and scored on 18-19
@@ -192,15 +192,15 @@ the ETA correction. Cost is the model's own CPU over the replay (learning,
 | variant | mean error | worst band | model CPU | learned state |
 | --- | --- | --- | --- | --- |
 | `profile` | 139.5 s | - | 90.8 s | 38.3 MB |
-| `no-incremental` | 140.6 s (+0.8%) | 0-2 min, -0.2% | 75.0 s | 9.7 MB |
 | `full` | 143.9 s (+3.1%) | 5-10 min, +3.8% | 86.6 s | 9.7 MB |
 | `prior-shape` | 144.7 s (+3.7%) | 2-5 min, +4.6% | 85.9 s | 9.7 MB |
 
-`no-incremental` misses more: 18.3% of its predictions come more than two
-minutes too late, against 7.6% for `profile`, because it hears of slow
-crossings later. The ETA correction is fitted per model and moves that
-balance, so the share was not a criterion. Every other variant measured there
-missed the 5% or cost no less, and is gone.
+`no-incremental`, which reports a crossing only once finished, also passed:
+140.6 s (+0.8%), no band worse than `profile`, 75.0 s and 9.7 MB. It is gone
+all the same, because it misses more: 18.3% of its predictions come more than
+two minutes too late, against 7.6% for `profile`, since it hears of slow
+crossings later. Every other variant measured there missed the 5% or cost no
+less, and is gone too.
 
 Pace is **not** learned directly. What is learned is a *multiplier* on the pace
 the timetable implies for that cell at that hour of day. The timetable is not

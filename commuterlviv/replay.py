@@ -170,9 +170,8 @@ def _idx(m, names, key):
 def drain(model, tracks, closed, now):
     """Hand the epoch's cell crossings, finished and in progress, to the model."""
     parts = [(gi, c, veh, True) for gi, c, veh in closed]
-    if model.cfg.incremental:
-        parts += [(model.shape_base[t.shape_id] + t.cell.i, t.cell, veh, False)
-                  for veh, t in tracks.items() if t.cell is not None]
+    parts += [(model.shape_base[t.shape_id] + t.cell.i, t.cell, veh, False)
+              for veh, t in tracks.items() if t.cell is not None]
     closed.clear()
     if not parts:
         return

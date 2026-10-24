@@ -9,7 +9,6 @@ class Config:
     name: str
     doc: str
     prior: str = "level"        # use of the timetable's pace: level|shape
-    incremental: bool = True    # report a cell crossing while it is in progress
 
     # k_*: observations a layer needs before it outweighs the layer it backs off
     # to. *_hl: half-lives, in seconds. `prof_hl` is not a term but a back-off
@@ -33,10 +32,6 @@ VARIANTS = [
                 "its own average pace is a constant and the level is learned. "
                 "Tests whether the prior's measured 6% slow bias is the whole "
                 "of what it costs."),
-    replace(FULL, name="no-incremental", incremental=False,
-            doc="A crossing is reported only once finished. Fast crossings then "
-                "report before slow ones, so the model hears about a jam after "
-                "it has cleared."),
     replace(FULL, name="profile", prof_hl=604800.0,
             doc="What this cell does at this hour, learned across days and kept "
                 "for weeks, put where the corridor used to be: the thing the "
