@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:commuterlviv/src/api.dart';
+import 'package:commuterlviv/src/due.dart';
 import 'package:commuterlviv/src/live.dart';
 import 'package:commuterlviv/src/mine_tab.dart';
 import 'package:commuterlviv/src/models.dart';
@@ -130,6 +131,29 @@ void main() {
 
     await tester.tap(find.byTooltip(txt.unpin));
     expect(heard.pins, isEmpty);
+  });
+
+  testWidgets('a pinned stop flows its due chips from under its name', (
+    tester,
+  ) async {
+    final soon = DateTime.now().millisecondsSinceEpoch ~/ 1000 + 300;
+    await _pump(
+      tester,
+      pins: const [0],
+      arrivals: {
+        0: [
+          Arrival(route: 0, veh: 7, t: soon),
+          Arrival(route: 0, veh: 8, t: soon + 300),
+        ],
+      },
+    );
+
+    final chips = find.byType(Due);
+    final first = tester.getTopLeft(chips.at(0));
+    final second = tester.getTopLeft(chips.at(1));
+    expect(first.dx, tester.getTopLeft(find.text('Opera')).dx);
+    expect(second.dy, first.dy);
+    expect(second.dx, greaterThan(first.dx));
   });
 
   testWidgets('a rename rewrites the whole list, in order', (tester) async {

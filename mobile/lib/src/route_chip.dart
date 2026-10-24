@@ -16,7 +16,8 @@ const _lineWidth = 32.0;
 /// The body watches [route] on the map or stops watching it, and the `›`
 /// beside it opens the route's line. Both are drawn as targets, so nothing
 /// hides behind a long press. [trailing] follows the badge in the body, such
-/// as a countdown. With a [width] the body takes what the `›` leaves.
+/// as a countdown. With a [width] the body takes what the `›` leaves; without
+/// one the chip is as wide as what it holds, so a row of them flows.
 class RouteChip extends StatelessWidget {
   const RouteChip({
     super.key,
@@ -74,6 +75,7 @@ class RouteChip extends StatelessWidget {
       width: width,
       height: kMinInteractiveDimension,
       child: Center(
+        widthFactor: 1,
         child: Material(
           color: raised,
           shape: stadium,
