@@ -89,6 +89,15 @@ class _MineTabState extends State<MineTab> {
   Future<void> _renamePlace(Place p) async {
     final name = await askName(context, txt.rename, was: p.name);
     if (name == null || name.isEmpty || name == p.name) return;
+    // Names compared as the server keys them, trimmed: the other place of
+    // that name would be dropped there
+    if (_places.any((q) => q.name != p.name && q.name.trim() == name)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(txt.placeNameTaken)));
+      }
+      return;
+    }
     _putPlaces([
       for (final q in _places)
         if (q.name == p.name) Place(name: name, at: q.at) else q,

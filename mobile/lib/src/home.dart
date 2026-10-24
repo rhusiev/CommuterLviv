@@ -322,9 +322,14 @@ class _HomeScreenState extends State<HomeScreen> {
       if (p.name != name) p,
   ];
 
-  /// Kept by name, so saving over a name moves that place.
-  Future<void> _savePlace(String name, LatLng at) =>
-      _places([..._withoutPlace(name), Place(name: name, at: at)]);
+  /// Kept by name, so saving over a name moves that place - and says so,
+  /// since its old point is gone and the name may not have been typed.
+  Future<void> _savePlace(String name, LatLng at) async {
+    final kept = _withoutPlace(name);
+    final moves = kept.length < (_sets?.places.length ?? 0);
+    await _places([...kept, Place(name: name, at: at)]);
+    if (moves && _error == null) _tell(txt.placeMoved(name));
+  }
 
   /// What a long press on the map offers for [at].
   void _hold(LatLng at) => showFloatingSheet<void>(

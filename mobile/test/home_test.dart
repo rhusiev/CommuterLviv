@@ -3,13 +3,17 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:commuterlviv/src/api.dart';
 import 'package:commuterlviv/src/home.dart';
+import 'package:commuterlviv/src/map_tab.dart' show lviv;
 import 'package:commuterlviv/src/map_theme.dart';
+import 'package:commuterlviv/src/models.dart';
 import 'package:commuterlviv/src/strings.dart';
 
 import 'real_server.dart';
@@ -27,17 +31,23 @@ const _open = Duration(seconds: 1);
 /// timer it does not cancel when it goes
 const _firstTrim = Duration(seconds: 3);
 
-/// A city of no stops, a user of no sets, and a basemap of nothing - all the
-/// home screen needs to come up. The socket is refused, which it retries.
-Future<HttpServer> _serve() async {
+/// A city of no stops, a user of no sets and of [places], and a basemap of
+/// nothing - all the home screen needs to come up. Places written are taken as
+/// they come. The socket is refused, which it retries.
+Future<HttpServer> _serve({List<Place> places = const []}) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-  server.listen((req) {
+  server.listen((req) async {
     final body = switch (req.uri.path) {
       '/api/catalog' => {'routes': [], 'stops': []},
       '/api/me' => {
         'username': 'me',
-        'sets': {'sets': [], 'active': null},
+        'sets': {
+          'sets': [],
+          'active': null,
+          'places': [for (final p in places) p.toJson()],
+        },
       },
+      '/api/places' => jsonDecode(await utf8.decodeStream(req)),
       // One source drawn, or the map is refused; its tiles are never there
       final p when p.endsWith('/style.json') => {
         'version': 8,
@@ -73,6 +83,34 @@ Future<HttpServer> _serve() async {
   return server;
 }
 
+/// The home screen on a phone, signed in to [_serve], once it has come up.
+Future<void> _pumpHome(
+  WidgetTester tester, {
+  List<Place> places = const [],
+}) async {
+  tester.view.physicalSize = _phone;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  allowRealHttp();
+  final server = (await tester.runAsync(() => _serve(places: places)))!;
+  addTearDown(() => server.close(force: true));
+  final origin = 'http://${server.address.host}:${server.port}';
+  setTileOrigin(origin);
+  addTearDown(() => setTileOrigin(null));
+  SharedPreferences.setMockInitialValues({});
+  FlutterSecureStorage.setMockInitialValues({});
+  final api = await Api.open();
+  await api.setBase(origin);
+
+  await tester.pumpWidget(
+    MaterialApp(
+      home: HomeScreen(api: api, username: 'me', onOut: () {}),
+    ),
+  );
+  // Four tabs are compact: one not picked is named by its tooltip only
+  await pumpUntil(tester, () => tester.any(find.byTooltip(txt.plan)));
+}
+
 void main() {
   testWidgets('an end put where I am reads so in the planner, not as its '
       'coordinates', (tester) async {
@@ -84,15 +122,6 @@ void main() {
     FlutterError.onError = (e) {
       if (!e.exceptionAsString().contains('RenderFlex overflowed')) reported(e);
     };
-    tester.view.physicalSize = _phone;
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    allowRealHttp();
-    final server = (await tester.runAsync(_serve))!;
-    addTearDown(() => server.close(force: true));
-    final origin = 'http://${server.address.host}:${server.port}';
-    setTileOrigin(origin);
-    addTearDown(() => setTileOrigin(null));
     final messenger = tester.binding.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(_here, (_) async => true);
     addTearDown(() => messenger.setMockMethodCallHandler(_here, null));
@@ -106,18 +135,7 @@ void main() {
       ),
     );
     addTearDown(() => messenger.setMockStreamHandler(_fixes, null));
-    SharedPreferences.setMockInitialValues({});
-    FlutterSecureStorage.setMockInitialValues({});
-    final api = await Api.open();
-    await api.setBase(origin);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: HomeScreen(api: api, username: 'me', onOut: () {}),
-      ),
-    );
-    // Four tabs are compact: one not picked is named by its tooltip only
-    await pumpUntil(tester, () => tester.any(find.byTooltip(txt.plan)));
+    await _pumpHome(tester);
     await tester.tap(find.byTooltip(txt.plan));
     await tester.pump(_open);
     // Pressed rather than tapped: the map's own buttons float over the
@@ -134,6 +152,42 @@ void main() {
 
     expect(find.widgetWithText(OutlinedButton, txt.useHere), findsOneWidget);
     expect(find.textContaining('49.8419'), findsNothing);
+    await tester.pump(_firstTrim);
+    FlutterError.onError = reported;
+  });
+
+  testWidgets('saving a point under a saved name says the place moved', (
+    tester,
+  ) async {
+    useLang(Lang.en);
+    addTearDown(() => useLang(Lang.uk));
+    final reported = FlutterError.onError!;
+    FlutterError.onError = (e) {
+      if (!e.exceptionAsString().contains('RenderFlex overflowed')) reported(e);
+    };
+    await _pumpHome(
+      tester,
+      places: const [Place(name: 'Home', at: LatLng(49.8, 24.0))],
+    );
+
+    // Held through the map's own callback: the floating chrome covers much
+    // of the test surface
+    tester.widget<FlutterMap>(find.byType(FlutterMap)).options.onLongPress!(
+      const TapPosition(Offset.zero, null),
+      lviv,
+    );
+    await tester.pump();
+    await tester.pump(_open);
+    await tester.tap(find.text(txt.savePlaceAs));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'Home');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, txt.saveHere));
+
+    await pumpUntil(
+      tester,
+      () => tester.any(find.text(txt.placeMoved('Home'))),
+    );
     await tester.pump(_firstTrim);
     FlutterError.onError = reported;
   });

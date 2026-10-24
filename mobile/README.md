@@ -362,7 +362,11 @@ a stop or a place dragged by its handle to reorder. Its last row opens the
 account sheet, which no longer sits in the top bar. Both lists are written whole -
 `POST /api/places` and `POST /api/pins` take the entire list - so a rename is a
 delete and a save in one request, which is what keeps it atomic when the name is
-the identity server-side. Search saves too: `GET /api/search?q=` merges
+the identity server-side. It is also why a place cannot be renamed to another
+place's name, compared trimmed as the server keys them: the server keeps one
+place per name, so the other would be dropped. The rename is refused with a
+message and nothing is sent. Saving a point under a saved name, from anywhere,
+moves that place there, and a message says it moved. Search saves too: `GET /api/search?q=` merges
 addresses and shops under their own heading below the stops, a quarter of a
 second after the typing stops, and every row there - stops included - has a star
 that names the point and keeps it. A place picked from either opens

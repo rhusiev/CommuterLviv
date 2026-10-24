@@ -171,6 +171,24 @@ void main() {
     expect(heard.places!.first.at, _home.at);
   });
 
+  testWidgets('a rename to the name of another place is refused, and says '
+      'so', (tester) async {
+    final heard = await _pump(tester, places: const [_home, _work]);
+
+    await tester.longPress(find.text('Home'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(txt.rename));
+    await tester.pumpAndSettle();
+    // Trimmed, as the server keys the names
+    await tester.enterText(find.byType(TextField), ' Work ');
+    await tester.tap(find.text(txt.save));
+    await tester.pumpAndSettle();
+
+    expect(find.text(txt.placeNameTaken), findsOneWidget);
+    expect(heard.places, isNull);
+    expect(_top(tester, 'Home'), lessThan(_top(tester, 'Work')));
+  });
+
   testWidgets('a tap shows the place', (tester) async {
     final heard = await _pump(tester, places: const [_home]);
 
