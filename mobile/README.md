@@ -146,7 +146,7 @@ not undoing:
 
 Two paths build the same three APKs, both into `mobile/build/app/outputs/flutter-apk/app-<abi>-release.apk`:
 
-* **Tag and push.** `.github/workflows/release.yml` runs on any `v*` tag, builds the per-ABI APKs at `/tmp/build/nl.r1a.commuterlviv/mobile`, signs them with the secrets below, and creates a GitHub release named after the tag with the three APKs attached. Once the workflow runs, F-Droid's recipe downloads them back from those same URLs and rebuilds from source to confirm the bytes match.
+* **Tag and push.** `.github/workflows/release.yml` runs on every push to `main`, builds the per-ABI APKs at `/tmp/build/nl.r1a.commuterlviv/mobile`, signs them with the secrets below, tags `v<version>`, and creates a GitHub release named after the tag with the three APKs attached. Once the workflow runs, F-Droid's recipe downloads them back from those same URLs and rebuilds from source to confirm the bytes match.
 * **Locally.** `../deploy/release-apk.sh` does the same thing by hand into `release/<version>/`, prints the file paths, and asks for a tag and a manual release. Use it when you want to inspect a build before publishing, or when the GHA runner is unreachable.
 
 Either way the F-Droid recipe names the same tag (`commit: v<version>`) and the same three URLs (`binary: .../commuterlviv-<version>-<abi>.apk`), and verifies them.
@@ -157,7 +157,7 @@ The four secrets the workflow reads are at
 * `ANDROID_KEYSTORE_B64` - `base64 mobile/android/commuterlviv-release.jks | tr -d '\n'`. The .jks itself is gitignored, and a base64 string is the simplest way to put binary in a secret field
 * `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` - the three remaining fields of `key.properties`. The workflow writes `key.properties` from them before the build
 
-The workflow fails the step that checks signatures (`Verify signatures and rename for release`) if the APK is not signed by `22e0d82c02f7a01805f121b40648bb4f6a2954b847e97089d3f73142ade31c32`, the same SHA-256 `AllowedAPKSigningKeys:` pins in the recipe, so a wrong keystore is caught before the release ships.
+The workflow fails the step that checks signatures (`Verify signatures`, in `.github/actions/apks`) if the APK is not signed by `22e0d82c02f7a01805f121b40648bb4f6a2954b847e97089d3f73142ade31c32`, the same SHA-256 `AllowedAPKSigningKeys:` pins in the recipe, so a wrong keystore is caught before the release ships.
 
 ## What the server needs
 
