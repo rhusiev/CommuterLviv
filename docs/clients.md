@@ -254,9 +254,9 @@ again and go quiet anew, and it is never shown while the socket is down, when
 the service cannot say either way.
 
 The language is Ukrainian, with English for a browser that asks for it;
-`web/src/lib/i18n.ts` holds both dictionaries and the picker is in the account
-menu. Changing it reloads the page; the phone app, which shares the same keys,
-switches without a restart.
+`web/src/lib/i18n.ts` holds both dictionaries, MapLibre's own button labels
+included, and the picker is in the account menu. Changing it reloads the page;
+the phone app, which shares the same keys, switches without a restart.
 
 Smoothness is the reason for the shape of the code. Positions arrive every five
 seconds, and between them each vehicle is interpolated towards where the server

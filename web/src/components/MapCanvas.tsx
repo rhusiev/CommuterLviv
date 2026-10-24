@@ -445,6 +445,7 @@ export function MapCanvas(props: Props) {
         pitchWithRotate: false,
         touchPitch: false,
         attributionControl: { compact: true },
+        locale: t.mapLocale,
         canvasContextAttributes: { antialias: false, powerPreference: "high-performance" },
       });
       map.touchZoomRotate.disableRotation();

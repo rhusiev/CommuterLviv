@@ -791,6 +791,20 @@ def test_the_walking_speed_reads_on_one_line_in_ukrainian(page):
     assert lines == 1
 
 
+def test_the_maps_own_buttons_speak_ukrainian(page):
+    _register(page, "localised")
+    playwright.expect(page.get_by_text("0 vehicles")).to_be_visible()
+    page.evaluate("localStorage.setItem('commuterlviv.lang', 'uk')")
+    page.reload()
+
+    expect = playwright.expect
+    expect(page.get_by_role("button", name="Наблизити")).to_be_visible()
+    expect(page.get_by_role("button", name="Віддалити")).to_be_visible()
+    expect(page.locator(".maplibregl-ctrl-attrib-button")).to_have_attribute(
+        "title", "Показати чи сховати авторство")
+    expect(page.locator(".maplibregl-canvas")).to_have_attribute("aria-label", "Мапа")
+
+
 def test_the_zoom_buttons_are_not_a_white_square_on_the_dark_map(page):
     _register(page, "zoomer")
     zoom = page.locator(".maplibregl-ctrl-group").filter(

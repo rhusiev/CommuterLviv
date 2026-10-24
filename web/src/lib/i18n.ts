@@ -32,6 +32,14 @@ const en = {
   /** Headings over the route chips, by `Route.type` */
   kinds: { bus: "Buses", tram: "Trams", trolleybus: "Trolleybuses" } as Record<string, string>,
   map: "Map",
+  /** MapLibre's own strings, as its `locale` option keys them */
+  mapLocale: {
+    "AttributionControl.ToggleAttribution": "Toggle attribution",
+    "AttributionControl.MapFeedback": "Map feedback",
+    "Map.Title": "Map",
+    "NavigationControl.ZoomIn": "Zoom in",
+    "NavigationControl.ZoomOut": "Zoom out",
+  } as Record<string, string>,
   mine: "Mine",
   lines: "Lines",
   allLines: "All",
@@ -256,6 +264,13 @@ const uk: Strings = {
   routes: "Маршрути",
   kinds: { bus: "Автобуси", tram: "Трамваї", trolleybus: "Тролейбуси" },
   map: "Мапа",
+  mapLocale: {
+    "AttributionControl.ToggleAttribution": "Показати чи сховати авторство",
+    "AttributionControl.MapFeedback": "Відгук про мапу",
+    "Map.Title": "Мапа",
+    "NavigationControl.ZoomIn": "Наблизити",
+    "NavigationControl.ZoomOut": "Віддалити",
+  },
   mine: "Моє",
   lines: "Лінії",
   allLines: "Усі",
