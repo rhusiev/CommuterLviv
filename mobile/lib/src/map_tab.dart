@@ -240,10 +240,25 @@ const _absorb = AbsorbPointer(child: SizedBox.expand());
 class _Attribution extends StatelessWidget {
   const _Attribution();
 
+  /// flutter_map's default height for the ⓘ and its row
+  static const _badgeSize = 24.0;
+
   @override
   Widget build(BuildContext context) => RichAttributionWidget(
     alignment: AttributionAlignment.bottomLeft,
     showFlutterMapAttribution: false,
+    permanentHeight: _badgeSize,
+    // flutter_map's own button, but its tooltip is a fixed English
+    // "Attributions" and is what a screen reader says
+    openButton: (context, open) => IconButton(
+      onPressed: open,
+      tooltip: txt.attributions,
+      icon: const Icon(
+        Icons.info_outlined,
+        color: Colors.black,
+        size: _badgeSize,
+      ),
+    ),
     attributions: [
       TextSourceAttribution(
         'OpenStreetMap',

@@ -51,6 +51,7 @@ class Strings {
     required this.kinds,
     required this.everyRoute,
     required this.layers,
+    required this.attributions,
     required this.account,
     required this.findStop,
     required this.tryAgain,
@@ -255,6 +256,9 @@ class Strings {
 
   final String everyRoute;
   final String layers;
+
+  /// The map's ⓘ, which opens the credits for its data and tiles
+  final String attributions;
   final String account;
   final String findStop;
   final String tryAgain;
@@ -490,6 +494,7 @@ const _en = Strings(
   kinds: {'bus': 'Buses', 'tram': 'Trams', 'trolleybus': 'Trolleybuses'},
   everyRoute: 'Every route',
   layers: 'Layers',
+  attributions: 'Attributions',
   account: 'Account',
   findStop: 'Find a stop or a place',
   tryAgain: 'Try again',
@@ -746,6 +751,7 @@ const _uk = Strings(
   kinds: {'bus': 'Автобуси', 'tram': 'Трамваї', 'trolleybus': 'Тролейбуси'},
   everyRoute: 'Усі маршрути',
   layers: 'Шари',
+  attributions: 'Джерела мапи',
   account: 'Обліковий запис',
   findStop: 'Зупинка або місце',
   tryAgain: 'Спробувати ще',

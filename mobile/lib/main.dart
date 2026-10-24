@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'src/api.dart';
 import 'src/home.dart';
@@ -64,6 +65,12 @@ class _CommuterLvivAppState extends State<CommuterLvivApp> {
         title: 'CommuterLviv',
         debugShowCheckedModeBanner: false,
         theme: appTheme(),
+        // Flutter's own words - the date and time pickers, Back, the screen
+        // reader's labels - and the pickers' first weekday follow the app's
+        // language, not the phone's
+        locale: Locale(lang.name),
+        supportedLocales: [for (final l in Lang.values) Locale(l.name)],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
         home: !_checked
             ? const _Splash()
             : _user == null

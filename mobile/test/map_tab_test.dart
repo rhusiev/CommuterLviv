@@ -82,4 +82,13 @@ void main() {
     await pump(tester, card: _cardOf(isOffstage: true));
     expect(_zoomOut(tester), alone);
   });
+
+  testWidgets("the map's credits button is named in the app's language", (
+    tester,
+  ) async {
+    await pump(tester);
+
+    expect(find.byTooltip(txt.attributions), findsOneWidget);
+    expect(find.byTooltip('Attributions'), findsNothing);
+  });
 }

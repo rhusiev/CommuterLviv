@@ -30,6 +30,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # Flutter's own strings and date formats in Ukrainian. Part of the SDK, so
+  # the lockfile gains only its `sdk` entry
+  flutter_localizations:
+    sdk: flutter
 
   flutter_map: ^8.3.2
   latlong2: ^0.10.1

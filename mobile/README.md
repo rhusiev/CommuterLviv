@@ -274,7 +274,13 @@ inherited widget, so a widget says whatever `txt` said when it was last built.
 `ValueNotifier` that `main.dart` wraps the whole `MaterialApp` in, so one
 rebuild from the root is the entire mechanism and no widget below has to know
 the language can change. Nothing may cache a string in a field or in
-`initState`, or that copy will be the old language.
+`initState`, or that copy will be the old language. The same rebuild hands
+`MaterialApp` the language as its `locale`, so Flutter's own words from
+`flutter_localizations` - the date and time pickers, Back, the screen reader's
+labels - and the pickers' week, from Monday in Ukrainian, follow the app's
+language rather than the phone's. flutter_map's ⓘ names itself in English
+whatever the locale, so `map_tab.dart` passes the same button with its own
+tooltip.
 
 **The attribution is a badge, not a strip.** OpenStreetMap's data is ODbL and
 its attribution guidelines want a credit that is reasonably visible - but they
