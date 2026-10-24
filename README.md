@@ -57,9 +57,12 @@ origins in `COMMUTERLVIV_ORIGINS`. Everything it downloads or learns lives in
   updates, with its route number and heading. Pick routes to see their stops,
   or zoom in close to see every stop; tap a stop for the next arrival of every route through it, tap a vehicle for
   every stop it will reach and when.
-- **Times.** Pinned stops and their arrivals, live. Arrivals beyond the current
-  trip - the vehicle's next run - are in italics with a schedule mark.
-- **Plan.** Tap where you are and where you are going. You get ways there ranked
+- **Lines.** Every route, to pick the ones the map shows with their stops -
+  all of them, the ones watched, or the ones calling near you - with the saved
+  sets of them and the lines opened lately. Open one line and the map shows only
+  it, beside its stops one way or the other, each with when the route is next
+  due there and where its vehicles are.
+- **Journey.** Tap where you are and where you are going. You get ways there ranked
   by arrival, each ride marked live, timetabled or on a vehicle's next trip,
   with the backups behind each ride should you miss it. Sort by fastest, less
   walking, fewer changes or most backups, set your walking speed, or plan for
@@ -72,6 +75,9 @@ origins in `COMMUTERLVIV_ORIGINS`. Everything it downloads or learns lives in
   by hurrying, with the pace that makes it, or will be missed, and offers to
   search again. A followed journey survives a reload or a restart. The app can
   go on with the screen off, on a notification that sounds when to get off.
+- **Mine.** Pinned stops and their arrivals, live, the saved places and route
+  sets, and the account. Arrivals beyond the current trip - the vehicle's next
+  run - are in italics with a schedule mark.
 - **Layers.** The whole network, traffic per street, and eight map styles -
   colorful, natural, muted and gray, each light and dark.
 

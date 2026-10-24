@@ -116,8 +116,9 @@ void main() {
         home: HomeScreen(api: api, username: 'me', onOut: () {}),
       ),
     );
-    await pumpUntil(tester, () => tester.any(find.text(txt.plan)));
-    await tester.tap(find.text(txt.plan));
+    // Four tabs are compact: one not picked is named by its tooltip only
+    await pumpUntil(tester, () => tester.any(find.byTooltip(txt.plan)));
+    await tester.tap(find.byTooltip(txt.plan));
     await tester.pump(_open);
     // Pressed rather than tapped: the map's own buttons float over the
     // panel's corner on the test surface

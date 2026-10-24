@@ -18,6 +18,8 @@ import 'followed.dart';
 import 'haptics.dart';
 import 'hold_sheet.dart';
 import 'here.dart';
+import 'lines.dart';
+import 'lines_tab.dart';
 import 'journey_panel.dart';
 import 'live.dart';
 import 'map_controls.dart' show nearZoom;
@@ -28,7 +30,6 @@ import 'models.dart';
 import 'password_dialog.dart';
 import 'place_card.dart';
 import 'quiet_banner.dart';
-import 'route_badge.dart';
 import 'server_dialog.dart';
 import 'sheets.dart';
 import 'stop_card.dart';
@@ -43,11 +44,21 @@ import 'strings.dart';
 /// How far a tap may land from a stop and still count.
 const _hitRadius = 22.0;
 
-/// The share of the screen the planner may grow to, the map keeping the rest.
-const _plannerShare = 0.6;
+/// The share of the screen the planner or an open line's panel may grow to,
+/// the map keeping the rest.
+const _panelShare = 0.6;
 
 /// A dot in the planner's A/B ring: a place, but neither end of a journey
 const _placeMark = '•';
+
+/// The tabs, in the bar's order
+const _mapTab = 0;
+const _linesTab = 1;
+const _journeyTab = 2;
+const _mineTab = 3;
+
+/// The most stops the server watches for one socket (`MAX_STOPS` in hub.py)
+const _maxWatched = 64;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -75,9 +86,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final Set<int> _routes = {};
 
-  /// The route outlives its tab, so leaving and coming back keeps it.
+  /// The line open in the Lines tab. It outlives the tab, so leaving and
+  /// coming back keeps it.
   int? _route;
-  bool _onRoute = false;
+
+  /// Which of the open line's directions its stops are listed for
+  int _way = 0;
+
+  /// Route ids of the lines opened lately, latest first
+  late List<String> _recent = widget.api.recentLines;
   late bool _allLines = widget.api.showLines;
   Shapes? _shapes;
   List<int> _drawn = const [];
@@ -86,13 +103,21 @@ class _HomeScreenState extends State<HomeScreen> {
   List<int> _faint = const [];
   List<int> _pins = const [];
   int? _stop;
-  int _tab = 0;
+
+  /// Map, Lines, Journey, Mine
+  int _tab = _mapTab;
 
   /// Only while it is on does anything ask the server how the streets run.
   late bool _traffic = widget.api.showTraffic;
   late bool _followAway = widget.api.followAway;
 
-  bool _planning = false;
+  bool get _planning => _tab == _journeyTab;
+
+  /// One line, over the map, in place of the routes grid
+  bool get _lineOpen => _tab == _linesTab && _route != null;
+
+  /// Whether a page hides the map
+  bool get _covered => _tab == _mineTab || (_tab == _linesTab && !_lineOpen);
 
   /// The planner option drawn on the map, only while planning
   Journey? _journey;
@@ -208,7 +233,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ..addAll(routes);
       _pins = catalog.stopsAt([for (final i in _pins) old.stops[i].id]);
       _route = route;
-      _onRoute &= route != null;
       _stop = null;
       _journey = null;
       // Its stop and route positions are the old catalog's
@@ -218,7 +242,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _tracking.stop();
     unawaited(widget.api.setFollowed(null));
     _push();
-    if (_allLines || _onRoute) unawaited(_geometry());
+    if (_allLines || _route != null) unawaited(_geometry());
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(txt.renewed)));
   }
@@ -256,24 +280,28 @@ class _HomeScreenState extends State<HomeScreen> {
     _watch();
   }
 
-  /// What the socket sends: while a journey is shown or followed, only its
-  /// rides, with the open route's.
+  /// What the socket sends: the open line alone, as it is all the map shows;
+  /// while a journey is shown or followed, only its rides.
   Set<int> get _shown {
+    if (_lineOpen) return {_route!};
     final rides = {
       for (final journey in [?_following, if (_planning) ?_journey])
         for (final leg in journey.legs)
           if (leg.route != null) leg.route!,
     };
-    final route = _onRoute ? _route : null;
-    if (rides.isNotEmpty) return {...rides, ?route};
-    return route != null ? {route} : _routes;
+    return rides.isNotEmpty ? rides : _routes;
   }
 
-  /// The planner's option while planning, else the journey followed.
-  Journey? get _onMap => _planning ? _journey : _following;
+  /// The planner's option while planning, else the journey followed; nothing
+  /// while a line is open.
+  Journey? get _onMap => _lineOpen
+      ? null
+      : _planning
+      ? _journey
+      : _following;
 
   List<int> get _lines {
-    if (_onRoute && _route != null) return [_route!];
+    if (_lineOpen) return [_route!];
     if (!_allLines) return const [];
     return [for (var i = 0; i < _catalog!.routes.length; i++) i];
   }
@@ -347,21 +375,25 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openRoute(int route) {
+    final recent = opened(_recent, _catalog!.routes[route].id);
     setState(() {
+      if (route != _route) _way = 0;
       _route = route;
-      _onRoute = true;
-      _tab = 0;
-      _planning = false;
-      _aboard = null;
-      _journey = null;
+      _recent = recent;
+      _tab = _linesTab;
+      _leavePlanner();
     });
+    unawaited(widget.api.setRecentLines(recent));
     _push();
     _geometry().then((_) {
+      if (!mounted) return;
+      // The line's stops are known only from its shape
+      _watch();
       final shape = _shapes?.routes.elementAtOrNull(route);
       final points = [
         for (final line in shape?.lines ?? const <RouteLine>[]) ...line.pts,
       ];
-      if (!mounted || points.isEmpty) return;
+      if (points.isEmpty) return;
       _map.fitCamera(
         CameraFit.bounds(
           bounds: LatLngBounds.fromPoints(points),
@@ -371,24 +403,32 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  /// Back from the open line to the routes grid
   void _closeRoute() {
-    setState(() {
-      _route = null;
-      _onRoute = false;
-    });
+    setState(() => _route = null);
     _push();
   }
 
+  /// The open line's ways, once the shapes are in
+  List<Direction> get _ways => _route == null
+      ? const []
+      : directions(_shapes?.routes.elementAtOrNull(_route!));
+
   /// The server caps the watch list, so pins go first. A followed journey's
-  /// stops are watched for when its vehicles get to them.
+  /// stops are watched for when its vehicles get to them, and the open line's
+  /// last, as the longest and the least needed.
   void _watch() {
+    final line = _lineOpen
+        ? _ways.elementAtOrNull(_way)?.stops ?? const <int>[]
+        : const <int>[];
     _live?.setStops(
       {
         ..._pins,
         ?_stop,
         for (final leg in _following?.legs ?? const <Leg>[])
           if (leg.kind == 'ride') ...[leg.a, leg.b],
-      }.toList(),
+        ...line,
+      }.take(_maxWatched).toList(),
     );
   }
 
@@ -401,11 +441,8 @@ class _HomeScreenState extends State<HomeScreen> {
     unawaited(widget.api.setFollowed(jsonEncode(followed)));
     setState(() {
       _followed = followed;
-      _planning = false;
-      _aboard = null;
-      _picking = null;
-      _folded = false;
-      _journey = null;
+      _tab = _mapTab;
+      _leavePlanner();
     });
     _push();
     unawaited(_here.start());
@@ -453,9 +490,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ? null
           : Aboard(veh, followed.journey.legs[stage.leg].route);
       _ask = true;
-      _tab = 0;
-      _planning = true;
-      _onRoute = false;
+      _tab = _journeyTab;
     });
     _push();
     if (veh == null) unawaited(_hereFor(End.from));
@@ -730,7 +765,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (hit == null || !mounted) return;
-    setState(() => _tab = 0);
+    setState(_uncover);
     switch (hit) {
       case StopHit(:final stop):
         _openStop(stop, fly: true);
@@ -741,7 +776,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _openPlace(String name, LatLng at, {String where = ''}) {
     setState(() {
-      _tab = 0;
+      _uncover();
       _place = at;
     });
     _fly(at);
@@ -869,30 +904,36 @@ class _HomeScreenState extends State<HomeScreen> {
         body: Center(child: CircularProgressIndicator.adaptive()),
       );
     }
-    final selected = _onRoute ? 3 : (_planning ? 2 : _tab);
     // No app bar or navigation bar: the chrome floats over a full-screen map,
     // so each piece is stacked with its own inset
     return PopScope(
       // Back from another tab returns to the map, as Android's tabs do, rather
       // than leaving the app
-      canPop: selected == 0,
+      canPop: _tab == _mapTab,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _pickTab(0);
+        if (didPop) return;
+        // Back from a line is to the routes grid, as its own back button goes
+        _lineOpen ? _closeRoute() : _pickTab(_mapTab);
       },
       child: Scaffold(
         body: Stack(
           children: [
             IndexedStack(
-              index: _tab,
+              index: switch (_tab) {
+                _mineTab => 2,
+                _linesTab when !_lineOpen => 1,
+                _ => 0,
+              },
               children: [
-                _mapTab(catalog, live),
+                _mapPage(catalog, live),
+                _linesPage(catalog),
                 MineTab(
                   catalog: catalog,
                   live: live,
                   pins: _pins,
                   onPins: _savePins,
                   onStop: (stop) {
-                    setState(() => _tab = 0);
+                    setState(_uncover);
                     _openStop(stop, fly: true);
                   },
                   watching: _routes,
@@ -913,33 +954,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-            if (_planning && _tab == 0) _planner(catalog),
+            if (_planning) _planner(catalog),
+            if (_lineOpen) _line(catalog, live),
             Positioned(
               left: floatingGap,
               right: floatingGap,
               top: MediaQuery.paddingOf(context).top + floatingGap,
-              child: _onRoute && _route != null
-                  ? _RouteStrip(
-                      route: catalog.routes[_route!],
-                      onClose: _closeRoute,
-                    )
-                  : _TopBar(
-                      onSearch: _search,
-                      onRoutes: () => _openRoutes(catalog),
-                      onLayers: _openLayers,
-                      layered: _allLines || _traffic,
-                    ),
+              child: _TopBar(
+                onSearch: _search,
+                onLayers: _openLayers,
+                layered: _allLines || _traffic,
+              ),
             ),
             Positioned(
               left: 0,
               right: 0,
               bottom: MediaQuery.paddingOf(context).bottom + floatingGap,
               child: Center(
-                child: _Tabs(
-                  selected: selected,
-                  route: _route == null ? null : catalog.routes[_route!],
-                  onPick: _pickTab,
-                ),
+                child: _Tabs(selected: _tab, onPick: _pickTab),
               ),
             ),
             Positioned(
@@ -955,7 +987,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _mapTab(Catalog catalog, Live live) {
+  Widget _mapPage(Catalog catalog, Live live) {
     return MapTab(
       api: widget.api,
       map: _map,
@@ -981,7 +1013,7 @@ class _HomeScreenState extends State<HomeScreen> {
       places: _sets?.places ?? const [],
       shapes: _shapes,
       lines: _lines,
-      arrowed: _onRoute ? _route : null,
+      arrowed: _lineOpen ? _route : null,
       onTap: _tap,
       onHold: _hold,
     );
@@ -1022,7 +1054,7 @@ class _HomeScreenState extends State<HomeScreen> {
       bottom: floatingBottom(context),
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * _plannerShare,
+          maxHeight: MediaQuery.sizeOf(context).height * _panelShare,
         ),
         child: JourneyPanel(
           api: widget.api,
@@ -1061,32 +1093,38 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _pickTab(int i) {
     setState(() {
-      _tab = i == 1 ? 1 : 0;
-      _planning = i == 2;
-      _onRoute = i == 3;
-      if (!_planning) {
-        _aboard = null;
-        _picking = null;
-        _folded = false;
-        _journey = null;
-      }
+      _tab = i;
+      if (!_planning) _leavePlanner();
     });
     _push();
   }
 
-  void _openRoutes(Catalog catalog) => showFloatingSheet<void>(
-    context,
-    (_) => RouteSheet(
-      api: widget.api,
-      catalog: catalog,
-      sets: _sets,
-      picked: _routes,
-      onToggle: _toggleRoute,
-      onClear: () {
-        setState(_routes.clear);
-        _push();
-      },
-      onActivated: (set, routes) => setState(() {
+  /// Drops what the planner held for the map
+  void _leavePlanner() {
+    _aboard = null;
+    _picking = null;
+    _folded = false;
+    _journey = null;
+  }
+
+  /// Back to the map from a page that hides it; the planner and an open line
+  /// already show it
+  void _uncover() {
+    if (_covered) _tab = _mapTab;
+  }
+
+  Widget _linesPage(Catalog catalog) => LinesTab(
+    api: widget.api,
+    catalog: catalog,
+    sets: _sets,
+    picked: _routes,
+    onToggle: _toggleRoute,
+    onClear: () {
+      setState(_routes.clear);
+      _push();
+    },
+    onActivated: (set, routes) {
+      setState(() {
         _routes
           ..clear()
           ..addAll(routes);
@@ -1096,65 +1134,60 @@ class _HomeScreenState extends State<HomeScreen> {
           pins: _sets!.pins,
           places: _sets!.places,
         );
-        _push();
-      }),
-      onSets: (sets) => setState(() => _sets = sets),
-      onRoute: _openRoute,
-    ),
-    scrollControlled: true,
+      });
+      _push();
+    },
+    onSets: (sets) => setState(() => _sets = sets),
+    onOpen: _openRoute,
+    recent: _recent,
+    here: _here,
   );
-}
 
-/// Replaces the top bar while a route is open.
-class _RouteStrip extends StatelessWidget {
-  const _RouteStrip({required this.route, required this.onClose});
-
-  final TransitRoute route;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) => Floating(
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-      child: Row(
-        children: [
-          RouteBadge(route: route),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              route.long,
-              overflow: TextOverflow.ellipsis,
-              style: material.Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-          IconButton(
-            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-            onPressed: onClose,
-            icon: const Icon(Icons.close, size: 20),
-          ),
-        ],
+  Widget _line(Catalog catalog, Live live) => Positioned(
+    left: floatingGap,
+    right: floatingGap,
+    top: floatingTop(context),
+    bottom: floatingBottom(context),
+    child: Align(
+      alignment: Alignment.bottomCenter,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * _panelShare,
+        ),
+        child: LinePanel(
+          catalog: catalog,
+          live: live,
+          route: _route!,
+          ways: _ways,
+          way: _way,
+          onWay: (way) {
+            setState(() => _way = way);
+            _watch();
+          },
+          watching: _routes.contains(_route),
+          onWatch: () => _toggleRoute(_route!),
+          onStop: (stop) => _openStop(stop, fly: true),
+          onBack: _closeRoute,
+        ),
       ),
     ),
   );
 }
 
-/// A search pill and the two buttons that change the map, floating over it and
-/// clear of the status bar.
+/// A search pill and the layers button, floating over the map and clear of
+/// the status bar.
 ///
-/// The split is by what a thing does, not by how often it is wanted: routes
-/// choose what is tracked and layers change what the map draws. What is kept
-/// and how the app is set up live in the Mine tab, so nothing that signs you
-/// out sits loose on the map.
+/// Only what changes the map sits on it. Which routes are tracked is the Lines
+/// tab's, and what is kept and how the app is set up the Mine tab's, so nothing
+/// that signs you out sits loose on the map.
 class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.onSearch,
-    required this.onRoutes,
     required this.onLayers,
     required this.layered,
   });
 
   final VoidCallback onSearch;
-  final VoidCallback onRoutes;
   final VoidCallback onLayers;
 
   /// Whether anything inside the layers sheet is on, which is the only sign the
@@ -1192,12 +1225,6 @@ class _TopBar extends StatelessWidget {
       ),
       const SizedBox(width: 8),
       RoundButton(
-        tooltip: txt.routes,
-        onPressed: onRoutes,
-        child: const Icon(Icons.route_outlined),
-      ),
-      const SizedBox(width: 8),
-      RoundButton(
         tooltip: txt.layers,
         onPressed: onLayers,
         child: Icon(Icons.layers_outlined, color: layered ? accent : null),
@@ -1207,57 +1234,41 @@ class _TopBar extends StatelessWidget {
 }
 
 class _Tabs extends StatelessWidget {
-  const _Tabs({
-    required this.selected,
-    required this.route,
-    required this.onPick,
-  });
+  const _Tabs({required this.selected, required this.onPick});
 
   final int selected;
-
-  /// Adds a fourth tab while it is open.
-  final TransitRoute? route;
   final void Function(int index) onPick;
 
   @override
   Widget build(BuildContext context) {
     final tabs = [
       (Icons.map_outlined, txt.map),
-      (Icons.person_outline, txt.mine),
+      (Icons.timeline_outlined, txt.lines),
       (Icons.directions_outlined, txt.plan),
-      if (route != null) (Icons.timeline_outlined, txt.routeLine),
+      (Icons.person_outline, txt.mine),
     ];
-    // Four labelled tabs are wider than a phone, so then only the picked one
-    // keeps its label
-    final compact = tabs.length > 3;
-    Widget tab(int i, IconData icon, String label, {bool bare = false}) => _Tab(
-      icon: icon,
-      label: label,
-      bare: bare,
-      on: i == selected,
-      onTap: () => onPick(i),
-    );
     return Floating(
       elevation: 4,
       clipBehavior: Clip.antiAlias,
       child: SizedBox(
         height: tabBarHeight,
-        // `IntrinsicWidth` over flexible children sizes every column to the
-        // widest tab while keeping the bar only as wide as it needs to be
-        child: IntrinsicWidth(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            // Stretch: a fill only as tall as its label reads as a highlight
-            // rather than a button
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final (i, (icon, label)) in tabs.indexed)
-                if (compact)
-                  tab(i, icon, label, bare: i != selected)
-                else
-                  Expanded(child: tab(i, icon, label)),
-            ],
-          ),
+        // Four labelled tabs are wider than a phone, so only the picked one
+        // keeps its label
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          // Stretch: a fill only as tall as its label reads as a highlight
+          // rather than a button
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final (i, (icon, label)) in tabs.indexed)
+              _Tab(
+                icon: icon,
+                label: label,
+                bare: i != selected,
+                on: i == selected,
+                onTap: () => onPick(i),
+              ),
+          ],
         ),
       ),
     );

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Banner } from "./components/Banner";
-import { Icon } from "./components/Icon";
 import { MapCanvas } from "./components/MapCanvas";
-import { RoutePanel } from "./components/RoutePanel";
+import { LineView, LinesBrowse } from "./components/LinesPanel";
 import { SignIn } from "./components/SignIn";
 import { FollowCard } from "./components/FollowCard";
 import { JourneyPanel } from "./components/JourneyPanel";
@@ -12,17 +11,16 @@ import { PlaceCard } from "./components/PlaceCard";
 import { AccountSettings } from "./components/AccountSettings";
 import { MinePanel } from "./components/MinePanel";
 import { LayersPanel } from "./components/LayersPanel";
-import { Close } from "./components/Cross";
 import { Menu } from "./components/Menu";
 import { StopSearch } from "./components/StopSearch";
-import { RouteBadge } from "./components/RouteBadge";
 import { VehicleCard } from "./components/VehicleCard";
 import { api, catalog as fetchCatalog, catalogTag } from "./lib/api";
 import { useIndex, usePositions } from "./lib/catalog";
 import { samePlace, saved, type Shown } from "./lib/places";
 import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from "./lib/theme";
 import { RAMP, useTraffic } from "./lib/traffic";
-import { readUrl, writeUrl, type UrlState } from "./lib/url";
+import { directions, loadRecent, opened as openedLately, saveRecent } from "./lib/lines";
+import { readUrl, TABS, writeUrl, type UrlState } from "./lib/url";
 import { heldFollowed, holdFollowed, type Followed } from "./lib/followed";
 import { useFollow } from "./lib/useFollow";
 import { takeRenewed, useLive } from "./lib/useLive";
@@ -37,6 +35,8 @@ const TRAFFIC_KEY = "commuterlviv.traffic";
 const JOIN = /^\/join\/([\w-]+)\/?$/;
 /** A dot in the planner's A/B ring: a place, but neither end of a journey */
 const PLACE_MARK = "•";
+/** The socket's cap on the stops it is asked to watch (`MAX_STOPS` in hub.py) */
+const MAX_WATCHED = 64;
 
 /** Pins from before the server kept them, as catalog positions. Read once per
  * account against whatever catalog is loaded now, then deleted. */
@@ -71,9 +71,9 @@ function carryOldPins(cat: Catalog, who: Me): string[] {
 
 const TAB_NAMES: Record<UrlState["tab"], string> = {
   map: t.map,
+  lines: t.lines,
   plan: t.plan,
   mine: t.mine,
-  route: t.route,
 };
 
 export function App() {
@@ -91,10 +91,11 @@ export function App() {
   /** A point to list the stops near in the search; a new object lists them again */
   const [around, setAround] = useState<{ lat: number; lon: number } | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lon: number } | null>(null);
-  const [tab, setTab] = useState<UrlState["tab"]>(
-    opened.route === null && opened.tab === "route" ? "map" : opened.tab,
-  );
+  const [tab, setTab] = useState<UrlState["tab"]>(opened.tab);
+  /** The line open in the Lines tab, and which way along it is shown */
   const [route, setRoute] = useState<number | null>(null);
+  const [way, setWay] = useState(0);
+  const [recent, setRecent] = useState(loadRecent);
   const [allLines, setAllLines] = useState(() => loadFlag(LINES_KEY));
   const planner = usePlanner(tab === "plan", (why) => setNotice(t.noFix[why]));
   const [journey, setJourney] = useState<Journey | null>(null);
@@ -102,7 +103,6 @@ export function App() {
   const [followed, setFollowed] = useState<Followed | null>(null);
   const following = followed?.journey ?? null;
   const [folded, setFolded] = useState(false);
-  const [panel, setPanel] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   /** Not a failure: news worth a line, such as the city changing */
   const [info, setInfo] = useState<string | null>(null);
@@ -137,7 +137,6 @@ export function App() {
         if (opened.route !== null) {
           const i = got.routes.findIndex((r) => r.id === opened.route);
           if (i >= 0) setRoute(i);
-          else setTab("map");
         }
         const i = got.stops.findIndex((x) => x.id === opened.stop);
         if (i >= 0) {
@@ -183,14 +182,15 @@ export function App() {
     setFocus({ lat: s.lat, lon: s.lon });
   };
 
+  /** The map shows only this line */
+  const lineOpen = tab === "lines" && route !== null;
   // The planner's option while one is shown, so another way can be weighed
   // against the one followed
-  const drawn = (tab === "plan" ? journey : null) ?? following;
+  const drawn = lineOpen ? null : ((tab === "plan" ? journey : null) ?? following);
 
   const { geo, indexes, lines, fit, stops, faint } = useMapLayers({
     cat,
-    tab,
-    route,
+    route: lineOpen ? route : null,
     drawn,
     chosen,
     allLines,
@@ -201,16 +201,23 @@ export function App() {
     if (cat) live.setRoutes(indexes);
   }, [live, cat, indexes]);
 
+  const ways = useMemo(
+    () => (route === null ? [] : directions(geo?.routes[route])),
+    [geo, route],
+  );
+
   /** A journey followed adds the stops its rides board and leave at, for
-   * when its vehicles get there */
+   * when its vehicles get there; the line open adds its stops, last, so they
+   * are the ones the socket's cap drops */
   const watched = useMemo(() => {
     const out = new Set(pins);
     if (stop !== null) out.add(stop);
     for (const leg of following?.legs ?? []) {
       if (leg.kind === "ride") out.add(leg.a).add(leg.b);
     }
-    return [...out];
-  }, [pins, stop, following]);
+    for (const s of lineOpen ? (ways[way]?.stops ?? []) : []) out.add(s);
+    return [...out].slice(0, MAX_WATCHED);
+  }, [pins, stop, following, lineOpen, ways, way]);
 
   useEffect(() => {
     if (cat) live.setStops(watched);
@@ -281,8 +288,13 @@ export function App() {
   };
 
   const openRoute = (i: number) => {
+    if (!cat) return;
+    if (i !== route) setWay(0);
     setRoute(i);
-    openTab("route");
+    const next = openedLately(recent, cat.routes[i]!.id);
+    setRecent(next);
+    saveRecent(next);
+    openTab("lines");
   };
 
   const { load } = session;
@@ -309,9 +321,6 @@ export function App() {
       />
     );
 
-  // 12 px + the drawer's 320 + 12, so panels centre on the map left over. Only
-  // from `md`, because below that the drawer covers the map anyway
-  const clear = panel ? "left-3 md:left-86" : "left-3";
   // Top 19 and bottom 20: a panel grows with what it holds down to the tab bar,
   // rather than standing full height around one line
   const tall = "max-h-[calc(100%-9.75rem)]";
@@ -356,10 +365,10 @@ export function App() {
         places={places}
         shapes={geo}
         lines={lines}
-        directed={tab === "route" ? route : null}
+        directed={lineOpen ? route : null}
         traffic={traffic}
         theme={theme}
-        covered={tab !== "map"}
+        covered={tab !== "map" && !lineOpen}
       />
       {held && (
         <HoldMenu
@@ -379,16 +388,6 @@ export function App() {
       )}
 
       <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start gap-2 p-3">
-        <button
-          onClick={() => setPanel((v) => !v)}
-          title={t.routes}
-          aria-label={t.routes}
-          className={`fab pointer-events-auto ${
-            panel ? "text-accent" : "text-slate-300 hover:text-slate-100"
-          }`}
-        >
-          <Icon name="menu" />
-        </button>
         <div className="pointer-events-auto min-w-0 flex-1 sm:max-w-sm">
           <StopSearch
             catalog={cat}
@@ -512,7 +511,7 @@ export function App() {
 
       {tab === "mine" && (
         <section
-          className={`panel absolute ${clear} right-3 top-19 z-20 mx-auto max-w-lg overflow-y-auto p-4 ${tall}`}
+          className={`panel absolute left-3 right-3 top-19 z-20 mx-auto max-w-lg overflow-y-auto p-4 ${tall}`}
         >
           <MinePanel
             catalog={cat}
@@ -541,29 +540,42 @@ export function App() {
         </section>
       )}
 
-      {tab === "route" && route !== null && (
-        <aside
-          className={`panel absolute ${clear} right-3 top-19 z-20 mx-auto flex max-w-md items-start gap-2 p-3`}
-        >
-          <RouteBadge
-            route={cat.routes[route]!}
-            className="px-1.5 py-0.5 text-xs"
-          />
-          <p className="min-w-0 flex-1 truncate text-sm text-slate-300">
-            {cat.routes[route]!.long}
-          </p>
-          <Close
-            onClick={() => {
-              setRoute(null);
-              openTab("map");
-            }}
-          />
+      {tab === "lines" && (
+        <aside className="panel absolute left-3 top-19 bottom-20 z-20 w-80 max-w-[calc(100vw-1.5rem)] p-3">
+          {route === null ? (
+            <LinesBrowse
+              catalog={cat}
+              picked={picked}
+              onToggle={session.togglePicked}
+              onClear={session.clearPicked}
+              onOpen={openRoute}
+              recent={recent}
+              sets={session.routeSets.sets}
+              active={session.routeSets.active}
+              onActivate={session.routeSets.activate}
+              onCreate={session.routeSets.create}
+              onUpdate={session.routeSets.update}
+            />
+          ) : (
+            <LineView
+              catalog={cat}
+              route={route}
+              ways={ways}
+              way={way}
+              onWay={setWay}
+              arrivals={live.arrivals}
+              watching={picked.has(cat.routes[route]!.id)}
+              onWatch={() => session.togglePicked(cat.routes[route]!.id)}
+              onStop={showStop}
+              onBack={() => setRoute(null)}
+            />
+          )}
         </aside>
       )}
 
       {tab === "map" && (stop !== null || veh !== null || place || following) && (
         <div
-          className={`pointer-events-none absolute ${clear} bottom-20 right-3 z-10 mx-auto flex max-w-md flex-col gap-2`}
+          className={`pointer-events-none absolute left-3 bottom-20 right-3 z-10 mx-auto flex max-w-md flex-col gap-2`}
         >
           {stop !== null ? (
             <StopCard
@@ -631,15 +643,8 @@ export function App() {
       {/* One font weight throughout, so choosing a tab does not resize its
           label and slide the others. Equal columns where they fit; a phone
           has room only for each label's own width */}
-      <nav
-        className={`bar absolute bottom-3 left-1/2 z-30 grid w-max grid-flow-col ${
-          route === null ? "sm:grid-cols-3" : "sm:grid-cols-4"
-        } -translate-x-1/2 gap-0.5 p-1 text-sm sm:gap-1`}
-      >
-        {(route === null
-          ? (["map", "plan", "mine"] as const)
-          : (["map", "plan", "mine", "route"] as const)
-        ).map((v) => (
+      <nav className="bar absolute bottom-3 left-1/2 z-30 grid w-max -translate-x-1/2 grid-flow-col gap-0.5 p-1 text-sm sm:grid-cols-4 sm:gap-1">
+        {TABS.map((v) => (
           <button
             key={v}
             onClick={() => {
@@ -657,23 +662,6 @@ export function App() {
         ))}
       </nav>
 
-      {panel && (
-        <aside className="panel absolute left-3 top-19 bottom-20 z-20 w-80 max-w-[calc(100vw-1.5rem)] p-3">
-          <RoutePanel
-            catalog={cat}
-            picked={picked}
-            onToggle={session.togglePicked}
-            onClear={session.clearPicked}
-            onRoute={openRoute}
-            sets={session.routeSets.sets}
-            active={session.routeSets.active}
-            onActivate={session.routeSets.activate}
-            onCreate={session.routeSets.create}
-            onUpdate={session.routeSets.update}
-            onDelete={session.routeSets.remove}
-          />
-        </aside>
-      )}
     </div>
   );
 }

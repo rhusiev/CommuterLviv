@@ -542,12 +542,16 @@ onto edges, lacks them, so it is rebuilt once. Without them the service still st
 ## Route shapes
 
 `GET /api/shapes` is where a route physically goes: per route, the polylines its
-trips follow, each marked with the feed direction it runs. Direction is drawn by
+trips follow, each marked with the feed direction it runs and listing the stops
+it calls at in order, as catalog positions (`stops`). Those are the longest trip
+on that shape, so a short working does not cut the list short; they are what the
+Lines tab lists a line by, one direction at a time. Direction is drawn by
 the clients, not served - a run both ways gets two tracks of chevrons, one per
 side, spaced on screen rather than on the ground, which is why nothing here has
-to be respaced per zoom. 245 KB, 33 KB gzipped, one ETag per feed, and both clients ask for it
-only the first time something wants to draw a line - tapping a vehicle's badge
-to see its route, or the button that puts the whole network on the map. Nobody
+to be respaced per zoom. 245 KB, 33 KB gzipped before the stops were added, one ETag per
+feed, and both clients ask for it only the first time something wants to draw or
+list a line - opening one in the Lines tab, or the button that puts the whole
+network on the map. Nobody
 who opens neither pays for it.
 
 ## Keeping the city current

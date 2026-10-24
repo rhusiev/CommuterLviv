@@ -1,13 +1,14 @@
 """The web app in a real browser against the real service: an account created
 through the sign-in screen, a stop found by name, the bus on its board, a
 pinned stop listed once in the Mine tab and an old Times link opening it, a route
-watched from the stop's card and from what is due there, a journey planned from
-on board the bus and followed, a place found by name planned to and a name that
-matches nothing, what opens on an option only once it is picked, one followed
-on foot that misses its bus searched again, a refused location, a changed
-password and a cancelled one, one that cannot be cancelled while under way,
-none offered where the service turns it off, and a shared link that opens its
-stop or route.
+watched from the stop's card and from what is due there, a line's stops each way
+with its bus coming, an old line link opening the Lines tab, a journey planned
+from on board the bus and followed, a place found by name planned to and a name
+that matches nothing, what opens on an option only once it is picked, one
+followed on foot that misses its bus searched again, a refused location, a
+changed password and a cancelled one, one that cannot be cancelled while under
+way, none offered where the service turns it off, and a shared link that opens
+its stop or route.
 
 Needs the built web app (`npm run build` in `web/`), Playwright for Python and a
 Chromium. Skipped when any of them is missing."""
@@ -240,7 +241,7 @@ def test_a_route_that_calls_at_a_stop_is_watched_from_its_card(page):
     expect(page.get_by_text("Stop 0 - Stop 4")).not_to_be_visible()
     page.get_by_role("button", name="Line А1").last.click()
     expect(page.get_by_text("Stop 0 - Stop 4")).to_be_visible()
-    page.get_by_role("button", name="Routes").click()
+    page.get_by_role("button", name="Back").click()
     expect(page.get_by_text("0 on")).to_be_visible()
 
 
@@ -279,6 +280,26 @@ def test_a_stop_no_watched_route_calls_at_opens_from_close_in(page):
     _zoom_to(page, ALL_STOPS_ZOOM)
     page.mouse.click(*at)
     expect(card).to_be_visible()
+
+
+def test_a_line_lists_its_stops_each_way_with_the_bus_coming(page):
+    _register(page, "rider")
+    expect = playwright.expect
+    page.get_by_role("button", name="Lines", exact=True).click()
+    page.get_by_role("button", name="Line А1").click()
+    way = page.get_by_title("The other way")
+    stops = page.get_by_role("listitem").filter(has_text=re.compile(r"^Stop \d"))
+
+    expect(way).to_have_text(f"→ Stop {city.STOPS - 1}")
+    expect(stops.first).to_contain_text("Stop 0")
+    expect(stops).to_have_count(city.STOPS)
+    expect(page.get_by_label("A vehicle heading here")).to_have_count(1, timeout=SEE_MS)
+    expect(page.get_by_role("list").get_by_text(re.compile(r"^(Now|\d+ min)$")).first).to_be_visible()
+
+    way.click()
+
+    expect(way).to_have_text("→ Stop 0")
+    expect(stops.first).to_contain_text(f"Stop {city.STOPS - 1}")
 
 
 def test_a_saved_place_is_offered_above_the_stops_it_matches(page):
@@ -536,8 +557,8 @@ def test_an_option_says_its_length_on_one_line_on_a_phone(page):
 
 
 def _pick_route(page):
-    """Picks the city's one route from the routes tab."""
-    page.get_by_role("button", name="Routes").click()
+    """Picks the city's one route from the Lines tab."""
+    page.get_by_role("button", name="Lines", exact=True).click()
     page.get_by_role("button", name="1", exact=True).click()
 
 
@@ -628,6 +649,7 @@ def test_a_missed_bus_is_searched_again_from_the_last_fix(page):
     expect = playwright.expect
     _pick_route(page)
     expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
+    page.get_by_role("button", name="Map", exact=True).click()
     journey, tag = _a_ride_from_the_door(page)
     ride = next(leg for leg in journey["legs"] if leg["kind"] == "ride")
     ride["dep"] = time.time() - MISSED_S
@@ -659,6 +681,7 @@ def test_the_step_followed_on_a_phone_is_not_cut_short_by_its_buttons(page):
     expect = playwright.expect
     _pick_route(page)
     expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
+    page.get_by_role("button", name="Map", exact=True).click()
     journey, tag = _a_ride_from_the_door(page)
     held = {"journey": journey, "to": {"lat": END[0], "lon": END[1]}, "tag": tag}
     page.evaluate("v => localStorage.setItem('commuterlviv.following', v)",
@@ -828,5 +851,17 @@ def test_a_shared_link_opens_its_stop_or_route(page):
     page.goto("/?stop=s4")
     expect(page.get_by_role("heading", name="Stop 4")).to_be_visible()
 
-    page.goto(f"/?route={city.ROUTE}&tab=route")
+    page.goto(f"/?route={city.ROUTE}&tab=lines")
     expect(page.get_by_text("Stop 0 - Stop 4")).to_be_visible()
+
+
+def test_an_old_line_link_opens_the_line_in_the_lines_tab(page):
+    _register(page, "oldliner")
+    expect = playwright.expect
+    expect(page.get_by_text("0 vehicles")).to_be_visible()
+
+    page.goto(f"/?route={city.ROUTE}&tab=route")
+    expect(page.get_by_title("The other way")).to_be_visible(timeout=SEE_MS)
+
+    page.goto("/?tab=route")
+    expect(page.get_by_role("radio", name="All")).to_be_checked(timeout=SEE_MS)

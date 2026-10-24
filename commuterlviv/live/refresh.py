@@ -26,7 +26,7 @@ LOG_SKIPPED = 20    # skipped stops logged each night; `/api/status` has them al
 def served(net, live):
     """What the HTTP side hands out about a city besides its catalog, built
     once rather than per client."""
-    shapes = json.dumps(geometry.describe(net, live.cat.routes)).encode()
+    shapes = json.dumps(geometry.describe(net, live.cat)).encode()
     streets = traffic.segments(net, live.model)
     units = streets.pop("unit")
     body = json.dumps(streets).encode()

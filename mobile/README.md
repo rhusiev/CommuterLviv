@@ -180,16 +180,18 @@ refused and the map stays empty while everything else works.
 | `lib/src/api.dart`           | cookies, the CSRF token and the `Origin` header - the browser part      |
 | `lib/src/live.dart`          | the socket, the vehicles, and where each one is right now               |
 | `lib/src/vehicle_layer.dart` | one `CustomPaint` for the whole city                                    |
-| `lib/src/home.dart`          | the state both tabs share, and nothing that draws                       |
+| `lib/src/home.dart`          | the state the tabs share, and nothing that draws                        |
 | `lib/src/map_tab.dart`       | the basemap, the vehicles and the attribution                           |
+| `lib/src/lines_tab.dart`     | every route, by filter and set, and one line's stops over the map       |
+| `lib/src/lines.dart`         | a line's ways and stop rows, the routes near you, the lines opened      |
 | `lib/src/mine_tab.dart`      | pinned stops with what is due, places, sets, and the account row        |
 | `lib/src/stop_card.dart`     | one stop, from the bottom of the map                                    |
 | `lib/src/place_card.dart`    | a place picked by name, and the way there                               |
 | `lib/src/hold_sheet.dart`    | what a long press on the map offers for that point                      |
 | `lib/src/stop_search.dart`   | stops by name and near you, and places from the service                 |
 | `lib/src/traffic.dart`       | how fast the streets are running, while that is on                      |
-| `lib/src/sheets.dart`        | the route sheet, the basemap sheet, and the dialogs each of them shares |
-| `lib/src/due.dart`           | a route chip with its countdown, drawn in two places                         |
+| `lib/src/sheets.dart`        | the basemap and account sheets, and the dialogs they share              |
+| `lib/src/due.dart`           | a route chip with its countdown, drawn in two places                    |
 | `lib/src/route_chip.dart`    | a route: its body watches it, its `›` opens the line                    |
 | `lib/src/server_dialog.dart` | which server to talk to, asked from two places                          |
 | `lib/src/map_theme.dart`     | the eight basemap styles and the colours drawn over them                |
@@ -298,7 +300,7 @@ are committed: a build from source must not need a rasteriser.
 
 ## Planning a journey
 
-The directions button in the app bar opens `journey_panel.dart` over the map.
+The Journey tab opens `journey_panel.dart` over the map.
 Tapping either end opens the same search as the top bar (`stop_search.dart`):
 typing finds stops, addresses and shops, and before anything is typed it offers
 where I am, choosing on the map, and the saved places. The locate button beside

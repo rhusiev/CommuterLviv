@@ -620,7 +620,11 @@ class Traffic {
 /// direction is what tells a stretch run both ways from a one-way one, so the
 /// chevrons on it can be drawn as two tracks rather than one.
 class RouteLine {
-  const RouteLine({required this.dir, required this.pts});
+  const RouteLine({
+    required this.dir,
+    required this.pts,
+    this.stops = const [],
+  });
 
   factory RouteLine.fromJson(Map<String, dynamic> j) => RouteLine(
     dir: j['dir'] as int,
@@ -628,10 +632,15 @@ class RouteLine {
       for (final p in j['pts'] as List)
         LatLng(((p as List)[0] as num).toDouble(), (p[1] as num).toDouble()),
     ],
+    stops: [for (final s in j['stops'] as List? ?? const []) s as int],
   );
 
   final int dir;
   final List<LatLng> pts;
+
+  /// Catalog positions of the stops called at along it, in order; none from
+  /// a server older than the field
+  final List<int> stops;
 }
 
 class RouteShape {

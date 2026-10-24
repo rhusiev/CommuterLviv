@@ -32,13 +32,23 @@ class Strings {
     required this.haveInvite,
     required this.map,
     required this.mine,
+    required this.lines,
+    required this.allLines,
+    required this.watchingLines,
+    required this.nearLines,
+    required this.nothingNearLines,
+    required this.noneWatched,
+    required this.recentLines,
+    required this.otherWay,
+    required this.watchLine,
+    required this.noLineStops,
+    required this.vehicleHere,
     required this.mapStyle,
     required this.themeNames,
     required this.server,
     required this.signOut,
     required this.routes,
     required this.kinds,
-    required this.routeLine,
     required this.everyRoute,
     required this.layers,
     required this.account,
@@ -218,6 +228,20 @@ class Strings {
   final String haveInvite;
   final String map;
   final String mine;
+
+  /// The routes, and one line of them open; "Lines" so it does not read as the
+  /// journey tab in Ukrainian, which spends "Маршрут" on a route
+  final String lines;
+  final String allLines;
+  final String Function(int n) watchingLines;
+  final String nearLines;
+  final String Function(int metres) nothingNearLines;
+  final String noneWatched;
+  final String recentLines;
+  final String otherWay;
+  final String watchLine;
+  final String noLineStops;
+  final String vehicleHere;
   final String mapStyle;
 
   /// Each basemap's name, by its [MapTheme.id].
@@ -229,8 +253,6 @@ class Strings {
   /// Headings over the route chips, by `TransitRoute.type`
   final Map<String, String> kinds;
 
-  /// A second word for "route": Ukrainian already spends one on `plan`.
-  final String routeLine;
   final String everyRoute;
   final String layers;
   final String account;
@@ -440,6 +462,17 @@ const _en = Strings(
   haveInvite: 'I have an invite code',
   map: 'Map',
   mine: 'Mine',
+  lines: 'Lines',
+  allLines: 'All',
+  watchingLines: _enWatchingLines,
+  nearLines: 'Near me',
+  nothingNearLines: _enNothingNearLines,
+  noneWatched: 'Nothing watched yet. Tap a route to watch it.',
+  recentLines: 'Opened lately',
+  otherWay: 'The other way',
+  watchLine: 'Watch',
+  noLineStops: 'The stops of this line are not known',
+  vehicleHere: 'A vehicle heading here',
   mapStyle: 'Map style',
   themeNames: {
     'colorful-dark': 'Colorful dark',
@@ -455,7 +488,6 @@ const _en = Strings(
   signOut: 'Sign out',
   routes: 'Routes',
   kinds: {'bus': 'Buses', 'tram': 'Trams', 'trolleybus': 'Trolleybuses'},
-  routeLine: 'Line',
   everyRoute: 'Every route',
   layers: 'Layers',
   account: 'Account',
@@ -498,7 +530,7 @@ const _en = Strings(
   save: 'Save',
   use: 'Use',
   sets: 'Sets',
-  noSets: 'Watch some routes and save them as a set from the routes list',
+  noSets: 'Watch some routes and save them as a set in the Lines tab',
   pin: 'Pin',
   unpin: 'Unpin',
   callsHere: 'Calls here',
@@ -623,6 +655,9 @@ const _en = Strings(
 );
 
 String _enUpdateSet(String name) => 'Update “$name”';
+String _enWatchingLines(int n) => 'Watching $n';
+String _enNothingNearLines(int metres) =>
+    'No stop within $metres m of where you are';
 String _enWalkLeg(int m) => 'Walk $m min';
 String _enChangeCount(int n) => n == 1 ? '1 change' : '$n changes';
 String _enChangeAt(String stops) => 'Change at $stops';
@@ -683,6 +718,17 @@ const _uk = Strings(
   haveInvite: 'У мене є код запрошення',
   map: 'Мапа',
   mine: 'Моє',
+  lines: 'Лінії',
+  allLines: 'Усі',
+  watchingLines: _ukWatchingLines,
+  nearLines: 'Поруч',
+  nothingNearLines: _ukNothingNearLines,
+  noneWatched: 'Поки нічого не відстежується. Торкніться маршруту, щоб відстежувати його.',
+  recentLines: 'Нещодавно відкриті',
+  otherWay: 'Інший напрямок',
+  watchLine: 'Відстежувати',
+  noLineStops: 'Зупинки цієї лінії невідомі',
+  vehicleHere: 'Транспорт прямує сюди',
   mapStyle: 'Вигляд мапи',
   themeNames: {
     'colorful-dark': 'Кольорова темна',
@@ -698,7 +744,6 @@ const _uk = Strings(
   signOut: 'Вийти',
   routes: 'Маршрути',
   kinds: {'bus': 'Автобуси', 'tram': 'Трамваї', 'trolleybus': 'Тролейбуси'},
-  routeLine: 'Лінія',
   everyRoute: 'Усі маршрути',
   layers: 'Шари',
   account: 'Обліковий запис',
@@ -742,7 +787,7 @@ const _uk = Strings(
   use: 'Використати',
   sets: 'Набори',
   noSets:
-      'Відстежуйте кілька маршрутів і збережіть їх як набір у списку маршрутів',
+      'Відстежуйте кілька маршрутів і збережіть їх як набір у вкладці Лінії',
   pin: 'Закріпити',
   unpin: 'Відкріпити',
   callsHere: 'Тут зупиняються',
@@ -763,7 +808,7 @@ const _uk = Strings(
       'можуть бути неповні або неточні',
   plannerPreparing:
       'Планувальник поїздок готується - спробуйте за кілька хвилин',
-  plan: 'Маршрут',
+  plan: 'Поїздка',
   from: 'Звідки',
   to: 'Куди',
   tapMap: 'Торкніться мапи',
@@ -865,6 +910,9 @@ const _uk = Strings(
 );
 
 String _ukUpdateSet(String name) => 'Оновити «$name»';
+String _ukWatchingLines(int n) => 'Відстежую $n';
+String _ukNothingNearLines(int metres) =>
+    'Немає зупинки ближче ніж за $metres м';
 String _ukWalkLeg(int m) => 'Пішки $m хв';
 String _ukChangeCount(int n) => n == 1 ? '1 пересадка' : 'Пересадок: $n';
 String _ukChangeAt(String stops) => 'Пересадка: $stops';

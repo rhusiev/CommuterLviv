@@ -112,8 +112,10 @@ export type Aboard = { veh: number; route: number | null };
  * hour */
 export type Plan = { t: number; options: Journey[]; report?: string };
 
-/** `dir` is the feed's `direction_id`, kept only to tell the two apart */
-export type RouteLine = { dir: number; pts: [number, number][] };
+/** `dir` is the feed's `direction_id`, kept only to tell the two apart;
+ * `stops`, catalog positions in the order it calls at them, which a service
+ * older than the Lines tab does not send */
+export type RouteLine = { dir: number; pts: [number, number][]; stops?: number[] };
 
 export type RouteShape = { lines: RouteLine[] };
 

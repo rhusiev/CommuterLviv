@@ -29,22 +29,22 @@ outline while it stands, so a marker always says which way it faces without
 claiming it is moving. Stops are small circles, drawn for the routes you have
 picked. From zoom 16 (`ALL_STOPS_ZOOM`, 17 in the app's tiles) every other stop
 is drawn too, faint, and opens its card like the rest, so a stop can be looked
-up without watching a route first. The routes to pick are grouped under buses, trams and trolleybuses,
-because tram 1 and bus 1 are different lines. A route is drawn as the same split
-chip wherever it shows - the routes panel, a stop's card, the Mine tab's pinned stops, a
-vehicle's card: a click on its body watches it or stops watching it, and the `›`
-beside it opens its line. A chip hides nothing behind a right click or a long
-press. On the map itself a right click, or a long press on a phone, opens a
-menu for that point: save it under a name typed into the menu, plan the way
-there or from there, or list the stops within 2 km of it in the search, as ◎
-does for where you are.
+up without watching a route first. The routes to pick are in the Lines tab,
+grouped under buses, trams and trolleybuses, because tram 1 and bus 1 are
+different lines. A route is drawn as the same split chip wherever it shows -
+the Lines tab, a stop's card, the Mine tab's pinned stops, a vehicle's card: a
+click on its body watches it or stops watching it, and the `›` beside it opens
+its line. A chip hides nothing behind a right click or a long press. On the map
+itself a right click, or a long press on a phone, opens a menu for that point:
+save it under a name typed into the menu, plan the way there or from there, or
+list the stops within 2 km of it in the search, as ◎ does for where you are.
 Clicking a stop opens its card: the next arrival of each route due there, and
 under "Calls here" every route through it. Pinning it
 puts it in the Mine tab. Clicking a vehicle
 asks the opposite question: `GET /api/vehicle?veh=<id>` answers with every stop
 that vehicle is predicted to reach and when, out to the model's 45-minute
 horizon, read off the same predictions the stop card shows - so the two cannot
-disagree. A third tab plans a journey: tap where you are and where you are
+disagree. The Journey tab plans a journey: tap where you are and where you are
 going, and it answers with ways to get there, ranked by arrival - walk to a
 stop, ride, maybe change, walk to the door. An end put where you are reads
 "Where I am" in its field rather than its coordinates. Already on a vehicle, "I'm on it"
@@ -176,7 +176,7 @@ column, and why the phone's `Scaffold` has neither an `appBar` nor a
 what anything scrollable uses to clear the two floating bars.
 
 What goes where is decided by what a control does, not by how often it is
-wanted. Routes choose what is tracked and open the routes panel. Layers change
+wanted. Which routes are tracked is the Lines tab's. Layers change
 what the map draws - the route lines, the traffic, the basemap - and live in one
 sheet behind a layers button, whose icon is lit while anything in it is on.
 Everything belonging to the account rather than to the map is one tab, Mine:
@@ -188,8 +188,30 @@ next to anything else. A pinned stop is listed there once, with its arrivals.
 Nothing that is a toggle and nothing that signs you out sits loose on the map.
 That is `LayersSheet` and `AccountSheet` in `mobile/lib/src/sheets.dart` and
 `mine_tab.dart`, and `LayersPanel.tsx`, `MinePanel.tsx` and
-`AccountSettings.tsx` on the web. The web's `?tab=` names the open tab; a link
-from before the Mine tab, `?tab=times` or `?tab=saved`, opens Mine.
+`AccountSettings.tsx` on the web.
+
+The four tabs are Map, Lines, Journey and Mine - in Ukrainian Мапа, Лінії,
+Поїздка and Моє, since "Маршрут" for a journey read as one of the "Маршрути", the
+routes. Lines browses every route: All, Watching (the ticked ones) or Near me
+(the routes of the stops within 500 m of the device's fix, asked for only when
+picked; 500 m is chosen, not derived), the route sets to make one the watched
+selection or save the ticks as one, the last five lines opened (kept on the
+device), and the grid of route chips, whose body ticks a route and whose `›`
+opens its line. Renaming and deleting a set is in Mine. An open line
+uncovers the map and draws only that route, over a followed or planned journey,
+beside a panel with a back button, a toggle between its two ways named by the
+last stop, Watch, and its stops in order. Each stop shows when this route is
+next due there, greyed while the vehicle is still finishing its previous trip,
+and a vehicle is marked at the stop it reaches soonest. The order is the
+server's: each shape line carries the stops of the longest trip on it
+(docs/service.md). That way's stops are watched after the pins, the open stop
+and a followed journey's, up to the server's cap of 64. That is `LinesPanel.tsx`
+and `lib/lines.ts` on the web, `lines_tab.dart` and `lines.dart` on the phone.
+On the phone the tab pill shows only the picked tab's label, as four labelled
+tabs are wider than a phone. The web's `?tab=` names the open tab - `map`,
+`lines`, `plan` or `mine` - and `?route=` the open line. A link from before,
+`?tab=times` or `?tab=saved`, opens Mine, and `?tab=route` the Lines tab, on
+the line when the link names one.
 
 Changing the password is offered only where the service says it allows it
 (`password_change` in `/api/me`), which it does not by default. Where offered, it

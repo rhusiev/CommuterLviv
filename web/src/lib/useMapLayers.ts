@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { shapes as fetchShapes } from "./api";
 import type { Catalog, Journey, RouteShape, Shapes } from "./types";
-import type { UrlState } from "./url";
 
 type Bounds = [number, number, number, number];
 
@@ -22,11 +21,10 @@ export function bounds(shape: RouteShape): Bounds | null {
   return w > e ? null : [w, s, e, n];
 }
 
-/** What the map draws and the socket sends, by catalog position: the rides of
- * the journey shown, else the route open, else the routes picked */
+/** What the map draws and the socket sends, by catalog position: the line
+ * open, else the rides of the journey shown, else the routes picked */
 export function useMapLayers({
   cat,
-  tab,
   route,
   drawn,
   chosen,
@@ -34,7 +32,7 @@ export function useMapLayers({
   onError,
 }: {
   cat: Catalog | null;
-  tab: UrlState["tab"];
+  /** The line open in the Lines tab, while that tab is shown */
   route: number | null;
   drawn: Journey | null;
   chosen: number[];
@@ -55,20 +53,20 @@ export function useMapLayers({
 
   /** The socket's own filter: while one route is open it is the only one sent */
   const indexes = useMemo(
-    () => journeyRoutes ?? (tab === "route" && route !== null ? [route] : chosen),
-    [journeyRoutes, tab, route, chosen],
+    () => (route !== null ? [route] : (journeyRoutes ?? chosen)),
+    [journeyRoutes, route, chosen],
   );
 
   const lines = useMemo(() => {
-    if (tab === "route" && route !== null) return [route];
+    if (route !== null) return [route];
     if (!allLines || !cat) return [];
     return cat.routes.map((_, i) => i);
-  }, [tab, route, allLines, cat]);
+  }, [route, allLines, cat]);
 
   const fit = useMemo(() => {
-    const shape = tab === "route" && route !== null ? geo?.routes[route] : null;
+    const shape = route !== null ? geo?.routes[route] : null;
     return shape ? bounds(shape) : null;
-  }, [tab, route, geo]);
+  }, [route, geo]);
 
   useEffect(() => {
     if (!lines.length || geo) return;
