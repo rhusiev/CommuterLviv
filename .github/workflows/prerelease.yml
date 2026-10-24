@@ -1,0 +1,69 @@
+# Publish a GitHub pre-release of `dev` for testing before a release: the three
+# APKs, signed with the release key so they install over the released app.
+#
+# Runs on a pushed `dev-*` tag, which must be on `dev`:
+#
+#   git tag dev-$(git rev-parse --short dev) dev && git push github dev-$(git rev-parse --short dev)
+#
+# F-Droid's recipe watches every tag (`UpdateCheckMode: Tags`, no pattern) and
+# builds one whose pubspec carries a higher versionCode than it has. So a
+# pre-release only ships a pubspec some `v<app>` release already shipped: its
+# tag is passed over, and the real release keeps the new code to itself.
+name: prerelease
+
+on:
+  push:
+    tags:
+      - "dev-*"
+
+permissions:
+  contents: write
+
+env:
+  PUB_CACHE: /tmp/pubcache
+
+jobs:
+  prerelease:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check the tag is on dev and its app version is released
+        run: |
+          git merge-base --is-ancestor HEAD origin/dev || {
+            echo "$TAG is not on dev"
+            exit 1
+          }
+          app=$(sed -n 's/^version: \(.*\)+.*$/\1/p' mobile/pubspec.yaml)
+          here=$(grep '^version:' mobile/pubspec.yaml)
+          there=$(git show "v$app:mobile/pubspec.yaml" 2>/dev/null | grep '^version:') || there=""
+          [ "$here" = "$there" ] || {
+            echo "the pubspec's $here was never released as v$app - F-Droid would build $TAG"
+            exit 1
+          }
+
+      - uses: ./.github/actions/apks
+        with:
+          version: ${{ env.TAG }}
+          keystore-b64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          keystore-password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          key-alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          key-password: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Publish GitHub pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          prerelease: true
+          make_latest: false
+          body: >-
+            A build of `dev` at ${{ github.sha }} for testing, not a release.
+            The app inside keeps the version of its last release, so it
+            installs over it and the next release installs over this.
+            The server and web app of this commit are not deployed by it.
+          files: |
+            /tmp/build/nl.r1a.commuterlviv/mobile/release/commuterlviv-*.apk

@@ -122,6 +122,14 @@ what makes one. Bumping the pubspec as well is what makes it an app release.
 `deploy/release-apk.sh` builds the same APKs locally, for checking
 reproducibility before a merge; it publishes nothing.
 
+A pre-release is a build of `dev` for testing before a release:
+`.github/workflows/prerelease.yml` runs on a pushed `dev-*` tag on `dev`, builds
+and signs the same APKs through the action `release.yml` uses
+(`.github/actions/apks`), and publishes them as a GitHub pre-release. It refuses
+a pubspec version no `v<app>` release has shipped, since F-Droid would build
+that tag; so the app keeps its released version and installs over it. It
+deploys nothing - the server and web app of that commit run where you put them.
+
 The `places` release is not a version. `.github/workflows/places.yml` replaces
 its `lviv-search.sqlite` on the 3rd of every month, and can be run by hand from
 the Actions tab - see [search](service.md#search).
