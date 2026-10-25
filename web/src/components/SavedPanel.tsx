@@ -1,6 +1,6 @@
 import { useState, type ComponentProps } from "react";
 import { t } from "../lib/i18n";
-import { dropped, renamed } from "../lib/places";
+import { dropped, renamed, taken } from "../lib/places";
 import { useReorder } from "../lib/reorder";
 import type { Place } from "../lib/types";
 import { Remove } from "./Cross";
@@ -9,7 +9,7 @@ import { Grip } from "./Grip";
 /** The places kept by name, in the order the account chose; a row is dragged
  * by its grip to change it. A place is renamed by writing the whole list with
  * the old name gone and the new one in its position, because the name is what
- * identifies it server-side. */
+ * identifies it server-side - and so not to a name another place goes by. */
 
 export function SavedPanel({
   places,
@@ -30,6 +30,7 @@ export function SavedPanel({
           place={p}
           drag={kept.row(i)}
           onShow={() => onPlace(p)}
+          isTaken={(name) => taken(places, name, p)}
           onRename={(name) => onPlaces(renamed(places, p, name))}
           onForget={() => onPlaces(dropped(places, p.name))}
         />
@@ -42,16 +43,19 @@ function PlaceRow({
   place,
   drag,
   onShow,
+  isTaken,
   onRename,
   onForget,
 }: {
   place: Place;
   drag: ComponentProps<"li">;
   onShow: () => void;
+  isTaken: (name: string) => boolean;
   onRename: (name: string) => void;
   onForget: () => void;
 }) {
   const [name, setName] = useState<string | null>(null);
+  const clash = name !== null && isTaken(name);
 
   if (name !== null)
     return (
@@ -60,6 +64,7 @@ function PlaceRow({
           className="flex gap-1"
           onSubmit={(e) => {
             e.preventDefault();
+            if (clash) return;
             if (name.trim()) onRename(name.trim());
             setName(null);
           }}
@@ -69,12 +74,14 @@ function PlaceRow({
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Escape" && setName(null)}
+            aria-invalid={clash}
             className="field min-w-0 flex-1 py-1.5"
           />
           <button className="btn-quiet px-3 py-0" title={t.keepName}>
             {t.save}
           </button>
         </form>
+        {clash && <p className="mt-1 px-2 text-xs text-rose-300">{t.placeTaken}</p>}
       </li>
     );
 

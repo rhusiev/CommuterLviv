@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { api, ApiError } from "../lib/api";
 import { mins } from "../lib/eta";
 import { t } from "../lib/i18n";
-import { samePlace, saved } from "../lib/places";
+import { samePlace } from "../lib/places";
 import {
   heldPrefer,
   holdPrefer,
@@ -58,7 +58,7 @@ export function JourneyPanel({
   onPoint,
   onLine,
   places,
-  onPlaces,
+  onSavePlace,
   onShow,
   onFollow,
   ask,
@@ -78,7 +78,7 @@ export function JourneyPanel({
   onPoint: (which: End, at: Point) => void;
   onLine: (i: number) => void;
   places: Place[];
-  onPlaces: (next: Place[]) => void;
+  onSavePlace: (name: string, lat: number, lon: number) => void;
   /** The option picked to be drawn on the map, or null once none is */
   onShow: (j: Journey | null) => void;
   onFollow: (j: Journey) => void;
@@ -278,7 +278,7 @@ export function JourneyPanel({
         if (name) setNames((n) => new Map(n).set(key(p), name));
         onPoint(which, p);
       }}
-      onSave={(name, p) => onPlaces(saved(places, name, p.lat, p.lon))}
+      onSave={(name, p) => onSavePlace(name, p.lat, p.lon)}
     />
   );
 

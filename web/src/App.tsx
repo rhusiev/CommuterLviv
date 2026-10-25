@@ -16,7 +16,7 @@ import { StopSearch } from "./components/StopSearch";
 import { VehicleCard } from "./components/VehicleCard";
 import { api, catalog as fetchCatalog, catalogTag } from "./lib/api";
 import { useIndex, usePositions } from "./lib/catalog";
-import { samePlace, saved, type Shown } from "./lib/places";
+import { replaces, samePlace, saved, type Shown } from "./lib/places";
 import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from "./lib/theme";
 import { RAMP, useTraffic } from "./lib/traffic";
 import { directions, loadRecent, opened as openedLately, saveRecent } from "./lib/lines";
@@ -258,6 +258,13 @@ export function App() {
     session.savePins(next.map((i) => cat.stops[i]!.id));
   };
 
+  // A place saved under a name in use replaces that one, so it is asked first
+  // where the name was not typed into a field that says so
+  const savePlace = (name: string, lat: number, lon: number) => {
+    if (replaces(places, name, { lat, lon }) && !confirm(`${t.placeTaken}. ${t.replaceIt}`)) return;
+    keepPlaces(saved(places, name, lat, lon));
+  };
+
   const showPlace = (at: Shown) => {
     openTab("map");
     setStop(null);
@@ -373,6 +380,7 @@ export function App() {
       {held && (
         <HoldMenu
           at={held}
+          isTaken={(name) => replaces(places, name, held)}
           onSave={(name) => {
             keepPlaces(saved(places, name, held.lat, held.lon));
             setHeld(null);
@@ -393,9 +401,7 @@ export function App() {
             catalog={cat}
             onGo={showStop}
             onPlace={showPlace}
-            onSave={(name, lat, lon) =>
-              keepPlaces(saved(places, name, lat, lon))
-            }
+            onSave={savePlace}
             places={places}
             around={around}
           />
@@ -502,7 +508,7 @@ export function App() {
             onFold={setFolded}
             onLine={openRoute}
             places={places}
-            onPlaces={keepPlaces}
+            onSavePlace={savePlace}
             onPoint={planner.setEnd}
             onStop={showStop}
           />
@@ -600,7 +606,7 @@ export function App() {
               <PlaceCard
                 place={place}
                 isSaved={places.some((p) => samePlace(place, p))}
-                onSave={() => keepPlaces(saved(places, place.name, place.lat, place.lon))}
+                onSave={() => savePlace(place.name, place.lat, place.lon)}
                 onGo={() => planTo(place)}
                 onClose={() => setPlace(null)}
               />

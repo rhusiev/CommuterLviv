@@ -342,6 +342,60 @@ def test_a_place_held_on_the_map_is_named_in_its_menu(page):
     expect(page.locator("ul li").first).to_have_text("Corner★")
 
 
+def _save_held(page, name, x=VIEWPORT["width"] / 2, y=VIEWPORT["height"] / 2):
+    """Saves the point held at `x`, `y` under `name` from its menu"""
+    menu = _hold(page, x, y)
+    menu.get_by_role("button", name="Save this place...").click()
+    menu.get_by_label("Name this place").fill(name)
+    menu.get_by_role("button", name="Save").click()
+    playwright.expect(menu).not_to_be_visible()
+
+
+def _saved_names(page):
+    """The names in the Mine tab's saved places, in their order"""
+    rows = page.get_by_title("Show on the map")
+    playwright.expect(rows.first).to_be_visible()
+    return rows.all_inner_texts()
+
+
+def test_a_place_is_not_renamed_onto_another_ones_name_and_keeps_its_row(page):
+    _register(page, "renamer")
+    for i, name in enumerate(["Home", "Work", "Gym"]):
+        _save_held(page, name, VIEWPORT["width"] / 2 + 100 * i)
+    page.get_by_role("button", name="Mine", exact=True).click()
+    assert _saved_names(page) == ["Home", "Work", "Gym"]
+    sent = []
+    page.on("request", lambda r: sent.append(r) if r.url.endswith("/api/places") else None)
+
+    rename = page.get_by_role("button", name="Rename")
+    rename.nth(1).click()
+    field = page.locator("li form input")
+    field.fill(" Home ")
+    field.press("Enter")
+    expect = playwright.expect
+    expect(page.get_by_text("A place with that name is already saved")).to_be_visible()
+    expect(field).to_be_visible()
+    assert sent == []
+
+    field.fill("Office")
+    field.press("Enter")
+    expect(page.get_by_title("Show on the map").nth(1)).to_have_text("Office")
+    assert _saved_names(page) == ["Home", "Office", "Gym"]
+
+
+def test_saving_under_a_name_in_use_elsewhere_says_it_replaces_that_place(page):
+    _register(page, "replacer")
+    _save_held(page, "Home")
+    menu = _hold(page, VIEWPORT["width"] / 2 + 100)
+    menu.get_by_role("button", name="Save this place...").click()
+    menu.get_by_label("Name this place").fill("Home")
+
+    playwright.expect(menu.get_by_text("A place with that name is already saved")).to_be_visible()
+    menu.get_by_role("button", name="Replace").click()
+    page.get_by_role("button", name="Mine", exact=True).click()
+    assert _saved_names(page) == ["Home"]
+
+
 def test_the_way_to_a_place_held_on_the_map_is_planned_from_its_menu(page):
     _register(page, "wayfarer")
     with page.expect_request(lambda r: "/api/plan?from=" in r.url) as asked:

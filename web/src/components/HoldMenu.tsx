@@ -6,15 +6,17 @@ export type Held = { lat: number; lon: number; x: number; y: number };
 
 /** The menu's width in CSS pixels, so it is kept on the page near an edge */
 const WIDTH_PX = 240;
-/** About its height with the name field open, for the same */
-const HEIGHT_PX = 220;
+/** About its height with the name field and its warning open, for the same */
+const HEIGHT_PX = 240;
 /** Decimals of a degree shown: 1e-4 is about 11 m */
 const DEGREE_DECIMALS = 4;
 
 /** What a long press or a right click on the map offers for that point. Saving
- * asks for the name in the menu itself. */
+ * asks for the name in the menu itself, and says so before it replaces a place
+ * of that name elsewhere. */
 export function HoldMenu({
   at,
+  isTaken,
   onSave,
   onTo,
   onFrom,
@@ -22,6 +24,7 @@ export function HoldMenu({
   onClose,
 }: {
   at: Held;
+  isTaken: (name: string) => boolean;
   onSave: (name: string) => void;
   onTo: () => void;
   onFrom: () => void;
@@ -30,6 +33,7 @@ export function HoldMenu({
 }) {
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
+  const clash = isTaken(name);
   const left = Math.max(0, Math.min(at.x, window.innerWidth - WIDTH_PX));
   const top = Math.max(0, Math.min(at.y, window.innerHeight - HEIGHT_PX));
   const save = () => {
@@ -81,14 +85,16 @@ export function HoldMenu({
               placeholder={t.namePlace}
               aria-label={t.namePlace}
               autoFocus
+              aria-invalid={clash}
               className="field w-full py-1.5"
             />
+            {clash && <p className="px-1 text-xs text-rose-300">{t.placeTaken}</p>}
             <div className="flex justify-end gap-1">
               <button type="button" onClick={onClose} className="btn-quiet px-2">
                 {t.cancel}
               </button>
               <button type="submit" disabled={!name.trim()} className="btn px-3 disabled:bg-raised/70 disabled:text-slate-500">
-                {t.save}
+                {clash ? t.replace : t.save}
               </button>
             </div>
           </form>

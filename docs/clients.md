@@ -38,6 +38,8 @@ its line. A chip hides nothing behind a right click or a long press. On the map
 itself a right click, or a long press on a phone, opens a menu for that point:
 save it under a name typed into the menu, plan the way there or from there, or
 list the stops within 2 km of it in the search, as ◎ does for where you are.
+A place is known by its name, so a name another saved place goes by is said to
+replace that place, in the menu and before a save from the search or a card.
 Clicking a stop opens its card: the next arrival of each route due there, and
 under "Calls here" every route through it. Pinning it
 puts it in the Mine tab. Clicking a vehicle
@@ -275,7 +277,8 @@ uses, so panning moves the city and the vehicles in the same frame.
 endpoint and no model - the browser and the phone see the same city, the same
 route sets and the same predictions, and the same journey planner behind the
 third choice in the tab pill. Both also carry the same three views added since:
-a list of saved places in the Mine tab where a place can be renamed or dropped, a search that finds
+a list of saved places in the Mine tab where a place can be renamed, though not
+to another place's name, or dropped, a search that finds
 addresses and shops as well as stop names, with matching saved places above
 both, and lists the stops within 2 km of where you are (the web's ◎ in the search
 bar, the app's search before anything is typed), traffic drawn over the streets
