@@ -54,7 +54,8 @@ BOX = (SOUTH, WEST, NORTH, EAST)
 # for that the city's own are among them to lead
 WIDE = 300
 # a name that is only a house number, "7а" or "12/2б": plots OpenStreetMap tags
-# as a place, which name nothing anyone searches for
+# as a place, which name nothing anyone searches for. Photon's are kept when
+# they have a street, by their address
 HOUSE_NUMBER = re.compile(r"\d+[^\W\d_]?(/\d+[^\W\d_]?)?")
 # mapidx addresses open with the nearest settlements; the street and district follow
 NEAR = 3
@@ -204,7 +205,9 @@ def _place(f):
     if not inside(lat, lon):
         return None
     p = f.get("properties", {})
-    name = p.get("name") or _street(p)
+    name = p.get("name")
+    if not name or HOUSE_NUMBER.fullmatch(name):
+        name = _street(p)
     if not name:
         return None
     return {"name": name, "where": _where(p, name),

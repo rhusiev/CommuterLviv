@@ -36,6 +36,21 @@ def test_a_place_is_offered_as_far_as_the_footpaths_reach(lat, lon, offered):
     assert (geocode._place(_feature(lat, lon)) is not None) == offered
 
 
+def _numbered(name, street=None):
+    """A Photon feature at the centre named only by a house number."""
+    properties = {"name": name, "osm_value": "locality", "street": street,
+                  "housenumber": name if street else None}
+    return {"geometry": {"coordinates": geocode.CENTRE[::-1]}, "properties": properties}
+
+
+def test_photon_s_places_named_only_by_a_house_number_are_left_out():
+    assert geocode._place(_numbered("55")) is None
+
+
+def test_photon_s_places_named_only_by_a_house_number_go_by_their_address():
+    assert geocode._place(_numbered("55", "вулиця Шевченка"))["name"] == "вулиця Шевченка 55"
+
+
 def _hit(name, km_east):
     """A search row `km_east` km east of the city centre."""
     lat, lon = geocode.CENTRE
