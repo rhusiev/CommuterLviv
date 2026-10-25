@@ -4,7 +4,8 @@ The local index is osm-mapidx's (`data/lviv-search.sqlite`).
 `.github/workflows/places.yml` rebuilds it from OpenStreetMap monthly and
 publishes it, and `renew_index` downloads it at that pace. It survives typos
 and knows each place's surroundings, so "аптека сихів" and "форум львв" both
-find what was meant, and it answers without leaving the machine. It has no house numbers.
+find what was meant, and it answers without leaving the machine. It has no house numbers and no
+streets.
 
 Photon (https://photon.komoot.io) fills that in. It is used rather than
 Nominatim because it indexes every named object in OSM and answers a prefix,
@@ -109,19 +110,21 @@ class Geocoder:
     def _merge(self, q):
         """Both sources, one list, the city's own places first. Among those
         and among the rest, a digit means a house address, which only Photon
-        knows, so it leads; otherwise the local index does. Photon failing is
-        fatal only when it was the one source."""
-        local = self._local(q)
+        knows, so it leads; otherwise the index's places named so do, then
+        Photon's, which has the streets the index lacks, then the index's
+        places only on or near something named so. Photon failing is fatal
+        only when it was the one source."""
+        named, nearby = self._local(q)
         try:
             remote = self._ask(q) if self.url else []
         except requests.RequestException:
             if not self.index.exists():
                 raise
             remote = []
-        first, then = (remote, local) if any(c.isdigit() for c in q) \
-            else (local, remote)
+        order = [*remote, *named, *nearby] if any(c.isdigit() for c in q) \
+            else [*named, *remote, *nearby]
         out = []
-        for p in sorted(first + then, key=lambda p: not _in_city(p)):
+        for p in sorted(order, key=lambda p: not _in_city(p)):
             if len(out) == LIMIT:
                 break
             if not any(_same(p, o) for o in out):
@@ -129,12 +132,18 @@ class Geocoder:
         return out
 
     def _local(self, q):
+        """The index's hits found by their own name, and those found only by
+        their surroundings, each in the index's order."""
+        named, nearby = [], []
         if not self.index.exists():
-            return []
-        hits = mapidx.search(str(self.index), q, limit=WIDE, origin=CENTRE, within=BOX)
-        return [{"name": h["name"], "where": ", ".join(h["address"][NEAR:NEAR + 2]),
-                 "lat": h["lat"], "lon": h["lon"], "kind": None}
-                for h in hits if not HOUSE_NUMBER.fullmatch(h["name"])]
+            return named, nearby
+        for h in mapidx.search(str(self.index), q, limit=WIDE, origin=CENTRE,
+                               within=BOX):
+            if not HOUSE_NUMBER.fullmatch(h["name"]):
+                (named if h["named"] else nearby).append({
+                    "name": h["name"], "where": ", ".join(h["address"][NEAR:NEAR + 2]),
+                    "lat": h["lat"], "lon": h["lon"], "kind": None})
+        return named, nearby
 
     def _ask(self, q):
         query = urllib.parse.urlencode({
@@ -144,11 +153,17 @@ class Geocoder:
         })
         r = self.session.get(f"{self.url}/api?{query}", timeout=TIMEOUT)
         r.raise_for_status()
-        out = []
+        out, streets = [], set()
         for f in r.json().get("features", []):
             place = _place(f)
-            if place is not None:
-                out.append(place)
+            if place is None:
+                continue
+            # Photon answers a street once per stretch of it in OSM
+            if f["properties"].get("type") == "street":
+                if (place["name"], place["where"]) in streets:
+                    continue
+                streets.add((place["name"], place["where"]))
+            out.append(place)
         return out
 
 

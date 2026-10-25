@@ -48,9 +48,11 @@ VILLAGE_KM = 12
 TOWN_KM = 2
 
 
-def _geocoder(monkeypatch, local, remote):
+def _geocoder(monkeypatch, local, remote, nearby=()):
+    """`local` as the index's places found by name, `nearby` as those found
+    by their surroundings, `remote` as Photon's."""
     geocoder = geocode.Geocoder("https://photon.invalid")
-    monkeypatch.setattr(geocoder, "_local", lambda q: local)
+    monkeypatch.setattr(geocoder, "_local", lambda q: (local, list(nearby)))
     monkeypatch.setattr(geocoder, "_ask", lambda q: remote)
     return geocoder
 
@@ -77,7 +79,8 @@ def test_a_place_in_the_city_the_index_ranks_late_still_leads(monkeypatch, tmp_p
     rows = [_hit(f"Shevchenka {i}", VILLAGE_KM) for i in range(geocode.LIMIT)] \
         + [_hit("Shevchenka school", TOWN_KM)]
     monkeypatch.setattr(geocode.mapidx, "search", lambda path, q, limit, origin, within: [
-        {"name": r["name"], "address": [], "lat": r["lat"], "lon": r["lon"]} for r in rows])
+        {"name": r["name"], "address": [], "lat": r["lat"], "lon": r["lon"], "named": True}
+        for r in rows])
 
     found = geocode.Geocoder("", index=index)._merge("shevchenka")
 
@@ -97,7 +100,7 @@ def test_the_index_finds_the_city_s_place_behind_more_of_the_oblast_s_than_it_ke
     index = write(tmp_path / "search.sqlite",
                   [Place(h["name"], h["lat"], h["lon"]) for h in [*far, near]])
 
-    found = geocode.Geocoder("", index=index)._local("shevchenka")
+    found, _ = geocode.Geocoder("", index=index)._local("shevchenka")
 
     assert [(h["lat"], h["lon"]) for h in found] == [(near["lat"], near["lon"])]
 
@@ -107,6 +110,61 @@ def test_the_index_s_places_named_only_by_a_house_number_are_left_out(tmp_path):
     index = write(tmp_path / "search.sqlite",
                   [Place(n, *geocode.CENTRE, context=("Шевченка",)) for n in names])
 
-    found = geocode.Geocoder("", index=index)._local("шевченка")
+    _, found = geocode.Geocoder("", index=index)._local("шевченка")
 
     assert {h["name"] for h in found} == {"36,6", "№120", "22 Гектари"}
+
+
+def test_the_index_tells_a_place_named_so_from_one_on_a_street_named_so(tmp_path):
+    index = write(tmp_path / "search.sqlite", [
+        Place("Urban Coffee", *geocode.CENTRE, context=("проспект Шевченка",)),
+        Place("Школа імені Шевченка", *geocode.CENTRE),
+    ])
+
+    named, nearby = geocode.Geocoder("", index=index)._local("шевченка")
+
+    assert [h["name"] for h in named] == ["Школа імені Шевченка"]
+    assert [h["name"] for h in nearby] == ["Urban Coffee"]
+
+
+def test_photon_s_street_comes_before_the_index_s_places_only_on_it(monkeypatch):
+    school, street = _hit("Shevchenka school", TOWN_KM), _hit("Shevchenka avenue", TOWN_KM)
+    cafes = [_hit(f"Cafe {i}", TOWN_KM) for i in range(geocode.LIMIT)]
+
+    found = _geocoder(monkeypatch, [school], [street], cafes)._merge("shevchenka avenue")
+
+    assert found[:2] == [school, street]
+
+
+# m between two stretches of one street in OSM, as Photon answers "проспект Шевченка"
+STRETCH_M = 300
+
+
+def _street_feature(lat, lon, district):
+    return {"geometry": {"coordinates": [lon, lat]},
+            "properties": {"name": "проспект Шевченка", "type": "street",
+                           "osm_value": "primary", "district": district}}
+
+
+def test_photon_s_street_is_listed_once_however_many_stretches_it_has(monkeypatch):
+    lat, lon = geocode.CENTRE
+    step = STRETCH_M / walk.metres(lat, lon, lat + 1, lon)
+    features = [_street_feature(lat + i * step, lon, "Галицький") for i in range(3)] \
+        + [_street_feature(lat, lon, "Сихівський")]
+    geocoder = geocode.Geocoder("https://photon.invalid")
+    monkeypatch.setattr(geocoder.session, "get", lambda url, timeout: _Answer(features))
+
+    found = geocoder._ask("проспект шевченка")
+
+    assert [h["where"] for h in found] == ["Галицький", "Сихівський"]
+
+
+class _Answer:
+    def __init__(self, features):
+        self.features = features
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return {"features": self.features}

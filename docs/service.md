@@ -494,9 +494,14 @@ cannot. It asks two sources. The first is a local index, `data/lviv-search.sqlit
 built by osm-mapidx (https://github.com/rhusiev/osm-mapidx) with
 `python -m mapidx.cli build ukraine-latest.osm.pbf --region lviv`; its search
 code is vendored as `commuterlviv/mapidx/`. It forgives typos and Latin
-transliteration, and leads for queries without a digit. The second is Photon
-over OpenStreetMap, biased to the city, which leads when the query has a digit,
-since house numbers are what it is best at. Both are clamped to the box the map
+transliteration, but it holds no streets: its builder reads a street only as the
+address of what stands on it. The second is Photon over OpenStreetMap, biased to
+the city, which has both streets and house numbers. A query with a digit is a
+house address, so Photon leads it. Otherwise the index's places with the query
+in their own name lead, then Photon's, then the index's places only on or near
+something of that name: "проспект Шевченка" is the avenue before the cafés on
+it. Photon answers a street once per stretch of it in OpenStreetMap, so a street
+of one name in one district is kept once. Both are clamped to the box the map
 frames can place a vehicle in (`wire.py`), widened by the footpaths' reach past
 the stops (`walk.MARGIN`), which `/api/plan` also refuses points outside of:
 past it there is no walk to a line. The index applies the box itself, before it
@@ -512,8 +517,9 @@ OpenStreetMap on the 3rd of every month and publishes it on this repository's
 `places` release, because the build streams the whole Ukraine extract and peaks
 near 5 GB. It runs osm-mapidx's builder at a pinned commit, the one the vendored
 search was copied from, so the two only ever move together. The vendored copy
-carries one addition past that commit, the box (`search(within=)`), which reads
-nothing the builder writes differently. The service
+carries two additions past that commit, which read nothing the builder writes
+differently: the box (`search(within=)`) and whether a hit was found by its own
+name (`named`). The service
 downloads it from `COMMUTERLVIV_PLACES_URL` on a start without one, then at the
 nightly check once it is 30 days old. A download is kept only if it opens and
 finds Lviv, and is swapped in with a rename; each search opens the file anew, so
