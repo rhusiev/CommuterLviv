@@ -252,6 +252,36 @@ void main() {
     await _done(tester, reported);
   });
 
+  testWidgets('a line opened frames the map on it, above its stops', (
+    tester,
+  ) async {
+    useLang(Lang.en);
+    addTearDown(() => useLang(Lang.uk));
+    final reported = FlutterError.onError!;
+    FlutterError.onError = (e) {
+      if (!e.exceptionAsString().contains('RenderFlex overflowed')) reported(e);
+    };
+    await _pumpHome(tester, catalog: _lineCatalog, shapes: _lineShapes);
+    final map = tester
+        .widget<FlutterMap>(find.byType(FlutterMap))
+        .mapController!;
+
+    await tester.tap(find.byTooltip(txt.lines));
+    await tester.pump(_open);
+    await tester.tap(find.byIcon(Icons.chevron_right));
+    await pumpUntil(tester, () => tester.any(find.text(_lineStop(0))));
+
+    final mapTop = tester.getTopLeft(find.byType(FlutterMap)).dy;
+    final panelTop = tester.getTopLeft(find.byType(LinePanel)).dy;
+    for (final at in [_lineStopAt(0), _lineStopAt(_lineStops - 1)]) {
+      final y = mapTop + map.camera.latLngToScreenOffset(at).dy;
+      expect(y, lessThan(panelTop));
+    }
+    // The map's tile workers fail what they still hold when the map goes
+    await pumpQuiet(tester);
+    await _done(tester, reported);
+  });
+
   testWidgets('an option opened frames the map on it, above the planner', (
     tester,
   ) async {

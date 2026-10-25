@@ -82,8 +82,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final MapController _map = MapController();
 
-  /// Measures the planner, which a framed option is kept above
+  /// The planner and the open line, measured to frame the map above them
   final _plannerKey = GlobalKey();
+  final _lineKey = GlobalKey();
   Live? _live;
   Catalog? _catalog;
   Sets? _sets;
@@ -435,7 +436,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final points = [
         for (final line in shape?.lines ?? const <RouteLine>[]) ...line.pts,
       ];
-      _frame(points);
+      _frameAbove(
+        _lineKey,
+        points,
+        isWanted: () => _lineOpen && _route == route,
+      );
     });
   }
 
@@ -456,24 +461,28 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// How far up from the map's bottom edge the planner reaches, with a gap
+  /// How far up from the map's bottom edge the [panel] reaches, with a gap
   /// above it; nothing while it is not laid out
-  double get _plannerReach {
-    final box = _plannerKey.currentContext?.findRenderObject() as RenderBox?;
+  double _reach(GlobalKey panel) {
+    final box = panel.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return 0;
     return floatingBottom(context) + box.size.height + floatingGap;
   }
 
-  /// Frames [journey] above the planner once the planner has laid itself out
-  /// with the option open, as opening it changes the planner's height
-  void _frameAbovePlanner(Journey journey, Catalog catalog) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _journey != journey) return;
-      _frame(
-        journey.extent(catalog),
-        below: _plannerOverButtons ? _plannerReach : 0,
-      );
-    });
+  /// Frames [points] above [panel] once the panel has laid itself out, as what
+  /// it then shows changes its height. Nothing is framed if by then
+  /// [isWanted] says the panel has moved on
+  void _frameAbove(
+    GlobalKey panel,
+    List<LatLng> points, {
+    required bool Function() isWanted,
+  }) {
+    WidgetsBinding.instance
+      ..addPostFrameCallback((_) {
+        if (!mounted || !isWanted()) return;
+        _frame(points, below: _reach(panel));
+      })
+      ..ensureVisualUpdate();
   }
 
   /// Back from the open line to the routes grid
@@ -1156,7 +1165,13 @@ class _HomeScreenState extends State<HomeScreen> {
           onSave: _savePlace,
           onShow: (journey) {
             setState(() => _journey = journey);
-            if (journey != null) _frameAbovePlanner(journey, catalog);
+            if (journey != null) {
+              _frameAbove(
+                _plannerKey,
+                journey.extent(catalog),
+                isWanted: () => _journey == journey,
+              );
+            }
             _push();
           },
           onFollow: _follow,
@@ -1231,6 +1246,7 @@ class _HomeScreenState extends State<HomeScreen> {
           maxHeight: MediaQuery.sizeOf(context).height * _panelShare,
         ),
         child: LinePanel(
+          key: _lineKey,
           catalog: catalog,
           live: live,
           route: _route!,
