@@ -7,6 +7,7 @@ import { FollowCard } from "./components/FollowCard";
 import { JourneyPanel } from "./components/JourneyPanel";
 import { StopCard } from "./components/StopCard";
 import { HoldMenu, type Held } from "./components/HoldMenu";
+import { Confirm } from "./components/Confirm";
 import { PlaceCard } from "./components/PlaceCard";
 import { AccountSettings } from "./components/AccountSettings";
 import { MinePanel } from "./components/MinePanel";
@@ -27,7 +28,7 @@ import { takeRenewed, useLive } from "./lib/useLive";
 import { useMapLayers } from "./lib/useMapLayers";
 import { usePlanner } from "./lib/usePlanner";
 import { useSession } from "./lib/useSession";
-import type { Catalog, Journey, Me } from "./lib/types";
+import type { Catalog, Journey, Me, Place } from "./lib/types";
 import { t } from "./lib/i18n";
 
 const LINES_KEY = "commuterlviv.lines";
@@ -88,6 +89,8 @@ export function App() {
   const [place, setPlace] = useState<Shown | null>(null);
   /** Where the map was last held, while its menu is open */
   const [held, setHeld] = useState<Held | null>(null);
+  /** A save waiting for the answer to whether it may replace the place of its name */
+  const [replacing, setReplacing] = useState<Place | null>(null);
   /** A point to list the stops near in the search; a new object lists them again */
   const [around, setAround] = useState<{ lat: number; lon: number } | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lon: number } | null>(null);
@@ -261,8 +264,8 @@ export function App() {
   // A place saved under a name in use replaces that one, so it is asked first
   // where the name was not typed into a field that says so
   const savePlace = (name: string, lat: number, lon: number) => {
-    if (replaces(places, name, { lat, lon }) && !confirm(`${t.placeTaken}. ${t.replaceIt}`)) return;
-    keepPlaces(saved(places, name, lat, lon));
+    if (replaces(places, name, { lat, lon })) setReplacing({ name, lat, lon });
+    else keepPlaces(saved(places, name, lat, lon));
   };
 
   const showPlace = (at: Shown) => {
@@ -392,6 +395,17 @@ export function App() {
             setHeld(null);
           }}
           onClose={() => setHeld(null)}
+        />
+      )}
+      {replacing && (
+        <Confirm
+          text={t.placeTaken}
+          action={t.replace}
+          onConfirm={() => {
+            keepPlaces(saved(places, replacing.name, replacing.lat, replacing.lon));
+            setReplacing(null);
+          }}
+          onCancel={() => setReplacing(null)}
         />
       )}
 

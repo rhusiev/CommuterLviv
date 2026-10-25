@@ -39,7 +39,9 @@ itself a right click, or a long press on a phone, opens a menu for that point:
 save it under a name typed into the menu, plan the way there or from there, or
 list the stops within 2 km of it in the search, as ◎ does for where you are.
 A place is known by its name, so a name another saved place goes by is said to
-replace that place, in the menu and before a save from the search or a card.
+replace that place: in the menu under the name typed, and before a save from the
+search, a card or the planner in a dialog that saves only on "Replace". Saving a
+place again where it stands asks nothing.
 Clicking a stop opens its card: the next arrival of each route due there, and
 under "Calls here" every route through it. Pinning it
 puts it in the Mine tab. Clicking a vehicle

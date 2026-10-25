@@ -396,6 +396,70 @@ def test_saving_under_a_name_in_use_elsewhere_says_it_replaces_that_place(page):
     assert _saved_names(page) == ["Home"]
 
 
+def _star_stop_4(page):
+    """Saves Stop 4 from the search, under its own name and where it stands;
+    its row's star."""
+    page.get_by_placeholder("Find a stop or a place").fill("Stop 4")
+    # a saved place's row has no star, so the first is the stop's
+    star = page.get_by_title("Save this place").first
+    star.click()
+    return star
+
+
+def _places_kept(page):
+    """Where the service keeps the places saved, by name"""
+    kept = page.evaluate("fetch('/api/places').then(r => r.json())")["places"]
+    return {p["name"]: (p["lat"], p["lon"]) for p in kept}
+
+
+def test_a_save_from_the_search_over_a_name_in_use_elsewhere_is_asked_and_cancelled(page):
+    _register(page, "hesitant")
+    page.on("dialog", lambda dialog: pytest.fail(f"asked in a {dialog.type}"))
+    _save_held(page, "Stop 4")
+    sent = []
+    page.on("request", lambda r: sent.append(r) if r.url.endswith("/api/places") else None)
+
+    star = _star_stop_4(page)
+    asked = page.get_by_role("alertdialog", name="A place with that name is already saved")
+    expect = playwright.expect
+    expect(asked.get_by_role("button", name="Cancel")).to_be_focused()
+    page.keyboard.press("Escape")
+    expect(asked).not_to_be_visible()
+    expect(star).to_be_focused()
+    star.click()
+    asked.get_by_role("button", name="Cancel").click()
+    expect(asked).not_to_be_visible()
+
+    assert sent == []
+    assert _places_kept(page) == {"Stop 4": pytest.approx(CENTRE, abs=1e-3)}
+    page.get_by_role("button", name="Mine", exact=True).click()
+    assert _saved_names(page) == ["Stop 4"]
+
+
+def test_a_save_from_the_search_over_a_name_in_use_elsewhere_replaces_it_once_confirmed(page):
+    _register(page, "decisive")
+    _save_held(page, "Stop 4")
+
+    _star_stop_4(page)
+    with page.expect_request(lambda r: r.url.endswith("/api/places")):
+        page.get_by_role("alertdialog").get_by_role("button", name="Replace").click()
+
+    playwright.expect(page.get_by_role("alertdialog")).not_to_be_visible()
+    assert _places_kept(page) == {"Stop 4": pytest.approx(END, abs=1e-3)}
+
+
+def test_saving_a_place_again_where_it_stands_is_not_asked(page):
+    _register(page, "repeater")
+    page.on("dialog", lambda dialog: pytest.fail(f"asked in a {dialog.type}"))
+    with page.expect_request(lambda r: r.url.endswith("/api/places")):
+        _star_stop_4(page)
+
+    with page.expect_request(lambda r: r.url.endswith("/api/places")):
+        _star_stop_4(page)
+    playwright.expect(page.get_by_role("alertdialog")).to_have_count(0)
+    assert _places_kept(page) == {"Stop 4": pytest.approx(END, abs=1e-3)}
+
+
 def test_the_way_to_a_place_held_on_the_map_is_planned_from_its_menu(page):
     _register(page, "wayfarer")
     with page.expect_request(lambda r: "/api/plan?from=" in r.url) as asked:
