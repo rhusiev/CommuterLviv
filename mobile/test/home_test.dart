@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:commuterlviv/src/api.dart';
 import 'package:commuterlviv/src/home.dart';
+import 'package:commuterlviv/src/journey_panel.dart' show JourneyPanel;
 import 'package:commuterlviv/src/lines_tab.dart' show LinePanel;
 import 'package:commuterlviv/src/map_tab.dart' show lviv;
 import 'package:commuterlviv/src/map_theme.dart';
@@ -251,7 +252,9 @@ void main() {
     await _done(tester, reported);
   });
 
-  testWidgets('an option opened frames the map on it', (tester) async {
+  testWidgets('an option opened frames the map on it, above the planner', (
+    tester,
+  ) async {
     useLang(Lang.en);
     addTearDown(() => useLang(Lang.uk));
     final reported = FlutterError.onError!;
@@ -282,6 +285,12 @@ void main() {
     final middle =
         (_lineStopAt(0).longitude + _lineStopAt(_alighting).longitude) / 2;
     expect(map.camera.center.longitude, closeTo(middle, _sameDeg));
+    final mapTop = tester.getTopLeft(find.byType(FlutterMap)).dy;
+    final plannerTop = tester.getTopLeft(find.byType(JourneyPanel)).dy;
+    for (final at in [_lineStopAt(0), _lineStopAt(_alighting)]) {
+      final y = mapTop + map.camera.latLngToScreenOffset(at).dy;
+      expect(y, lessThan(plannerTop));
+    }
     // The map's tile workers fail what they still hold when the map goes
     await pumpQuiet(tester);
     await _done(tester, reported);

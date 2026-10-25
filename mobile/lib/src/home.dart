@@ -48,6 +48,9 @@ const _hitRadius = 22.0;
 /// the map keeping the rest.
 const _panelShare = 0.6;
 
+/// The margin a framed line or option keeps from each edge of the map
+const _framePad = 40.0;
+
 /// A dot in the planner's A/B ring: a place, but neither end of a journey
 const _placeMark = '•';
 
@@ -78,6 +81,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final MapController _map = MapController();
+
+  /// Measures the planner, which a framed option is kept above
+  final _plannerKey = GlobalKey();
   Live? _live;
   Catalog? _catalog;
   Sets? _sets;
@@ -433,15 +439,41 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  /// Moves the camera to show all of [points], if there are any
-  void _frame(List<LatLng> points) {
+  /// Moves the camera to show all of [points], if there are any, above
+  /// [below] pixels at the bottom of the map
+  void _frame(List<LatLng> points, {double below = 0}) {
     if (points.isEmpty) return;
     _map.fitCamera(
       CameraFit.bounds(
         bounds: LatLngBounds.fromPoints(points),
-        padding: const EdgeInsets.all(40),
+        padding: EdgeInsets.fromLTRB(
+          _framePad,
+          _framePad,
+          _framePad,
+          math.max(_framePad, below),
+        ),
       ),
     );
+  }
+
+  /// How far up from the map's bottom edge the planner reaches, with a gap
+  /// above it; nothing while it is not laid out
+  double get _plannerReach {
+    final box = _plannerKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return 0;
+    return floatingBottom(context) + box.size.height + floatingGap;
+  }
+
+  /// Frames [journey] above the planner once the planner has laid itself out
+  /// with the option open, as opening it changes the planner's height
+  void _frameAbovePlanner(Journey journey, Catalog catalog) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _journey != journey) return;
+      _frame(
+        journey.extent(catalog),
+        below: _plannerOverButtons ? _plannerReach : 0,
+      );
+    });
   }
 
   /// Back from the open line to the routes grid
@@ -1099,6 +1131,7 @@ class _HomeScreenState extends State<HomeScreen> {
           maxHeight: MediaQuery.sizeOf(context).height * _panelShare,
         ),
         child: JourneyPanel(
+          key: _plannerKey,
           api: widget.api,
           catalog: catalog,
           from: _from,
@@ -1123,7 +1156,7 @@ class _HomeScreenState extends State<HomeScreen> {
           onSave: _savePlace,
           onShow: (journey) {
             setState(() => _journey = journey);
-            if (journey != null) _frame(journey.extent(catalog));
+            if (journey != null) _frameAbovePlanner(journey, catalog);
             _push();
           },
           onFollow: _follow,
