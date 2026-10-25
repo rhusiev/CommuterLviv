@@ -214,6 +214,16 @@ void main() {
     expect(_top(tester, 'Home'), lessThan(_top(tester, 'Work')));
   });
 
+  testWidgets('a place near a stop is called by it, else by where it is', (
+    tester,
+  ) async {
+    const atOpera = Place(name: 'Flat', at: LatLng(49.841, 24.03));
+    await _pump(tester, places: const [atOpera, _home]);
+
+    expect(find.text(txt.nearStop('Opera')), findsOneWidget);
+    expect(find.text('49.8000, 24.0000'), findsOneWidget);
+  });
+
   testWidgets('a tap shows the place', (tester) async {
     final heard = await _pump(tester, places: const [_home]);
 

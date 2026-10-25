@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 
 import 'api.dart';
 import 'models.dart';
+import 'point_label.dart';
 import 'route_badge.dart';
 import 'sheets.dart' show askPlaceName;
 import 'stop_search.dart';
@@ -165,10 +166,7 @@ class EndField extends StatelessWidget {
     final where =
         _saved?.name ??
         name ??
-        (at == null
-            ? endLabel(end)
-            : '${at!.latitude.toStringAsFixed(4)}, '
-                  '${at!.longitude.toStringAsFixed(4)}');
+        (at == null ? endLabel(end) : pointLabel(catalog, at!));
     return Row(
       children: [
         RowLabel(text: endLabel(end), icon: endIcon(end)),

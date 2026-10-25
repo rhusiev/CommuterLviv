@@ -189,6 +189,7 @@ refused and the map stays empty while everything else works.
 | `lib/src/place_card.dart`    | a place picked by name, and the way there                               |
 | `lib/src/hold_sheet.dart`    | what a long press on the map offers for that point                      |
 | `lib/src/stop_search.dart`   | stops by name and near you, and places from the service                 |
+| `lib/src/point_label.dart`   | a point nothing names, called by the stop within 300 m of it            |
 | `lib/src/traffic.dart`       | how fast the streets are running, while that is on                      |
 | `lib/src/sheets.dart`        | the basemap and account sheets, and the dialogs they share              |
 | `lib/src/due.dart`           | a route chip with its countdown, drawn in two places                    |
@@ -311,7 +312,10 @@ Tapping either end opens the same search as the top bar (`stop_search.dart`):
 typing finds stops, addresses and shops, and before anything is typed it offers
 where I am, choosing on the map, and the saved places. The locate button beside
 each field is where I am in one tap, and the field then says so rather than
-giving the coordinates. While an end is being picked on the map
+giving the coordinates. A point nothing names, in its field and at the top of
+the long-press sheet, is called by the stop nearest it within 300 m ("Near
+Rynok"), and only past that by its coordinates, as on the web; Mine says where
+a saved place is the same way, under its name. While an end is being picked on the map
 the panel folds to a strip saying so, and a tap is that point and not the
 nearest stop, because a door rarely is one. The arrow in the panel's corner
 folds it to a strip too, showing the picked option's length and routes, so the

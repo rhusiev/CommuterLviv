@@ -11,6 +11,7 @@ import 'package:flutter/material.dart' as material show Theme;
 import 'due.dart';
 import 'live.dart';
 import 'models.dart';
+import 'point_label.dart';
 import 'sheets.dart' show askName, manage;
 import 'strings.dart';
 import 'theme.dart';
@@ -161,9 +162,7 @@ class _MineTabState extends State<MineTab> {
                 index: i,
                 icon: Icons.place_outlined,
                 title: p.name,
-                under:
-                    '${p.at.latitude.toStringAsFixed(4)}, '
-                    '${p.at.longitude.toStringAsFixed(4)}',
+                under: pointLabel(widget.catalog, p.at),
                 onTap: () => widget.onPlace(p),
                 onRename: () => _renamePlace(p),
                 onDelete: () async => _putPlaces([

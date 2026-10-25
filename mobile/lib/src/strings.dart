@@ -73,6 +73,7 @@ class Strings {
     required this.toHere,
     required this.fromHere,
     required this.nearHere,
+    required this.nearStop,
     required this.nothingNearHere,
     required this.noPlaces,
     required this.saved,
@@ -289,6 +290,9 @@ class Strings {
   final String toHere;
   final String fromHere;
   final String nearHere;
+
+  /// A point nothing names, called by the stop near it
+  final String Function(String stop) nearStop;
   final String nothingNearHere;
   final String noPlaces;
   final String saved;
@@ -523,6 +527,7 @@ const _en = Strings(
   toHere: 'Directions to here',
   fromHere: 'Directions from here',
   nearHere: 'Stops near here',
+  nearStop: _enNearStop,
   nothingNearHere: 'No stop within 2 km of this place',
   noPlaces: 'Save a place and it is offered here',
   saved: 'Saved',
@@ -709,6 +714,7 @@ String _enHurryAhead(String route, String stop) =>
 String _enMissedRide(String route, String stop) =>
     '$route at $stop will be missed';
 String _enToGo(String distance) => '$distance to go';
+String _enNearStop(String stop) => 'Near $stop';
 String _enMetres(int m) => '$m m';
 String _enKm(double km) => '${km.toStringAsFixed(1)} km';
 
@@ -782,6 +788,7 @@ const _uk = Strings(
   toHere: 'Маршрут сюди',
   fromHere: 'Маршрут звідси',
   nearHere: 'Зупинки поблизу',
+  nearStop: _ukNearStop,
   nothingNearHere: 'Немає зупинки ближче ніж за 2 км звідси',
   noPlaces: 'Збережене місце зʼявиться тут',
   saved: 'Збережене',
@@ -968,6 +975,7 @@ String _ukHurryAhead(String route, String stop) =>
 String _ukMissedRide(String route, String stop) =>
     'На $route на зупинці $stop не встигнете';
 String _ukToGo(String distance) => 'Ще $distance';
+String _ukNearStop(String stop) => 'Біля зупинки $stop';
 String _ukMetres(int m) => '$m м';
 String _ukKm(double km) => '${km.toStringAsFixed(1).replaceAll('.', ',')} км';
 

@@ -322,6 +322,29 @@ void main() {
     expect(find.textContaining('49.8419'), findsNothing);
   });
 
+  testWidgets('an end nothing names reads by the stop near it', (tester) async {
+    const stop = Stop(
+      id: 's0',
+      name: 'Rynok',
+      code: '',
+      lat: 49.8419,
+      lon: 24.0315,
+      routes: [],
+    );
+    await pump(
+      tester,
+      catalog: const Catalog(
+        routes: [],
+        stops: [stop],
+        index: {},
+        stopIndex: {},
+      ),
+      to: const LatLng(49.8429, 24.0315),
+    );
+
+    expect(find.text(txt.nearStop('Rynok')), findsOneWidget);
+  });
+
   testWidgets('an end offers where I am and the map before a search', (
     tester,
   ) async {

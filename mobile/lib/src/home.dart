@@ -366,6 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
     context,
     (_) => HoldSheet(
       at: at,
+      catalog: _catalog!,
       onSave: (name) {
         Navigator.pop(context);
         unawaited(_savePlace(name, at));

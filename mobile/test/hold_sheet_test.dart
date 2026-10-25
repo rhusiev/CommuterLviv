@@ -3,20 +3,36 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'package:commuterlviv/src/hold_sheet.dart';
+import 'package:commuterlviv/src/models.dart';
 import 'package:commuterlviv/src/strings.dart';
 
 const _at = LatLng(49.84187, 24.03142);
 
+/// A city whose one stop, [_opera], is 111 m north of [_at]
+const _city = Catalog(routes: [], stops: [_opera], index: {}, stopIndex: {});
+
+const _opera = Stop(
+  id: 's0',
+  name: 'Opera (7)',
+  code: '7',
+  lat: 49.84287,
+  lon: 24.03142,
+  routes: [],
+);
+
+const _nowhere = Catalog(routes: [], stops: [], index: {}, stopIndex: {});
+
 /// What the sheet was asked to do, in order
 final _done = <String>[];
 
-Future<void> _pump(WidgetTester tester) {
+Future<void> _pump(WidgetTester tester, {Catalog catalog = _nowhere}) {
   _done.clear();
   return tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
         body: HoldSheet(
           at: _at,
+          catalog: catalog,
           onSave: (name) => _done.add('save $name'),
           onTo: () => _done.add('to'),
           onFrom: () => _done.add('from'),
@@ -43,6 +59,12 @@ void main() {
       expect(_done.last, done);
     }
     expect(find.text(txt.savePlaceAs), findsOneWidget);
+  });
+
+  testWidgets('a held point near a stop is called by it', (tester) async {
+    await _pump(tester, catalog: _city);
+
+    expect(find.text(txt.nearStop('Opera')), findsOneWidget);
   });
 
   testWidgets('a held point is named in the sheet itself, not a dialog', (

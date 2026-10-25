@@ -6,15 +6,15 @@ import 'package:flutter/material.dart' hide Theme;
 import 'package:flutter/material.dart' as material show Theme;
 import 'package:latlong2/latlong.dart';
 
+import 'models.dart';
+import 'point_label.dart';
 import 'strings.dart';
-
-/// Decimals of a degree shown: 1e-4 is about 11 m.
-const _degreeDecimals = 4;
 
 class HoldSheet extends StatefulWidget {
   const HoldSheet({
     super.key,
     required this.at,
+    required this.catalog,
     required this.onSave,
     required this.onTo,
     required this.onFrom,
@@ -22,6 +22,9 @@ class HoldSheet extends StatefulWidget {
   });
 
   final LatLng at;
+
+  /// The stops [at] may be named by
+  final Catalog catalog;
   final void Function(String name) onSave;
   final VoidCallback onTo;
   final VoidCallback onFrom;
@@ -49,7 +52,6 @@ class _HoldSheetState extends State<HoldSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final at = widget.at;
     return SafeArea(
       child: Padding(
         // Above the keyboard while the name is typed
@@ -65,10 +67,7 @@ class _HoldSheetState extends State<HoldSheet> {
                 txt.thisPlace,
                 style: material.Theme.of(context).textTheme.titleLarge,
               ),
-              subtitle: Text(
-                '${at.latitude.toStringAsFixed(_degreeDecimals)}, '
-                '${at.longitude.toStringAsFixed(_degreeDecimals)}',
-              ),
+              subtitle: Text(pointLabel(widget.catalog, widget.at)),
             ),
             if (_naming) _nameField() else ..._actions(),
           ],
