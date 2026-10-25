@@ -114,8 +114,9 @@ class _SignInScreenState extends State<SignInScreen> {
               padding: const EdgeInsets.all(24),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 420),
-                // The group is what a password manager sees: without it Android is
-                // offered two unrelated fields and Bitwarden will not fill either
+                // The group is what a password manager sees: without it
+                // Android is offered two unrelated fields and Bitwarden will
+                // not fill either
                 child: AutofillGroup(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
