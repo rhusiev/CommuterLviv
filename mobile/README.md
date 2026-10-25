@@ -315,7 +315,7 @@ giving the coordinates. While an end is being picked on the map
 the panel folds to a strip saying so, and a tap is that point and not the
 nearest stop, because a door rarely is one. The arrow in the panel's corner
 folds it to a strip too, showing the picked option's length and routes, so the
-option can be read on the map; tapping the strip opens the panel again. Open, the panel lies over the map's buttons, so the screen reader skips them until it folds. The
+option can be read on the map; tapping the strip opens the panel again. Open, the panel lies over the map's buttons, so the screen reader skips them until it folds. A drawn option carries one pill of times per stop, centred on the stop; on a saved place the pill stands above it, clear of the place's name (`journey_layer.dart`). The
 planner is left through the bottom tabs or with back, which from any tab but the
 map returns to the map rather than leaving the app. On the map, back first
 folds the follow card's list of steps or closes the map's credits, if open. On the sign-in screen, back from taking up an invite returns to signing in. Two chips beside the two

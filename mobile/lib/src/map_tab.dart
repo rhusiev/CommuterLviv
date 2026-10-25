@@ -156,7 +156,12 @@ class MapTab extends StatelessWidget {
               places: places,
             ),
             if (journey case final journey?)
-              JourneyLayer(journey: journey, catalog: catalog, theme: theme),
+              JourneyLayer(
+                journey: journey,
+                catalog: catalog,
+                theme: theme,
+                places: places,
+              ),
             // The journey's own pills name its ends while it is drawn.
             if (journey == null && marks.isNotEmpty)
               MarkerLayer(
