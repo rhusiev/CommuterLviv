@@ -570,6 +570,25 @@ def test_the_ends_are_the_same_shape_as_the_time_to_leave(page):
     assert end.evaluate(radius) == leave.evaluate(radius)
 
 
+def test_an_end_of_the_way_is_saved_under_a_name_asked_in_the_page(page):
+    _register(page, "keeper")
+    page.on("dialog", lambda dialog: pytest.fail(f"asked in a {dialog.type}"))
+    _plan_to_town_hall(page)
+    page.locator("aside").get_by_role("button", name="Town hall").click()
+    page.locator("aside").get_by_role("button", name="Save this place").click()
+
+    asked = page.get_by_role("dialog", name="Name this place")
+    field = asked.get_by_role("textbox", name="Name this place")
+    playwright.expect(field).to_be_focused()
+    playwright.expect(asked.get_by_role("button", name="Save")).to_be_disabled()
+    field.fill(" Hall ")
+    with page.expect_request(lambda r: r.url.endswith("/api/places")):
+        asked.get_by_role("button", name="Save").click()
+
+    playwright.expect(asked).not_to_be_visible()
+    assert _places_kept(page) == {"Hall": pytest.approx(END, abs=1e-3)}
+
+
 def _plan_a_ride(page, confidence, hurry=False, backup=0):
     """Plans the way to END, answered with one option that rides the city's
     route on what `confidence` names, caught only by hurrying if `hurry` says
@@ -634,6 +653,22 @@ def test_a_picked_option_says_its_notes_and_hurry_in_place(page):
     expect(why).to_be_visible()
     expect(hint).to_be_visible()
     expect(card.get_by_role("button", name=re.compile("^(Next trip|Hurry)"))).to_have_count(0)
+
+
+def test_a_search_is_reported_with_a_note_asked_in_the_page(page):
+    _register(page, "reporter")
+    page.on("dialog", lambda dialog: pytest.fail(f"asked in a {dialog.type}"))
+    _plan_a_ride(page, "live")
+    page.route("**/api/report", lambda route: route.fulfill(status=204))
+    page.get_by_role("button", name="Something looks wrong? Report it").click()
+
+    asked = page.get_by_role("dialog", name=re.compile("^What looks wrong"))
+    asked.get_by_role("textbox").fill("The bus never came")
+    with page.expect_request(lambda r: r.url.endswith("/api/report")) as sent:
+        asked.get_by_role("button", name="Send").click()
+
+    assert sent.value.post_data_json == {"id": "r1", "note": "The bus never came"}
+    playwright.expect(page.get_by_text("Reported, thank you")).to_be_visible()
 
 
 def test_every_target_on_a_picked_option_is_big_enough_to_tap(page):

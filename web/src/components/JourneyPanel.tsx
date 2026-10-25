@@ -12,6 +12,7 @@ import {
 } from "../lib/prefer";
 import { heldHurry, heldSpeed } from "../lib/walking";
 import type { WayPick } from "./Backups";
+import { Prompt } from "./Confirm";
 import { Icon, type IconName } from "./Icon";
 import { JourneyOption } from "./JourneyOption";
 import { RouteBadge } from "./RouteBadge";
@@ -112,6 +113,7 @@ export function JourneyPanel({
   /** How reporting it went */
   const [reported, setReported] = useState<string | null>(null);
   const reportSaid = current ? reported : null;
+  const [askingNote, setAskingNote] = useState(false);
   const held = useRef(fresh(null));
   /** Unix seconds, or null for now - which is what the service assumes */
   const [at, setAt] = useState<number | null>(null);
@@ -174,10 +176,10 @@ export function JourneyPanel({
     if (ask && from && to) searchAsked();
   }, [ask, from, to]);
 
-  const sendReport = async () => {
+  const sendReport = async (note: string) => {
+    setAskingNote(false);
     const id = report;
-    const note = prompt(t.reportNote);
-    if (note === null || !id) return;
+    if (!id) return;
     try {
       await api.report(id, note);
       setReportable((r) => (r === id ? null : r));
@@ -359,13 +361,22 @@ export function JourneyPanel({
           {reportSaid}
           {report && (
             <button
-              onClick={() => void sendReport()}
+              onClick={() => setAskingNote(true)}
               className="underline decoration-dotted underline-offset-2 hover:text-slate-300"
             >
               {t.report}
             </button>
           )}
         </p>
+      )}
+      {askingNote && (
+        <Prompt
+          text={t.reportNote}
+          action={t.send}
+          optional
+          onAnswer={(note) => void sendReport(note)}
+          onCancel={() => setAskingNote(false)}
+        />
       )}
     </div>
   );
@@ -503,6 +514,7 @@ function Field({
   onSave: (name: string, at: Point) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [naming, setNaming] = useState(false);
   const known = point && places.find((p) => samePlace(point, p));
   const then = (act: () => void) => () => {
     setOpen(false);
@@ -539,10 +551,7 @@ function Field({
                   </button>
                   {point && !known && (
                     <button
-                      onClick={then(() => {
-                        const n = prompt(t.namePlace)?.trim();
-                        if (n) onSave(n, point);
-                      })}
+                      onClick={then(() => setNaming(true))}
                       className={row}
                     >
                       <span className="w-4 text-center">☆</span>
@@ -600,6 +609,17 @@ function Field({
       >
         <Icon name="locate" className="size-4" />
       </button>
+      {naming && point && (
+        <Prompt
+          text={t.namePlace}
+          action={t.save}
+          onAnswer={(n) => {
+            setNaming(false);
+            onSave(n, point);
+          }}
+          onCancel={() => setNaming(false)}
+        />
+      )}
     </div>
   );
 }
