@@ -51,11 +51,15 @@ def test_photon_s_places_named_only_by_a_house_number_go_by_their_address():
     assert geocode._place(_numbered("55", "вулиця Шевченка"))["name"] == "вулиця Шевченка 55"
 
 
-def _hit(name, km_east):
+def _hit(name, km_east, kind=None):
     """A search row `km_east` km east of the city centre."""
     lat, lon = geocode.CENTRE
     return {"name": name, "where": "", "lat": lat,
-            "lon": lon + km_east * 1000 / walk.metres(lat, 0, lat, 1), "kind": None}
+            "lon": lon + km_east * 1000 / walk.metres(lat, 0, lat, 1), "kind": kind}
+
+
+def _street(name, km_east, kind):
+    return {**_hit(name, km_east, kind), geocode.STREET: True}
 
 
 # a village inside the box, past the city's own streets, and a street in town
@@ -94,7 +98,8 @@ def test_a_place_in_the_city_the_index_ranks_late_still_leads(monkeypatch, tmp_p
     rows = [_hit(f"Shevchenka {i}", VILLAGE_KM) for i in range(geocode.LIMIT)] \
         + [_hit("Shevchenka school", TOWN_KM)]
     monkeypatch.setattr(geocode.mapidx, "search", lambda path, q, limit, origin, within: [
-        {"name": r["name"], "address": [], "lat": r["lat"], "lon": r["lon"], "named": True}
+        {"name": r["name"], "address": [], "lat": r["lat"], "lon": r["lon"], "named": True,
+         "category": "amenity=school"}
         for r in rows])
 
     found = geocode.Geocoder("", index=index)._merge("shevchenka")
@@ -140,6 +145,32 @@ def test_the_index_tells_a_place_named_so_from_one_on_a_street_named_so(tmp_path
 
     assert [h["name"] for h in named] == ["Школа імені Шевченка"]
     assert [h["name"] for h in nearby] == ["Urban Coffee"]
+
+
+def test_the_index_s_streets_lead_its_other_places_of_the_name(tmp_path):
+    index = write(tmp_path / "search.sqlite", [
+        Place("Зелена Сливка", *geocode.CENTRE),
+        Place("ЖК Зелена околиця", *geocode.CENTRE, category="landuse=residential"),
+        Place("Зелена вулиця", *geocode.CENTRE, category="highway=residential"),
+    ])
+
+    named, _ = geocode.Geocoder("", index=index)._local("зелена")
+
+    # the estate's name sorts first in the index, so only the street's
+    # highway=* puts the street before it
+    assert [(h["name"], h["kind"]) for h in named][0] == ("Зелена вулиця", "residential")
+
+
+def test_photon_s_street_is_left_out_where_the_index_has_a_street_of_its_name(
+        monkeypatch):
+    local = _street("Городоцька вулиця", VILLAGE_KM, "residential")
+    stretches = [_street("Городоцька вулиця", km, "primary")
+                 for km in (TOWN_KM, VILLAGE_KM / 2)]
+    stop = _hit("Городоцька вулиця", TOWN_KM, "bus_stop")
+
+    found = _geocoder(monkeypatch, [local], [*stretches, stop])._merge("городоцька")
+
+    assert found == [stop, _hit("Городоцька вулиця", VILLAGE_KM, "residential")]
 
 
 def test_photon_s_street_comes_before_the_index_s_places_only_on_it(monkeypatch):

@@ -4,8 +4,8 @@ The local index is osm-mapidx's (`data/lviv-search.sqlite`).
 `.github/workflows/places.yml` rebuilds it from OpenStreetMap monthly and
 publishes it, and `renew_index` downloads it at that pace. It survives typos
 and knows each place's surroundings, so "аптека сихів" and "форум львв" both
-find what was meant, and it answers without leaving the machine. It has no
-house numbers and no streets.
+find what was meant, and it answers without leaving the machine. It has the
+streets, one place each, but no house numbers.
 
 Photon (https://photon.komoot.io) fills that in. It is used rather than
 Nominatim because it indexes every named object in OSM and answers a prefix,
@@ -59,6 +59,9 @@ WIDE = 300
 HOUSE_NUMBER = re.compile(r"\d+[^\W\d_]?(/\d+[^\W\d_]?)?")
 # mapidx addresses open with the nearest settlements; the street and district follow
 NEAR = 3
+# whether a hit is a street, only while the two sources are merged: osm-mapidx's
+# streets are its only highway=* places, and Photon types its own
+STREET = "street"
 
 # Photon indexes names in the local language under "default"; it translates
 # only into the handful it was built with, and Ukrainian is not one of them
@@ -111,10 +114,12 @@ class Geocoder:
     def _merge(self, q):
         """Both sources, one list, the city's own places first. Among those
         and among the rest, a digit means a house address, which only Photon
-        knows, so it leads; otherwise the index's places named so do, then
-        Photon's, which has the streets the index lacks, then the index's
-        places only on or near something named so. Photon failing is fatal
-        only when it was the one source."""
+        knows, so it leads; otherwise the index's places named so do, streets
+        first, then Photon's, then the index's places only on or near
+        something named so. Photon's street is left out where the index found
+        a street of its name: the index has a street once, Photon once per
+        district it runs through. Photon failing is fatal only when it was
+        the one source."""
         named, nearby = self._local(q)
         try:
             remote = self._ask(q) if self.url else []
@@ -122,6 +127,8 @@ class Geocoder:
             if not self.index.exists():
                 raise
             remote = []
+        streets = {h["name"] for h in [*named, *nearby] if h.get(STREET)}
+        remote = [p for p in remote if not (p.get(STREET) and p["name"] in streets)]
         order = [*remote, *named, *nearby] if any(c.isdigit() for c in q) \
             else [*named, *remote, *nearby]
         out = []
@@ -130,20 +137,23 @@ class Geocoder:
                 break
             if not any(_same(p, o) for o in out):
                 out.append(p)
-        return out
+        return [{k: v for k, v in p.items() if k != STREET} for p in out]
 
     def _local(self, q):
-        """The index's hits found by their own name, and those found only by
-        their surroundings, each in the index's order."""
+        """The index's hits found by their own name, streets first, and those
+        found only by their surroundings, each in the index's order."""
         named, nearby = [], []
         if not self.index.exists():
             return named, nearby
         for h in mapidx.search(str(self.index), q, limit=WIDE, origin=CENTRE,
                                within=BOX):
+            key, _, value = h["category"].partition("=")
             if not HOUSE_NUMBER.fullmatch(h["name"]):
                 (named if h["named"] else nearby).append({
                     "name": h["name"], "where": ", ".join(h["address"][NEAR:NEAR + 2]),
-                    "lat": h["lat"], "lon": h["lon"], "kind": None})
+                    "lat": h["lat"], "lon": h["lon"], "kind": value,
+                    STREET: key == "highway"})
+        named.sort(key=lambda h: not h[STREET])
         return named, nearby
 
     def _ask(self, q):
@@ -160,7 +170,7 @@ class Geocoder:
             if place is None:
                 continue
             # Photon answers a street once per stretch of it in OSM
-            if f["properties"].get("type") == "street":
+            if place[STREET]:
                 if (place["name"], place["where"]) in streets:
                     continue
                 streets.add((place["name"], place["where"]))
@@ -211,7 +221,8 @@ def _place(f):
     if not name:
         return None
     return {"name": name, "where": _where(p, name),
-            "lat": float(lat), "lon": float(lon), "kind": p.get("osm_value")}
+            "lat": float(lat), "lon": float(lon), "kind": p.get("osm_value"),
+            STREET: p.get("type") == "street"}
 
 
 def _street(p):
