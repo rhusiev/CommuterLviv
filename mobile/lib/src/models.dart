@@ -124,8 +124,11 @@ class Catalog {
 
   /// A stop's name, or none for a position this catalog lacks: the server
   /// sends -1 for a stop missing from it, and a newer catalog may be longer
-  String stopName(int stop) =>
-      stop >= 0 && stop < stops.length ? stops[stop].name : '';
+  String stopName(int stop) => stopAt(stop)?.name ?? '';
+
+  /// The stop at [stop], or null for a position this catalog lacks
+  Stop? stopAt(int stop) =>
+      stop >= 0 && stop < stops.length ? stops[stop] : null;
 
   /// The route at [route], or null for a position this catalog lacks
   TransitRoute? routeAt(int? route) =>
@@ -467,6 +470,15 @@ class Journey {
 
   int get walking =>
       legs.where((l) => l.walking).fold(0, (s, l) => s + l.arr - l.dep);
+
+  /// What its legs go along, and the stops they meet at: a leg from an older
+  /// service may have no points
+  List<LatLng> extent(Catalog catalog) => [
+    for (final leg in legs) ...leg.pts,
+    for (final leg in legs)
+      for (final i in [leg.a, leg.b])
+        if (catalog.stopAt(i) case final stop?) LatLng(stop.lat, stop.lon),
+  ];
 
   /// As [Journey.fromJson] reads it, without the legs' backups
   Map<String, Object?> toJson() => {

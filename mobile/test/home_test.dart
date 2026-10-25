@@ -33,8 +33,8 @@ const _open = Duration(seconds: 1);
 const _firstTrim = Duration(seconds: 3);
 
 /// A city of [catalog], no stops by default, its lines of [shapes], a user of
-/// no sets and of [places], and a basemap of nothing - all the home screen
-/// needs to come up. Places written are taken as
+/// no sets and of [places], a basemap of nothing, and [plan] for any search -
+/// all the home screen needs to come up. Places written are taken as
 /// they come, and each list written is added to [sent]. The socket is refused,
 /// which it retries.
 Future<HttpServer> _serve({
@@ -42,12 +42,14 @@ Future<HttpServer> _serve({
   List<Object?>? sent,
   Map<String, Object?> catalog = _noCatalog,
   Map<String, Object?> shapes = _noShapes,
+  Map<String, Object?>? plan,
 }) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   server.listen((req) async {
     final body = switch (req.uri.path) {
       '/api/catalog' => catalog,
       '/api/shapes' => shapes,
+      '/api/plan' => plan,
       '/api/me' => {
         'username': 'me',
         'sets': {
@@ -105,13 +107,20 @@ Future<void> _pumpHome(
   List<Object?>? sent,
   Map<String, Object?> catalog = _noCatalog,
   Map<String, Object?> shapes = _noShapes,
+  Map<String, Object?>? plan,
 }) async {
   tester.view.physicalSize = _phone;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   allowRealHttp();
   final server = (await tester.runAsync(
-    () => _serve(places: places, sent: sent, catalog: catalog, shapes: shapes),
+    () => _serve(
+      places: places,
+      sent: sent,
+      catalog: catalog,
+      shapes: shapes,
+      plan: plan,
+    ),
   ))!;
   addTearDown(() => server.close(force: true));
   final origin = 'http://${server.address.host}:${server.port}';
@@ -239,6 +248,42 @@ void main() {
     // The map's tile workers fail what they still hold when the map goes
     await pumpQuiet(tester);
     semantics.dispose();
+    await _done(tester, reported);
+  });
+
+  testWidgets('an option opened frames the map on it', (tester) async {
+    useLang(Lang.en);
+    addTearDown(() => useLang(Lang.uk));
+    final reported = FlutterError.onError!;
+    FlutterError.onError = (e) {
+      if (!e.exceptionAsString().contains('RenderFlex overflowed')) reported(e);
+    };
+    await _pumpHome(tester, places: _ends, catalog: _lineCatalog, plan: _plan);
+    final map = tester
+        .widget<FlutterMap>(find.byType(FlutterMap))
+        .mapController!;
+    await tester.tap(find.byTooltip(txt.plan));
+    await tester.pump(_open);
+    for (final (i, end) in _ends.indexed) {
+      // The search page slides in from the frame after the tap
+      await tester.tap(find.widgetWithIcon(OutlinedButton, Icons.search).at(i));
+      await tester.pump();
+      await tester.pump(_open);
+      await tester.tap(find.text(end.name));
+      await tester.pump();
+      await tester.pump(_open);
+    }
+    await tester.tap(find.text(txt.findRoute));
+    await pumpUntil(tester, () => tester.any(_optionLength));
+
+    await tester.tap(_optionLength);
+    await tester.pump();
+
+    final middle =
+        (_lineStopAt(0).longitude + _lineStopAt(_alighting).longitude) / 2;
+    expect(map.camera.center.longitude, closeTo(middle, _sameDeg));
+    // The map's tile workers fail what they still hold when the map goes
+    await pumpQuiet(tester);
     await _done(tester, reported);
   });
 
@@ -397,3 +442,50 @@ final _lineShapes = <String, Object?>{
     },
   ],
 };
+
+/// Where [_plan]'s ride gets off: a stop short of the line's end, so the
+/// option lies a little west of the map's first view, at about its zoom.
+/// Framing it then renders no new tiles, which would still be rendering when
+/// the test ends
+const _alighting = _lineStops - 2;
+
+/// About 7 m of longitude here, against the option's 3.3 km
+const _sameDeg = 1e-4;
+
+/// Two places to plan between, by the line's first stop and [_alighting]
+final _ends = [
+  Place(name: 'Home', at: _lineStopAt(0)),
+  Place(name: 'Work', at: _lineStopAt(_alighting)),
+];
+
+/// One option, riding the line to [_alighting], 12 minutes door to door
+final _plan = <String, Object?>{
+  't': 0,
+  'report': 'r1',
+  'options': [
+    {
+      'dep': 0,
+      'arr': 720,
+      'rides': 1,
+      'live': true,
+      'confidence': 'live',
+      'legs': [
+        {'kind': 'walk', 'dep': 0, 'arr': 60, 'a': -1, 'b': 0},
+        {
+          'kind': 'ride',
+          'dep': 60,
+          'arr': 660,
+          'a': 0,
+          'b': _alighting,
+          'route': 0,
+          'live': true,
+          'confidence': 'live',
+        },
+        {'kind': 'walk', 'dep': 660, 'arr': 720, 'a': _alighting, 'b': -1},
+      ],
+    },
+  ],
+};
+
+/// The length of [_plan]'s option, as its summary reads in the language set
+Finder get _optionLength => find.text(txt.minutes(12));

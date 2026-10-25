@@ -428,14 +428,19 @@ class _HomeScreenState extends State<HomeScreen> {
       final points = [
         for (final line in shape?.lines ?? const <RouteLine>[]) ...line.pts,
       ];
-      if (points.isEmpty) return;
-      _map.fitCamera(
-        CameraFit.bounds(
-          bounds: LatLngBounds.fromPoints(points),
-          padding: const EdgeInsets.all(40),
-        ),
-      );
+      _frame(points);
     });
+  }
+
+  /// Moves the camera to show all of [points], if there are any
+  void _frame(List<LatLng> points) {
+    if (points.isEmpty) return;
+    _map.fitCamera(
+      CameraFit.bounds(
+        bounds: LatLngBounds.fromPoints(points),
+        padding: const EdgeInsets.all(40),
+      ),
+    );
   }
 
   /// Back from the open line to the routes grid
@@ -1117,6 +1122,7 @@ class _HomeScreenState extends State<HomeScreen> {
           onSave: _savePlace,
           onShow: (journey) {
             setState(() => _journey = journey);
+            if (journey != null) _frame(journey.extent(catalog));
             _push();
           },
           onFollow: _follow,

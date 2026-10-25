@@ -41,6 +41,29 @@ void main() {
     expect(faint, [0]);
   });
 
+  test("a journey's extent is its legs' points and the stops they meet, not "
+      'the door or a stop the catalog lacks', () {
+    const walk = [LatLng(1, 1), LatLng(2, 2)];
+    const journey = Journey(
+      dep: 0,
+      arr: 0,
+      rides: 1,
+      live: false,
+      confidence: Confidence.live,
+      legs: [
+        Leg(kind: 'walk', dep: 0, arr: 0, a: -1, b: 0, pts: walk),
+        Leg(kind: 'ride', dep: 0, arr: 0, a: 0, b: 1),
+      ],
+    );
+
+    // The walk and the ride both meet the stop
+    expect(journey.extent(_catalog), [
+      ...walk,
+      const LatLng(0, 0),
+      const LatLng(0, 0),
+    ]);
+  });
+
   test('a password may be changed only where the service says so', () {
     Me me(Map<String, dynamic> extra) => Me.fromJson({
       'username': 'u',
