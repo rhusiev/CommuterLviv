@@ -95,13 +95,18 @@ class StopSearch extends SearchDelegate<Hit?> {
   @override
   List<Widget> buildActions(BuildContext context) => [
     if (query.isNotEmpty)
-      IconButton(onPressed: () => query = '', icon: const Icon(Icons.clear)),
+      IconButton(
+        onPressed: () => query = '',
+        icon: const Icon(Icons.clear),
+        tooltip: txt.clear,
+      ),
   ];
 
   @override
   Widget buildLeading(BuildContext context) => IconButton(
     onPressed: () => close(context, null),
     icon: const BackButtonIcon(),
+    tooltip: MaterialLocalizations.of(context).backButtonTooltip,
   );
 
   @override

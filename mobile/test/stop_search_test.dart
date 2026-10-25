@@ -130,6 +130,26 @@ Future<void> open(
 }
 
 void main() {
+  testWidgets('the clear and back buttons say what they do', (tester) async {
+    Hit? picked;
+    await open(tester, (hit) => picked = hit);
+    await tester.enterText(find.byType(TextField), 'mark');
+    await tester.pump(_settled);
+
+    await tester.tap(find.byTooltip(txt.clear));
+    await tester.pump();
+    expect(find.text('mark'), findsNothing);
+    expect(find.byTooltip(txt.clear), findsNothing);
+
+    final back = MaterialLocalizations.of(
+      tester.element(find.byType(TextField)),
+    ).backButtonTooltip;
+    await tester.tap(find.byTooltip(back));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    expect(picked, isNull);
+  });
+
   testWidgets('a saved place the query matches comes first, and is picked as '
       'a place', (tester) async {
     Hit? picked;
