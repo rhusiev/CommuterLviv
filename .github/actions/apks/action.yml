@@ -124,8 +124,12 @@ runs:
       # working directory unless the step says otherwise, and that failed
       # with "No such file or directory" on v0.9.3. This figure runs from
       # /tmp/build because the workspace is still gone at this point. An
-      # empty dir is enough - the builds already ran in /tmp and that is
-      # the path baked into the built APKs
+      # empty dir is enough for the steps - the builds already ran in /tmp
+      # and that is the path baked into the built APKs - but the runner
+      # reads this action's own file again at the job's end, for the post
+      # steps of the actions it uses, and failed the job without it
       shell: bash
       working-directory: /tmp/build/nl.r1a.commuterlviv
-      run: mkdir -p "$GITHUB_WORKSPACE"
+      run: |
+        mkdir -p "$GITHUB_WORKSPACE/.github/actions"
+        cp -r .github/actions/apks "$GITHUB_WORKSPACE/.github/actions/"
