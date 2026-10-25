@@ -246,8 +246,8 @@ disk, across restarts.
 `StyleReader` throws its message as a bare `String`, not an `Exception`, so
 `_loadStyle` catches both. Either way the map goes on without a basemap -
 stops, lines and vehicles are still drawn over a blank ground - and a snackbar
-with a close button says the basemap would not load. Picking a basemap in the
-layers sheet tries again.
+with a close button says the basemap would not load, and stays until closed.
+Picking a basemap in the layers sheet tries again.
 
 **An arrow is a claim.** The wire's flag bit 1 says the tracker is confident the
 vehicle is moving, and the wedge is drawn only then. This is the same

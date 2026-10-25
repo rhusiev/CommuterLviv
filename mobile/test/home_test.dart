@@ -33,6 +33,9 @@ const _open = Duration(seconds: 1);
 /// timer it does not cancel when it goes
 const _firstTrim = Duration(seconds: 3);
 
+/// Longer than a snackbar stays up of itself, 4 s
+const _pastSnackBar = Duration(seconds: 5);
+
 /// A city of [catalog], no stops by default, its lines of [shapes], a user of
 /// no sets and of [places], a basemap of nothing unless it [hasBasemap] not at
 /// all, and [plan] for any search -
@@ -166,6 +169,10 @@ void main() {
     expect(loading, findsNothing);
     // The notice slides up into reach first
     await tester.pump(_open);
+    await tester.pump(_pastSnackBar);
+    // Time for it to slide away, were it going
+    await tester.pump(_open);
+    expect(find.text(txt.noBasemap), findsOne);
     await tester.tap(
       find.descendant(
         of: find.byType(SnackBar),

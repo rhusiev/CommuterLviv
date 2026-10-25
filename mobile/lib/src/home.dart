@@ -685,10 +685,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// A [closable] notice stays up until it is closed
   void _tell(String text, {bool closable = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(text), showCloseIcon: closable));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text), showCloseIcon: closable, persist: closable),
+    );
   }
 
   void _openStop(int stop, {bool fly = false}) {
