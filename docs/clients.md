@@ -54,7 +54,7 @@ stop, ride, maybe change, walk to the door. An end put where you are reads
 "Where I am" in its field rather than its coordinates. A point nothing named,
 in its field and at the top of the map's menu, is called by the stop within
 300 m nearest to it ("Near Stop 4"), and only past that by its coordinates; the
-app still gives the coordinates. Already on a vehicle, "I'm on it"
+app does the same, and also under Mine. Already on a vehicle, "I'm on it"
 on its card plans from on board it: the From field shows it, there is no time
 to leave at, and only its id is sent (docs/service.md). It lasts only while
 the planner is open: leaving the planner, or following a journey, drops it, as
@@ -73,10 +73,10 @@ anything else. Opened, every control below it is drawn as one and is at least
 badge sits in a ring with a map and opens its line, "N backups ›" lists the
 backups, and Follow follows it. A note and the hurry pill say why in place,
 under them, with nothing to tap for it. The app does the same
-(`mobile/README.md`). On the web, drawing an option also frames
-the map on it - its walks, its rides and the stops they meet; the app does not
-yet. The framing, and a line's from the Lines tab, keeps clear of the panel
-open over the map: it uses the widest strip the panel leaves free, measured as
+(`mobile/README.md`). Drawing an option also frames the map on it - its
+walks, its rides and the stops they meet. The framing, and a line's from the
+Lines tab, keeps clear of the panel open over the map. The app keeps it above
+its bottom panel. The web uses the widest strip the panel leaves free, measured as
 the fit is made, or the whole map when no strip is 120 px wide past its
 padding (`lib/padding.ts`).
 
