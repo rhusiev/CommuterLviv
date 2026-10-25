@@ -42,6 +42,7 @@ class MapTab extends StatelessWidget {
     required this.here,
     this.onLocate,
     this.card,
+    this.covered = false,
     required this.empty,
     required this.marks,
     required this.journey,
@@ -81,6 +82,10 @@ class MapTab extends StatelessWidget {
   /// brings its own gap above, so that an offstage one leaves the buttons
   /// where they were.
   final Widget? card;
+
+  /// A panel is drawn over the map buttons, so the screen reader must not
+  /// offer them.
+  final bool covered;
 
   final bool empty;
 
@@ -197,7 +202,10 @@ class MapTab extends StatelessWidget {
             children: [
               Align(
                 alignment: Alignment.centerRight,
-                child: MapControls(map: map, here: here, onLocate: onLocate),
+                child: ExcludeSemantics(
+                  excluding: covered,
+                  child: MapControls(map: map, here: here, onLocate: onLocate),
+                ),
               ),
               ?card,
             ],

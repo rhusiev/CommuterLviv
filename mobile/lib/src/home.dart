@@ -113,6 +113,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool get _planning => _tab == _journeyTab;
 
+  /// The open journey panel lies over the map buttons; folded or picking an
+  /// end, it leaves them clear
+  bool get _panelOverButtons => _planning && !_folded && _picking == null;
+
   /// One line, over the map, in place of the routes grid
   bool get _lineOpen => _tab == _linesTab && _route != null;
 
@@ -1029,6 +1033,7 @@ class _HomeScreenState extends State<HomeScreen> {
       here: _here,
       onLocate: _following != null ? _tracking.start : null,
       card: _followCard(catalog, live),
+      covered: _panelOverButtons,
       empty: _shown.isEmpty && _place == null,
       marks: [
         if (_planning && _from != null) (at: _from!, label: 'A'),
@@ -1074,10 +1079,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _planner(Catalog catalog) {
     return Positioned(
       left: floatingGap,
-      // Folded, clear of the map's buttons
-      right: _folded || _picking != null
-          ? floatingGap * 2 + kMinInteractiveDimension
-          : floatingGap,
+      right: _panelOverButtons
+          ? floatingGap
+          : floatingGap * 2 + kMinInteractiveDimension,
       bottom: floatingBottom(context),
       child: ConstrainedBox(
         constraints: BoxConstraints(

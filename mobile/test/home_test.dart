@@ -169,6 +169,33 @@ void main() {
     FlutterError.onError = reported;
   });
 
+  testWidgets('the map buttons under the open journey panel are not read out', (
+    tester,
+  ) async {
+    useLang(Lang.en);
+    addTearDown(() => useLang(Lang.uk));
+    final reported = FlutterError.onError!;
+    FlutterError.onError = (e) {
+      if (!e.exceptionAsString().contains('RenderFlex overflowed')) reported(e);
+    };
+    final semantics = tester.ensureSemantics();
+    await _pumpHome(tester);
+    final zoomIn = find.semantics.byPredicate(
+      (node) => node.tooltip == txt.zoomIn,
+    );
+    expect(zoomIn, findsOne);
+
+    await tester.tap(find.byTooltip(txt.plan));
+    await tester.pump(_open);
+    expect(zoomIn, findsNothing);
+
+    await tester.tap(find.byTooltip(txt.hidePanel));
+    await tester.pump(_open);
+    expect(zoomIn, findsOne);
+    semantics.dispose();
+    await _done(tester, reported);
+  });
+
   testWidgets('saving a point under a name in use elsewhere asks first, and '
       'a cancel sends nothing', (tester) async {
     final (sent, reported) = await _pumpWithHome(
