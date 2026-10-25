@@ -369,7 +369,8 @@ map: a walk follows the footpath graph (`walk.path`), and a ride is its shape cu
 between the stop it is boarded at and the stop it is left at. Both are simplified
 to 4 m. The clients draw the option you tap - walks dotted, rides solid in the
 route's colour, one pill of times per stop where getting off and getting on
-share the reading, and no times for a walk under a minute, which somebody
+share the reading, centred on the stop or, on a saved place, standing above it
+clear of the place's name, and no times for a walk under a minute, which somebody
 already at the stop would read as walking from 18:35 to 18:35 - and wipe it,
 with the A and B marks, when you leave the planner. The first tap on an option only picks it; its stops and routes open
 their own views once it is picked.

@@ -21,7 +21,7 @@ import { watchHere } from "../lib/position";
 import type { Pace } from "../lib/traffic";
 import { build, colour, R, type Sprites } from "../lib/sprites";
 import { t } from "../lib/i18n";
-import { journeyTags } from "../lib/tags";
+import { journeyTags, onPlace } from "../lib/tags";
 import { ink, styleUrl, type Theme } from "../lib/theme";
 import type { Catalog, Journey, Place, Shapes } from "../lib/types";
 import { MOVING_FLAG, STALE_FLAG } from "../lib/wire";
@@ -44,6 +44,10 @@ const PLACE_R = 5;
 
 /** Below this a name is more clutter than help, so places are dots alone */
 const LABEL_ZOOM = 12.5;
+/** A journey pill's height, and the gap a pill on a saved place keeps above
+ * it: more than half the name's plate, which is drawn level with the dot */
+const TAG_H = 18;
+const TAG_LIFT = 10;
 /** Where the map comes in to on a place it is sent to, close enough to read the
  * streets around it */
 const NEAR_ZOOM = 16;
@@ -419,13 +423,14 @@ export function MapCanvas(props: Props) {
 
       // Timestamps only, one pill per stop; durations stay in the planner's
       // list. The pills name the ends while the journey is drawn, so the A/B
-      // marks rest until it is cleared.
-      const tags: { x: number; y: number; text: string }[] =
-        journeyTags(legs).map((tag) => ({
-          x: p.x(tag.lon),
-          y: p.y(tag.lat),
-          text: tag.text,
-        }));
+      // marks rest until it is cleared. On a saved place a pill stands above
+      // it, clear of the name.
+      const tags: PlacedTag[] = journeyTags(legs).map((tag) => ({
+        x: p.x(tag.lon),
+        y: p.y(tag.lat),
+        rise: onPlace(tag, places) ? -(TAG_H / 2 + TAG_LIFT) : 0,
+        text: tag.text,
+      }));
       placeTags(g, c, tags);
 
       // Vehicles move between camera changes, so keep asking for frames
@@ -653,32 +658,37 @@ export function MapCanvas(props: Props) {
   );
 }
 
+/** A journey tag on the screen: its stop at `x, y`, its pill's centre `rise`
+ * px below that, so negative is above */
+type PlacedTag = { x: number; y: number; rise: number; text: string };
+
 /** Journey tags, each stepped aside until it clears the ones already drawn.
  * A pill that had to move keeps a leader line to its stop, so stepping aside
  * on zoom-out never reads as teleporting somewhere else. */
 function placeTags(
   g: CanvasRenderingContext2D,
   c: ReturnType<typeof ink>,
-  tags: { x: number; y: number; text: string }[],
+  tags: PlacedTag[],
 ) {
   const drawn: { x0: number; y0: number; x1: number; y1: number }[] = [];
   for (const tag of tags) {
     g.font = "bold 11px system-ui, sans-serif";
     const w = g.measureText(tag.text).width + 10;
-    for (const dy of [0, -22, 22, -44, 44]) {
+    for (const step of [0, -22, 22, -44, 44]) {
+      const dy = tag.rise + step;
       const x0 = tag.x - w / 2;
-      const y0 = tag.y - 9 + dy;
+      const y0 = tag.y - TAG_H / 2 + dy;
       const clear = drawn.every(
-        (r) => x0 + w < r.x0 - 2 || x0 > r.x1 + 2 || y0 + 18 < r.y0 - 2 || y0 > r.y1 + 2,
+        (r) => x0 + w < r.x0 - 2 || x0 > r.x1 + 2 || y0 + TAG_H < r.y0 - 2 || y0 > r.y1 + 2,
       );
       if (!clear) continue;
-      drawn.push({ x0, y0, x1: x0 + w, y1: y0 + 18 });
-      if (dy !== 0) {
+      drawn.push({ x0, y0, x1: x0 + w, y1: y0 + TAG_H });
+      if (step !== 0) {
         g.globalAlpha = 0.7;
         g.strokeStyle = c.edge;
         g.lineWidth = 1;
         g.beginPath();
-        g.moveTo(tag.x, tag.y + dy - Math.sign(dy) * 9);
+        g.moveTo(tag.x, tag.y + dy - Math.sign(dy) * (TAG_H / 2));
         g.lineTo(tag.x, tag.y);
         g.stroke();
         g.globalAlpha = 1;
