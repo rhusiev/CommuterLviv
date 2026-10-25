@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -17,6 +18,9 @@ import 'package:commuterlviv/src/route_chip.dart';
 import 'package:commuterlviv/src/strings.dart';
 
 import 'real_server.dart';
+
+/// A typical phone's width in logical pixels
+const _phone = Size(411, 914);
 
 /// A chip's tooltip is shown on a long press and wins the gesture arena, so a
 /// tooltip here would stop the line ever opening.
@@ -356,4 +360,60 @@ void main() {
       semantics.dispose();
     },
   );
+
+  testWidgets('the way takes the width beside Watch, and only then shortens', (
+    tester,
+  ) async {
+    // The test font's square glyphs make the Ukrainian Watch label take most
+    // of the row, leaving too little room to tell the two layouts apart
+    useLang(Lang.en);
+    addTearDown(() => useLang(Lang.uk));
+    tester.view.physicalSize = _phone;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+    final live = Live((await tester.runAsync(Api.open))!, onRenewed: () {});
+    Future<RenderParagraph> way(String end) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: LinePanel(
+              catalog: Catalog(
+                routes: _mixed.routes,
+                stops: [
+                  _mixed.stops.first,
+                  Stop(
+                    id: 'e',
+                    name: end,
+                    code: '',
+                    lat: 0,
+                    lon: 0,
+                    routes: [0],
+                  ),
+                ],
+                index: _mixed.index,
+                stopIndex: const {'a': 0, 'e': 1},
+              ),
+              live: live,
+              route: 0,
+              ways: const [
+                (dir: 0, stops: [0, 1]),
+              ],
+              way: 0,
+              onWay: (_) {},
+              watching: false,
+              onWatch: () {},
+              onStop: (_) {},
+              onBack: () {},
+            ),
+          ),
+        ),
+      );
+      return tester.renderObject<RenderParagraph>(find.text('→ $end'));
+    }
+
+    expect((await way('Pohulianka')).didExceedMaxLines, isFalse);
+    expect((await way('Pohulianka' * 4)).didExceedMaxLines, isTrue);
+  });
 }

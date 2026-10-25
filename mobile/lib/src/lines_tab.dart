@@ -451,22 +451,29 @@ class LinePanel extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(
               children: [
-                if (shown?.stops.lastOrNull case final last?)
-                  Flexible(
-                    child: Tooltip(
-                      message: txt.otherWay,
-                      child: ActionChip(
-                        label: Text(
-                          '→ ${catalog.stops[last].name}',
-                          overflow: TextOverflow.ellipsis,
+                // All the width Watch leaves, not the half a Flexible beside a
+                // Spacer gets; the chip itself is only as wide as its name
+                Expanded(
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: switch (shown?.stops.lastOrNull) {
+                      final last? => Tooltip(
+                        message: txt.otherWay,
+                        child: ActionChip(
+                          label: Text(
+                            '→ ${catalog.stops[last].name}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onPressed: ways.length < 2
+                              ? null
+                              : () => onWay((way + 1) % ways.length),
                         ),
-                        onPressed: ways.length < 2
-                            ? null
-                            : () => onWay((way + 1) % ways.length),
                       ),
-                    ),
+                      null => const SizedBox.shrink(),
+                    },
                   ),
-                const Spacer(),
+                ),
+                const SizedBox(width: 8),
                 FilterChip(
                   label: Text(txt.watchLine),
                   selected: watching,
