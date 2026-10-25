@@ -498,8 +498,10 @@ over OpenStreetMap, biased to the city, which leads when the query has a digit,
 since house numbers are what it is best at. Both are clamped to the box the map
 frames can place a vehicle in (`wire.py`), widened by the footpaths' reach past
 the stops (`walk.MARGIN`), which `/api/plan` also refuses points outside of:
-past it there is no walk to a line. The same name
-within 100 m is kept once. Answers are cached for a day.
+past it there is no walk to a line. That box takes in villages up to 15 km out
+that share the city's street names, so places within 8 km of Rynok Square (the
+city's own; `geocode.CITY`) come first, each source's order kept among them and
+among the rest. The same name within 100 m is kept once. Answers are cached for a day.
 The index is not in the image. `.github/workflows/places.yml` rebuilds it from
 OpenStreetMap on the 3rd of every month and publishes it on this repository's
 `places` release, because the build streams the whole Ukraine extract and peaks

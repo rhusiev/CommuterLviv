@@ -42,6 +42,11 @@ TIMEOUT = 4.0
 
 # m apart two hits of the same name are one place said twice
 SAME_PLACE = 100.0
+# m from CENTRE within which a place is the city's own and leads the list. The
+# box above reaches villages 15 km out, which share the city's street names;
+# Рясне-2, the furthest district, is 7.3 km out and the villages start past 8.
+# Chosen, not derived
+CITY = 8000.0
 # the index covers the whole oblast and ranks by name before distance, so
 # enough hits are asked for that the city's survive the clamp
 WIDE = 300
@@ -97,9 +102,10 @@ class Geocoder:
         return bool(self.url) or self.index.exists()
 
     def _merge(self, q):
-        """Both sources, one list. A digit means a house address, which only
-        Photon knows, so it leads; otherwise the local index does. Photon
-        failing is fatal only when it was the one source."""
+        """Both sources, one list, the city's own places first. Among those
+        and among the rest, a digit means a house address, which only Photon
+        knows, so it leads; otherwise the local index does. Photon failing is
+        fatal only when it was the one source."""
         local = self._local(q)
         try:
             remote = self._ask(q) if self.url else []
@@ -110,10 +116,12 @@ class Geocoder:
         first, then = (remote, local) if any(c.isdigit() for c in q) \
             else (local, remote)
         out = []
-        for p in first + then:
+        for p in sorted(first + then, key=lambda p: not _in_city(p)):
+            if len(out) == LIMIT:
+                break
             if not any(_same(p, o) for o in out):
                 out.append(p)
-        return out[:LIMIT]
+        return out
 
     def _local(self, q):
         if not self.index.exists():
@@ -121,7 +129,7 @@ class Geocoder:
         hits = mapidx.search(str(self.index), q, limit=WIDE, origin=CENTRE)
         return [{"name": h["name"], "where": ", ".join(h["address"][NEAR:NEAR + 2]),
                  "lat": h["lat"], "lon": h["lon"], "kind": None}
-                for h in hits if inside(h["lat"], h["lon"])][:LIMIT]
+                for h in hits if inside(h["lat"], h["lon"])]
 
     def _ask(self, q):
         query = urllib.parse.urlencode({
@@ -155,6 +163,10 @@ def renew_index(url, path=INDEX):
                     f.write(chunk)
         if not mapidx.search(str(fresh), "львів", limit=1):
             raise ValueError("the downloaded index does not find Lviv")
+
+
+def _in_city(p):
+    return walk.metres(p["lat"], p["lon"], *CENTRE) < CITY
 
 
 def _same(a, b):
