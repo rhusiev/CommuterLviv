@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Banner } from "./components/Banner";
 import { MapCanvas } from "./components/MapCanvas";
 import { LineView, LinesBrowse } from "./components/LinesPanel";
@@ -106,6 +106,8 @@ export function App() {
   const [followed, setFollowed] = useState<Followed | null>(null);
   const following = followed?.journey ?? null;
   const [folded, setFolded] = useState(false);
+  /** The planner's or the lines' panel, whichever tab has it open over the map */
+  const panel = useRef<HTMLElement>(null);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   /** Not a failure: news worth a line, such as the city changing */
   const [info, setInfo] = useState<string | null>(null);
@@ -363,6 +365,7 @@ export function App() {
         }}
         focus={focus}
         fit={fit}
+        panel={panel}
         picking={planner.picking !== null}
         onPickPoint={planner.pickAt}
         onHoldPoint={setHeld}
@@ -504,6 +507,7 @@ export function App() {
 
       {tab === "plan" && (
         <aside
+          ref={panel}
           className={`panel absolute right-3 top-19 z-20 w-96 max-w-[calc(100vw-1.5rem)] overflow-y-auto p-3 ${tall}`}
         >
           <JourneyPanel
@@ -564,7 +568,7 @@ export function App() {
       )}
 
       {tab === "lines" && (
-        <aside className="panel absolute left-3 top-19 bottom-20 z-20 w-80 max-w-[calc(100vw-1.5rem)] p-3">
+        <aside ref={panel} className="panel absolute left-3 top-19 bottom-20 z-20 w-80 max-w-[calc(100vw-1.5rem)] p-3">
           {route === null ? (
             <LinesBrowse
               catalog={cat}

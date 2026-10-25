@@ -75,7 +75,10 @@ backups, and Follow follows it. A note and the hurry pill say why in place,
 under them, with nothing to tap for it. The app does the same
 (`mobile/README.md`). On the web, drawing an option also frames
 the map on it - its walks, its rides and the stops they meet; the app does not
-yet.
+yet. The framing, and a line's from the Lines tab, keeps clear of the panel
+open over the map: it uses the widest strip the panel leaves free, measured as
+the fit is made, or the whole map when no strip is 120 px wide past its
+padding (`lib/padding.ts`).
 
 An option can be followed. Follow on it moves to the map, turns on the dot
 where you are and puts a card at the bottom that says what to do now: walk to

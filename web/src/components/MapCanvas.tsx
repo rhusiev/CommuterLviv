@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { Map as MapLibre } from "maplibre-gl";
 import WORKER from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import {
@@ -21,6 +21,7 @@ import { watchHere } from "../lib/position";
 import type { Pace } from "../lib/traffic";
 import { build, colour, R, type Sprites } from "../lib/sprites";
 import { t } from "../lib/i18n";
+import { fitPadding } from "../lib/padding";
 import { journeyTags, onPlace } from "../lib/tags";
 import { ink, styleUrl, type Theme } from "../lib/theme";
 import type { Catalog, Journey, Place, Shapes } from "../lib/types";
@@ -75,6 +76,8 @@ type Props = {
   focus: { lat: number; lon: number } | null;
   /** `[west, south, east, north]` */
   fit: [number, number, number, number] | null;
+  /** The panel lying over the map, if one is open: a fit frames clear of it */
+  panel: RefObject<HTMLElement | null>;
   /** A click sets a journey end instead of choosing a stop */
   picking: boolean;
   onPickPoint: (lat: number, lon: number) => void;
@@ -111,6 +114,7 @@ export function MapCanvas(props: Props) {
     live,
     focus,
     fit,
+    panel,
     locate,
     shapes,
     directed,
@@ -573,11 +577,15 @@ export function MapCanvas(props: Props) {
         timer = window.setTimeout(go, 100);
         return;
       }
-      m.fitBounds([fit[0], fit[1], fit[2], fit[3]], { padding: 48, duration: 800 });
+      const padding = fitPadding(
+        m.getContainer().getBoundingClientRect(),
+        panel.current?.getBoundingClientRect() ?? null,
+      );
+      m.fitBounds([fit[0], fit[1], fit[2], fit[3]], { padding, duration: 800 });
     };
     go();
     return () => clearTimeout(timer);
-  }, [fit]);
+  }, [fit, panel]);
 
   useEffect(() => {
     if (!focus) return;

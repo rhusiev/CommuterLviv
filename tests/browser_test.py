@@ -642,10 +642,12 @@ def test_everything_on_an_unpicked_option_picks_it(page, word):
     expect(card.get_by_role("button", expanded=True)).to_be_visible()
 
 
-def test_a_picked_option_is_framed_on_the_map(page):
+@pytest.mark.parametrize("size", [VIEWPORT, PHONE], ids=["desktop", "phone"])
+def test_a_picked_option_is_framed_on_the_map_clear_of_the_planner(page, size):
     # maplibre's camera does not move until a style has loaded, and the
     # basemap's is someone else's server
     page.route("**/style.json", lambda route: route.fulfill(json=BLANK_STYLE))
+    page.set_viewport_size(size)
     _register(page, "framer")
     _, length = _plan_a_ride(page, "live")
     # the place card flew to the town hall, at the line's end
@@ -654,8 +656,15 @@ def test_a_picked_option_is_framed_on_the_map(page):
 
     length.click()
 
-    # the ride runs the whole line, so the camera centres on its middle
-    page.wait_for_function(f"Math.abs({view}.lon - {CENTRE[1]}) < {SAME_DEG}")
+    # the view is kept once the camera stops
+    page.wait_for_function(f"Math.abs({view}.lon - {END[1]}) > {SAME_DEG}")
+    framed = page.evaluate(view)
+    panel = page.locator("aside").bounding_box()
+    for end in (city._point(0), END):
+        x, y = _on_page(*end, framed, size)
+        assert 0 < x < size["width"] and 0 < y < size["height"]
+        assert not (panel["x"] < x < panel["x"] + panel["width"]
+                    and panel["y"] < y < panel["y"] + panel["height"])
 
 
 def test_a_picked_option_folds_again_from_its_summary(page):
@@ -781,10 +790,11 @@ def test_picking_the_route_puts_its_bus_on_the_map(page):
     expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
 
 
-def _on_page(lat, lon):
-    """Where on the page the map draws `lat`, `lon`: web Mercator about the
-    view the page starts at, which is centred."""
-    world = TILE_PX * 2 ** ZOOM
+def _on_page(lat, lon, view=None, size=VIEWPORT):
+    """Where on a page of `size` the map draws `lat`, `lon`: web Mercator about
+    `view`, by default the one the page starts at, which is centred."""
+    view = view or {"lat": CENTRE[0], "lon": CENTRE[1], "zoom": ZOOM}
+    world = TILE_PX * 2 ** view["zoom"]
 
     def x(lo):
         return lo / 360 * world
@@ -792,8 +802,8 @@ def _on_page(lat, lon):
     def y(la):
         return -math.log(math.tan(math.pi / 4 + math.radians(la) / 2)) / (2 * math.pi) * world
 
-    return (VIEWPORT["width"] / 2 + x(lon) - x(CENTRE[1]),
-            VIEWPORT["height"] / 2 + y(lat) - y(CENTRE[0]))
+    return (size["width"] / 2 + x(lon) - x(view["lon"]),
+            size["height"] / 2 + y(lat) - y(view["lat"]))
 
 
 def _board_the_bus(page):
