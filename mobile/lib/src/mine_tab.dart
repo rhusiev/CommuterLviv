@@ -279,7 +279,17 @@ class _StopTile extends StatelessWidget {
       icon: const Icon(Icons.push_pin),
       tooltip: txt.unpin,
     ),
-    title: Text(catalog.stopName(stop)),
+    // The handle sits beside the name rather than as the tile's trailing, which
+    // would narrow the chips under it to one a row on a phone
+    title: Row(
+      children: [
+        Expanded(child: Text(catalog.stopName(stop))),
+        ReorderableDragStartListener(
+          index: index,
+          child: const Icon(Icons.drag_handle),
+        ),
+      ],
+    ),
     subtitle: arrivals.isEmpty
         ? Text(txt.nothingDue)
         : Wrap(
@@ -296,10 +306,6 @@ class _StopTile extends StatelessWidget {
                 ),
             ],
           ),
-    trailing: ReorderableDragStartListener(
-      index: index,
-      child: const Icon(Icons.drag_handle),
-    ),
     onTap: onOpen,
   );
 }

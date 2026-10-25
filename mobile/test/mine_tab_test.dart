@@ -29,6 +29,9 @@ final _catalog = Catalog(
   stopIndex: const {'s1': 0},
 );
 
+/// A 1080 px wide phone, in logical pixels.
+const _phone = Size(411, 914);
+
 const _home = Place(name: 'Home', at: LatLng(49.8, 24.0));
 const _work = Place(name: 'Work', at: LatLng(49.9, 24.1));
 const _set = RouteSet(id: 'x', name: 'Commute', routes: ['r48'], ord: 0);
@@ -154,6 +157,28 @@ void main() {
     expect(first.dx, tester.getTopLeft(find.text('Opera')).dx);
     expect(second.dy, first.dy);
     expect(second.dx, greaterThan(first.dx));
+  });
+
+  testWidgets('a pinned stop gives its due chips the width under its handle', (
+    tester,
+  ) async {
+    tester.view.physicalSize = _phone;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final soon = DateTime.now().millisecondsSinceEpoch ~/ 1000 + 300;
+    await _pump(
+      tester,
+      pins: const [0],
+      arrivals: {
+        0: [Arrival(route: 0, veh: 7, t: soon)],
+      },
+    );
+
+    // The test font is wider than a phone's: on Roboto a due chip is about
+    // 135 px, so two need the room the handle would otherwise keep
+    final room = tester.getRect(find.byType(Wrap));
+    final handle = tester.getRect(find.byIcon(Icons.drag_handle));
+    expect(room.right, greaterThanOrEqualTo(handle.right));
   });
 
   testWidgets('a rename rewrites the whole list, in order', (tester) async {

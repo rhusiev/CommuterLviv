@@ -359,7 +359,9 @@ because that is how it arrives. A server without the planner caches answers
 The Mine tab (`mine_tab.dart`) lists the pinned stops with what is due at each,
 the named places and the route sets, each row tapping through to the map (a set
 becomes the watched selection), a place or a set held to rename or remove, and
-a stop or a place dragged by its handle to reorder. Its last row opens the
+a stop or a place dragged by its handle to reorder. A pinned stop's handle sits
+beside its name, so its due chips run the full width under it and a phone fits
+two or more a row. Its last row opens the
 account sheet, which no longer sits in the top bar. Both lists are written whole -
 `POST /api/places` and `POST /api/pins` take the entire list - so a rename is a
 delete and a save in one request, which is what keeps it atomic when the name is
