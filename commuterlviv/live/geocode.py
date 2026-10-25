@@ -14,6 +14,7 @@ away: point COMMUTERLVIV_PHOTON_URL at it.
 
 Either source alone is enough to search; with neither the endpoint answers 503.
 """
+import re
 import threading
 import time
 import urllib.parse
@@ -51,6 +52,9 @@ BOX = (SOUTH, WEST, NORTH, EAST)
 # the index ranks by name before distance, so enough hits in the box are asked
 # for that the city's own are among them to lead
 WIDE = 300
+# a name that is only a house number, "7а" or "12/2б": plots OpenStreetMap tags
+# as a place, which name nothing anyone searches for
+HOUSE_NUMBER = re.compile(r"\d+[^\W\d_]?(/\d+[^\W\d_]?)?")
 # mapidx addresses open with the nearest settlements; the street and district follow
 NEAR = 3
 
@@ -130,7 +134,7 @@ class Geocoder:
         hits = mapidx.search(str(self.index), q, limit=WIDE, origin=CENTRE, within=BOX)
         return [{"name": h["name"], "where": ", ".join(h["address"][NEAR:NEAR + 2]),
                  "lat": h["lat"], "lon": h["lon"], "kind": None}
-                for h in hits]
+                for h in hits if not HOUSE_NUMBER.fullmatch(h["name"])]
 
     def _ask(self, q):
         query = urllib.parse.urlencode({

@@ -501,7 +501,9 @@ frames can place a vehicle in (`wire.py`), widened by the footpaths' reach past
 the stops (`walk.MARGIN`), which `/api/plan` also refuses points outside of:
 past it there is no walk to a line. The index applies the box itself, before it
 cuts its candidates to the best-named: it covers the whole oblast, and a common
-name such as "шевченка" matches thousands of places there. That box takes in villages up to 15 km out
+name such as "шевченка" matches thousands of places there. Its places named only
+by a house number ("7а", "12/2б"), plots OpenStreetMap tags as places, are left
+out (`geocode.HOUSE_NUMBER`). That box takes in villages up to 15 km out
 that share the city's street names, so places within 8 km of Rynok Square (the
 city's own; `geocode.CITY`) come first, each source's order kept among them and
 among the rest. The same name within 100 m is kept once. Answers are cached for a day.

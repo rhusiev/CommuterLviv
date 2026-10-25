@@ -100,3 +100,13 @@ def test_the_index_finds_the_city_s_place_behind_more_of_the_oblast_s_than_it_ke
     found = geocode.Geocoder("", index=index)._local("shevchenka")
 
     assert [(h["lat"], h["lon"]) for h in found] == [(near["lat"], near["lon"])]
+
+
+def test_the_index_s_places_named_only_by_a_house_number_are_left_out(tmp_path):
+    names = ["7а", "12/2б", "55", "36,6", "№120", "22 Гектари"]
+    index = write(tmp_path / "search.sqlite",
+                  [Place(n, *geocode.CENTRE, context=("Шевченка",)) for n in names])
+
+    found = geocode.Geocoder("", index=index)._local("шевченка")
+
+    assert {h["name"] for h in found} == {"36,6", "№120", "22 Гектари"}
