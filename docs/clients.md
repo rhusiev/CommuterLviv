@@ -51,7 +51,10 @@ horizon, read off the same predictions the stop card shows - so the two cannot
 disagree. The Journey tab plans a journey: tap where you are and where you are
 going, and it answers with ways to get there, ranked by arrival - walk to a
 stop, ride, maybe change, walk to the door. An end put where you are reads
-"Where I am" in its field rather than its coordinates. Already on a vehicle, "I'm on it"
+"Where I am" in its field rather than its coordinates. A point nothing named,
+in its field and at the top of the map's menu, is called by the stop within
+300 m nearest to it ("Near Stop 4"), and only past that by its coordinates; the
+app still gives the coordinates. Already on a vehicle, "I'm on it"
 on its card plans from on board it: the From field shows it, there is no time
 to leave at, and only its id is sent (docs/service.md). It lasts only while
 the planner is open: leaving the planner, or following a journey, drops it, as

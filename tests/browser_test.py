@@ -462,6 +462,21 @@ def test_saving_a_place_again_where_it_stands_is_not_asked(page):
     assert _places_kept(page) == {"Stop 4": pytest.approx(END, abs=1e-3)}
 
 
+def test_a_point_held_on_the_map_is_called_by_its_stop_not_its_coordinates(page):
+    _register(page, "labeller")
+    menu = _hold(page)
+    coordinates = re.compile(r"\d+\.\d+, \d+\.\d+")
+    expect = playwright.expect
+    expect(menu.get_by_text("Near Stop 2", exact=True)).to_be_visible()
+    expect(menu.get_by_text(coordinates)).to_have_count(0)
+
+    menu.get_by_role("button", name="Directions to here").click()
+
+    panel = page.locator("aside")
+    expect(panel.get_by_role("button", name="Near Stop 2")).to_be_visible()
+    expect(panel.get_by_text(coordinates)).to_have_count(0)
+
+
 def test_the_way_to_a_place_held_on_the_map_is_planned_from_its_menu(page):
     _register(page, "wayfarer")
     with page.expect_request(lambda r: "/api/plan?from=" in r.url) as asked:

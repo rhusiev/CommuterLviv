@@ -8,14 +8,13 @@ export type Held = { lat: number; lon: number; x: number; y: number };
 const WIDTH_PX = 240;
 /** About its height with the name field and its warning open, for the same */
 const HEIGHT_PX = 240;
-/** Decimals of a degree shown: 1e-4 is about 11 m */
-const DEGREE_DECIMALS = 4;
 
 /** What a long press or a right click on the map offers for that point. Saving
  * asks for the name in the menu itself, and says so before it replaces a place
  * of that name elsewhere. */
 export function HoldMenu({
   at,
+  label,
   isTaken,
   onSave,
   onTo,
@@ -24,6 +23,8 @@ export function HoldMenu({
   onClose,
 }: {
   at: Held;
+  /** What to call the point, in the menu's heading */
+  label: string;
   isTaken: (name: string) => boolean;
   onSave: (name: string) => void;
   onTo: () => void;
@@ -69,7 +70,7 @@ export function HoldMenu({
         }}
       >
         <p className="px-2.5 pb-1 pt-0.5 text-xs text-slate-500">
-          {at.lat.toFixed(DEGREE_DECIMALS)}, {at.lon.toFixed(DEGREE_DECIMALS)}
+          {label}
         </p>
         {naming ? (
           <form

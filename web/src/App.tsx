@@ -16,7 +16,7 @@ import { Menu } from "./components/Menu";
 import { StopSearch } from "./components/StopSearch";
 import { VehicleCard } from "./components/VehicleCard";
 import { api, catalog as fetchCatalog, catalogTag } from "./lib/api";
-import { useIndex, usePositions } from "./lib/catalog";
+import { pointLabel, useIndex, usePositions } from "./lib/catalog";
 import { replaces, samePlace, saved, type Shown } from "./lib/places";
 import { loadFlag, loadTheme, saveFlag, saveTheme, type Theme } from "./lib/theme";
 import { RAMP, useTraffic } from "./lib/traffic";
@@ -385,6 +385,7 @@ export function App() {
       {held && (
         <HoldMenu
           at={held}
+          label={pointLabel(cat, held)}
           isTaken={(name) => replaces(places, name, held)}
           onSave={(name) => {
             keepPlaces(saved(places, name, held.lat, held.lon));

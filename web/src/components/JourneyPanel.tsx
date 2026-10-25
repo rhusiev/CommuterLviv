@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { api, ApiError } from "../lib/api";
+import { pointLabel } from "../lib/catalog";
 import { mins } from "../lib/eta";
 import { t } from "../lib/i18n";
 import { samePlace } from "../lib/places";
@@ -595,9 +596,7 @@ function Field({
                 ? t.aboard
                 : (known?.name ??
                   name ??
-                  (point
-                    ? `${point.lat.toFixed(4)}, ${point.lon.toFixed(4)}`
-                    : t.findStop))}
+                  (point ? pointLabel(catalog, point) : t.findStop))}
             </span>
           </button>
         )}
