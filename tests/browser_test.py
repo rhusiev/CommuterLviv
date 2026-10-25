@@ -61,6 +61,8 @@ MISSED_S = 60            # the bus left this long before the page loaded
 # to 28 s in, so a ride is asked for until this long. 60 s is chosen
 RIDE_S = 60.0
 ASK_EVERY_MS = 1000
+BLANK_STYLE = {"version": 8, "sources": {}, "layers": []}
+SAME_DEG = 1e-4          # about 7 m of longitude here, against a line 2 km long
 
 
 def _chromium():
@@ -623,6 +625,22 @@ def test_everything_on_an_unpicked_option_picks_it(page, word):
     card.get_by_text(re.compile(f"^{word}")).click()
 
     expect(card.get_by_role("button", expanded=True)).to_be_visible()
+
+
+def test_a_picked_option_is_framed_on_the_map(page):
+    # maplibre's camera does not move until a style has loaded, and the
+    # basemap's is someone else's server
+    page.route("**/style.json", lambda route: route.fulfill(json=BLANK_STYLE))
+    _register(page, "framer")
+    _, length = _plan_a_ride(page, "live")
+    # the place card flew to the town hall, at the line's end
+    view = "JSON.parse(localStorage.getItem('commuterlviv.view'))"
+    page.wait_for_function(f"Math.abs({view}.lon - {END[1]}) < {SAME_DEG}")
+
+    length.click()
+
+    # the ride runs the whole line, so the camera centres on its middle
+    page.wait_for_function(f"Math.abs({view}.lon - {CENTRE[1]}) < {SAME_DEG}")
 
 
 def test_a_picked_option_folds_again_from_its_summary(page):

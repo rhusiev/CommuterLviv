@@ -4,21 +4,33 @@ import type { Catalog, Journey, RouteShape, Shapes } from "./types";
 
 type Bounds = [number, number, number, number];
 
-/** West, south, east and north of a route's lines; null for no points */
-export function bounds(shape: RouteShape): Bounds | null {
+/** West, south, east and north of `[lat, lon]` points; null for none */
+function boundsOf(points: Iterable<readonly [number, number]>): Bounds | null {
   let w = 180,
     s = 90,
     e = -180,
     n = -90;
-  for (const line of shape.lines) {
-    for (const [lat, lon] of line.pts) {
-      w = Math.min(w, lon);
-      e = Math.max(e, lon);
-      s = Math.min(s, lat);
-      n = Math.max(n, lat);
-    }
+  for (const [lat, lon] of points) {
+    w = Math.min(w, lon);
+    e = Math.max(e, lon);
+    s = Math.min(s, lat);
+    n = Math.max(n, lat);
   }
   return w > e ? null : [w, s, e, n];
+}
+
+/** The bounds of a route's lines */
+export function bounds(shape: RouteShape): Bounds | null {
+  return boundsOf(shape.lines.flatMap((line) => line.pts));
+}
+
+/** The bounds of what a journey's legs go along, and of the stops they meet
+ *  at - a leg from an older service may have no points */
+export function journeyBounds(j: Journey, cat: Catalog): Bounds | null {
+  const stops = j.legs
+    .flatMap((leg) => [cat.stops[leg.a], cat.stops[leg.b]])
+    .flatMap((stop) => (stop ? [[stop.lat, stop.lon] as const] : []));
+  return boundsOf([...j.legs.flatMap((leg) => leg.pts ?? []), ...stops]);
 }
 
 /** What the map draws and the socket sends, by catalog position: the line
@@ -27,6 +39,7 @@ export function useMapLayers({
   cat,
   route,
   drawn,
+  framed,
   chosen,
   allLines,
   onError,
@@ -35,6 +48,8 @@ export function useMapLayers({
   /** The line open in the Lines tab, while that tab is shown */
   route: number | null;
   drawn: Journey | null;
+  /** The journey the camera frames once it is shown, in place of a line */
+  framed: Journey | null;
   chosen: number[];
   allLines: boolean;
   onError: (err: unknown) => void;
@@ -63,10 +78,16 @@ export function useMapLayers({
     return cat.routes.map((_, i) => i);
   }, [route, allLines, cat]);
 
-  const fit = useMemo(() => {
+  const lineFit = useMemo(() => {
     const shape = route !== null ? geo?.routes[route] : null;
     return shape ? bounds(shape) : null;
   }, [route, geo]);
+  // Apart, so the shapes arriving do not frame the journey again
+  const journeyFit = useMemo(
+    () => (framed && cat ? journeyBounds(framed, cat) : null),
+    [framed, cat],
+  );
+  const fit = route !== null ? lineFit : journeyFit;
 
   useEffect(() => {
     if (!lines.length || geo) return;

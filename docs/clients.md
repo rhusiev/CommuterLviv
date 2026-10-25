@@ -70,7 +70,9 @@ anything else. Opened, every control below it is drawn as one and is at least
 badge sits in a ring with a map and opens its line, "N backups ›" lists the
 backups, and Follow follows it. A note and the hurry pill say why in place,
 under them, with nothing to tap for it. The app does the same
-(`mobile/README.md`).
+(`mobile/README.md`). On the web, drawing an option also frames
+the map on it - its walks, its rides and the stops they meet; the app does not
+yet.
 
 An option can be followed. Follow on it moves to the map, turns on the dot
 where you are and puts a card at the bottom that says what to do now: walk to

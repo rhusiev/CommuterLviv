@@ -189,12 +189,14 @@ export function App() {
   const lineOpen = tab === "lines" && route !== null;
   // The planner's option while one is shown, so another way can be weighed
   // against the one followed
-  const drawn = lineOpen ? null : ((tab === "plan" ? journey : null) ?? following);
+  const planned = lineOpen || tab !== "plan" ? null : journey;
+  const drawn = lineOpen ? null : (planned ?? following);
 
   const { geo, indexes, lines, fit, stops, faint } = useMapLayers({
     cat,
     route: lineOpen ? route : null,
     drawn,
+    framed: planned,
     chosen,
     allLines,
     onError: failed,
