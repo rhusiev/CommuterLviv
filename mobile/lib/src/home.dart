@@ -170,6 +170,9 @@ class _HomeScreenState extends State<HomeScreen> {
   late MapTheme _theme = themeById(widget.api.mapTheme);
   Style? _style;
 
+  /// The theme's style would not load, so the map goes on without a basemap
+  bool _hasNoBasemap = false;
+
   @override
   void initState() {
     super.initState();
@@ -594,14 +597,26 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       if (mounted && _theme.id == theme.id) setState(() => _style = style);
     } on Exception {
-      if (mounted) setState(() => _error = txt.noBasemap);
+      _lostBasemap(theme);
+    } on String {
+      // On an HTTP error the reader throws its message, not an exception
+      _lostBasemap(theme);
     }
+  }
+
+  /// Stops, lines and vehicles are drawn without the basemap, which is only
+  /// said, as the map is still of use
+  void _lostBasemap(MapTheme theme) {
+    if (!mounted || _theme.id != theme.id) return;
+    setState(() => _hasNoBasemap = true);
+    _tell(txt.noBasemap, closable: true);
   }
 
   Future<void> _setTheme(MapTheme theme) async {
     setState(() {
       _theme = theme;
       _style = null;
+      _hasNoBasemap = false;
     });
     await widget.api.setMapTheme(theme.id);
     await _loadStyle();
@@ -670,9 +685,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _tell(String text) {
+  void _tell(String text, {bool closable = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(text), showCloseIcon: closable));
   }
 
   void _openStop(int stop, {bool fly = false}) {
@@ -976,6 +992,7 @@ class _HomeScreenState extends State<HomeScreen> {
         text: _error!,
         onRetry: () => setState(() {
           _error = null;
+          _hasNoBasemap = false;
           _load();
           _loadStyle();
         }),
@@ -1075,6 +1092,7 @@ class _HomeScreenState extends State<HomeScreen> {
       api: widget.api,
       map: _map,
       style: _style,
+      hasNoBasemap: _hasNoBasemap,
       traffic: _traffic,
       catalog: catalog,
       live: live,

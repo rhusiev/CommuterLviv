@@ -13,7 +13,7 @@ import 'package:commuterlviv/src/api.dart';
 import 'package:commuterlviv/src/home.dart';
 import 'package:commuterlviv/src/journey_panel.dart' show JourneyPanel;
 import 'package:commuterlviv/src/lines_tab.dart' show LinePanel;
-import 'package:commuterlviv/src/map_tab.dart' show lviv;
+import 'package:commuterlviv/src/map_tab.dart' show MapTab, lviv;
 import 'package:commuterlviv/src/map_theme.dart';
 import 'package:commuterlviv/src/models.dart';
 import 'package:commuterlviv/src/strings.dart';
@@ -34,7 +34,8 @@ const _open = Duration(seconds: 1);
 const _firstTrim = Duration(seconds: 3);
 
 /// A city of [catalog], no stops by default, its lines of [shapes], a user of
-/// no sets and of [places], a basemap of nothing, and [plan] for any search -
+/// no sets and of [places], a basemap of nothing unless it [hasBasemap] not at
+/// all, and [plan] for any search -
 /// all the home screen needs to come up. Places written are taken as
 /// they come, and each list written is added to [sent]. The socket is refused,
 /// which it retries.
@@ -44,6 +45,7 @@ Future<HttpServer> _serve({
   Map<String, Object?> catalog = _noCatalog,
   Map<String, Object?> shapes = _noShapes,
   Map<String, Object?>? plan,
+  bool hasBasemap = true,
 }) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   server.listen((req) async {
@@ -61,7 +63,7 @@ Future<HttpServer> _serve({
       },
       '/api/places' => _noted(jsonDecode(await utf8.decodeStream(req)), sent),
       // One source drawn, or the map is refused; its tiles are never there
-      final p when p.endsWith('/style.json') => {
+      final p when hasBasemap && p.endsWith('/style.json') => {
         'version': 8,
         'name': 'nothing',
         'sources': {
@@ -109,6 +111,7 @@ Future<void> _pumpHome(
   Map<String, Object?> catalog = _noCatalog,
   Map<String, Object?> shapes = _noShapes,
   Map<String, Object?>? plan,
+  bool hasBasemap = true,
 }) async {
   tester.view.physicalSize = _phone;
   tester.view.devicePixelRatio = 1;
@@ -121,6 +124,7 @@ Future<void> _pumpHome(
       catalog: catalog,
       shapes: shapes,
       plan: plan,
+      hasBasemap: hasBasemap,
     ),
   ))!;
   addTearDown(() => server.close(force: true));
@@ -142,6 +146,38 @@ Future<void> _pumpHome(
 }
 
 void main() {
+  testWidgets('a basemap that will not load leaves the map without it, and '
+      'says so until closed', (tester) async {
+    useLang(Lang.en);
+    addTearDown(() => useLang(Lang.uk));
+    final reported = FlutterError.onError!;
+    FlutterError.onError = (e) {
+      if (!e.exceptionAsString().contains('RenderFlex overflowed')) reported(e);
+    };
+    await _pumpHome(tester, hasBasemap: false);
+    await pumpUntil(tester, () => tester.any(find.text(txt.noBasemap)));
+
+    expect(find.byType(FlutterMap), findsOne);
+    // Not the socket's bar, which is refused here
+    final loading = find.descendant(
+      of: find.byType(MapTab),
+      matching: find.byType(LinearProgressIndicator),
+    );
+    expect(loading, findsNothing);
+    // The notice slides up into reach first
+    await tester.pump(_open);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(SnackBar),
+        matching: find.byIcon(Icons.close),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(_open);
+    expect(find.text(txt.noBasemap), findsNothing);
+    await _done(tester, reported);
+  });
+
   testWidgets('an end put where I am reads so in the planner, not as its '
       'coordinates', (tester) async {
     useLang(Lang.en);

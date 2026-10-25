@@ -32,6 +32,7 @@ class MapTab extends StatelessWidget {
     required this.api,
     required this.map,
     required this.style,
+    this.hasNoBasemap = false,
     required this.traffic,
     required this.catalog,
     required this.live,
@@ -58,8 +59,12 @@ class MapTab extends StatelessWidget {
   final Api api;
   final MapController map;
 
-  /// Null while the basemap is still being read.
+  /// Null while the basemap is still being read, or if it would not be.
   final Style? style;
+
+  /// The basemap would not be read: the map is drawn without it, and nothing
+  /// says it is still on its way.
+  final bool hasNoBasemap;
 
   /// How the streets are running, over the basemap and under everything else.
   /// Only while this is on is anything asked for.
@@ -216,7 +221,8 @@ class MapTab extends StatelessWidget {
             ],
           ),
         ),
-        if (style == null) const LinearProgressIndicator(minHeight: 2),
+        if (style == null && !hasNoBasemap)
+          const LinearProgressIndicator(minHeight: 2),
         if (empty)
           Center(
             child: Card(

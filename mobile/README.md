@@ -242,6 +242,13 @@ So `_loadStyle` rebuilds the `Style` with `theme: read.theme.copyWith(id: theme.
 nothing else: the map keeps showing the first style's pictures, read back from
 disk, across restarts.
 
+**A basemap that will not load is thrown as a string.** On an HTTP error
+`StyleReader` throws its message as a bare `String`, not an `Exception`, so
+`_loadStyle` catches both. Either way the map goes on without a basemap -
+stops, lines and vehicles are still drawn over a blank ground - and a snackbar
+with a close button says the basemap would not load. Picking a basemap in the
+layers sheet tries again.
+
 **An arrow is a claim.** The wire's flag bit 1 says the tracker is confident the
 vehicle is moving, and the wedge is drawn only then. This is the same
 conservatism the web UI applies, decided once on the server so both clients say
