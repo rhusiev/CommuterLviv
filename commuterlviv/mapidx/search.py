@@ -55,6 +55,8 @@ MIN_PROBE = 3
 # context: everyone types the name, the context only narrows it.
 CONTEXT_PENALTY = 0.01
 EARTH_RADIUS_M = 6_371_000
+# SQLite's default cap on a statement's parameters, since 3.32
+MAX_VARIABLES = 32_766
 
 # The end of the Unicode range, so `word < prefix + LAST_CHAR` is every
 # extension of the prefix and nothing else.
@@ -193,10 +195,32 @@ def _distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return math.hypot(dx, dy) * EARTH_RADIUS_M
 
 
+def _within(db: sqlite3.Connection, ranked: list[tuple[int, list[float]]],
+            box: tuple[float, float, float, float]) -> list[tuple[int, list[float]]]:
+    """The hits inside `box`, `(south, west, north, east)`, in their order."""
+    south, west, north, east = box
+    places = [place for place, _ in ranked]
+    per_query = MAX_VARIABLES - len(box)
+    inside: set[int] = set()
+    for start in range(0, len(places), per_query):
+        part = places[start:start + per_query]
+        inside.update(place for place, in db.execute(
+            "SELECT rowid FROM places WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? "
+            f"AND rowid IN ({','.join('?' * len(part))})",
+            [south, north, west, east, *part]))
+    return [hit for hit in ranked if hit[0] in inside]
+
+
 def search(db_path: str, query: str, limit: int = 20,
            threshold: float = MIN_WORD_SCORE,
-           origin: tuple[float, float] | None = None) -> list[dict]:
-    """Ranked hits, each a dict of score, name, address, matched, lon, lat, metres."""
+           origin: tuple[float, float] | None = None,
+           within: tuple[float, float, float, float] | None = None) -> list[dict]:
+    """Ranked hits, each a dict of score, name, address, matched, lon, lat, metres.
+
+    `within`, `(south, west, north, east)`, keeps only the places inside it, and
+    before the cut to a few times `limit`: an index of a whole region holds more
+    places of one name than that, and a box drawn round its hits afterwards can
+    be left with none of them."""
     query_words = WORD_RE.findall(normalise(query))
     if not query_words:
         return []
@@ -213,6 +237,8 @@ def search(db_path: str, query: str, limit: int = 20,
                                  for place in scores_by_place
                                  if min(scores_by_place[place]) < threshold <= max(scores_by_place[place])],
                             query_words, threshold)
+    if within is not None:
+        ranked = _within(db, ranked, within)
     if not ranked:
         db.close()
         return []

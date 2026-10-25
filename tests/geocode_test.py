@@ -4,6 +4,8 @@ import pytest
 from commuterlviv import walk
 from commuterlviv.live import geocode, wire
 
+from .places_index import Place, write
+
 # how far a test point stands from an edge, well inside walk.MARGIN
 STEP = walk.MARGIN / 2
 MID_LAT = wire.LAT0 + wire.DLAT / 2
@@ -74,9 +76,27 @@ def test_a_place_in_the_city_the_index_ranks_late_still_leads(monkeypatch, tmp_p
     index.touch()
     rows = [_hit(f"Shevchenka {i}", VILLAGE_KM) for i in range(geocode.LIMIT)] \
         + [_hit("Shevchenka school", TOWN_KM)]
-    monkeypatch.setattr(geocode.mapidx, "search", lambda path, q, limit, origin: [
+    monkeypatch.setattr(geocode.mapidx, "search", lambda path, q, limit, origin, within: [
         {"name": r["name"], "address": [], "lat": r["lat"], "lon": r["lon"]} for r in rows])
 
     found = geocode.Geocoder("", index=index)._merge("shevchenka")
 
     assert found[0]["name"] == "Shevchenka school"
+
+
+# where the index keeps a region's places past the city's box
+OBLAST_KM = 60
+
+
+def test_the_index_finds_the_city_s_place_behind_more_of_the_oblast_s_than_it_keeps(
+        monkeypatch, tmp_path):
+    monkeypatch.setattr(geocode, "WIDE", 1)
+    # the index cuts its candidates to ten times what is asked for
+    far = [_hit("Shevchenka", OBLAST_KM) for _ in range(10 * geocode.WIDE)]
+    near = _hit("Shevchenka", TOWN_KM)
+    index = write(tmp_path / "search.sqlite",
+                  [Place(h["name"], h["lat"], h["lon"]) for h in [*far, near]])
+
+    found = geocode.Geocoder("", index=index)._local("shevchenka")
+
+    assert [(h["lat"], h["lon"]) for h in found] == [(near["lat"], near["lon"])]

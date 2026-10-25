@@ -499,7 +499,9 @@ over OpenStreetMap, biased to the city, which leads when the query has a digit,
 since house numbers are what it is best at. Both are clamped to the box the map
 frames can place a vehicle in (`wire.py`), widened by the footpaths' reach past
 the stops (`walk.MARGIN`), which `/api/plan` also refuses points outside of:
-past it there is no walk to a line. That box takes in villages up to 15 km out
+past it there is no walk to a line. The index applies the box itself, before it
+cuts its candidates to the best-named: it covers the whole oblast, and a common
+name such as "шевченка" matches thousands of places there. That box takes in villages up to 15 km out
 that share the city's street names, so places within 8 km of Rynok Square (the
 city's own; `geocode.CITY`) come first, each source's order kept among them and
 among the rest. The same name within 100 m is kept once. Answers are cached for a day.
@@ -507,7 +509,9 @@ The index is not in the image. `.github/workflows/places.yml` rebuilds it from
 OpenStreetMap on the 3rd of every month and publishes it on this repository's
 `places` release, because the build streams the whole Ukraine extract and peaks
 near 5 GB. It runs osm-mapidx's builder at a pinned commit, the one the vendored
-search was copied from, so the two only ever move together. The service
+search was copied from, so the two only ever move together. The vendored copy
+carries one addition past that commit, the box (`search(within=)`), which reads
+nothing the builder writes differently. The service
 downloads it from `COMMUTERLVIV_PLACES_URL` on a start without one, then at the
 nightly check once it is 30 days old. A download is kept only if it opens and
 finds Lviv, and is swapped in with a rename; each search opens the file anew, so

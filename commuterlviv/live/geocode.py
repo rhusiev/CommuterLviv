@@ -47,8 +47,9 @@ SAME_PLACE = 100.0
 # Рясне-2, the furthest district, is 7.3 km out and the villages start past 8.
 # Chosen, not derived
 CITY = 8000.0
-# the index covers the whole oblast and ranks by name before distance, so
-# enough hits are asked for that the city's survive the clamp
+BOX = (SOUTH, WEST, NORTH, EAST)
+# the index ranks by name before distance, so enough hits in the box are asked
+# for that the city's own are among them to lead
 WIDE = 300
 # mapidx addresses open with the nearest settlements; the street and district follow
 NEAR = 3
@@ -126,10 +127,10 @@ class Geocoder:
     def _local(self, q):
         if not self.index.exists():
             return []
-        hits = mapidx.search(str(self.index), q, limit=WIDE, origin=CENTRE)
+        hits = mapidx.search(str(self.index), q, limit=WIDE, origin=CENTRE, within=BOX)
         return [{"name": h["name"], "where": ", ".join(h["address"][NEAR:NEAR + 2]),
                  "lat": h["lat"], "lon": h["lon"], "kind": None}
-                for h in hits if inside(h["lat"], h["lon"])]
+                for h in hits]
 
     def _ask(self, q):
         query = urllib.parse.urlencode({
