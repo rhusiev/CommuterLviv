@@ -69,7 +69,7 @@ class Strings {
     required this.thisPlace,
     required this.savePlaceAs,
     required this.placeNameTaken,
-    required this.placeMoved,
+    required this.replace,
     required this.toHere,
     required this.fromHere,
     required this.nearHere,
@@ -282,12 +282,10 @@ class Strings {
   final String thisPlace;
   final String savePlaceAs;
 
-  /// A rename refused: the name is a place's identity on the server, so a
-  /// second place of that name would replace the first
+  /// A rename refused, or a save asked first: the name is a place's identity
+  /// on the server, so a second place of that name would replace the first
   final String placeNameTaken;
-
-  /// Saving under a saved place's name moves that place
-  final String Function(String name) placeMoved;
+  final String replace;
   final String toHere;
   final String fromHere;
   final String nearHere;
@@ -521,7 +519,7 @@ const _en = Strings(
   thisPlace: 'This place',
   savePlaceAs: 'Save this place...',
   placeNameTaken: 'A place with that name is already saved',
-  placeMoved: _enPlaceMoved,
+  replace: 'Replace',
   toHere: 'Directions to here',
   fromHere: 'Directions from here',
   nearHere: 'Stops near here',
@@ -671,7 +669,6 @@ const _en = Strings(
 );
 
 String _enUpdateSet(String name) => 'Update “$name”';
-String _enPlaceMoved(String name) => '“$name” moved here';
 String _enWatchingLines(int n) => 'Watching $n';
 String _enNothingNearLines(int metres) =>
     'No stop within $metres m of where you are';
@@ -781,7 +778,7 @@ const _uk = Strings(
   thisPlace: 'Це місце',
   savePlaceAs: 'Зберегти це місце...',
   placeNameTaken: 'Місце з такою назвою вже збережено',
-  placeMoved: _ukPlaceMoved,
+  replace: 'Замінити',
   toHere: 'Маршрут сюди',
   fromHere: 'Маршрут звідси',
   nearHere: 'Зупинки поблизу',
@@ -930,7 +927,6 @@ const _uk = Strings(
 );
 
 String _ukUpdateSet(String name) => 'Оновити «$name»';
-String _ukPlaceMoved(String name) => '«$name» перенесено сюди';
 String _ukWatchingLines(int n) => 'Відстежую $n';
 String _ukNothingNearLines(int metres) =>
     'Немає зупинки ближче ніж за $metres м';

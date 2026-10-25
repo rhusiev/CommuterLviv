@@ -366,8 +366,9 @@ delete and a save in one request, which is what keeps it atomic when the name is
 the identity server-side. It is also why a place cannot be renamed to another
 place's name, compared trimmed as the server keys them: the server keeps one
 place per name, so the other would be dropped. The rename is refused with a
-message and nothing is sent. Saving a point under a saved name, from anywhere,
-moves that place there, and a message says it moved. Search saves too: `GET /api/search?q=` merges
+message and nothing is sent. Saving a point under the name of a place elsewhere,
+from anywhere, asks first in a dialog and replaces that place only on "Replace",
+as the web does; saving a place again where it stands asks nothing. Search saves too: `GET /api/search?q=` merges
 addresses and shops under their own heading below the stops, a quarter of a
 second after the typing stops, and every row there - stops included - has a star
 that names the point and keeps it. A place picked from either opens

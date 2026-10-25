@@ -33,8 +33,12 @@ const _firstTrim = Duration(seconds: 3);
 
 /// A city of no stops, a user of no sets and of [places], and a basemap of
 /// nothing - all the home screen needs to come up. Places written are taken as
-/// they come. The socket is refused, which it retries.
-Future<HttpServer> _serve({List<Place> places = const []}) async {
+/// they come, and each list written is added to [sent]. The socket is refused,
+/// which it retries.
+Future<HttpServer> _serve({
+  List<Place> places = const [],
+  List<Object?>? sent,
+}) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   server.listen((req) async {
     final body = switch (req.uri.path) {
@@ -47,7 +51,7 @@ Future<HttpServer> _serve({List<Place> places = const []}) async {
           'places': [for (final p in places) p.toJson()],
         },
       },
-      '/api/places' => jsonDecode(await utf8.decodeStream(req)),
+      '/api/places' => _noted(jsonDecode(await utf8.decodeStream(req)), sent),
       // One source drawn, or the map is refused; its tiles are never there
       final p when p.endsWith('/style.json') => {
         'version': 8,
@@ -83,16 +87,25 @@ Future<HttpServer> _serve({List<Place> places = const []}) async {
   return server;
 }
 
+/// What was [written], its list of places added to [sent].
+Object? _noted(Object? written, List<Object?>? sent) {
+  sent?.add((written as Map<String, dynamic>)['places']);
+  return written;
+}
+
 /// The home screen on a phone, signed in to [_serve], once it has come up.
 Future<void> _pumpHome(
   WidgetTester tester, {
   List<Place> places = const [],
+  List<Object?>? sent,
 }) async {
   tester.view.physicalSize = _phone;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   allowRealHttp();
-  final server = (await tester.runAsync(() => _serve(places: places)))!;
+  final server = (await tester.runAsync(
+    () => _serve(places: places, sent: sent),
+  ))!;
   addTearDown(() => server.close(force: true));
   final origin = 'http://${server.address.host}:${server.port}';
   setTileOrigin(origin);
@@ -156,39 +169,97 @@ void main() {
     FlutterError.onError = reported;
   });
 
-  testWidgets('saving a point under a saved name says the place moved', (
-    tester,
-  ) async {
-    useLang(Lang.en);
-    addTearDown(() => useLang(Lang.uk));
-    final reported = FlutterError.onError!;
-    FlutterError.onError = (e) {
-      if (!e.exceptionAsString().contains('RenderFlex overflowed')) reported(e);
-    };
-    await _pumpHome(
+  testWidgets('saving a point under a name in use elsewhere asks first, and '
+      'a cancel sends nothing', (tester) async {
+    final (sent, reported) = await _pumpWithHome(
       tester,
-      places: const [Place(name: 'Home', at: LatLng(49.8, 24.0))],
+      const LatLng(49.8, 24.0),
     );
+    await _saveHeld(tester, 'Home');
 
-    // Held through the map's own callback: the floating chrome covers much
-    // of the test surface
-    tester.widget<FlutterMap>(find.byType(FlutterMap)).options.onLongPress!(
-      const TapPosition(Offset.zero, null),
-      lviv,
-    );
-    await tester.pump();
-    await tester.pump(_open);
-    await tester.tap(find.text(txt.savePlaceAs));
-    await tester.pump();
-    await tester.enterText(find.byType(TextField), 'Home');
-    await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, txt.saveHere));
-
-    await pumpUntil(
-      tester,
-      () => tester.any(find.text(txt.placeMoved('Home'))),
-    );
-    await tester.pump(_firstTrim);
-    FlutterError.onError = reported;
+    expect(find.text(txt.placeNameTaken), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, txt.cancel));
+    await pumpQuiet(tester);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(sent, isEmpty);
+    await _done(tester, reported);
   });
+
+  testWidgets('saving a point under a name in use elsewhere replaces that '
+      'place once confirmed', (tester) async {
+    final (sent, reported) = await _pumpWithHome(
+      tester,
+      const LatLng(49.8, 24.0),
+    );
+    await _saveHeld(tester, 'Home');
+
+    await tester.tap(find.widgetWithText(TextButton, txt.replace));
+    await pumpUntil(tester, () => sent.isNotEmpty);
+    expect(sent.single, [Place(name: 'Home', at: lviv).toJson()]);
+    await _done(tester, reported);
+  });
+
+  testWidgets('saving a place again where it stands neither asks nor says '
+      'anything', (tester) async {
+    final (sent, reported) = await _pumpWithHome(tester, lviv);
+    await _saveHeld(tester, 'Home');
+
+    await pumpUntil(tester, () => sent.isNotEmpty);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(sent.single, [Place(name: 'Home', at: lviv).toJson()]);
+    await pumpQuiet(tester);
+    expect(find.byType(SnackBar), findsNothing);
+    await _done(tester, reported);
+  });
+}
+
+/// The home screen in English, of one place, "Home", at [at]; the lists of
+/// places it writes, and the error handler to put back in [_done]. The test
+/// font overflows the tab bar, which is let pass until then.
+Future<(List<Object?>, void Function(FlutterErrorDetails))> _pumpWithHome(
+  WidgetTester tester,
+  LatLng at,
+) async {
+  useLang(Lang.en);
+  addTearDown(() => useLang(Lang.uk));
+  final reported = FlutterError.onError!;
+  FlutterError.onError = (e) {
+    if (!e.exceptionAsString().contains('RenderFlex overflowed')) reported(e);
+  };
+  final sent = <Object?>[];
+  await _pumpHome(
+    tester,
+    places: [Place(name: 'Home', at: at)],
+    sent: sent,
+  );
+  return (sent, reported);
+}
+
+/// Saves [lviv] under [name] from the sheet a long press opens there.
+Future<void> _saveHeld(WidgetTester tester, String name) async {
+  // Held through the map's own callback: the floating chrome covers much
+  // of the test surface
+  tester.widget<FlutterMap>(find.byType(FlutterMap)).options.onLongPress!(
+    const TapPosition(Offset.zero, null),
+    lviv,
+  );
+  await tester.pump();
+  await tester.pump(_open);
+  await tester.tap(find.text(txt.savePlaceAs));
+  await tester.pump();
+  await tester.enterText(find.byType(TextField), name);
+  await tester.pump();
+  await tester.tap(find.widgetWithText(FilledButton, txt.saveHere));
+  await tester.pump();
+  await tester.pump(_open);
+}
+
+/// Past the map's first cache trim, which outlives the test otherwise, with
+/// the error handler [reported] put back.
+Future<void> _done(
+  WidgetTester tester,
+  void Function(FlutterErrorDetails) reported,
+) async {
+  await tester.pump(_firstTrim);
+  FlutterError.onError = reported;
 }

@@ -322,14 +322,35 @@ class _HomeScreenState extends State<HomeScreen> {
       if (p.name != name) p,
   ];
 
-  /// Kept by name, so saving over a name moves that place - and says so,
-  /// since its old point is gone and the name may not have been typed.
+  /// Kept by name, so saving over a name elsewhere replaces that place - and
+  /// is asked first, as the point it stood at is lost.
   Future<void> _savePlace(String name, LatLng at) async {
-    final kept = _withoutPlace(name);
-    final moves = kept.length < (_sets?.places.length ?? 0);
-    await _places([...kept, Place(name: name, at: at)]);
-    if (moves && _error == null) _tell(txt.placeMoved(name));
+    final replaces = (_sets?.places ?? const <Place>[]).any(
+      (p) => p.name.trim() == name.trim() && !p.isAt(at),
+    );
+    if (replaces && !await _mayReplace()) return;
+    await _places([..._withoutPlace(name), Place(name: name, at: at)]);
   }
+
+  /// True once the place of the name is to be replaced.
+  Future<bool> _mayReplace() async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog.adaptive(
+          content: Text(txt.placeNameTaken),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(txt.cancel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(txt.replace),
+            ),
+          ],
+        ),
+      ) ??
+      false;
 
   /// What a long press on the map offers for [at].
   void _hold(LatLng at) => showFloatingSheet<void>(
