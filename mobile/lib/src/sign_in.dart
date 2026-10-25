@@ -100,103 +100,111 @@ class _SignInScreenState extends State<SignInScreen> {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              // The group is what a password manager sees: without it Android is
-              // offered two unrelated fields and Bitwarden will not fill either
-              child: AutofillGroup(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text('CommuterLviv', style: text.headlineMedium),
-                    const SizedBox(height: 4),
-                    Text(txt.tagline, style: text.bodyMedium),
-                    const SizedBox(height: 28),
-                    if (_joining && _mode == 'code') ...[
-                      TextField(
-                        controller: _code,
-                        autocorrect: false,
-                        decoration: InputDecoration(
-                          labelText: txt.inviteCode,
-                          helperText: txt.inviteHint,
+    // Back from taking up an invite returns to signing in, as the toggle does,
+    // rather than leaving the app
+    return PopScope(
+      canPop: !_joining,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(() => _joining = false);
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                // The group is what a password manager sees: without it Android is
+                // offered two unrelated fields and Bitwarden will not fill either
+                child: AutofillGroup(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('CommuterLviv', style: text.headlineMedium),
+                      const SizedBox(height: 4),
+                      Text(txt.tagline, style: text.bodyMedium),
+                      const SizedBox(height: 28),
+                      if (_joining && _mode == 'code') ...[
+                        TextField(
+                          controller: _code,
+                          autocorrect: false,
+                          decoration: InputDecoration(
+                            labelText: txt.inviteCode,
+                            helperText: txt.inviteHint,
+                          ),
                         ),
+                        const SizedBox(height: 12),
+                      ],
+                      TextField(
+                        controller: _username,
+                        autocorrect: false,
+                        textInputAction: TextInputAction.next,
+                        autofillHints: const [AutofillHints.username],
+                        decoration: InputDecoration(labelText: txt.username),
                       ),
                       const SizedBox(height: 12),
-                    ],
-                    TextField(
-                      controller: _username,
-                      autocorrect: false,
-                      textInputAction: TextInputAction.next,
-                      autofillHints: const [AutofillHints.username],
-                      decoration: InputDecoration(labelText: txt.username),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _password,
-                      obscureText: true,
-                      onSubmitted: (_) => _busy ? null : _submit(),
-                      autofillHints: [
-                        _joining
-                            ? AutofillHints.newPassword
-                            : AutofillHints.password,
-                      ],
-                      decoration: InputDecoration(labelText: txt.password),
-                    ),
-                    const SizedBox(height: 4),
-                    SwitchListTile.adaptive(
-                      value: _remember,
-                      onChanged: (v) => setState(() => _remember = v),
-                      title: Text(txt.stayIn),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        _error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: _busy ? null : _submit,
-                      child: _busy
-                          ? const SizedBox(
-                              height: 18,
-                              width: 18,
-                              child: CircularProgressIndicator.adaptive(),
-                            )
-                          : Text(
-                              _joining
-                                  ? (_mode == 'open'
-                                        ? txt.createAccount
-                                        : txt.join)
-                                  : txt.signIn,
-                            ),
-                    ),
-                    if (_mode != 'closed')
-                      TextButton(
-                        onPressed: () => setState(() => _joining = !_joining),
-                        child: Text(
+                      TextField(
+                        controller: _password,
+                        obscureText: true,
+                        onSubmitted: (_) => _busy ? null : _submit(),
+                        autofillHints: [
                           _joining
-                              ? txt.haveAccount
-                              : (_mode == 'open'
-                                    ? txt.wantAccount
-                                    : txt.haveInvite),
-                        ),
+                              ? AutofillHints.newPassword
+                              : AutofillHints.password,
+                        ],
+                        decoration: InputDecoration(labelText: txt.password),
                       ),
-                    TextButton(
-                      onPressed: _editServer,
-                      child: Text(widget.api.base),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      SwitchListTile.adaptive(
+                        value: _remember,
+                        onChanged: (v) => setState(() => _remember = v),
+                        title: Text(txt.stayIn),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          _error!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: _busy ? null : _submit,
+                        child: _busy
+                            ? const SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator.adaptive(),
+                              )
+                            : Text(
+                                _joining
+                                    ? (_mode == 'open'
+                                          ? txt.createAccount
+                                          : txt.join)
+                                    : txt.signIn,
+                              ),
+                      ),
+                      if (_mode != 'closed')
+                        TextButton(
+                          onPressed: () => setState(() => _joining = !_joining),
+                          child: Text(
+                            _joining
+                                ? txt.haveAccount
+                                : (_mode == 'open'
+                                      ? txt.wantAccount
+                                      : txt.haveInvite),
+                          ),
+                        ),
+                      TextButton(
+                        onPressed: _editServer,
+                        child: Text(widget.api.base),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
