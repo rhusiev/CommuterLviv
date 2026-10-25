@@ -317,7 +317,8 @@ nearest stop, because a door rarely is one. The arrow in the panel's corner
 folds it to a strip too, showing the picked option's length and routes, so the
 option can be read on the map; tapping the strip opens the panel again. The
 planner is left through the bottom tabs or with back, which from any tab but the
-map returns to the map rather than leaving the app. Two chips beside the two
+map returns to the map rather than leaving the app. On the map, back first
+folds the follow card's list of steps or closes the map's credits, if open. Two chips beside the two
 fields say when to leave: the day, `Today` until another is picked in the next
 30 days, and the time, `Now` until one is picked. They are passed as
 `at=<unix seconds>`. A time already past on today is meant for tomorrow. Below

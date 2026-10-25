@@ -916,7 +916,8 @@ class _HomeScreenState extends State<HomeScreen> {
       // than leaving the app
       canPop: _tab == _mapTab,
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
+        // On the map, what held back was a panel folding itself
+        if (didPop || _tab == _mapTab) return;
         // Back from a line is to the routes grid, as its own back button goes
         _lineOpen ? _closeRoute() : _pickTab(_mapTab);
       },

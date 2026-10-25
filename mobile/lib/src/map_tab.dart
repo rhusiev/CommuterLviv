@@ -4,6 +4,7 @@ library;
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart' hide Theme;
+import 'package:flutter/material.dart' as material show Theme;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -257,6 +258,25 @@ class _Attribution extends StatelessWidget {
         Icons.info_outlined,
         color: Colors.black,
         size: _badgeSize,
+      ),
+    ),
+    // Shown only while the credits are open, so back closes them first
+    // rather than leaving the app from the map
+    closeButton: (context, close) => PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) close();
+      },
+      child: IconButton(
+        onPressed: close,
+        tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+        icon: Icon(
+          Icons.cancel_outlined,
+          color:
+              material.Theme.of(context).textTheme.titleSmall?.color ??
+              Colors.black,
+          size: _badgeSize,
+        ),
       ),
     ),
     attributions: [

@@ -12,7 +12,12 @@ import 'package:commuterlviv/src/map_theme.dart';
 import 'package:commuterlviv/src/models.dart';
 import 'package:commuterlviv/src/strings.dart';
 
+import 'back.dart';
+
 const _card = Key('card');
+
+/// Long enough for the credits to fade in or out; the map never settles
+const _fade = Duration(seconds: 1);
 
 Future<void> pump(WidgetTester tester, {Widget? card}) async {
   SharedPreferences.setMockInitialValues({});
@@ -90,5 +95,18 @@ void main() {
 
     expect(find.byTooltip(txt.attributions), findsOneWidget);
     expect(find.byTooltip('Attributions'), findsNothing);
+  });
+
+  testWidgets('back closes the open credits rather than leaving the app', (
+    tester,
+  ) async {
+    await pump(tester);
+    await tester.tap(find.byTooltip(txt.attributions));
+    await tester.pump(_fade);
+    expect(find.byTooltip(txt.attributions), findsNothing);
+
+    expect(await pressBack(tester), isFalse);
+    await tester.pump(_fade);
+    expect(find.byTooltip(txt.attributions), findsOneWidget);
   });
 }

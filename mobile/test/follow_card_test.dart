@@ -18,6 +18,8 @@ import 'package:commuterlviv/src/live.dart';
 import 'package:commuterlviv/src/models.dart';
 import 'package:commuterlviv/src/strings.dart';
 
+import 'back.dart';
+
 const lat0 = 49.84;
 const lon0 = 24.03;
 const fixEveryMs = 2000;
@@ -332,6 +334,20 @@ void main() {
     await tester.tap(find.byTooltip(txt.hideSteps));
     await tester.pump();
     expect(find.text('Stop 0 → Stop 1'), findsNothing);
+  });
+
+  testWidgets('back folds the steps rather than leaving the app', (
+    tester,
+  ) async {
+    final here = await pump(tester, away: false);
+    here.move(0, 100);
+    await tester.pump();
+    await tester.tap(find.byTooltip(txt.showSteps));
+    await tester.pump();
+
+    expect(await pressBack(tester), isFalse);
+    expect(find.text('Stop 0 → Stop 1'), findsNothing);
+    expect(await pressBack(tester), isTrue);
   });
 
   testWidgets('a step too long for one line wraps onto a second', (
