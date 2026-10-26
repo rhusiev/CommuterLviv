@@ -76,7 +76,7 @@ origins in `COMMUTERLVIV_ORIGINS`. Everything it downloads or learns lives in
   search again. A followed journey survives a reload or a restart. The app can
   go on with the screen off, on a notification that sounds when to get off.
 - **Mine.** Pinned stops and their arrivals, live, the saved places and route
-  sets, and the account. Arrivals beyond the current trip - the vehicle's next
+  sets, one list at a time under a switch, and the account beside it. Arrivals beyond the current trip - the vehicle's next
   run - are in italics with a schedule mark.
 - **Layers.** The whole network, traffic per street, and eight map styles -
   colorful, natural, muted and gray, each light and dark.

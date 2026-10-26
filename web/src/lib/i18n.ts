@@ -229,7 +229,8 @@ const en = {
   planned: "Timetabled: the vehicle is still finishing its previous trip",
   noPlaces: "Save a place and it is offered here",
   saved: "Saved",
-  pinnedStops: "Pinned stops",
+  mineStops: "Stops",
+  minePlaces: "Places",
   nothingSaved:
     "No places saved yet. Save one from the search, the journey fields or by right-clicking or holding the map.",
   rename: "Rename",
@@ -465,7 +466,8 @@ const uk: Strings = {
   planned: "За розкладом: транспорт ще завершує попередній рейс",
   noPlaces: "Збережене місце зʼявиться тут",
   saved: "Збережене",
-  pinnedStops: "Закріплені зупинки",
+  mineStops: "Зупинки",
+  minePlaces: "Місця",
   nothingSaved:
     "Збережених місць ще немає. Збережіть місце з пошуку, з полів маршруту або правим кліком чи утримавши мапу.",
   rename: "Перейменувати",

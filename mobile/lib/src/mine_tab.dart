@@ -1,6 +1,6 @@
-/// Everything that is the account's own, in one list: the pinned stops with
-/// what is due there, the saved places, the route sets, and last the account
-/// itself. Each list goes up as a whole, so a rename is the same one write as a
+/// Everything that is the account's own: the pinned stops with what is due
+/// there, the saved places and the route sets, one at a time under a switch,
+/// with the account itself beside it. Each list goes up as a whole, so a rename is the same one write as a
 /// reorder - which is what keeps a rename atomic, since the name is the
 /// identity server-side.
 library;
@@ -18,6 +18,9 @@ import 'theme.dart';
 
 /// How many arrivals a pinned stop shows at most.
 const _dueShown = 6;
+
+/// Which of the account's lists is shown.
+enum MineSection { stops, places, sets }
 
 class MineTab extends StatefulWidget {
   const MineTab({
@@ -73,6 +76,7 @@ class _MineTabState extends State<MineTab> {
   /// The order just dragged to, shown until the screen hands the saved list
   /// back, so a row does not jump back while the write is under way.
   List<Place>? _placed;
+  var _section = MineSection.stops;
 
   @override
   void didUpdateWidget(MineTab old) {
@@ -113,114 +117,147 @@ class _MineTabState extends State<MineTab> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = material.Theme.of(context);
-    final pins = widget.pins;
-    final places = _places;
-    final sets = widget.sets;
     // The bar and the tab pill float over this list, so the ends need clearance
     return CustomScrollView(
       slivers: [
         SliverPadding(padding: EdgeInsets.only(top: floatingTop(context))),
-        _Line(txt.pinnedStops, theme.textTheme.labelLarge),
-        if (pins.isEmpty)
-          _Line(txt.pinAStop, theme.textTheme.bodySmall)
-        else
-          AnimatedBuilder(
-            animation: widget.live,
-            builder: (context, _) => SliverReorderableList(
-              itemCount: pins.length,
-              onReorderItem: (from, to) =>
-                  widget.onPins(_moved(pins, from, to)),
-              itemBuilder: (context, i) => _StopTile(
-                key: ValueKey(widget.catalog.stops[pins[i]].id),
-                index: i,
-                catalog: widget.catalog,
-                stop: pins[i],
-                arrivals: widget.live.arrivals[pins[i]] ?? const [],
-                onUnpin: () => widget.onPins([
-                  for (final p in pins)
-                    if (p != pins[i]) p,
-                ]),
-                onOpen: () => widget.onStop(pins[i]),
-                watching: widget.watching,
-                onWatch: widget.onWatch,
-                onLine: widget.onLine,
-              ),
-            ),
-          ),
-        _Line(txt.places, theme.textTheme.labelLarge),
-        if (places.isEmpty)
-          _Line(txt.saveHow, theme.textTheme.bodySmall)
-        else
-          SliverReorderableList(
-            itemCount: places.length,
-            onReorderItem: (from, to) => _putPlaces(_moved(places, from, to)),
-            itemBuilder: (context, i) {
-              final p = places[i];
-              return _Row(
-                key: ValueKey(p.name),
-                index: i,
-                icon: Icons.place_outlined,
-                title: p.name,
-                under: pointLabel(widget.catalog, p.at),
-                onTap: () => widget.onPlace(p),
-                onRename: () => _renamePlace(p),
-                onDelete: () async => _putPlaces([
-                  for (final q in places)
-                    if (q.name != p.name) q,
-                ]),
-              );
-            },
-          ),
-        _Line(txt.sets, theme.textTheme.labelLarge),
-        if (sets == null || sets.sets.isEmpty)
-          _Line(txt.noSets, theme.textTheme.bodySmall)
-        else
-          SliverList.list(
-            children: [
-              for (final s in sets.sets)
-                ListTile(
-                  leading: Icon(
-                    s.id == sets.active
-                        ? Icons.check_circle
-                        : Icons.circle_outlined,
-                    color: s.id == sets.active ? accent : null,
-                  ),
-                  title: Text(s.name, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(
-                    [
-                      for (final r in widget.catalog.routesAt(s.routes))
-                        widget.catalog.routes[r].short,
-                    ].join(' · '),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  selected: s.id == sets.active,
-                  onTap: () => widget.onActivate(s),
-                  onLongPress: () => manage(
-                    context,
-                    onRename: () => _renameSet(s),
-                    onDelete: () => widget.onDelete(s),
-                  ),
-                ),
-            ],
-          ),
-        if (places.isNotEmpty || sets?.sets.isNotEmpty == true)
-          _Line(txt.holdToManage, theme.textTheme.bodySmall),
-        const SliverToBoxAdapter(child: Divider(height: 1)),
-        SliverToBoxAdapter(
-          child: ListTile(
-            leading: const Icon(Icons.person_outline),
-            title: Text(txt.account),
-            subtitle: Text(widget.username, overflow: TextOverflow.ellipsis),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: widget.onAccount,
-          ),
-        ),
+        SliverToBoxAdapter(child: _switch()),
+        ...switch (_section) {
+          MineSection.stops => _stops(),
+          MineSection.places => _placeRows(),
+          MineSection.sets => _setRows(context),
+        },
         SliverPadding(
           padding: EdgeInsets.only(bottom: floatingBottom(context)),
         ),
       ],
     );
+  }
+
+  Widget _switch() => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 8, 4, 4),
+    child: Row(
+      children: [
+        Expanded(
+          child: Wrap(
+            spacing: 6,
+            children: [
+              for (final (section, label) in [
+                (MineSection.stops, txt.mineStops),
+                (MineSection.places, txt.minePlaces),
+                (MineSection.sets, txt.sets),
+              ])
+                ChoiceChip(
+                  label: Text(label),
+                  showCheckmark: false,
+                  selected: _section == section,
+                  onSelected: (_) => setState(() => _section = section),
+                ),
+            ],
+          ),
+        ),
+        IconButton(
+          onPressed: widget.onAccount,
+          icon: const Icon(Icons.manage_accounts_outlined),
+          tooltip: '${txt.account}: ${widget.username}',
+        ),
+      ],
+    ),
+  );
+
+  List<Widget> _stops() {
+    final pins = widget.pins;
+    if (pins.isEmpty) return [_Hint(txt.pinAStop)];
+    return [
+      AnimatedBuilder(
+        animation: widget.live,
+        builder: (context, _) => SliverReorderableList(
+          itemCount: pins.length,
+          onReorderItem: (from, to) => widget.onPins(_moved(pins, from, to)),
+          itemBuilder: (context, i) => _StopTile(
+            key: ValueKey(widget.catalog.stops[pins[i]].id),
+            index: i,
+            catalog: widget.catalog,
+            stop: pins[i],
+            arrivals: widget.live.arrivals[pins[i]] ?? const [],
+            onUnpin: () => widget.onPins([
+              for (final p in pins)
+                if (p != pins[i]) p,
+            ]),
+            onOpen: () => widget.onStop(pins[i]),
+            watching: widget.watching,
+            onWatch: widget.onWatch,
+            onLine: widget.onLine,
+          ),
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _placeRows() {
+    final places = _places;
+    if (places.isEmpty) return [_Hint(txt.saveHow)];
+    return [
+      SliverReorderableList(
+        itemCount: places.length,
+        onReorderItem: (from, to) => _putPlaces(_moved(places, from, to)),
+        itemBuilder: (context, i) {
+          final p = places[i];
+          return _Row(
+            key: ValueKey(p.name),
+            index: i,
+            icon: Icons.place_outlined,
+            title: p.name,
+            under: pointLabel(widget.catalog, p.at),
+            onTap: () => widget.onPlace(p),
+            onRename: () => _renamePlace(p),
+            onDelete: () async => _putPlaces([
+              for (final q in places)
+                if (q.name != p.name) q,
+            ]),
+          );
+        },
+      ),
+      _Hint(txt.holdToManage),
+    ];
+  }
+
+  List<Widget> _setRows(BuildContext context) {
+    final sets = widget.sets;
+    if (sets == null || sets.sets.isEmpty) {
+      return [_Hint(txt.noSets)];
+    }
+    return [
+      SliverList.list(
+        children: [
+          for (final s in sets.sets)
+            ListTile(
+              leading: Icon(
+                s.id == sets.active
+                    ? Icons.check_circle
+                    : Icons.circle_outlined,
+                color: s.id == sets.active ? accent : null,
+              ),
+              title: Text(s.name, overflow: TextOverflow.ellipsis),
+              subtitle: Text(
+                [
+                  for (final r in widget.catalog.routesAt(s.routes))
+                    widget.catalog.routes[r].short,
+                ].join(' · '),
+                overflow: TextOverflow.ellipsis,
+              ),
+              selected: s.id == sets.active,
+              onTap: () => widget.onActivate(s),
+              onLongPress: () => manage(
+                context,
+                onRename: () => _renameSet(s),
+                onDelete: () => widget.onDelete(s),
+              ),
+            ),
+        ],
+      ),
+      _Hint(txt.holdToManage),
+    ];
   }
 }
 
@@ -232,17 +269,17 @@ List<T> _moved<T>(List<T> list, int from, int to) {
   return next;
 }
 
-class _Line extends StatelessWidget {
-  const _Line(this.text, this.style);
+/// A line of help under or instead of a list.
+class _Hint extends StatelessWidget {
+  const _Hint(this.text);
 
   final String text;
-  final TextStyle? style;
 
   @override
   Widget build(BuildContext context) => SliverToBoxAdapter(
     child: Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-      child: Text(text, style: style),
+      child: Text(text, style: material.Theme.of(context).textTheme.bodySmall),
     ),
   );
 }

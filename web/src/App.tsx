@@ -10,7 +10,7 @@ import { HoldMenu, type Held } from "./components/HoldMenu";
 import { Confirm } from "./components/Confirm";
 import { PlaceCard } from "./components/PlaceCard";
 import { AccountSettings } from "./components/AccountSettings";
-import { MinePanel } from "./components/MinePanel";
+import { MinePanel, type MineSection } from "./components/MinePanel";
 import { LayersPanel } from "./components/LayersPanel";
 import { Menu } from "./components/Menu";
 import { StopSearch } from "./components/StopSearch";
@@ -95,6 +95,7 @@ export function App() {
   const [around, setAround] = useState<{ lat: number; lon: number } | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lon: number } | null>(null);
   const [tab, setTab] = useState<UrlState["tab"]>(opened.tab);
+  const [mineSection, setMineSection] = useState<MineSection>("stops");
   /** The line open in the Lines tab, and which way along it is shown */
   const [route, setRoute] = useState<number | null>(null);
   const [way, setWay] = useState(0);
@@ -557,6 +558,8 @@ export function App() {
             onActivate={session.routeSets.activate}
             onDelete={session.routeSets.remove}
             username={me.username}
+            section={mineSection}
+            onSection={setMineSection}
             account={
               <AccountSettings
                 passwordChange={me.password_change ?? false}

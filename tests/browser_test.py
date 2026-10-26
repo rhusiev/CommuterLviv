@@ -209,7 +209,7 @@ def test_a_pinned_stop_is_listed_once_in_the_mine_tab(page):
     page.get_by_role("button", name="Mine", exact=True).click()
 
     expect = playwright.expect
-    expect(page.get_by_role("heading", name="Pinned stops")).to_be_visible()
+    expect(page.get_by_role("button", name="Stops", exact=True, pressed=True)).to_be_visible()
     expect(page.get_by_role("button", name="Stop 4", exact=True)).to_have_count(1)
     expect(page.get_by_role("button", name="Account", exact=True)).to_have_count(0)
 
@@ -220,7 +220,8 @@ def test_an_old_times_link_opens_the_mine_tab(page):
 
     page.goto("/?tab=times")
 
-    playwright.expect(page.get_by_role("heading", name="Pinned stops")).to_be_visible(
+    playwright.expect(
+        page.get_by_role("button", name="Stops", exact=True, pressed=True)).to_be_visible(
         timeout=SEE_MS)
 
 
@@ -353,6 +354,11 @@ def _save_held(page, name, x=VIEWPORT["width"] / 2, y=VIEWPORT["height"] / 2):
     playwright.expect(menu).not_to_be_visible()
 
 
+def _open_places(page):
+    page.get_by_role("button", name="Mine", exact=True).click()
+    page.get_by_role("button", name="Places", exact=True).click()
+
+
 def _saved_names(page):
     """The names in the Mine tab's saved places, in their order"""
     rows = page.get_by_title("Show on the map")
@@ -364,12 +370,12 @@ def test_a_place_is_not_renamed_onto_another_ones_name_and_keeps_its_row(page):
     _register(page, "renamer")
     for i, name in enumerate(["Home", "Work", "Gym"]):
         _save_held(page, name, VIEWPORT["width"] / 2 + 100 * i)
-    page.get_by_role("button", name="Mine", exact=True).click()
+    _open_places(page)
     assert _saved_names(page) == ["Home", "Work", "Gym"]
     sent = []
     page.on("request", lambda r: sent.append(r) if r.url.endswith("/api/places") else None)
 
-    rename = page.get_by_role("button", name="Rename")
+    rename = page.get_by_role("button", name="Rename", exact=True)
     rename.nth(1).click()
     field = page.locator("li form input")
     field.fill(" Home ")
@@ -394,7 +400,7 @@ def test_saving_under_a_name_in_use_elsewhere_says_it_replaces_that_place(page):
 
     playwright.expect(menu.get_by_text("A place with that name is already saved")).to_be_visible()
     menu.get_by_role("button", name="Replace").click()
-    page.get_by_role("button", name="Mine", exact=True).click()
+    _open_places(page)
     assert _saved_names(page) == ["Home"]
 
 
@@ -434,7 +440,7 @@ def test_a_save_from_the_search_over_a_name_in_use_elsewhere_is_asked_and_cancel
 
     assert sent == []
     assert _places_kept(page) == {"Stop 4": pytest.approx(CENTRE, abs=1e-3)}
-    page.get_by_role("button", name="Mine", exact=True).click()
+    _open_places(page)
     assert _saved_names(page) == ["Stop 4"]
 
 
@@ -928,7 +934,8 @@ def test_a_refused_location_says_how_to_allow_it(page):
 
 
 def _open_account(page, tab="Mine", row="Account"):
-    """The account is the last row of the Mine tab, named with the username"""
+    """The account is a button beside the Mine tab's switch, named with the
+    username"""
     page.get_by_role("button", name=tab, exact=True).click()
     page.get_by_role("button", name=re.compile(f"^{row}")).click()
 

@@ -90,30 +90,42 @@ Future<_Heard> _pump(
 double _top(WidgetTester tester, String text) =>
     tester.getTopLeft(find.text(text)).dy;
 
+/// Which of the rows given to [_pump] are on screen.
+List<String> _shown() => [
+  for (final text in ['Opera', 'Home', 'Work', 'Commute'])
+    if (find.text(text).evaluate().isNotEmpty) text,
+];
+
+Future<void> _open(WidgetTester tester, String section) async {
+  await tester.tap(find.widgetWithText(ChoiceChip, section));
+  await tester.pump();
+}
+
 void main() {
-  testWidgets('pins, places and sets come in that order, the account last', (
+  testWidgets('one list shows at a time, the pinned stops first', (
     tester,
   ) async {
-    final heard = await _pump(
+    await _pump(
       tester,
       pins: const [0],
       places: const [_home],
       sets: const [_set],
     );
 
-    final order = [
-      txt.pinnedStops,
-      'Opera',
-      txt.places,
-      'Home',
-      txt.sets,
-      'Commute',
-      txt.account,
-    ].map((text) => _top(tester, text)).toList();
-    expect(order, [...order]..sort());
-    expect(find.text('tester'), findsOneWidget);
+    expect(_shown(), ['Opera']);
+    await _open(tester, txt.minePlaces);
+    expect(_shown(), ['Home']);
+    await _open(tester, txt.sets);
+    expect(_shown(), ['Commute']);
+  });
 
-    await tester.tap(find.text(txt.account));
+  testWidgets('the account opens from beside the switch, whichever list is '
+      'shown', (tester) async {
+    final heard = await _pump(tester, sets: const [_set]);
+    await _open(tester, txt.sets);
+
+    await tester.tap(find.byTooltip('${txt.account}: tester'));
+
     expect(heard.account, isTrue);
   });
 
@@ -176,7 +188,9 @@ void main() {
 
     // The test font is wider than a phone's: on Roboto a due chip is about
     // 135 px, so two need the room the handle would otherwise keep
-    final room = tester.getRect(find.byType(Wrap));
+    final room = tester.getRect(
+      find.ancestor(of: find.byType(Due), matching: find.byType(Wrap)),
+    );
     final handle = tester.getRect(find.byIcon(Icons.drag_handle));
     expect(room.right, greaterThanOrEqualTo(handle.right));
   });
@@ -184,6 +198,7 @@ void main() {
   testWidgets('a rename rewrites the whole list, in order', (tester) async {
     final heard = await _pump(tester, places: const [_home, _work]);
 
+    await _open(tester, txt.minePlaces);
     await tester.longPress(find.text('Home'));
     await tester.pumpAndSettle();
     await tester.tap(find.text(txt.rename));
@@ -200,6 +215,7 @@ void main() {
       'so', (tester) async {
     final heard = await _pump(tester, places: const [_home, _work]);
 
+    await _open(tester, txt.minePlaces);
     await tester.longPress(find.text('Home'));
     await tester.pumpAndSettle();
     await tester.tap(find.text(txt.rename));
@@ -219,6 +235,7 @@ void main() {
   ) async {
     const atOpera = Place(name: 'Flat', at: LatLng(49.841, 24.03));
     await _pump(tester, places: const [atOpera, _home]);
+    await _open(tester, txt.minePlaces);
 
     expect(find.text(txt.nearStop('Opera')), findsOneWidget);
     expect(find.text('49.8000, 24.0000'), findsOneWidget);
@@ -226,6 +243,7 @@ void main() {
 
   testWidgets('a tap shows the place', (tester) async {
     final heard = await _pump(tester, places: const [_home]);
+    await _open(tester, txt.minePlaces);
 
     await tester.tap(find.text('Home'));
 
@@ -234,6 +252,7 @@ void main() {
 
   testWidgets('a set activates on a tap and renames on a hold', (tester) async {
     final heard = await _pump(tester, sets: const [_set]);
+    await _open(tester, txt.sets);
 
     await tester.tap(find.text('Commute'));
     expect(heard.activated?.id, 'x');
@@ -249,13 +268,25 @@ void main() {
     expect((heard.renamed?.$1.id, heard.renamed?.$2), ('x', 'Work run'));
   });
 
-  testWidgets('each empty section says how it fills', (tester) async {
+  testWidgets('each empty list says how it fills', (tester) async {
     await _pump(tester);
 
     expect(find.text(txt.pinAStop), findsOneWidget);
+    await _open(tester, txt.minePlaces);
     expect(find.text(txt.saveHow), findsOneWidget);
+    expect(find.text(txt.holdToManage), findsNothing);
+    await _open(tester, txt.sets);
     expect(find.text(txt.noSets), findsOneWidget);
     expect(find.text(txt.holdToManage), findsNothing);
-    expect(find.text(txt.account), findsOneWidget);
+  });
+
+  testWidgets('a list with rows says how to manage them', (tester) async {
+    await _pump(tester, places: const [_home], sets: const [_set]);
+
+    expect(find.text(txt.holdToManage), findsNothing);
+    await _open(tester, txt.minePlaces);
+    expect(find.text(txt.holdToManage), findsOneWidget);
+    await _open(tester, txt.sets);
+    expect(find.text(txt.holdToManage), findsOneWidget);
   });
 }

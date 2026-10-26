@@ -77,7 +77,8 @@ class Strings {
     required this.nothingNearHere,
     required this.noPlaces,
     required this.saved,
-    required this.pinnedStops,
+    required this.mineStops,
+    required this.minePlaces,
     required this.saveHow,
     required this.holdToManage,
     required this.foundStops,
@@ -296,7 +297,10 @@ class Strings {
   final String nothingNearHere;
   final String noPlaces;
   final String saved;
-  final String pinnedStops;
+
+  /// The switch between the account's lists: its pinned stops, its places
+  final String mineStops;
+  final String minePlaces;
 
   /// Where places get saved from, for an empty list of them
   final String saveHow;
@@ -531,7 +535,8 @@ const _en = Strings(
   nothingNearHere: 'No stop within 2 km of this place',
   noPlaces: 'Save a place and it is offered here',
   saved: 'Saved',
-  pinnedStops: 'Pinned stops',
+  mineStops: 'Stops',
+  minePlaces: 'Places',
   saveHow: 'Save a place with the star in the search or by holding the map',
   holdToManage: 'Hold one to rename or remove it',
   foundStops: 'Stops',
@@ -792,7 +797,8 @@ const _uk = Strings(
   nothingNearHere: 'Немає зупинки ближче ніж за 2 км звідси',
   noPlaces: 'Збережене місце зʼявиться тут',
   saved: 'Збережене',
-  pinnedStops: 'Закріплені зупинки',
+  mineStops: 'Зупинки',
+  minePlaces: 'Місця',
   saveHow: 'Збережіть місце зірочкою в пошуку або утримавши мапу',
   holdToManage: 'Утримуйте, щоб перейменувати або видалити',
   foundStops: 'Зупинки',

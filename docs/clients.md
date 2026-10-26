@@ -191,12 +191,16 @@ What goes where is decided by what a control does, not by how often it is
 wanted. Which routes are tracked is the Lines tab's. Layers change
 what the map draws - the route lines, the traffic, the basemap - and live in one
 sheet behind a layers button, whose icon is lit while anything in it is on.
-Everything belonging to the account rather than to the map is one tab, Mine:
-the pinned stops with what is due at each, dragged by a grip to reorder, the
-saved places, the route sets (a tap makes one the watched selection), and last a
-row for the account itself - the language, the walking speeds, the server, the
-password, signing out - with signing out below a rule so it is never the tap
-next to anything else. A pinned stop is listed there once, with its arrivals.
+Everything belonging to the account rather than to the map is one tab, Mine.
+A switch at its top shows one list at a time, so none hides another below it:
+Stops, the pinned stops with what is due at each, dragged by a grip to reorder;
+Places, the saved places; and Sets, the route sets (a tap makes one the watched
+selection). The tab keeps the list it was left on. Beside the switch, a button
+named with the username opens the account itself - the language, the walking
+speeds, the server, the password, signing out - with signing out below a rule
+so it is never the tap next to anything else. In the app that is a sheet; on the
+web it takes the lists' place until it is pressed again. A pinned stop is
+listed there once, with its arrivals.
 Nothing that is a toggle and nothing that signs you out sits loose on the map.
 That is `LayersSheet` and `AccountSheet` in `mobile/lib/src/sheets.dart` and
 `mine_tab.dart`, and `LayersPanel.tsx`, `MinePanel.tsx` and

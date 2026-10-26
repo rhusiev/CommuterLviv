@@ -6,9 +6,12 @@ import { Icon } from "./Icon";
 import { SavedPanel } from "./SavedPanel";
 import { Timetable } from "./Timetable";
 
-/** Everything that is the account's own, in one list: the pinned stops with
- * what is due there, the saved places, the route sets, and last the account
- * itself, folded until it is wanted. */
+/** Which of the account's lists is shown, or the account itself */
+export type MineSection = "stops" | "places" | "sets" | "account";
+
+/** Everything that is the account's own: the pinned stops with what is due
+ * there, the saved places and the route sets, one at a time under a switch,
+ * with the account itself behind a button beside it. */
 export function MinePanel(p: {
   catalog: Catalog;
   arrivals: Record<string, Arrival[]>;
@@ -27,13 +30,42 @@ export function MinePanel(p: {
   onActivate: (set: RouteSet) => void;
   onDelete: (set: RouteSet) => Promise<void>;
   username: string;
-  /** What the account row opens into */
+  /** What the account button opens into */
   account: ReactNode;
+  /** Held by the page, so the panel reopens on the list it was left on */
+  section: MineSection;
+  onSection: (next: MineSection) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const account = p.section === "account";
   return (
-    <div className="flex flex-col gap-4">
-      <Section title={t.pinnedStops}>
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-1.5">
+        {SWITCH.map(([section, label]) => (
+          <button
+            key={section}
+            onClick={() => p.onSection(section)}
+            aria-pressed={p.section === section}
+            className={`rounded-full px-3 py-1 text-sm ${
+              p.section === section ? "bg-accent/15 text-accent" : "text-slate-300 hover:bg-raised/70"
+            }`}
+          >
+            {t[label]}
+          </button>
+        ))}
+        <button
+          onClick={() => p.onSection(account ? "stops" : "account")}
+          aria-pressed={account}
+          aria-label={`${t.account}: ${p.username}`}
+          title={`${t.account}: ${p.username}`}
+          className={`ml-auto flex min-w-0 items-center gap-1.5 rounded-full px-2 py-1 text-sm ${
+            account ? "bg-accent/15 text-accent" : "text-slate-400 hover:bg-raised/70"
+          }`}
+        >
+          <Icon name="account" className="size-4 shrink-0" />
+          <span className="truncate">{p.username}</span>
+        </button>
+      </div>
+      {p.section === "stops" && (
         <Timetable
           catalog={p.catalog}
           stops={p.pins}
@@ -44,38 +76,23 @@ export function MinePanel(p: {
           onToggle={p.onToggle}
           onRoute={p.onRoute}
         />
-      </Section>
-      <Section title={t.places}>
+      )}
+      {p.section === "places" && (
         <SavedPanel places={p.places} onPlaces={p.onPlaces} onPlace={p.onPlace} />
-      </Section>
-      <Section title={t.sets}>
+      )}
+      {p.section === "sets" && (
         <SetList sets={p.sets} active={p.active} onActivate={p.onActivate} onDelete={p.onDelete} />
-      </Section>
-      <section className="border-t border-hair pt-3">
-        <button
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-slate-300 hover:bg-raised/70"
-        >
-          <Icon name="account" className="size-4" />
-          <span>{t.account}</span>
-          <span className="min-w-0 flex-1 truncate text-slate-500">{p.username}</span>
-          <Icon name={open ? "up" : "down"} className="size-4 text-slate-500" />
-        </button>
-        {open && <div className="mt-1">{p.account}</div>}
-      </section>
+      )}
+      {account && p.account}
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section>
-      <h2 className="mb-2 text-xs uppercase tracking-wide text-slate-500">{title}</h2>
-      {children}
-    </section>
-  );
-}
+const SWITCH = [
+  ["stops", "mineStops"],
+  ["places", "minePlaces"],
+  ["sets", "sets"],
+] as const;
 
 /** A set is chosen here, or deleted; what it holds is changed where routes are
  * watched */

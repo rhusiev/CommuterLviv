@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import { t } from "../lib/i18n";
 import type { Catalog } from "../lib/types";
-import { MinePanel } from "./MinePanel";
+import { MinePanel, type MineSection } from "./MinePanel";
 
 const CATALOG: Catalog = {
   routes: [{ id: "r1", short: "1", long: "Вокзал - Сихів", type: "bus" }],
@@ -29,19 +29,27 @@ const panel = (over: Partial<Parameters<typeof MinePanel>[0]> = {}) =>
       onDelete={() => Promise.resolve()}
       username="tester"
       account={<p>settings</p>}
+      section="stops"
+      onSection={() => {}}
       {...over}
     />,
   );
 
 describe("MinePanel", () => {
-  test("holds the pinned stops, the places and the sets, with the account last", () => {
-    const html = panel();
-    const at = [t.pinnedStops, "Площа Ринок", t.places, "Home", t.sets, "Commute", t.account].map(
-      (s) => html.indexOf(s),
-    );
+  test("shows only the list switched to", () => {
+    const shown = (section: MineSection) =>
+      ["Площа Ринок", "Home", "Commute", "settings"].filter((s) => panel({ section }).includes(s));
 
-    expect(at.every((i) => i >= 0)).toBe(true);
-    expect(at).toEqual([...at].sort((a, b) => a - b));
+    expect(shown("stops")).toEqual(["Площа Ринок"]);
+    expect(shown("places")).toEqual(["Home"]);
+    expect(shown("sets")).toEqual(["Commute"]);
+    expect(shown("account")).toEqual(["settings"]);
+  });
+
+  test("offers the switch and the account whichever list is shown", () => {
+    const html = panel({ section: "sets" });
+
+    for (const label of [t.mineStops, t.minePlaces, t.sets, "tester"]) expect(html).toContain(label);
   });
 
   test("lists a pinned stop once, with what is due there", () => {
@@ -51,15 +59,11 @@ describe("MinePanel", () => {
     expect(html).toContain(CATALOG.routes[0]!.long);
   });
 
-  test("keeps the account settings folded until the row is opened", () => {
-    expect(panel()).not.toContain("settings");
-  });
+  test("says how to fill each list that is empty", () => {
+    const empty = { pins: [], places: [], sets: [] };
 
-  test("says how to fill each section that is empty", () => {
-    const html = panel({ pins: [], places: [], sets: [] });
-
-    expect(html).toContain(t.nothingPinned);
-    expect(html).toContain(t.nothingSaved);
-    expect(html).toContain(t.noSets);
+    expect(panel({ ...empty, section: "stops" })).toContain(t.nothingPinned);
+    expect(panel({ ...empty, section: "places" })).toContain(t.nothingSaved);
+    expect(panel({ ...empty, section: "sets" })).toContain(t.noSets);
   });
 });
