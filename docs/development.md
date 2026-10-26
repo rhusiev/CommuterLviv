@@ -129,6 +129,9 @@ and signs the same APKs through the action `release.yml` uses
 a pubspec version no `v<app>` release has shipped, since F-Droid would build
 that tag; so the app keeps its released version and installs over it. It
 deploys nothing - the server and web app of that commit run where you put them.
+`.github/workflows/prune-prereleases.yml` deletes a pre-release and its tag once
+a `v*` release includes its commit, or once it is 14 days old unless it is the
+newest. It runs daily and after each release, from `main` only.
 
 The `places` release is not a version. `.github/workflows/places.yml` replaces
 its `lviv-search.sqlite` on the 3rd of every month, and can be run by hand from
