@@ -1,8 +1,8 @@
 /// Everything that is the account's own: the pinned stops with what is due
 /// there, the saved places and the route sets, one at a time under a switch,
-/// with the account itself beside it. Each list goes up as a whole, so a rename is the same one write as a
-/// reorder - which is what keeps a rename atomic, since the name is the
-/// identity server-side.
+/// with the account itself beside it. Each list goes up as a whole, so a
+/// rename is the same one write as a reorder - which is what keeps a rename
+/// atomic, since the name is the identity server-side.
 library;
 
 import 'package:flutter/material.dart' hide Theme;
@@ -191,7 +191,6 @@ class _MineTabState extends State<MineTab> {
           ),
         ),
       ),
-      _Hint(txt.holdToUnpin),
     ];
   }
 
@@ -219,7 +218,6 @@ class _MineTabState extends State<MineTab> {
           );
         },
       ),
-      _Hint(txt.holdToManage),
     ];
   }
 
@@ -257,7 +255,6 @@ class _MineTabState extends State<MineTab> {
             ),
         ],
       ),
-      _Hint(txt.holdToManage),
     ];
   }
 }
@@ -270,7 +267,7 @@ List<T> _moved<T>(List<T> list, int from, int to) {
   return next;
 }
 
-/// A line of help under or instead of a list.
+/// What an empty list says instead of its rows.
 class _Hint extends StatelessWidget {
   const _Hint(this.text);
 

@@ -278,28 +278,9 @@ void main() {
     await _pump(tester);
 
     expect(find.text(txt.pinAStop), findsOneWidget);
-    expect(find.text(txt.holdToUnpin), findsNothing);
     await _open(tester, txt.minePlaces);
     expect(find.text(txt.saveHow), findsOneWidget);
-    expect(find.text(txt.holdToManage), findsNothing);
     await _open(tester, txt.sets);
     expect(find.text(txt.noSets), findsOneWidget);
-    expect(find.text(txt.holdToManage), findsNothing);
-  });
-
-  testWidgets('a list with rows says how to manage them', (tester) async {
-    await _pump(
-      tester,
-      pins: const [0],
-      places: const [_home],
-      sets: const [_set],
-    );
-
-    expect(find.text(txt.holdToUnpin), findsOneWidget);
-    expect(find.text(txt.holdToManage), findsNothing);
-    await _open(tester, txt.minePlaces);
-    expect(find.text(txt.holdToManage), findsOneWidget);
-    await _open(tester, txt.sets);
-    expect(find.text(txt.holdToManage), findsOneWidget);
   });
 }

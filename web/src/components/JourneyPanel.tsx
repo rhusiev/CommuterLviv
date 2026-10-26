@@ -333,9 +333,6 @@ export function JourneyPanel({
       </div>
 
       {failed !== null && <p className="text-sm text-rose-300">{failed}</p>}
-      {options === null && failed === null && (
-        <p className="text-sm text-slate-500">{t.planHint}</p>
-      )}
       {options !== null && options.length === 0 && (
         <p className="text-sm text-slate-500">{t.noJourney}</p>
       )}

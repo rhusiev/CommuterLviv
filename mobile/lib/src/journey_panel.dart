@@ -397,16 +397,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
                 ),
               ),
             ),
-          if (_options != null)
-            Flexible(child: _results())
-          else if (!ready && _failed == null && !_busy)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(
-                txt.planHint,
-                style: material.Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
+          if (_options != null) Flexible(child: _results()),
           if (_options != null && _reportSaid != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),

@@ -80,8 +80,6 @@ class Strings {
     required this.mineStops,
     required this.minePlaces,
     required this.saveHow,
-    required this.holdToManage,
-    required this.holdToUnpin,
     required this.foundStops,
     required this.foundPlaces,
     required this.noSearch,
@@ -173,7 +171,6 @@ class Strings {
     required this.terminusWhy,
     required this.quietWhy,
     required this.wholeWalk,
-    required this.planHint,
     required this.follow,
     required this.followHint,
     required this.endFollow,
@@ -306,8 +303,6 @@ class Strings {
   /// Where places get saved from, for an empty list of them
   final String saveHow;
 
-  final String holdToManage;
-  final String holdToUnpin;
   final String foundStops;
   final String foundPlaces;
   final String noSearch;
@@ -416,7 +411,6 @@ class Strings {
   final String terminusWhy;
   final String quietWhy;
   final String wholeWalk;
-  final String planHint;
   final String follow;
   final String followHint;
   final String endFollow;
@@ -540,8 +534,6 @@ const _en = Strings(
   mineStops: 'Stops',
   minePlaces: 'Places',
   saveHow: 'Save a place with the star in the search or by holding the map',
-  holdToManage: 'Hold one to rename or remove it',
-  holdToUnpin: 'Hold one to unpin it',
   foundStops: 'Stops',
   foundPlaces: 'Places',
   noSearch: 'Place search is unavailable',
@@ -632,8 +624,6 @@ const _en = Strings(
   terminusWhy: 'The vehicle has not set off on this trip yet - the time is estimated from when this line usually leaves its terminus',
   quietWhy: 'Timetabled, but nothing on this route has been seen for an hour. It may not be running.',
   wholeWalk: 'Walk the whole way',
-  planHint:
-      'Tap From or To to search, pick a saved place or choose on the map.',
   follow: 'Follow it',
   followHint:
       'Says what to do next as you travel. Where you are stays on this phone.',
@@ -803,8 +793,6 @@ const _uk = Strings(
   mineStops: 'Зупинки',
   minePlaces: 'Місця',
   saveHow: 'Збережіть місце зірочкою в пошуку або утримавши мапу',
-  holdToManage: 'Утримуйте, щоб перейменувати або видалити',
-  holdToUnpin: 'Утримуйте, щоб відкріпити',
   foundStops: 'Зупинки',
   foundPlaces: 'Місця',
   noSearch: 'Пошук місць недоступний',
@@ -896,7 +884,6 @@ const _uk = Strings(
   terminusWhy: 'Транспорт ще не вирушив у цей рейс - час оцінено за тим, коли ця лінія зазвичай рушає з кінцевої',
   quietWhy: 'За розкладом курсує, але транспорту цього маршруту не видно вже годину. Можливо, він не їздить.',
   wholeWalk: 'Пішки весь шлях',
-  planHint: 'Торкніться «Звідки» чи «Куди», щоб шукати, вибрати збережене місце або вказати на мапі.',
   follow: 'Вести',
   followHint: 'Підказує, що робити далі, поки ви в дорозі. Де ви є, лишається на цьому телефоні.',
   endFollow: 'Завершити',
