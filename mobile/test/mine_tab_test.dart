@@ -129,7 +129,9 @@ void main() {
     expect(heard.account, isTrue);
   });
 
-  testWidgets('a pinned stop shows what is due and unpins', (tester) async {
+  testWidgets('a pinned stop shows what is due and unpins on a hold', (
+    tester,
+  ) async {
     final soon = DateTime.now().millisecondsSinceEpoch ~/ 1000 + 300;
     final heard = await _pump(
       tester,
@@ -144,7 +146,11 @@ void main() {
     await tester.tap(find.text('Opera'));
     expect(heard.stop, 0);
 
-    await tester.tap(find.byTooltip(txt.unpin));
+    expect(heard.pins, isNull);
+    await tester.longPress(find.text('Opera'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(txt.unpin));
+    await tester.pumpAndSettle();
     expect(heard.pins, isEmpty);
   });
 
@@ -272,6 +278,7 @@ void main() {
     await _pump(tester);
 
     expect(find.text(txt.pinAStop), findsOneWidget);
+    expect(find.text(txt.holdToUnpin), findsNothing);
     await _open(tester, txt.minePlaces);
     expect(find.text(txt.saveHow), findsOneWidget);
     expect(find.text(txt.holdToManage), findsNothing);
@@ -281,8 +288,14 @@ void main() {
   });
 
   testWidgets('a list with rows says how to manage them', (tester) async {
-    await _pump(tester, places: const [_home], sets: const [_set]);
+    await _pump(
+      tester,
+      pins: const [0],
+      places: const [_home],
+      sets: const [_set],
+    );
 
+    expect(find.text(txt.holdToUnpin), findsOneWidget);
     expect(find.text(txt.holdToManage), findsNothing);
     await _open(tester, txt.minePlaces);
     expect(find.text(txt.holdToManage), findsOneWidget);

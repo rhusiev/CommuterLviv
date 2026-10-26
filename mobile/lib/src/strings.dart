@@ -81,6 +81,7 @@ class Strings {
     required this.minePlaces,
     required this.saveHow,
     required this.holdToManage,
+    required this.holdToUnpin,
     required this.foundStops,
     required this.foundPlaces,
     required this.noSearch,
@@ -306,6 +307,7 @@ class Strings {
   final String saveHow;
 
   final String holdToManage;
+  final String holdToUnpin;
   final String foundStops;
   final String foundPlaces;
   final String noSearch;
@@ -539,6 +541,7 @@ const _en = Strings(
   minePlaces: 'Places',
   saveHow: 'Save a place with the star in the search or by holding the map',
   holdToManage: 'Hold one to rename or remove it',
+  holdToUnpin: 'Hold one to unpin it',
   foundStops: 'Stops',
   foundPlaces: 'Places',
   noSearch: 'Place search is unavailable',
@@ -801,6 +804,7 @@ const _uk = Strings(
   minePlaces: 'Місця',
   saveHow: 'Збережіть місце зірочкою в пошуку або утримавши мапу',
   holdToManage: 'Утримуйте, щоб перейменувати або видалити',
+  holdToUnpin: 'Утримуйте, щоб відкріпити',
   foundStops: 'Зупинки',
   foundPlaces: 'Місця',
   noSearch: 'Пошук місць недоступний',

@@ -191,6 +191,7 @@ class _MineTabState extends State<MineTab> {
           ),
         ),
       ),
+      _Hint(txt.holdToUnpin),
     ];
   }
 
@@ -310,11 +311,7 @@ class _StopTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListTile(
-    leading: IconButton(
-      onPressed: onUnpin,
-      icon: const Icon(Icons.push_pin),
-      tooltip: txt.unpin,
-    ),
+    leading: const Icon(Icons.push_pin),
     // The handle sits beside the name rather than as the tile's trailing, which
     // would narrow the chips under it to one a row on a phone
     title: Row(
@@ -343,6 +340,11 @@ class _StopTile extends StatelessWidget {
             ],
           ),
     onTap: onOpen,
+    onLongPress: () => manage(
+      context,
+      onDelete: () async => onUnpin(),
+      deleteLabel: txt.unpin,
+    ),
   );
 }
 

@@ -108,11 +108,13 @@ class _NameDialogState extends State<_NameDialog> {
 }
 
 /// What a long press on a saved thing offers. A thing that cannot be renamed -
-/// a pinned stop wears the stop's own name - passes a null [onRename].
+/// a pinned stop wears the stop's own name - passes a null [onRename], and
+/// one that is let go of rather than deleted names that in [deleteLabel].
 Future<void> manage(
   BuildContext context, {
   Future<void> Function()? onRename,
   required Future<void> Function() onDelete,
+  String? deleteLabel,
 }) async {
   final what = await showModalBottomSheet<String>(
     context: context,
@@ -127,7 +129,7 @@ Future<void> manage(
             ),
           ListTile(
             leading: const Icon(Icons.delete_outline),
-            title: Text(txt.delete),
+            title: Text(deleteLabel ?? txt.delete),
             onTap: () => Navigator.pop(context, 'delete'),
           ),
         ],
