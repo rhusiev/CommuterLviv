@@ -283,4 +283,23 @@ void main() {
     await _open(tester, txt.sets);
     expect(find.text(txt.noSets), findsOneWidget);
   });
+
+  testWidgets('a row lifted by its handle is drawn while it moves', (
+    tester,
+  ) async {
+    await _pump(tester, pins: const [0], places: const [_home, _work]);
+
+    for (final section in [txt.mineStops, txt.minePlaces]) {
+      await _open(tester, section);
+      final drag = await tester.startGesture(
+        tester.getCenter(find.byIcon(Icons.drag_handle).first),
+      );
+      await drag.moveBy(const Offset(0, 40));
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      await drag.up();
+      await tester.pumpAndSettle();
+    }
+  });
 }

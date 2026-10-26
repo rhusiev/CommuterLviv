@@ -174,6 +174,7 @@ class _MineTabState extends State<MineTab> {
         builder: (context, _) => SliverReorderableList(
           itemCount: pins.length,
           onReorderItem: (from, to) => widget.onPins(_moved(pins, from, to)),
+          proxyDecorator: _lifted,
           itemBuilder: (context, i) => _StopTile(
             key: ValueKey(widget.catalog.stops[pins[i]].id),
             index: i,
@@ -201,6 +202,7 @@ class _MineTabState extends State<MineTab> {
       SliverReorderableList(
         itemCount: places.length,
         onReorderItem: (from, to) => _putPlaces(_moved(places, from, to)),
+        proxyDecorator: _lifted,
         itemBuilder: (context, i) {
           final p = places[i];
           return _Row(
@@ -266,6 +268,14 @@ List<T> _moved<T>(List<T> list, int from, int to) {
   next.insert(to, next.removeAt(from));
   return next;
 }
+
+/// How high a row being dragged floats over the list.
+const _liftedElevation = 6.0;
+
+/// A row being dragged is drawn in the overlay, away from the page's
+/// [Material], so it is given one of its own - without it a tile cannot paint.
+Widget _lifted(Widget row, int index, Animation<double> animation) =>
+    Material(elevation: _liftedElevation, child: row);
 
 /// What an empty list says instead of its rows.
 class _Hint extends StatelessWidget {
