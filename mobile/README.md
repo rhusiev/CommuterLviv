@@ -146,7 +146,7 @@ not undoing:
 
 Two paths build the same three APKs, both into `mobile/build/app/outputs/flutter-apk/app-<abi>-release.apk`:
 
-* **Tag and push.** `.github/workflows/release.yml` runs on any `v*` tag, builds the per-ABI APKs at `/tmp/build/nl.r1a.commuterlviv/mobile`, signs them with the secrets below, and creates a GitHub release named after the tag with the three APKs attached. Once the workflow runs, F-Droid's recipe downloads them back from those same URLs and rebuilds from source to confirm the bytes match.
+* **Tag and push.** `.github/workflows/release.yml` runs on every push to `main`, builds the per-ABI APKs at `/tmp/build/nl.r1a.commuterlviv/mobile`, signs them with the secrets below, tags `v<version>`, and creates a GitHub release named after the tag with the three APKs attached. Once the workflow runs, F-Droid's recipe downloads them back from those same URLs and rebuilds from source to confirm the bytes match.
 * **Locally.** `../deploy/release-apk.sh` does the same thing by hand into `release/<version>/`, prints the file paths, and asks for a tag and a manual release. Use it when you want to inspect a build before publishing, or when the GHA runner is unreachable.
 
 Either way the F-Droid recipe names the same tag (`commit: v<version>`) and the same three URLs (`binary: .../commuterlviv-<version>-<abi>.apk`), and verifies them.
@@ -157,7 +157,7 @@ The four secrets the workflow reads are at
 * `ANDROID_KEYSTORE_B64` - `base64 mobile/android/commuterlviv-release.jks | tr -d '\n'`. The .jks itself is gitignored, and a base64 string is the simplest way to put binary in a secret field
 * `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` - the three remaining fields of `key.properties`. The workflow writes `key.properties` from them before the build
 
-The workflow fails the step that checks signatures (`Verify signatures and rename for release`) if the APK is not signed by `22e0d82c02f7a01805f121b40648bb4f6a2954b847e97089d3f73142ade31c32`, the same SHA-256 `AllowedAPKSigningKeys:` pins in the recipe, so a wrong keystore is caught before the release ships.
+The workflow fails the step that checks signatures (`Verify signatures`, in `.github/actions/apks`) if the APK is not signed by `22e0d82c02f7a01805f121b40648bb4f6a2954b847e97089d3f73142ade31c32`, the same SHA-256 `AllowedAPKSigningKeys:` pins in the recipe, so a wrong keystore is caught before the release ships.
 
 ## What the server needs
 
@@ -180,20 +180,26 @@ refused and the map stays empty while everything else works.
 | `lib/src/api.dart`           | cookies, the CSRF token and the `Origin` header - the browser part      |
 | `lib/src/live.dart`          | the socket, the vehicles, and where each one is right now               |
 | `lib/src/vehicle_layer.dart` | one `CustomPaint` for the whole city                                    |
-| `lib/src/home.dart`          | the state both tabs share, and nothing that draws                       |
+| `lib/src/home.dart`          | the state the tabs share, and nothing that draws                        |
 | `lib/src/map_tab.dart`       | the basemap, the vehicles and the attribution                           |
-| `lib/src/times_tab.dart`     | the pinned stops and what is due at each                                |
+| `lib/src/lines_tab.dart`     | every route, by filter and set, and one line's stops over the map       |
+| `lib/src/lines.dart`         | a line's ways and stop rows, the routes near you, the lines opened      |
+| `lib/src/mine_tab.dart`      | pinned stops with what is due, places, sets, and the account row        |
 | `lib/src/stop_card.dart`     | one stop, from the bottom of the map                                    |
+| `lib/src/place_card.dart`    | a place picked by name, and the way there                               |
+| `lib/src/hold_sheet.dart`    | what a long press on the map offers for that point                      |
 | `lib/src/stop_search.dart`   | stops by name and near you, and places from the service                 |
-| `lib/src/saved.dart`         | the saved places and the pinned stops, in one list                      |
+| `lib/src/point_label.dart`   | a point nothing names, called by the stop within 300 m of it            |
 | `lib/src/traffic.dart`       | how fast the streets are running, while that is on                      |
-| `lib/src/sheets.dart`        | the route sheet, the basemap sheet, and the dialogs each of them shares |
-| `lib/src/due.dart`           | one route's countdown chip, drawn in three places                       |
+| `lib/src/sheets.dart`        | the basemap and account sheets, and the dialogs they share              |
+| `lib/src/due.dart`           | a route chip with its countdown, drawn in two places                    |
+| `lib/src/route_chip.dart`    | a route: its body watches it, its `›` opens the line                    |
 | `lib/src/server_dialog.dart` | which server to talk to, asked from two places                          |
-| `lib/src/map_theme.dart`     | the five basemap styles and the colours drawn over them                 |
+| `lib/src/map_theme.dart`     | the eight basemap styles and the colours drawn over them                |
 | `lib/src/map_controls.dart`  | zoom, and the compass that shows up off north                           |
 | `lib/src/eta.dart`           | an arrival's absolute time, said as a countdown                         |
 | `lib/src/journey_panel.dart` | two points, and the ways between them                                   |
+| `lib/src/journey_option.dart` | one of those ways, folded to one tap target or opened into its legs    |
 | `lib/src/walk_speed.dart`    | how fast you walk, per search and as the usual                          |
 | `lib/src/map_tiles.dart`     | where the basemap is kept between runs                                  |
 | `lib/src/theme.dart`         | every colour and radius the app uses, once                              |
@@ -236,6 +242,13 @@ So `_loadStyle` rebuilds the `Style` with `theme: read.theme.copyWith(id: theme.
 nothing else: the map keeps showing the first style's pictures, read back from
 disk, across restarts.
 
+**A basemap that will not load is thrown as a string.** On an HTTP error
+`StyleReader` throws its message as a bare `String`, not an `Exception`, so
+`_loadStyle` catches both. Either way the map goes on without a basemap -
+stops, lines and vehicles are still drawn over a blank ground - and a snackbar
+with a close button says the basemap would not load, and stays until closed.
+Picking a basemap in the layers sheet tries again.
+
 **An arrow is a claim.** The wire's flag bit 1 says the tracker is confident the
 vehicle is moving, and the wedge is drawn only then. This is the same
 conservatism the web UI applies, decided once on the server so both clients say
@@ -269,7 +282,13 @@ inherited widget, so a widget says whatever `txt` said when it was last built.
 `ValueNotifier` that `main.dart` wraps the whole `MaterialApp` in, so one
 rebuild from the root is the entire mechanism and no widget below has to know
 the language can change. Nothing may cache a string in a field or in
-`initState`, or that copy will be the old language.
+`initState`, or that copy will be the old language. The same rebuild hands
+`MaterialApp` the language as its `locale`, so Flutter's own words from
+`flutter_localizations` - the date and time pickers, Back, the screen reader's
+labels - and the pickers' week, from Monday in Ukrainian, follow the app's
+language rather than the phone's. flutter_map's ⓘ names itself in English
+whatever the locale, so `map_tab.dart` passes the same button with its own
+tooltip.
 
 **The attribution is a badge, not a strip.** OpenStreetMap's data is ODbL and
 its attribution guidelines want a credit that is reasonably visible - but they
@@ -295,29 +314,42 @@ are committed: a build from source must not need a rasteriser.
 
 ## Planning a journey
 
-The directions button in the app bar opens `journey_panel.dart` over the map.
+The Journey tab opens `journey_panel.dart` over the map.
 Tapping either end opens the same search as the top bar (`stop_search.dart`):
 typing finds stops, addresses and shops, and before anything is typed it offers
 where I am, choosing on the map, and the saved places. The locate button beside
-each field is where I am in one tap. While an end is being picked on the map
+each field is where I am in one tap, and the field then says so rather than
+giving the coordinates. A point nothing names, in its field and at the top of
+the long-press sheet, is called by the stop nearest it within 300 m ("Near
+Rynok"), and only past that by its coordinates, as on the web; Mine says where
+a saved place is the same way, under its name. While an end is being picked on the map
 the panel folds to a strip saying so, and a tap is that point and not the
 nearest stop, because a door rarely is one. The arrow in the panel's corner
 folds it to a strip too, showing the picked option's length and routes, so the
-option can be read on the map; tapping the strip opens the panel again. The
-planner is left through the bottom tabs. Two chips beside the two fields say
-when to leave: the day, `Today` until another is picked in the next 30 days, and
-the time, `Now` until one is picked. They are passed as `at=<unix seconds>`. A
-time already past on today is meant for tomorrow. Below them a stepper sets
-how fast this search walks on the level, 0.5 to 8 km/h in halves, passed as
-`speed=`. It starts from the usual speed, kept on the device under
-`commuterlviv.walk` and set from `Walking and hurrying` in the account menu;
+option can be read on the map; tapping the strip opens the panel again. Open, the panel lies over the map's buttons, so the screen reader skips them until it folds - as it does under an open line's list of stops. Opening an option frames the map on it - its walks, its rides and the stops they meet - above the open panel, measured once the option has unfolded in it. An opened line is framed the same way, above its list of stops. A drawn option carries one pill of times per stop, centred on the stop; on a saved place the pill stands above it, clear of the place's name (`journey_layer.dart`). The
+planner is left through the bottom tabs or with back, which from any tab but the
+map returns to the map rather than leaving the app. On the map, back first
+folds the follow card's list of steps or closes the map's credits, if open. On the sign-in screen, back from taking up an invite returns to signing in. Two chips beside the two
+fields say when to leave: the day, `Today` until another is picked in the next
+30 days, and the time, `Now` until one is picked. They are passed as
+`at=<unix seconds>`. A time already past on today is meant for tomorrow. Below
+them a stepper sets how fast this search walks on the level, 0.5 to 8 km/h in
+halves, passed as `speed=`. It starts from the usual speed, kept on the device
+under `commuterlviv.walk` and set from `Walking and hurrying` in the account sheet;
 stepping it in the panel changes that search only. The server already slows
 walks uphill and speeds them down gentle slopes.
 
 `GET /api/plan` answers with options ranked by arrival. A ride on a tracked
 vehicle says nothing more; one resting on the timetable says so, and one on a
-line nothing has been seen running on says that in the error colour. Tapping
-either word explains what it means. The option's backup count opens a dialog
+line nothing has been seen running on says that in the error colour. An option
+not yet drawn is one tap target (`journey_option.dart`): a tap anywhere on it
+draws it and opens it, and nothing on it opens anything else. Folded, it says
+the hurry pill, its weakest ride's note and its backup count in words; its
+summary row folds it again and never turns into anything else. Opened, every
+control is drawn as one and as tall as `kMinInteractiveDimension`: a stop's row
+has a chevron and opens its card, a route's badge sits in a ring with a map and
+opens its line, and a note and the hurry pill say why under them, with nothing
+to tap for it. The browser does the same. "N backups ›" opens a dialog
 that, under each ride's stop, puts the planned way first and then the ride's
 backups - the other ways to the door from that stop, each with its routes,
 where it changes and when it gets there, at most half an hour after the option
@@ -335,15 +367,28 @@ because that is how it arrives. A server without the planner caches answers
 
 ## What is saved
 
-`Saved` in the top-bar menu opens `saved.dart`: the named places and the pinned
-stops in one sheet, each row tapping through to the map, held to rename or
-remove, and dragged by its handle to reorder. Both lists are written whole -
+The Mine tab (`mine_tab.dart`) lists the pinned stops with what is due at each,
+the named places and the route sets, each row tapping through to the map (a set
+becomes the watched selection), a place or a set held to rename or remove, and
+a stop or a place dragged by its handle to reorder. A pinned stop's handle sits
+beside its name, so its due chips run the full width under it and a phone fits
+two or more a row. Its last row opens the
+account sheet, which no longer sits in the top bar. Both lists are written whole -
 `POST /api/places` and `POST /api/pins` take the entire list - so a rename is a
 delete and a save in one request, which is what keeps it atomic when the name is
-the identity server-side. Search saves too: `GET /api/search?q=` merges
+the identity server-side. It is also why a place cannot be renamed to another
+place's name, compared trimmed as the server keys them: the server keeps one
+place per name, so the other would be dropped. The rename is refused with a
+message and nothing is sent. Saving a point under the name of a place elsewhere,
+from anywhere, asks first in a dialog and replaces that place only on "Replace",
+as the web does; saving a place again where it stands asks nothing. Search saves too: `GET /api/search?q=` merges
 addresses and shops under their own heading below the stops, a quarter of a
 second after the typing stops, and every row there - stops included - has a star
-that names the point and keeps it.
+that names the point and keeps it. A place picked from either opens
+`place_card.dart` instead of only moving the map. A long press on the map opens
+`hold_sheet.dart` for that point: the name to save it under is typed into the
+sheet itself, and the sheet also plans the way there or from there, or opens the
+search listing the stops within 2 km of it.
 
 ## Traffic, and which way a line runs
 

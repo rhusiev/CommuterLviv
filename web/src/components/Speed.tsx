@@ -18,7 +18,7 @@ export function Speed({
       <button onClick={() => onKmh(kmh - step)} disabled={kmh <= min} title={t.slower} className="btn-quiet px-2 disabled:opacity-40">
         <Icon name="minus" className="size-4" />
       </button>
-      <span className="w-16 text-center text-sm tabular-nums">{t.kmh(kmh)}</span>
+      <span className="w-24 whitespace-nowrap text-center text-sm tabular-nums">{t.kmh(kmh)}</span>
       <button onClick={() => onKmh(kmh + step)} disabled={kmh >= max} title={t.faster} className="btn-quiet px-2 disabled:opacity-40">
         <Icon name="plus" className="size-4" />
       </button>

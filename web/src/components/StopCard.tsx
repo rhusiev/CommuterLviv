@@ -1,18 +1,22 @@
+import { stopTitle } from "../lib/catalog";
 import { countdown, nextPerRoute } from "../lib/eta";
-import { RouteBadge } from "./RouteBadge";
+import { RouteChip } from "./RouteChip";
 import type { Arrival, Catalog } from "../lib/types";
 import { t } from "../lib/i18n";
 import { Icon } from "./Icon";
 import { Close } from "./Cross";
 
-/** The route list is complete; the times only cover the routes on the map,
- * because only those are being predicted for. */
+/** What is due here, then every route that calls here. Every route chip on it,
+ * due or not, watches its route or stops watching it, and opens its line from
+ * its `›`. What is due covers every route through the stop, watched or not. */
 export function StopCard({
   catalog,
   stop,
   arrivals,
   pinned,
   onPin,
+  watching,
+  onToggle,
   onRoute,
   onClose,
 }: {
@@ -21,21 +25,28 @@ export function StopCard({
   arrivals: Arrival[] | undefined;
   pinned: boolean;
   onPin: () => void;
+  /** The routes picked, by id */
+  watching: Set<string>;
+  onToggle: (id: string) => void;
+  /** The line, from a chip's `›` */
   onRoute: (i: number) => void;
   onClose: () => void;
 }) {
   const s = catalog.stops[stop];
   if (!s) return null;
-  const due = new Map(nextPerRoute(arrivals ?? []).map((a) => [a.route, a]));
+  const { name, code } = stopTitle(s);
+  const due = nextPerRoute(arrivals ?? []).filter((a) => catalog.routes[a.route]);
 
   return (
     <div className="panel pointer-events-auto p-3">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-medium text-slate-100">{s.name}</h3>
-          <p className="text-xs text-slate-500">
-            {s.code} · {t.routeCount(s.routes.length)}
-          </p>
+          {/* The code in brackets, as every other place names the stop */}
+          <div className="flex items-baseline gap-1.5">
+            <h3 className="truncate font-medium text-slate-100">{name}</h3>
+            {code && <span className="shrink-0 text-sm text-slate-500">({code})</span>}
+          </div>
+          <p className="text-xs text-slate-500">{t.routeCount(s.routes.length)}</p>
         </div>
         {/* An icon rather than a word, whose length would change on tap and
             shift the ✕ beside it */}
@@ -53,27 +64,46 @@ export function StopCard({
         <Close onClick={onClose} />
       </div>
 
-      <ul className="mt-2 flex flex-wrap gap-1">
+      {due.length === 0 ? (
+        <p className="mt-2 text-xs text-slate-500">{t.nothingDue}</p>
+      ) : (
+        <ul className="mt-2 flex flex-wrap gap-1">
+          {due.map((a) => {
+            const r = catalog.routes[a.route]!;
+            return (
+              <li key={a.route}>
+                <RouteChip
+                  route={r}
+                  watched={watching.has(r.id)}
+                  onWatch={() => onToggle(r.id)}
+                  onLine={() => onRoute(a.route)}
+                >
+                  <span className={`text-xs text-slate-400 ${a.planned ? "italic" : ""}`}>
+                    {countdown(a.t)}
+                  </span>
+                </RouteChip>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <h4 className="mt-3 text-xs uppercase tracking-wide text-slate-500">{t.callsHere}</h4>
+      <div className="mt-1 flex flex-wrap gap-1">
         {s.routes.map((i) => {
           const r = catalog.routes[i];
           if (!r) return null;
-          const a = due.get(i);
           return (
-            <li key={i}>
-              <button
-                onClick={() => onRoute(i)}
-                title={t.showLine}
-                className="flex items-center gap-1 rounded-control bg-raised/70 py-0.5 pl-0.5 pr-1.5 hover:bg-raised"
-              >
-                <RouteBadge route={r} className="px-1.5 py-0.5 text-xs" />
-                <span className={`text-xs text-slate-400 ${a?.planned ? "italic" : ""}`}>
-                  {a ? countdown(a.t) : "-"}
-                </span>
-              </button>
-            </li>
+            <RouteChip
+              key={r.id}
+              route={r}
+              watched={watching.has(r.id)}
+              onWatch={() => onToggle(r.id)}
+              onLine={() => onRoute(i)}
+            />
           );
         })}
-      </ul>
+      </div>
     </div>
   );
 }

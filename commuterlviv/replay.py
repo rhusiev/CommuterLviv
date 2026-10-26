@@ -10,10 +10,11 @@ import contextlib
 import datetime
 import os
 import sqlite3
+from dataclasses import dataclass
 
 import numpy as np
 
-from . import baselines, config, gtfs, track
+from . import config, gtfs, track
 from .model import PaceModel
 
 DB = os.path.join(gtfs.DATA, "feed.db")
@@ -33,15 +34,8 @@ class NoData(Exception):
 
 
 def build(net, cfg=None):
-    """The estimator a config asks for."""
-    cfg = cfg or config.FULL
-    if cfg.learn == "knn":
-        return baselines.KnnModel(net, cfg)
-    if cfg.learn == "median":
-        return baselines.MedianModel(net, cfg)
-    if cfg.learn.startswith("table"):
-        return baselines.TableModel(net, cfg)
-    return PaceModel(net, cfg)
+    """The model a config asks for."""
+    return PaceModel(net, cfg or config.FULL)
 
 
 def _window(t_from, t_to):
@@ -144,6 +138,11 @@ def run(net, t_from=None, t_to=None, epoch=EPOCH, db=DB, warmup=0.0,
     return model, res
 
 
+def recording(db):
+    """The recording at `db`, opened read-only, to be closed by a `with`."""
+    return contextlib.closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True))
+
+
 def _fixes(db, t_from, t_to):
     """The recording's on-trip fixes between `t_from` and `t_to` (either may
     be None), in time order."""
@@ -156,7 +155,7 @@ def _fixes(db, t_from, t_to):
     if t_to:
         sql += " AND veh_ts <= ?"
         args.append(t_to)
-    with contextlib.closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True)) as con:
+    with recording(db) as con:
         yield from con.execute(sql + " ORDER BY veh_ts", args)
 
 
@@ -171,9 +170,8 @@ def _idx(m, names, key):
 def drain(model, tracks, closed, now):
     """Hand the epoch's cell crossings, finished and in progress, to the model."""
     parts = [(gi, c, veh, True) for gi, c, veh in closed]
-    if model.cfg.incremental:
-        parts += [(model.shape_base[t.shape_id] + t.cell.i, t.cell, veh, False)
-                  for veh, t in tracks.items() if t.cell is not None]
+    parts += [(model.shape_base[t.shape_id] + t.cell.i, t.cell, veh, False)
+              for veh, t in tracks.items() if t.cell is not None]
     closed.clear()
     if not parts:
         return
@@ -188,17 +186,6 @@ def drain(model, tracks, closed, now):
     model.observe(idx[keep], a[:, 0], a[:, 1], a[:, 2], a[:, 3], now)
 
 
-def _lateness_eta(tr, s_now):
-    """Seconds to each remaining stop under the official API's method: one
-    lateness carried unchanged, so the answer is the scheduled travel time.
-
-    Only differences of timetable times are taken, so the service day never has
-    to be resolved.
-    """
-    sched_now = float(np.interp(s_now, tr.sdist, tr.sched))
-    return np.maximum(tr.sched[tr.next_stop:] - sched_now, 0.0)
-
-
 def prune(tracks, runs, now):
     """Forget vehicles that have gone quiet, so `tracks` stops growing.
 
@@ -211,10 +198,16 @@ def prune(tracks, runs, now):
         runs[veh] = tracks.pop(veh).run
 
 
+def fresh(tr, now):
+    """Whether the vehicle has reported within `STALE`: no decision of an
+    epoch is taken for one that has not."""
+    return tr.ts is not None and now - tr.ts <= STALE
+
+
 def predictable(tr, now):
-    """Whether this track can be predicted from at all, without asking the model."""
-    return (tr.ts is not None and tr.s is not None and now - tr.ts <= STALE
-            and tr.next_stop < len(tr.sdist))
+    """Whether this track can be predicted from at all, without asking the model:
+    fresh, placed on its shape, and with a stop still ahead of it."""
+    return fresh(tr, now) and tr.s is not None and tr.next_stop < len(tr.sdist)
 
 
 def believed(tr, now):
@@ -234,10 +227,7 @@ def etas(model, tr, now):
         return None
     i = tr.next_stop
     s_now = believed(tr, now)
-    if model.cfg.eta == "lateness":
-        dt = _lateness_eta(tr, s_now)
-    else:
-        dt = model.time_between(tr.shape_id, s_now, tr.sdist[i:])
+    dt = model.time_between(tr.shape_id, s_now, tr.sdist[i:])
     k = np.nonzero(dt <= HORIZON)[0]
     return (i, s_now, dt, k) if len(k) else None
 
@@ -250,36 +240,62 @@ def all_etas(model, asked, now):
     return got
 
 
-def _stands(model, tracks, got, now):
-    """The vehicles in at the end of their trip with nothing ahead in `got`,
-    noted standing for their next one as `Live` notes them."""
-    running = {tr.trip for tr in tracks.values()}
-    for veh, tr in tracks.items():
-        if got.get(veh) is None and tr.ts is not None and now - tr.ts <= STALE:
-            came = model.layovers.came(veh, tr.trip)
-            if came is not None:
-                model.layovers.stand_after(tr.trip, came, now, running)
-    model.layovers.foretell(now)
+@dataclass(frozen=True, slots=True)
+class Forecast:
+    """What one epoch foretold. `asked` holds the `(veh, track)` pairs that were
+    `predictable` and `got` their `etas`, each None where nothing lies inside the
+    horizon; `standing` the `(veh, track, came)` in at the end of their trip with
+    nothing ahead; `running` every trip a track is on."""
+    asked: list
+    got: list
+    standing: list
+    running: set
 
 
-def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True):
+def step(model, tracks, runs, closed, now, emit=True):
+    """One epoch, the same offline and live: hand the model what the tracks
+    crossed, forget the vehicles gone quiet, and - on an epoch that is emitted -
+    refresh the model and `forecast`. Returns the `Forecast`, or None."""
     # set before the drain, so the first scored epoch is past any training
     model.emitting = emit
     drain(model, tracks, closed, now)
-    res.epochs += 1
     prune(tracks, runs, now)
     if not emit:
-        return
+        return None
     model.refresh(now)
-    ep = int(now - res.t0)
+    return forecast(model, tracks, now)
+
+
+def forecast(model, tracks, now):
+    """Time every predictable track, and note the fresh ones in at the end of
+    their trip as standing for their next one."""
     asked = [(veh, tr) for veh, tr in tracks.items() if predictable(tr, now)]
-    # numbered before the model is consulted, so variants replaying the same
-    # recording agree on event numbering
-    idx = [(_idx(veh_idx, res.veh_ids, veh), _idx(trip_idx, res.trip_ids, tr.trip))
-           for veh, tr in asked]
-    etas = all_etas(model, asked, now)
-    _stands(model, tracks, dict(zip((veh for veh, _ in asked), etas)), now)
-    for (veh, tr), (vi, ti), got in zip(asked, idx, etas):
+    got = all_etas(model, asked, now)
+    timed = {veh for (veh, _), g in zip(asked, got) if g is not None}
+    running = {tr.trip for tr in tracks.values()}
+    standing = []
+    for veh, tr in tracks.items():
+        if veh in timed or not fresh(tr, now):
+            continue
+        came = model.layovers.came(veh, tr.trip)
+        if came is not None:
+            model.layovers.stand_after(tr.trip, came, now, running)
+            standing.append((veh, tr, came))
+    model.layovers.foretell(now)
+    return Forecast(asked, got, standing, running)
+
+
+def _flush(model, res, tracks, runs, closed, now, veh_idx, trip_idx, emit=True):
+    fc = step(model, tracks, runs, closed, now, emit)
+    res.epochs += 1
+    if fc is None:
+        return
+    ep = int(now - res.t0)
+    for (veh, tr), got in zip(fc.asked, fc.got):
+        # every track asked is numbered, timed or not, so variants replaying
+        # the same recording agree on event numbering
+        vi = _idx(veh_idx, res.veh_ids, veh)
+        ti = _idx(trip_idx, res.trip_ids, tr.trip)
         if got is None or not res.keep:
             continue
         i, s_now, dt, k = got

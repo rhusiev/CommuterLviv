@@ -2,12 +2,16 @@ import { type ReactNode, useEffect, useEffectEvent, useMemo, useRef, useState } 
 import { api } from "../lib/api";
 import { metres } from "../lib/geo";
 import { MIN_TYPED, score, words } from "../lib/match";
-import { matching } from "../lib/places";
+import { matching, type Shown } from "../lib/places";
 import { hereOnce, ONE_FIX, type NoFix } from "../lib/position";
 import type { Catalog, Found, Place } from "../lib/types";
 import { t } from "../lib/i18n";
+import { RouteBadge } from "./RouteBadge";
 
 const LIMIT = 8;
+
+/** A stop row names this many of its routes, so a hub's does not fill the list */
+const SHOWN_ROUTES = 6;
 
 /** Metres: past this "near me" is an IP geolocation, not a nearby stop */
 const NEAR = 2000;
@@ -28,21 +32,26 @@ type Section = { title: string; rows: Row[] };
 type Props = {
   catalog: Catalog;
   onGo: (stop: number) => void;
-  onPlace: (place: Place) => void;
+  onPlace: (place: Shown) => void;
   places: Place[];
   onSave: (name: string, lat: number, lon: number) => void;
   /** Set when the search stands in for a field: it opens focused, offers
    *  `idle` until something is typed, and asks to be dismissed when done */
   inline?: { placeholder: string; idle: ReactNode; onDismiss: () => void };
+  /** A point to list the stops near, as "near me" does for the device; a new
+   *  object lists them again */
+  around?: { lat: number; lon: number } | null;
 };
 
-export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: Props) {
+export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline, around = null }: Props) {
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const [near, setNear] = useState<{ stop: number; away: number }[] | null>(null);
   const [found, setFound] = useState<Found[]>([]);
   const [locating, setLocating] = useState(false);
   const [why, setWhy] = useState("");
+  // The query the place search last answered, so its silence means no match
+  const [answered, setAnswered] = useState("");
   const box = useRef<HTMLDivElement>(null);
 
   const names = useMemo(() => catalog.stops.map((s) => words(s.name)), [catalog]);
@@ -68,6 +77,7 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
       api.search(q, stop.signal).then(
         (got) => {
           setFound(got.places.slice(0, LIMIT));
+          setAnswered(q);
           setWhy("");
         },
         () => {
@@ -82,6 +92,29 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
       stop.abort();
     };
   }, [query, near]);
+
+  /** The stops within `NEAR` of `at`, nearest first */
+  const nearby = (at: { lat: number; lon: number }) =>
+    catalog.stops
+      .map((s, stop) => ({ stop, away: metres(at, s) }))
+      .filter((h) => h.away <= NEAR)
+      .sort((a, b) => a.away - b.away)
+      .slice(0, LIMIT);
+
+  const showNear = (close: { stop: number; away: number }[], none: string) => {
+    setNear(close);
+    if (close.length === 0) setWhy(none);
+  };
+
+  const [listedAround, setListedAround] = useState(around);
+  if (listedAround !== around) {
+    setListedAround(around);
+    if (around) {
+      setQuery("");
+      setWhy("");
+      showNear(nearby(around), t.nothingNearHere);
+    }
+  }
 
   // A new query or a new list of stops near starts at the top
   const [listed, setListed] = useState({ query, near });
@@ -101,14 +134,7 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
     hereOnce({ ...ONE_FIX, maximumAge: NEAR_FIX_AGE_MS }).then(
       (pos) => {
         setLocating(false);
-        const me = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        const close = catalog.stops
-          .map((s, stop) => ({ stop, away: metres(me, s) }))
-          .filter((h) => h.away <= NEAR)
-          .sort((a, b) => a.away - b.away)
-          .slice(0, LIMIT);
-        setNear(close);
-        if (close.length === 0) setWhy(t.nothingNear);
+        showNear(nearby({ lat: pos.coords.latitude, lon: pos.coords.longitude }), t.nothingNear);
       },
       (why: NoFix) => {
         setLocating(false);
@@ -145,6 +171,8 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
       : [{ title: t.stopHits, rows: near.map((h) => ({ stop: h.stop, away: h.away })) }]
   ).filter((s) => s.rows.length > 0);
   const rows = sections.flatMap((s) => s.rows);
+  const unmatched = near === null && query.trim().length >= MIN_TYPED && answered === query.trim();
+  const said = why || (unmatched ? t.nothingFound : "");
   // Named only once the list holds more than one kind of thing
   const headings = new Map<number, string>();
   if (sections.length > 1) {
@@ -189,14 +217,15 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
         }}
         placeholder={inline?.placeholder ?? t.findStop}
         autoFocus={inline !== undefined}
-        className={inline ? "field w-full py-1.5" : "field-bar py-2.5 pr-8"}
+        className={inline ? "field w-full py-1.5" : "field-bar py-2.5 pr-10"}
       />
       {!inline && (
         <button
           onClick={locate}
           disabled={locating}
           title={t.nearMe}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-1 text-sm text-slate-500 hover:text-accent disabled:text-slate-600"
+          aria-label={t.nearMe}
+          className="absolute right-1 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-full text-sm text-slate-500 hover:text-accent disabled:text-slate-600"
         >
           ◎
         </button>
@@ -204,13 +233,14 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
       {inline && query.trim() === "" && (
         <div className="panel absolute inset-x-0 top-full z-30 mt-1 p-1 text-sm">{inline.idle}</div>
       )}
-      {why !== "" && rows.length === 0 && (
+      {said !== "" && rows.length === 0 && (
         <p className="panel absolute inset-x-0 top-full z-30 mt-2 px-3 py-2 text-xs text-slate-400">
-          {why}
+          {said}
         </p>
       )}
       {rows.length > 0 && (
-        <ul className="panel absolute inset-x-0 top-full z-30 mt-2 overflow-hidden p-1">
+        // Down to the tab bar, as the panels are; past that the list scrolls
+        <ul className="panel absolute inset-x-0 top-full z-30 mt-2 max-h-[calc(100dvh-9rem)] overflow-y-auto p-1">
           {rows.map((row, n) => {
             const heading = headings.get(n);
             const it = "saved" in row
@@ -218,16 +248,15 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
               : "stop" in row
               ? {
                   ...catalog.stops[row.stop]!,
-                  where:
-                    row.away === undefined
-                      ? catalog.stops[row.stop]!.routes
-                          .map((r) => catalog.routes[r]?.short)
-                          .filter(Boolean)
-                          .slice(0, 6)
-                          .join(" ")
-                      : t.away(Math.round(row.away)),
+                  where: row.away === undefined ? "" : t.away(Math.round(row.away)),
                 }
               : row.place;
+            const routes =
+              "stop" in row && row.away === undefined
+                ? catalog.stops[row.stop]!.routes
+                    .flatMap((r) => catalog.routes[r] ?? [])
+                    .slice(0, SHOWN_ROUTES)
+                : [];
             return (
               <li key={n}>
                 {heading !== undefined && (
@@ -244,12 +273,21 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline }: P
                   <button
                     onClick={() => go(row)}
                     data-hit={it.name}
-                    className={`min-w-0 flex-1 px-2.5 py-1.5 text-left text-sm ${
+                    // Flex items: as inline text, name and address had no
+                    // break between them and ran out under the star
+                    className={`flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 px-2.5 py-1.5 text-left text-sm ${
                       n === cursor ? "text-accent" : "text-slate-300"
                     }`}
                   >
-                    <span className="truncate">{it.name}</span>
-                    <span className="ml-2 text-xs text-slate-500">{it.where}</span>
+                    <span className="min-w-0 break-words">{it.name}</span>
+                    <span className="text-xs text-slate-500">{it.where}</span>
+                    {routes.length > 0 && (
+                      <span className="flex flex-wrap gap-1">
+                        {routes.map((r) => (
+                          <RouteBadge key={r.id} route={r} className="px-1.5 text-xs" />
+                        ))}
+                      </span>
+                    )}
                   </button>
                   {"saved" in row ? (
                     <span className="shrink-0 px-2 py-1.5 text-sm text-accent">★</span>

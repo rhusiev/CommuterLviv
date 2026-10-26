@@ -29,11 +29,13 @@ function prefixEdits(q: string, w: string): number {
   return Math.min(...row);
 }
 
+/** A whole word beats a prefix, so a stop's code "61" comes before 610-619 */
 function wordScore(q: string, name: string[]): number {
   let best = 0;
   for (const w of name) {
-    if (w.startsWith(q)) return 3;
-    if (q.length >= 3 && w.includes(q)) best = Math.max(best, 2);
+    if (w === q) return 4;
+    if (w.startsWith(q)) best = 3;
+    else if (q.length >= 3 && w.includes(q)) best = Math.max(best, 2);
     else if (q.length >= 4 && best < 1 && prefixEdits(q, w) <= 1) best = 1;
   }
   return best;

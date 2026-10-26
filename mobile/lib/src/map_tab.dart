@@ -4,6 +4,7 @@ library;
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart' hide Theme;
+import 'package:flutter/material.dart' as material show Theme;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -31,15 +32,18 @@ class MapTab extends StatelessWidget {
     required this.api,
     required this.map,
     required this.style,
+    this.hasNoBasemap = false,
     required this.traffic,
     required this.catalog,
     required this.live,
     required this.stops,
+    required this.faint,
     required this.selected,
     required this.theme,
     required this.here,
     this.onLocate,
     this.card,
+    this.covered = false,
     required this.empty,
     required this.marks,
     required this.journey,
@@ -55,8 +59,12 @@ class MapTab extends StatelessWidget {
   final Api api;
   final MapController map;
 
-  /// Null while the basemap is still being read.
+  /// Null while the basemap is still being read, or if it would not be.
   final Style? style;
+
+  /// The basemap would not be read: the map is drawn without it, and nothing
+  /// says it is still on its way.
+  final bool hasNoBasemap;
 
   /// How the streets are running, over the basemap and under everything else.
   /// Only while this is on is anything asked for.
@@ -64,6 +72,9 @@ class MapTab extends StatelessWidget {
   final Catalog catalog;
   final Live live;
   final List<int> stops;
+
+  /// Every other stop: drawn faint and tappable from close in.
+  final List<int> faint;
   final int? selected;
   final MapTheme theme;
 
@@ -76,6 +87,10 @@ class MapTab extends StatelessWidget {
   /// brings its own gap above, so that an offstage one leaves the buttons
   /// where they were.
   final Widget? card;
+
+  /// A panel is drawn over the map buttons, so the screen reader must not
+  /// offer them.
+  final bool covered;
 
   final bool empty;
 
@@ -135,6 +150,7 @@ class MapTab extends StatelessWidget {
               catalog: catalog,
               live: live,
               stops: stops,
+              faint: faint,
               selected: selected,
               theme: theme,
               here: here,
@@ -145,7 +161,12 @@ class MapTab extends StatelessWidget {
               places: places,
             ),
             if (journey case final journey?)
-              JourneyLayer(journey: journey, catalog: catalog, theme: theme),
+              JourneyLayer(
+                journey: journey,
+                catalog: catalog,
+                theme: theme,
+                places: places,
+              ),
             // The journey's own pills name its ends while it is drawn.
             if (journey == null && marks.isNotEmpty)
               MarkerLayer(
@@ -191,13 +212,17 @@ class MapTab extends StatelessWidget {
             children: [
               Align(
                 alignment: Alignment.centerRight,
-                child: MapControls(map: map, here: here, onLocate: onLocate),
+                child: ExcludeSemantics(
+                  excluding: covered,
+                  child: MapControls(map: map, here: here, onLocate: onLocate),
+                ),
               ),
               ?card,
             ],
           ),
         ),
-        if (style == null) const LinearProgressIndicator(minHeight: 2),
+        if (style == null && !hasNoBasemap)
+          const LinearProgressIndicator(minHeight: 2),
         if (empty)
           Center(
             child: Card(
@@ -235,10 +260,44 @@ const _absorb = AbsorbPointer(child: SizedBox.expand());
 class _Attribution extends StatelessWidget {
   const _Attribution();
 
+  /// flutter_map's default height for the ⓘ and its row
+  static const _badgeSize = 24.0;
+
   @override
   Widget build(BuildContext context) => RichAttributionWidget(
     alignment: AttributionAlignment.bottomLeft,
     showFlutterMapAttribution: false,
+    permanentHeight: _badgeSize,
+    // flutter_map's own button, but its tooltip is a fixed English
+    // "Attributions" and is what a screen reader says
+    openButton: (context, open) => IconButton(
+      onPressed: open,
+      tooltip: txt.attributions,
+      icon: const Icon(
+        Icons.info_outlined,
+        color: Colors.black,
+        size: _badgeSize,
+      ),
+    ),
+    // Shown only while the credits are open, so back closes them first
+    // rather than leaving the app from the map
+    closeButton: (context, close) => PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) close();
+      },
+      child: IconButton(
+        onPressed: close,
+        tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+        icon: Icon(
+          Icons.cancel_outlined,
+          color:
+              material.Theme.of(context).textTheme.titleSmall?.color ??
+              Colors.black,
+          size: _badgeSize,
+        ),
+      ),
+    ),
     attributions: [
       TextSourceAttribution(
         'OpenStreetMap',

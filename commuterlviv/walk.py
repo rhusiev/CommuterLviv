@@ -52,6 +52,11 @@ WALKABLE = {
 # a stop's platform tagged only by its transit role, which is just as walkable:
 # somebody standing on one is waiting right at the stop
 PLATFORMS = ('["railway"="platform"]', '["public_transport"="platform"]')
+# a road whose pavement is drawn as a way of its own is not walked along: the
+# way beside it is, and the road is crossed only where a crossing is drawn.
+# OSRM's foot profile does the same, and so does an explicit foot access here
+SIDEWALKS = ("sidewalk", "sidewalk:both", "sidewalk:left", "sidewalk:right")
+FOOT_ALLOWED = {"yes", "permissive", "designated"}
 
 MARGIN = 0.02   # degrees around the stops' bounding box, about 2 km
 
@@ -61,24 +66,36 @@ def _selectors():
     return (f'["highway"~"^({kinds})$"]', *PLATFORMS)
 
 
-# which ways a graph was fetched as, so one fetched before a change to them is
-# refetched rather than kept for a month
-KIND = hashlib.blake2b("\n".join(_selectors()).encode(),
-                       digest_size=8).hexdigest()
-
-
 def query(bbox):
-    """The Overpass query for one bounding box; `>` pulls the nodes in too."""
+    """The Overpass query for one bounding box: the ways with their nodes but
+    no tags, which a whole city's worth would time out, and then the tags of the
+    few with a pavement of their own."""
     south, west, north, east = bbox
     ways = "\n".join(f'  way{sel}["foot"!="no"]["access"!="private"]'
                       f"({south},{west},{north},{east});"
                       for sel in _selectors())
+    beside = "\n".join(f'  way.walk["{key}"="separate"];' for key in SIDEWALKS)
     return f"""[out:json][timeout:180];
 (
 {ways}
+)->.walk;
+(.walk;>;);
+out skel qt;
+(
+{beside}
 );
-(._;>;);
-out skel qt;"""
+out tags qt;"""
+
+
+# which ways a graph was fetched as, so one fetched before a change to them is
+# refetched rather than kept for a month
+KIND = hashlib.blake2b(query((0, 0, 0, 0)).encode(), digest_size=8).hexdigest()
+
+
+def _beside(tags):
+    """Whether a way is a road with its pavement drawn apart from it."""
+    return (any(tags.get(key) == "separate" for key in SIDEWALKS)
+            and tags.get("foot") not in FOOT_ALLOWED)
 
 
 def bbox(net):
@@ -142,15 +159,20 @@ def metres(lat1, lon1, lat2, lon2):
 
 
 def compile_graph(raw):
-    """Overpass JSON into the arrays `Walk` runs on; edges are undirected,
-    since one-way streets are one-way only for traffic."""
+    """Overpass JSON into the arrays `Walk` runs on, without the roads whose
+    pavements are ways of their own; edges are undirected, since one-way
+    streets are one-way only for traffic."""
     where = {}
-    ways = []
+    drawn = []
+    beside = set()
     for el in raw["elements"]:
         if el["type"] == "node":
             where[el["id"]] = (el["lat"], el["lon"])
-        elif el["type"] == "way":
-            ways.append(el["nodes"])
+        elif "nodes" in el:
+            drawn.append((el.get("id"), el["nodes"]))
+        elif _beside(el.get("tags", {})):
+            beside.add(el["id"])
+    ways = [nodes for way, nodes in drawn if way not in beside]
 
     used = {}
     lat, lon = [], []

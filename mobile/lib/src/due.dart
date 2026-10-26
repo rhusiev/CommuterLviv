@@ -5,29 +5,35 @@ import 'package:flutter/material.dart';
 
 import 'eta.dart';
 import 'models.dart';
-import 'route_badge.dart';
+import 'route_chip.dart';
 
-/// A route badge and how long until it calls.
+/// A route's chip with how long until it calls.
 class Due extends StatelessWidget {
   const Due({
     super.key,
     required this.route,
     required this.arrival,
-    this.onLine,
+    required this.watched,
+    required this.onWatch,
+    required this.onLine,
   });
 
   final TransitRoute route;
   final Arrival arrival;
-
-  final VoidCallback? onLine;
+  final bool watched;
+  final VoidCallback onWatch;
+  final VoidCallback onLine;
 
   @override
-  Widget build(BuildContext context) {
-    final label = Row(
+  Widget build(BuildContext context) => RouteChip(
+    route: route,
+    watched: watched,
+    onWatch: onWatch,
+    onLine: onLine,
+    fontSize: 10,
+    trailing: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        RouteBadge(route: route, fontSize: 10),
-        const SizedBox(width: 6),
         if (arrival.planned) ...[
           const Icon(Icons.schedule, size: 14),
           const SizedBox(width: 2),
@@ -39,16 +45,6 @@ class Due extends StatelessWidget {
               : null,
         ),
       ],
-    );
-    // ActionChip rather than a Chip in an InkWell: the wrapper's ink paints a
-    // rectangle the size of the chip's margins and spills past the stadium
-    if (onLine == null) {
-      return Chip(visualDensity: VisualDensity.compact, label: label);
-    }
-    return ActionChip(
-      visualDensity: VisualDensity.compact,
-      label: label,
-      onPressed: onLine,
-    );
-  }
+    ),
+  );
 }

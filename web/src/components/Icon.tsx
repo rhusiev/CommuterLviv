@@ -27,9 +27,12 @@ const PATHS = {
   search: "M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 1 0 0-13M15.5 15.5 20 20",
   map: "M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2ZM9 4v14M15 6v14",
   info: `${RING(9)}M12 11v5M12 8v.01`,
+  warning: "M12 3.5 2.5 20h19L12 3.5ZM12 10v4.5M12 17.5v.01",
+  siren: "M7 17v-5a5 5 0 0 1 10 0v5M4.5 17h15v3.5h-15ZM12 2v2M4.5 5.5 6 7M19.5 5.5 18 7M12 10v3",
   down: "M6 9l6 6 6-6",
   up: "M6 15l6-6 6 6",
   right: "M9 6l6 6-6 6",
+  left: "M15 6l-6 6 6 6",
 } satisfies Record<string, string | readonly Part[]>;
 
 const parts = (v: string | readonly Part[]) => (typeof v === "string" ? [{ d: v }] : v);

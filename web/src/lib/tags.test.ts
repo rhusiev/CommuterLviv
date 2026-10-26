@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { clock } from "./eta";
-import { journeyTags, SHORT_WALK_S } from "./tags";
+import { journeyTags, onPlace, SHORT_WALK_S } from "./tags";
 import type { Leg } from "./types";
 
 // on a minute, so a few seconds later is still the same one on the clock
@@ -82,5 +82,21 @@ describe("journeyTags", () => {
       clock(T0 + 5 * MIN_S + 30),
       clock(T0 + 20 * MIN_S),
     ]);
+  });
+});
+
+describe("onPlace", () => {
+  // 20 m north of the stop, and 30 m
+  const HOME = { lat: STOP[0] + 0.00018, lon: STOP[1] };
+  const AWAY = { lat: STOP[0] + 0.00027, lon: STOP[1] };
+  const at = { lat: STOP[0], lon: STOP[1] };
+
+  test("a pill within 25 m of a saved place stands on it", () => {
+    expect(onPlace(at, [AWAY, HOME])).toBe(true);
+  });
+
+  test("a pill further from every saved place stands on none", () => {
+    expect(onPlace(at, [AWAY])).toBe(false);
+    expect(onPlace(at, [])).toBe(false);
   });
 });

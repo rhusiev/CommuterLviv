@@ -9,7 +9,7 @@ import 'package:commuterlviv/src/strings.dart';
 
 const _old = 'a long enough password';
 const _next = 'another long password';
-const _refused = 'the current password is wrong';
+const _refused = 'The current password is wrong';
 const _unreachable = 'nobody answered';
 
 /// Opens the dialog over a page, and keeps what it closed with.

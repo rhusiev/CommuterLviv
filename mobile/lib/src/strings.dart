@@ -31,15 +31,27 @@ class Strings {
     required this.wantAccount,
     required this.haveInvite,
     required this.map,
-    required this.times,
+    required this.mine,
+    required this.lines,
+    required this.allLines,
+    required this.watchingLines,
+    required this.nearLines,
+    required this.nothingNearLines,
+    required this.noneWatched,
+    required this.recentLines,
+    required this.otherWay,
+    required this.watchLine,
+    required this.noLineStops,
+    required this.vehicleHere,
     required this.mapStyle,
+    required this.themeNames,
     required this.server,
     required this.signOut,
     required this.routes,
-    required this.routeLine,
-    required this.showRoute,
+    required this.kinds,
     required this.everyRoute,
     required this.layers,
+    required this.attributions,
     required this.account,
     required this.findStop,
     required this.tryAgain,
@@ -50,21 +62,30 @@ class Strings {
     required this.nameSet,
     required this.rename,
     required this.delete,
-    required this.holdForLine,
     required this.places,
     required this.savePlace,
+    required this.getHere,
     required this.namePlace,
+    required this.thisPlace,
+    required this.savePlaceAs,
+    required this.placeNameTaken,
+    required this.replace,
+    required this.toHere,
+    required this.fromHere,
+    required this.nearHere,
+    required this.nearStop,
+    required this.nothingNearHere,
     required this.noPlaces,
     required this.saved,
-    required this.pinnedStops,
-    required this.nothingSaved,
-    required this.showOnMap,
-    required this.holdToManage,
+    required this.mineStops,
+    required this.minePlaces,
+    required this.saveHow,
     required this.foundStops,
     required this.foundPlaces,
     required this.noSearch,
     required this.nearMe,
     required this.nothingNear,
+    required this.nothingFound,
     required this.traffic,
     required this.departAt,
     required this.preferBy,
@@ -74,10 +95,10 @@ class Strings {
     required this.save,
     required this.use,
     required this.sets,
+    required this.noSets,
     required this.pin,
     required this.unpin,
     required this.callsHere,
-    required this.nothingDueWatched,
     required this.nothingDue,
     required this.pickARoute,
     required this.pinAStop,
@@ -89,7 +110,8 @@ class Strings {
     required this.whereAmI,
     required this.noLocation,
     required this.renewed,
-    required this.quiet,
+    required this.quietTitle,
+    required this.quietDetail,
     required this.plannerPreparing,
     required this.stopsAhead,
     required this.vehicleGone,
@@ -133,6 +155,10 @@ class Strings {
     required this.faster,
     required this.alsoOptionHint,
     required this.showWay,
+    required this.showLine,
+    required this.lineOf,
+    required this.watchRoute,
+    required this.unwatchRoute,
     required this.searchAgain,
     required this.today,
     required this.tomorrow,
@@ -145,7 +171,6 @@ class Strings {
     required this.terminusWhy,
     required this.quietWhy,
     required this.wholeWalk,
-    required this.planHint,
     required this.follow,
     required this.followHint,
     required this.endFollow,
@@ -205,17 +230,37 @@ class Strings {
   final String wantAccount;
   final String haveInvite;
   final String map;
-  final String times;
+  final String mine;
+
+  /// The routes, and one line of them open; "Lines" so it does not read as the
+  /// journey tab in Ukrainian, which spends "Маршрут" on a route
+  final String lines;
+  final String allLines;
+  final String Function(int n) watchingLines;
+  final String nearLines;
+  final String Function(int metres) nothingNearLines;
+  final String noneWatched;
+  final String recentLines;
+  final String otherWay;
+  final String watchLine;
+  final String noLineStops;
+  final String vehicleHere;
   final String mapStyle;
+
+  /// Each basemap's name, by its [MapTheme.id].
+  final Map<String, String> themeNames;
   final String server;
   final String signOut;
   final String routes;
 
-  /// A second word for "route": Ukrainian already spends one on `plan`.
-  final String routeLine;
-  final String showRoute;
+  /// Headings over the route chips, by `TransitRoute.type`
+  final Map<String, String> kinds;
+
   final String everyRoute;
   final String layers;
+
+  /// The map's ⓘ, which opens the credits for its data and tiles
+  final String attributions;
   final String account;
   final String findStop;
   final String tryAgain;
@@ -226,21 +271,44 @@ class Strings {
   final String nameSet;
   final String rename;
   final String delete;
-  final String holdForLine;
   final String places;
   final String savePlace;
+
+  /// Plans the way to a place shown on the map
+  final String getHere;
   final String namePlace;
+
+  /// A point held on the map, and what its sheet offers for it
+  final String thisPlace;
+  final String savePlaceAs;
+
+  /// A rename refused, or a save asked first: the name is a place's identity
+  /// on the server, so a second place of that name would replace the first
+  final String placeNameTaken;
+  final String replace;
+  final String toHere;
+  final String fromHere;
+  final String nearHere;
+
+  /// A point nothing names, called by the stop near it
+  final String Function(String stop) nearStop;
+  final String nothingNearHere;
   final String noPlaces;
   final String saved;
-  final String pinnedStops;
-  final String nothingSaved;
-  final String showOnMap;
-  final String holdToManage;
+
+  /// The switch between the account's lists: its pinned stops, its places
+  final String mineStops;
+  final String minePlaces;
+
+  /// Where places get saved from, for an empty list of them
+  final String saveHow;
+
   final String foundStops;
   final String foundPlaces;
   final String noSearch;
   final String nearMe;
   final String nothingNear;
+  final String nothingFound;
   final String traffic;
   final String departAt;
   final String preferBy;
@@ -252,10 +320,12 @@ class Strings {
   final String save;
   final String use;
   final String sets;
+
+  /// Where sets are made, for an empty list of them
+  final String noSets;
   final String pin;
   final String unpin;
   final String callsHere;
-  final String nothingDueWatched;
   final String nothingDue;
   final String pickARoute;
   final String pinAStop;
@@ -273,7 +343,8 @@ class Strings {
   final String renewed;
 
   /// Too few vehicles report for what the timetable has running.
-  final String quiet;
+  final String quietTitle;
+  final String quietDetail;
 
   final String plannerPreparing;
   final String stopsAhead;
@@ -322,6 +393,12 @@ class Strings {
   final String faster;
   final String alsoOptionHint;
   final String showWay;
+  final String showLine;
+
+  /// What the `›` of a route chip is called for [route], read out by a screen reader.
+  final String Function(String route) lineOf;
+  final String watchRoute;
+  final String unwatchRoute;
   final String searchAgain;
   final String today;
   final String tomorrow;
@@ -334,7 +411,6 @@ class Strings {
   final String terminusWhy;
   final String quietWhy;
   final String wholeWalk;
-  final String planHint;
   final String follow;
   final String followHint;
   final String endFollow;
@@ -400,15 +476,36 @@ const _en = Strings(
   wantAccount: 'Create an account',
   haveInvite: 'I have an invite code',
   map: 'Map',
-  times: 'Times',
+  mine: 'Mine',
+  lines: 'Lines',
+  allLines: 'All',
+  watchingLines: _enWatchingLines,
+  nearLines: 'Near me',
+  nothingNearLines: _enNothingNearLines,
+  noneWatched: 'Nothing watched yet. Tap a route to watch it.',
+  recentLines: 'Opened lately',
+  otherWay: 'The other way',
+  watchLine: 'Watch',
+  noLineStops: 'The stops of this line are not known',
+  vehicleHere: 'A vehicle heading here',
   mapStyle: 'Map style',
+  themeNames: {
+    'colorful-dark': 'Colorful dark',
+    'natural-dark': 'Natural dark',
+    'muted-dark': 'Muted dark',
+    'gray-dark': 'Gray dark',
+    'colorful': 'Colorful',
+    'natural': 'Natural',
+    'muted': 'Muted',
+    'gray': 'Gray',
+  },
   server: 'Server',
   signOut: 'Sign out',
   routes: 'Routes',
-  routeLine: 'Line',
-  showRoute: 'Show this route on the map',
+  kinds: {'bus': 'Buses', 'tram': 'Trams', 'trolleybus': 'Trolleybuses'},
   everyRoute: 'Every route',
   layers: 'Layers',
+  attributions: 'Attributions',
   account: 'Account',
   findStop: 'Find a stop or a place',
   tryAgain: 'Try again',
@@ -419,21 +516,30 @@ const _en = Strings(
   nameSet: 'Name this set',
   rename: 'Rename',
   delete: 'Delete',
-  holdForLine: 'Hold a route to see its line',
   places: 'Saved places',
   savePlace: 'Save this place',
+  getHere: 'Get here',
   namePlace: 'Name this place',
+  thisPlace: 'This place',
+  savePlaceAs: 'Save this place...',
+  placeNameTaken: 'A place with that name is already saved',
+  replace: 'Replace',
+  toHere: 'Directions to here',
+  fromHere: 'Directions from here',
+  nearHere: 'Stops near here',
+  nearStop: _enNearStop,
+  nothingNearHere: 'No stop within 2 km of this place',
   noPlaces: 'Save a place and it is offered here',
   saved: 'Saved',
-  pinnedStops: 'Pinned stops',
-  nothingSaved: 'Nothing saved yet',
-  showOnMap: 'Tap a row to show it on the map',
-  holdToManage: 'Hold one to rename or remove it',
+  mineStops: 'Stops',
+  minePlaces: 'Places',
+  saveHow: 'Save a place with the star in the search or by holding the map',
   foundStops: 'Stops',
   foundPlaces: 'Places',
   noSearch: 'Place search is unavailable',
   nearMe: 'Stops near me',
   nothingNear: 'No stop within 2 km of where you are',
+  nothingFound: 'No stop or place by that name',
   traffic: 'Traffic',
   departAt: 'Leave at',
   preferBy: 'Order',
@@ -443,11 +549,11 @@ const _en = Strings(
   save: 'Save',
   use: 'Use',
   sets: 'Sets',
+  noSets: 'Watch some routes and save them as a set in the Lines tab',
   pin: 'Pin',
   unpin: 'Unpin',
   callsHere: 'Calls here',
-  nothingDueWatched: 'Nothing due on the routes you are watching',
-  nothingDue: 'Nothing due',
+  nothingDue: 'Nothing due here for now',
   pickARoute: 'Pick a route to see it moving',
   pinAStop: 'Pin a stop and its times show up here',
   language: 'Language',
@@ -458,9 +564,10 @@ const _en = Strings(
   whereAmI: 'Where I am',
   noLocation: "Location is off or not allowed for the app - turn it on in the phone's settings",
   renewed: "The city's routes and timetables were updated",
-  quiet:
-      'Few vehicles are reporting where they are - possibly an air raid alert. '
-      'Positions and arrival times may be missing or off',
+  quietTitle: 'Possibly an air raid alert',
+  quietDetail:
+      'Few vehicles are reporting where they are, so positions and arrival '
+      'times may be missing or off',
   plannerPreparing:
       'The journey planner is getting ready - try again in a few minutes',
   plan: 'Journey',
@@ -500,6 +607,10 @@ const _en = Strings(
   faster: 'Faster',
   alsoOptionHint: 'This way is also among the options',
   showWay: 'Show this way on the map',
+  showLine: 'Show this line',
+  lineOf: _enLineOf,
+  watchRoute: 'Watch on the map',
+  unwatchRoute: 'Stop watching',
   searchAgain: 'That search is no longer held; search again',
   today: 'Today',
   tomorrow: 'Tomorrow',
@@ -513,8 +624,6 @@ const _en = Strings(
   terminusWhy: 'The vehicle has not set off on this trip yet - the time is estimated from when this line usually leaves its terminus',
   quietWhy: 'Timetabled, but nothing on this route has been seen for an hour. It may not be running.',
   wholeWalk: 'Walk the whole way',
-  planHint:
-      'Tap From or To to search, pick a saved place or choose on the map.',
   follow: 'Follow it',
   followHint:
       'Says what to do next as you travel. Where you are stays on this phone.',
@@ -563,6 +672,9 @@ const _en = Strings(
 );
 
 String _enUpdateSet(String name) => 'Update “$name”';
+String _enWatchingLines(int n) => 'Watching $n';
+String _enNothingNearLines(int metres) =>
+    'No stop within $metres m of where you are';
 String _enWalkLeg(int m) => 'Walk $m min';
 String _enChangeCount(int n) => n == 1 ? '1 change' : '$n changes';
 String _enChangeAt(String stops) => 'Change at $stops';
@@ -586,6 +698,7 @@ String _enPacesNow(double walk, double? hurry) =>
 
 String _enHurryAt(String pace) => 'Hurry: $pace';
 String _enAlsoOption(int n) => 'Option $n';
+String _enLineOf(String route) => 'Line $route';
 String _enUnreachable(String server) => 'Could not reach $server';
 String _enWalkTo(String stop) => 'Walk to $stop';
 String _enWaitAt(String stop) => 'Wait at $stop';
@@ -599,6 +712,7 @@ String _enHurryAhead(String route, String stop) =>
 String _enMissedRide(String route, String stop) =>
     '$route at $stop will be missed';
 String _enToGo(String distance) => '$distance to go';
+String _enNearStop(String stop) => 'Near $stop';
 String _enMetres(int m) => '$m m';
 String _enKm(double km) => '${km.toStringAsFixed(1)} km';
 
@@ -621,17 +735,38 @@ const _uk = Strings(
   wantAccount: 'Створити акаунт',
   haveInvite: 'У мене є код запрошення',
   map: 'Мапа',
-  times: 'Час',
+  mine: 'Моє',
+  lines: 'Лінії',
+  allLines: 'Усі',
+  watchingLines: _ukWatchingLines,
+  nearLines: 'Поруч',
+  nothingNearLines: _ukNothingNearLines,
+  noneWatched: 'Поки нічого не відстежується. Торкніться маршруту, щоб відстежувати його.',
+  recentLines: 'Нещодавно відкриті',
+  otherWay: 'Інший напрямок',
+  watchLine: 'Відстежувати',
+  noLineStops: 'Зупинки цієї лінії невідомі',
+  vehicleHere: 'Транспорт прямує сюди',
   mapStyle: 'Вигляд мапи',
+  themeNames: {
+    'colorful-dark': 'Кольорова темна',
+    'natural-dark': 'Природна темна',
+    'muted-dark': 'Приглушена темна',
+    'gray-dark': 'Сіра темна',
+    'colorful': 'Кольорова',
+    'natural': 'Природна',
+    'muted': 'Приглушена',
+    'gray': 'Сіра',
+  },
   server: 'Сервер',
   signOut: 'Вийти',
   routes: 'Маршрути',
-  routeLine: 'Лінія',
-  showRoute: 'Показати цей маршрут на мапі',
+  kinds: {'bus': 'Автобуси', 'tram': 'Трамваї', 'trolleybus': 'Тролейбуси'},
   everyRoute: 'Усі маршрути',
   layers: 'Шари',
+  attributions: 'Джерела мапи',
   account: 'Обліковий запис',
-  findStop: 'Знайти зупинку або місце',
+  findStop: 'Зупинка або місце',
   tryAgain: 'Спробувати ще',
   filterRoutes: 'Пошук маршруту',
   clear: 'Очистити',
@@ -640,21 +775,30 @@ const _uk = Strings(
   nameSet: 'Назва набору',
   rename: 'Перейменувати',
   delete: 'Видалити',
-  holdForLine: 'Утримуйте маршрут, щоб побачити лінію',
   places: 'Збережені місця',
   savePlace: 'Зберегти це місце',
+  getHere: 'Маршрут сюди',
   namePlace: 'Назва місця',
+  thisPlace: 'Це місце',
+  savePlaceAs: 'Зберегти це місце...',
+  placeNameTaken: 'Місце з такою назвою вже збережено',
+  replace: 'Замінити',
+  toHere: 'Маршрут сюди',
+  fromHere: 'Маршрут звідси',
+  nearHere: 'Зупинки поблизу',
+  nearStop: _ukNearStop,
+  nothingNearHere: 'Немає зупинки ближче ніж за 2 км звідси',
   noPlaces: 'Збережене місце зʼявиться тут',
   saved: 'Збережене',
-  pinnedStops: 'Закріплені зупинки',
-  nothingSaved: 'Поки нічого не збережено',
-  showOnMap: 'Торкніться рядка, щоб показати на мапі',
-  holdToManage: 'Утримуйте, щоб перейменувати або видалити',
+  mineStops: 'Зупинки',
+  minePlaces: 'Місця',
+  saveHow: 'Збережіть місце зірочкою в пошуку або утримавши мапу',
   foundStops: 'Зупинки',
   foundPlaces: 'Місця',
   noSearch: 'Пошук місць недоступний',
   nearMe: 'Зупинки поруч',
   nothingNear: 'Немає зупинки ближче ніж за 2 км',
+  nothingFound: 'Немає зупинки чи місця з такою назвою',
   traffic: 'Затори',
   departAt: 'Виїзд о',
   preferBy: 'Порядок',
@@ -664,11 +808,12 @@ const _uk = Strings(
   save: 'Зберегти',
   use: 'Використати',
   sets: 'Набори',
+  noSets:
+      'Відстежуйте кілька маршрутів і збережіть їх як набір у вкладці Лінії',
   pin: 'Закріпити',
   unpin: 'Відкріпити',
   callsHere: 'Тут зупиняються',
-  nothingDueWatched: 'На обраних маршрутах нічого не їде',
-  nothingDue: 'Нічого не їде',
+  nothingDue: 'Поки що сюди нічого не їде',
   pickARoute: 'Оберіть маршрут, щоб побачити рух',
   pinAStop: 'Закріпіть зупинку - і час буде тут',
   language: 'Мова',
@@ -679,12 +824,13 @@ const _uk = Strings(
   whereAmI: 'Де я',
   noLocation: 'Геолокацію вимкнено або не дозволено застосунку - увімкніть її в налаштуваннях телефона',
   renewed: 'Маршрути й розклади міста оновилися',
-  quiet:
-      'Мало транспорту передає, де він є - можливо, через повітряну тривогу. '
-      'Розташування й час прибуття можуть бути неповні або неточні',
+  quietTitle: 'Можливо, повітряна тривога',
+  quietDetail:
+      'Мало транспорту передає, де він є, тож розташування й час прибуття '
+      'можуть бути неповні або неточні',
   plannerPreparing:
       'Планувальник поїздок готується - спробуйте за кілька хвилин',
-  plan: 'Маршрут',
+  plan: 'Поїздка',
   from: 'Звідки',
   to: 'Куди',
   tapMap: 'Торкніться мапи',
@@ -721,6 +867,10 @@ const _uk = Strings(
   faster: 'Швидше',
   alsoOptionHint: 'Цей шлях є і серед варіантів',
   showWay: 'Показати цей шлях на мапі',
+  showLine: 'Показати лінію',
+  lineOf: _ukLineOf,
+  watchRoute: 'Стежити на мапі',
+  unwatchRoute: 'Не стежити',
   searchAgain: 'Цей пошук уже не збережено; шукайте знову',
   today: 'Сьогодні',
   tomorrow: 'Завтра',
@@ -734,7 +884,6 @@ const _uk = Strings(
   terminusWhy: 'Транспорт ще не вирушив у цей рейс - час оцінено за тим, коли ця лінія зазвичай рушає з кінцевої',
   quietWhy: 'За розкладом курсує, але транспорту цього маршруту не видно вже годину. Можливо, він не їздить.',
   wholeWalk: 'Пішки весь шлях',
-  planHint: 'Торкніться «Звідки» чи «Куди», щоб шукати, вибрати збережене місце або вказати на мапі.',
   follow: 'Вести',
   followHint: 'Підказує, що робити далі, поки ви в дорозі. Де ви є, лишається на цьому телефоні.',
   endFollow: 'Завершити',
@@ -782,6 +931,9 @@ const _uk = Strings(
 );
 
 String _ukUpdateSet(String name) => 'Оновити «$name»';
+String _ukWatchingLines(int n) => 'Відстежую $n';
+String _ukNothingNearLines(int metres) =>
+    'Немає зупинки ближче ніж за $metres м';
 String _ukWalkLeg(int m) => 'Пішки $m хв';
 String _ukChangeCount(int n) => n == 1 ? '1 пересадка' : 'Пересадок: $n';
 String _ukChangeAt(String stops) => 'Пересадка: $stops';
@@ -806,6 +958,7 @@ String _ukPacesNow(double walk, double? hurry) =>
 
 String _ukHurryAt(String pace) => 'Поспішіть: $pace';
 String _ukAlsoOption(int n) => 'Варіант $n';
+String _ukLineOf(String route) => 'Лінія $route';
 String _ukUnreachable(String server) => 'Не вдалося зʼєднатися з $server';
 String _ukWalkTo(String stop) => 'Ідіть до зупинки $stop';
 String _ukWaitAt(String stop) => 'Чекайте на зупинці $stop';
@@ -819,6 +972,7 @@ String _ukHurryAhead(String route, String stop) =>
 String _ukMissedRide(String route, String stop) =>
     'На $route на зупинці $stop не встигнете';
 String _ukToGo(String distance) => 'Ще $distance';
+String _ukNearStop(String stop) => 'Біля зупинки $stop';
 String _ukMetres(int m) => '$m м';
 String _ukKm(double km) => '${km.toStringAsFixed(1).replaceAll('.', ',')} км';
 

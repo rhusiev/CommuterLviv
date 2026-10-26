@@ -9,7 +9,6 @@ This does not write `feed.db` - the collector owns it - so the two poll the same
 endpoint independently.
 """
 import asyncio
-import contextlib
 import multiprocessing
 import os
 import sqlite3
@@ -36,7 +35,7 @@ class Service:
         self.set = settings
         self.log = log
         self.live = Live(net, settings.cfg, catalog, epoch=settings.epoch)
-        self.persist = persist and snapshot.supported(self.live.model)
+        self.persist = persist
         self.lock = asyncio.Lock()
         self.hub = None          # set by the app, which owns the connections
         self.timetable = lambda: None    # the planner's, once the app has one
@@ -71,7 +70,7 @@ class Service:
         timetable."""
         live, db = live or self.live, db or replay.DB
         try:
-            with contextlib.closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True)) as con:
+            with replay.recording(db) as con:
                 last = con.execute("SELECT max(veh_ts) FROM veh").fetchone()[0]
         except sqlite3.Error as exc:
             self.log("no recording to warm from:", brief(exc))
@@ -202,11 +201,9 @@ class Service:
             except Exception as exc:
                 self.errors += 1
                 fails += 1
-                if fails in (1, 5) or fails % 50 == 0:
+                if collect.worth_logging(fails):
                     self.log(f"poll error x{fails}", brief(exc))
-            wait = min(self.set.poll_veh * 2 ** min(fails, 8),
-                       collect.BACKOFF_MAX) if fails else self.set.poll_veh
-            await asyncio.sleep(max(0.5, wait - (time.time() - t0)))
+            await asyncio.sleep(collect.next_poll(self.set.poll_veh, fails, t0))
 
     @staticmethod
     def fetch():

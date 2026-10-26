@@ -36,7 +36,8 @@ export function Menu({
             onClick={() => onToggle(false)}
             className="fixed inset-0 cursor-default"
           />
-          <div className="panel absolute right-0 top-12 w-52 p-2">{children}</div>
+          {/* Opaque: it opens over the map controls, which showed through */}
+          <div className="panel absolute right-0 top-12 w-52 bg-panel p-2">{children}</div>
         </>
       )}
     </>

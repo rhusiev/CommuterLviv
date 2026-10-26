@@ -57,9 +57,11 @@ docker compose exec service python -m commuterlviv admin operator <name>
 `disable` locks an account and ends its sessions and can be undone; `delete`
 erases it and everything hanging off it and cannot. `operator` grants one
 thing: the right to read `GET /api/status`, which reports engine health, how
-many clients are connected and how much the service is pushing. Being signed in
-does not carry that - to anyone without the flag the endpoint is a 404, so it
-does not even admit to being there. `--undo` takes it back.
+many clients are connected, how much the service is pushing and, under
+`skipped`, the listed stops last night's check found the vehicles drive past
+(see [stops the vehicles drive past](service.md#stops-the-vehicles-drive-past)).
+Being signed in does not carry that - to anyone without the flag the endpoint
+is a 404, so it does not even admit to being there. `--undo` takes it back.
 
 A search somebody reported (see [reporting a search](service.md#reporting-a-search))
 is logged as `search reported: <file>` and kept in the service volume until
@@ -69,6 +71,14 @@ deleted; past 200 files new reports are refused:
 docker compose exec service ls data/reports
 docker compose exec service python -m commuterlviv report data/reports/<file>
 docker compose exec service rm data/reports/<file>
+```
+
+The same check runs by hand over any window of the recording, and a stop it
+confirms comes off the route with a `[[remove]]` rule in
+`commuterlviv/overrides.toml` and a release:
+
+```sh
+docker compose exec service python -m commuterlviv skipped --days 14
 ```
 
 `docker compose logs -f collector` prints one line every 5 minutes, which is the

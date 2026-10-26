@@ -63,9 +63,29 @@ scheduled time interpolated between its neighbours for each trip separately,
 and listed in the catalogue because the catalogue is built from the stop lists.
 A rule only applies to patterns whose line passes within 50 m, `within` moves
 that, and `toward` - matched against the last stop's name - is what keeps a
-one-way platform off the pattern going the other way. Editing the file rebuilds
-`data/network.pkl` on the next start, because the cache is keyed by
-`network.source()`, a digest of the feed and this file both.
+one-way platform off the pattern going the other way.
+
+The feed also lists stops a route drives past, and it has no pickup or
+drop-off columns to say so. А16 and А53 northbound list Колодзінського (0800)
+and do not stop there. A `[[remove]]` rule takes such a stop off one route:
+
+```toml
+[[remove]]
+route = "А16"
+stop = "0800"
+toward = "Приміський вокзал"      # off the trips that way only
+```
+
+The stop and its scheduled time drop out of every matching pattern before the
+distances are solved, so the route neither times it nor lists it in the
+catalogue, and journeys are not planned to board or leave it there. The stop
+itself stays, with every other route through it. A stop a rule both adds and
+removes stays removed. `python -m commuterlviv skipped` searches the recording
+for the stops a remove rule might be wanted at
+([stops the vehicles drive past](service.md#stops-the-vehicles-drive-past)).
+
+Editing the file rebuilds `data/network.pkl` on the next start, because the
+cache is keyed by `network.source()`, a digest of the feed and this file both.
 `check_overrides.py` on the `development-archive` branch builds from scratch and
 asserts every rule still lands where it says.
 
@@ -161,6 +181,27 @@ the corridor, then to the network. That is what carries the city across the
 overnight gap: by 06:00 the 5400 s means have decayed to nothing, and without
 the profile the morning peak would open on the timetable alone.
 
+`config.VARIANTS` keeps two more, each cheaper than `profile` and still good
+enough: within 5% of its mean error over all horizons and in every horizon band
+(0-2, 2-5, 5-10, 10-20 and 20-45 min ahead). They were measured on the study
+recording `veh-0906-0923.db`, warmed on 14-17 September and scored on 18-19
+September. That is 7.2 million predictions every variant made, all without
+the ETA correction. Cost is the model's own CPU over the replay (learning,
+`refresh` and the ETAs), and the size of what it has learned:
+
+| variant | mean error | worst band | model CPU | learned state |
+| --- | --- | --- | --- | --- |
+| `profile` | 139.5 s | - | 90.8 s | 38.3 MB |
+| `full` | 143.9 s (+3.1%) | 5-10 min, +3.8% | 86.6 s | 9.7 MB |
+| `prior-shape` | 144.7 s (+3.7%) | 2-5 min, +4.6% | 85.9 s | 9.7 MB |
+
+`no-incremental`, which reports a crossing only once finished, also passed:
+140.6 s (+0.8%), no band worse than `profile`, 75.0 s and 9.7 MB. It is gone
+all the same, because it misses more: 18.3% of its predictions come more than
+two minutes too late, against 7.6% for `profile`, since it hears of slow
+crossings later. Every other variant measured there missed the 5% or cost no
+less, and is gone too.
+
 Pace is **not** learned directly. What is learned is a *multiplier* on the pace
 the timetable implies for that cell at that hour of day. The timetable is not
 just a fallback - it already knows two useful things: that the old town is
@@ -185,7 +226,7 @@ otherwise keep only the last of them.
 
 ## 6. An ETA is a subtraction
 
-`replay.py`, `_flush`. Once per epoch, after the model has been updated and
+`replay.py`, `step`. Once per epoch, after the model has been updated and
 before anything is emitted, `model.refresh` recomputes per-cell time for all
 26712 cells and takes one cumulative sum. An arrival time for any stop is then
 the difference of two entries in that array plus a linear term inside the

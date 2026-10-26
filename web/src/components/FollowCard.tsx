@@ -37,7 +37,8 @@ export function FollowCard({
   useAwake(awake && !done);
   return (
     <div className="panel pointer-events-auto p-3">
-      <div className="flex items-start gap-2">
+      {/* The buttons move under the step once it would be left too narrow to read */}
+      <div className="flex flex-wrap items-start gap-2">
         {/* A div, as a button may not hold the paragraphs of the step */}
         <div
           role="button"
@@ -50,7 +51,7 @@ export function FollowCard({
           }}
           aria-expanded={steps}
           title={steps ? t.hideSteps : t.showSteps}
-          className="flex min-w-0 flex-1 cursor-pointer items-start gap-1 text-sm"
+          className="flex min-w-40 flex-1 cursor-pointer items-start gap-1 text-sm"
         >
           <div className="min-w-0 flex-1">
             {progress === null ? (
@@ -63,22 +64,33 @@ export function FollowCard({
           </div>
           <Icon name={steps ? "up" : "down"} className="size-4 shrink-0 text-slate-500" />
         </div>
-        {canKeepAwake() && !done && (
-          <button
-            onClick={() => {
-              holdAwake(!awake);
-              setAwake(!awake);
-            }}
-            aria-pressed={awake}
-            title={t.keepAwakeHint}
-            className={awake ? "btn" : "btn-quiet"}
-          >
-            {t.keepAwake}
+        <div className="ml-auto flex shrink-0 gap-2">
+          {canKeepAwake() && !done && (
+            // A switch with its track, so it reads as a setting rather than a status
+            <button
+              role="switch"
+              onClick={() => {
+                holdAwake(!awake);
+                setAwake(!awake);
+              }}
+              aria-checked={awake}
+              title={t.keepAwakeHint}
+              className="btn-quiet flex items-center gap-2"
+            >
+              <span
+                className={`flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors ${
+                  awake ? "justify-end bg-accent" : "justify-start bg-slate-600"
+                }`}
+              >
+                <span className="size-3 rounded-full bg-white" />
+              </span>
+              {t.keepAwake}
+            </button>
+          )}
+          <button onClick={onEnd} className={done ? "btn" : "btn-quiet"}>
+            {done ? t.ok : t.endFollow}
           </button>
-        )}
-        <button onClick={onEnd} className={done ? "btn" : "btn-quiet"}>
-          {done ? t.ok : t.endFollow}
-        </button>
+        </div>
       </div>
       {caught.kind !== "ok" && !done && (
         <CatchLine catalog={catalog} journey={journey} caught={caught} onSearch={onSearch} />
@@ -107,6 +119,7 @@ function CatchLine({
   caught: Exclude<Catch, { kind: "ok" }>;
   onSearch: () => void;
 }) {
+  const [why, setWhy] = useState(false);
   const leg = journey.legs[caught.leg]!;
   const route = leg.route === undefined ? "" : (catalog.routes[leg.route]?.short ?? "");
   const stop = stopName(catalog, leg.a);
@@ -117,18 +130,23 @@ function CatchLine({
       ? t.hurryAhead(route, stop)
       : t.hurryNow(route, countdown(caught.dep));
   return (
-    <div className="mt-2 flex items-center gap-2 border-t border-raised pt-2">
-      {caught.kmh !== null && (
-        <HurryPill hint={t.paceHint}>{t.kmh(caught.kmh)}</HurryPill>
-      )}
-      <p className={`min-w-0 flex-1 text-xs ${missed ? "text-rose-300" : "text-amber-300"}`}>
-        {said}
-      </p>
-      {(missed || caught.riding) && (
-        <button onClick={onSearch} className="btn shrink-0">
-          {missed ? t.planAgain : t.findAnother}
-        </button>
-      )}
+    <div className="mt-2 border-t border-raised pt-2">
+      <div className="flex items-center gap-2">
+        {caught.kmh !== null && (
+          <HurryPill hint={t.paceHint} onWhy={() => setWhy(!why)}>
+            {t.kmh(caught.kmh)}
+          </HurryPill>
+        )}
+        <p className={`min-w-0 flex-1 text-xs ${missed ? "text-rose-300" : "text-amber-300"}`}>
+          {said}
+        </p>
+        {(missed || caught.riding) && (
+          <button onClick={onSearch} className="btn shrink-0">
+            {missed ? t.planAgain : t.findAnother}
+          </button>
+        )}
+      </div>
+      {why && caught.kmh !== null && <p className="mt-1 text-xs text-slate-400">{t.paceHint}</p>}
     </div>
   );
 }
@@ -231,7 +249,7 @@ function Step({
         {stage.kind !== "walk" && route && (
           <RouteBadge route={route} className="shrink-0 px-1.5 text-xs" />
         )}
-        <span className="min-w-0 truncate font-medium text-slate-100">{head}</span>
+        <span className="line-clamp-2 min-w-0 font-medium break-words text-slate-100">{head}</span>
       </p>
       <p className="mt-0.5 text-xs text-slate-400">
         {stage.kind === "wait" ? (when ? t.dueIn(countdown(when.t)) : "") : t.toGo(distance(progress.left))}

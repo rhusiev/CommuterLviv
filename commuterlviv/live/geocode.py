@@ -4,7 +4,8 @@ The local index is osm-mapidx's (`data/lviv-search.sqlite`).
 `.github/workflows/places.yml` rebuilds it from OpenStreetMap monthly and
 publishes it, and `renew_index` downloads it at that pace. It survives typos
 and knows each place's surroundings, so "аптека сихів" and "форум львв" both
-find what was meant, and it answers without leaving the machine. It has no house numbers.
+find what was meant, and it answers without leaving the machine. It has the
+streets, one place each, but no house numbers.
 
 Photon (https://photon.komoot.io) fills that in. It is used rather than
 Nominatim because it indexes every named object in OSM and answers a prefix,
@@ -14,6 +15,7 @@ away: point COMMUTERLVIV_PHOTON_URL at it.
 
 Either source alone is enough to search; with neither the endpoint answers 503.
 """
+import re
 import threading
 import time
 import urllib.parse
@@ -42,11 +44,24 @@ TIMEOUT = 4.0
 
 # m apart two hits of the same name are one place said twice
 SAME_PLACE = 100.0
-# the index covers the whole oblast and ranks by name before distance, so
-# enough hits are asked for that the city's survive the clamp
+# m from CENTRE within which a place is the city's own and leads the list. The
+# box above reaches villages 15 km out, which share the city's street names;
+# Рясне-2, the furthest district, is 7.3 km out and the villages start past 8.
+# Chosen, not derived
+CITY = 8000.0
+BOX = (SOUTH, WEST, NORTH, EAST)
+# the index ranks by name before distance, so enough hits in the box are asked
+# for that the city's own are among them to lead
 WIDE = 300
+# a name that is only a house number, "7а" or "12/2б": plots OpenStreetMap tags
+# as a place, which name nothing anyone searches for. Photon's are kept when
+# they have a street, by their address
+HOUSE_NUMBER = re.compile(r"\d+[^\W\d_]?(/\d+[^\W\d_]?)?")
 # mapidx addresses open with the nearest settlements; the street and district follow
 NEAR = 3
+# whether a hit is a street, only while the two sources are merged: osm-mapidx's
+# streets are its only highway=* places, and Photon types its own
+STREET = "street"
 
 # Photon indexes names in the local language under "default"; it translates
 # only into the handful it was built with, and Ukrainian is not one of them
@@ -97,31 +112,49 @@ class Geocoder:
         return bool(self.url) or self.index.exists()
 
     def _merge(self, q):
-        """Both sources, one list. A digit means a house address, which only
-        Photon knows, so it leads; otherwise the local index does. Photon
-        failing is fatal only when it was the one source."""
-        local = self._local(q)
+        """Both sources, one list, the city's own places first. Among those
+        and among the rest, a digit means a house address, which only Photon
+        knows, so it leads; otherwise the index's places named so do, streets
+        first, then Photon's, then the index's places only on or near
+        something named so. Photon's street is left out where the index found
+        a street of its name: the index has a street once, Photon once per
+        district it runs through. Photon failing is fatal only when it was
+        the one source."""
+        named, nearby = self._local(q)
         try:
             remote = self._ask(q) if self.url else []
         except requests.RequestException:
             if not self.index.exists():
                 raise
             remote = []
-        first, then = (remote, local) if any(c.isdigit() for c in q) \
-            else (local, remote)
+        streets = {h["name"] for h in [*named, *nearby] if h.get(STREET)}
+        remote = [p for p in remote if not (p.get(STREET) and p["name"] in streets)]
+        order = [*remote, *named, *nearby] if any(c.isdigit() for c in q) \
+            else [*named, *remote, *nearby]
         out = []
-        for p in first + then:
+        for p in sorted(order, key=lambda p: not _in_city(p)):
+            if len(out) == LIMIT:
+                break
             if not any(_same(p, o) for o in out):
                 out.append(p)
-        return out[:LIMIT]
+        return [{k: v for k, v in p.items() if k != STREET} for p in out]
 
     def _local(self, q):
+        """The index's hits found by their own name, streets first, and those
+        found only by their surroundings, each in the index's order."""
+        named, nearby = [], []
         if not self.index.exists():
-            return []
-        hits = mapidx.search(str(self.index), q, limit=WIDE, origin=CENTRE)
-        return [{"name": h["name"], "where": ", ".join(h["address"][NEAR:NEAR + 2]),
-                 "lat": h["lat"], "lon": h["lon"], "kind": None}
-                for h in hits if inside(h["lat"], h["lon"])][:LIMIT]
+            return named, nearby
+        for h in mapidx.search(str(self.index), q, limit=WIDE, origin=CENTRE,
+                               within=BOX):
+            key, _, value = h["category"].partition("=")
+            if not HOUSE_NUMBER.fullmatch(h["name"]):
+                (named if h["named"] else nearby).append({
+                    "name": h["name"], "where": ", ".join(h["address"][NEAR:NEAR + 2]),
+                    "lat": h["lat"], "lon": h["lon"], "kind": value,
+                    STREET: key == "highway"})
+        named.sort(key=lambda h: not h[STREET])
+        return named, nearby
 
     def _ask(self, q):
         query = urllib.parse.urlencode({
@@ -131,11 +164,17 @@ class Geocoder:
         })
         r = self.session.get(f"{self.url}/api?{query}", timeout=TIMEOUT)
         r.raise_for_status()
-        out = []
+        out, streets = [], set()
         for f in r.json().get("features", []):
             place = _place(f)
-            if place is not None:
-                out.append(place)
+            if place is None:
+                continue
+            # Photon answers a street once per stretch of it in OSM
+            if place[STREET]:
+                if (place["name"], place["where"]) in streets:
+                    continue
+                streets.add((place["name"], place["where"]))
+            out.append(place)
         return out
 
 
@@ -157,6 +196,10 @@ def renew_index(url, path=INDEX):
             raise ValueError("the downloaded index does not find Lviv")
 
 
+def _in_city(p):
+    return walk.metres(p["lat"], p["lon"], *CENTRE) < CITY
+
+
 def _same(a, b):
     return a["name"] == b["name"] and \
         walk.metres(a["lat"], a["lon"], b["lat"], b["lon"]) < SAME_PLACE
@@ -172,11 +215,14 @@ def _place(f):
     if not inside(lat, lon):
         return None
     p = f.get("properties", {})
-    name = p.get("name") or _street(p)
+    name = p.get("name")
+    if not name or HOUSE_NUMBER.fullmatch(name):
+        name = _street(p)
     if not name:
         return None
     return {"name": name, "where": _where(p, name),
-            "lat": float(lat), "lon": float(lon), "kind": p.get("osm_value")}
+            "lat": float(lat), "lon": float(lon), "kind": p.get("osm_value"),
+            STREET: p.get("type") == "street"}
 
 
 def _street(p):

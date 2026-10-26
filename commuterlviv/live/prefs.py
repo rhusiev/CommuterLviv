@@ -24,17 +24,17 @@ def clean(name, routes, valid):
     """(name, routes) as they will be stored, or (None, why not)."""
     name = (name or "").strip()
     if not 1 <= len(name) <= MAX_NAME:
-        return None, f"a name must be 1 to {MAX_NAME} characters"
+        return None, f"A name must be 1 to {MAX_NAME} characters"
     if not isinstance(routes, list):
-        return None, "routes must be a list"
+        return None, "Routes must be a list"
     seen = []
     for r in routes:
         if not isinstance(r, str) or r not in valid:
-            return None, f"no such route: {r!r}"
+            return None, f"No such route: {r!r}"
         if r not in seen:
             seen.append(r)
     if len(seen) > MAX_ROUTES:
-        return None, f"a set holds at most {MAX_ROUTES} routes"
+        return None, f"A set holds at most {MAX_ROUTES} routes"
     return (name, seen), None
 
 
@@ -90,13 +90,13 @@ def clean_pins(stops, valid):
     """The pins as they will be stored, or (None, why not); unknown ids are
     dropped rather than refused."""
     if not isinstance(stops, list):
-        return None, "pins must be a list"
+        return None, "Pins must be a list"
     seen = []
     for s in stops:
         if isinstance(s, str) and s in valid and s not in seen:
             seen.append(s)
     if len(seen) > MAX_PINS:
-        return None, f"at most {MAX_PINS} pinned stops"
+        return None, f"At most {MAX_PINS} stops can be pinned"
     return seen, None
 
 
@@ -112,22 +112,22 @@ def clean_places(saved):
     """The places as they will be stored, or (None, why not); the name is the
     identity, so a repeated name keeps the last one given."""
     if not isinstance(saved, list):
-        return None, "places must be a list"
+        return None, "Places must be a list"
     seen = {}
     for p in saved:
         if not isinstance(p, dict):
-            return None, "a place must be an object"
+            return None, "A place must be an object"
         name = (p.get("name") or "").strip()
         lat, lon = p.get("lat"), p.get("lon")
         if not 1 <= len(name) <= MAX_NAME:
-            return None, f"a name must be 1 to {MAX_NAME} characters"
+            return None, f"A name must be 1 to {MAX_NAME} characters"
         if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
-            return None, "a place needs a lat and a lon"
+            return None, "A place needs a lat and a lon"
         if not -90 <= lat <= 90 or not -180 <= lon <= 180:
-            return None, "that is not a point on the planet"
+            return None, "That is not a point on the planet"
         seen[name] = {"name": name, "lat": float(lat), "lon": float(lon)}
     if len(seen) > MAX_PLACES:
-        return None, f"at most {MAX_PLACES} saved places"
+        return None, f"At most {MAX_PLACES} places can be saved"
     return list(seen.values()), None
 
 
@@ -142,14 +142,14 @@ async def create(pool, user_id, name, routes):
             n = await con.fetchval(
                 "SELECT count(*) FROM route_sets WHERE user_id = $1", user_id)
             if n >= MAX_SETS:
-                return None, f"at most {MAX_SETS} sets"
+                return None, f"At most {MAX_SETS} sets can be kept"
             try:
                 row = await con.fetchrow(
                     "INSERT INTO route_sets(user_id, name, routes, ord) "
                     "VALUES($1,$2,$3,$4) RETURNING id, name, routes, ord",
                     user_id, name, routes, n)
             except UniqueViolationError:
-                return None, "a set with that name already exists"
+                return None, "A set with that name already exists"
     return as_json(row), None
 
 
@@ -161,7 +161,7 @@ async def update(pool, set_id, user_id, name, routes):
             "WHERE id = $1 AND user_id = $2 RETURNING id, name, routes, ord",
             set_id, user_id, name, routes)
     except UniqueViolationError:
-        return None, "a set with that name already exists"
+        return None, "A set with that name already exists"
     return (as_json(row) if row else None), None
 
 

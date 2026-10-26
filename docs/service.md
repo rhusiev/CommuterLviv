@@ -4,9 +4,19 @@ The same model, on wall time instead of a recording, is `commuterlviv/live/` beh
 `python3 -m commuterlviv serve`. It polls the vehicle feed every five seconds, folds
 each fix into the same tracks, steps the model on the same 60 s grid, and pushes
 positions per poll and arrivals per epoch over a websocket. It shares the code
-rather than resembling it: one epoch in the service is the same four calls
-`replay._flush` makes offline, in the same order, so the numbers it serves are
-the numbers the reports measured.
+rather than resembling it: one epoch in the service is `replay.step`, the call
+the offline replay makes for each of its epochs, so the numbers it serves are
+the numbers the reports measured. That step feeds the model what the tracks
+crossed, forgets vehicles gone quiet, refreshes the model, and forecasts: every
+vehicle that reported within `replay.STALE` (120 s), is placed on its shape and
+still has a stop ahead is timed, and every other vehicle that reported within
+it and that the departure model saw get in at the end of its trip is noted
+standing for its next one.
+Only then does the service drop what the clients cannot show - a vehicle whose
+route the catalog lacks - and add the trips each vehicle runs next
+([trips after this one](#trips-after-this-one)). So a vehicle first seen
+already standing at its last stop is timed by neither: it has no stop ahead,
+and nothing saw when it got in.
 
 ```sh
 pip install -r requirements-live.txt
@@ -47,7 +57,7 @@ That rule is the fallback. Every minute a vehicle stands in early, the service
 also notes what the rule's two halves said, how long ago and how far ahead of
 the timetable the route last left that terminus, the timetable's gap to it,
 the hour, and how long the vehicle has stood, and a replay of the recording
-notes the same (`replay._stands`); once the vehicle leaves, each of
+notes the same (`replay.forecast`); once the vehicle leaves, each of
 those minutes is labelled with how long was really left. A gradient-boosted
 model (scikit-learn's `HistGradientBoostingRegressor`) is fitted on start,
 every 6 hours (`FIT_EVERY`) and after a feed swap, in a worker thread, on
@@ -170,7 +180,7 @@ scaled by it, which costs about a millisecond. The walk caps below
 (`TRANSFER_CAP`, `WALK_CAPS`) are distances in disguise: seconds at `SPEED`,
 scaled by the same pace, so a slower walker is offered the same stops, each
 further away in time. Both clients keep a usual speed on the
-device (the account menu) and step it per search beside the departure time.
+device (the account settings in the Mine tab) and step it per search beside the departure time.
 `&hurry=<km/h>`, from 0.5 to 12 (`HURRY_KMH`, a brisk run, chosen, not
 derived), is how fast they would walk to the first stop to catch a bus; see
 hurry options below. Both clients keep it beside the usual speed, off until
@@ -183,6 +193,17 @@ where somebody waiting at a stop stands, and often the only way drawn on that
 side of the street: without it, a point on the platform steps onto whatever is
 nearest instead - in one reported search a car park's aisle, which joined the
 streets 200 m away and made a stop 13 m off a 5-minute walk.
+
+A road whose pavement is drawn as a way of its own - `sidewalk`, `sidewalk:both`,
+`sidewalk:left` or `sidewalk:right` set to `separate` (`SIDEWALKS`) - is left out,
+unless it says `foot=yes`, `permissive` or `designated`, as OSRM's foot profile
+does. Otherwise the road is a footpath of the same length as the pavement beside
+it, and a walk can cross the street anywhere along it: in one reported search it
+walked 200 m down a three-lane carriageway and turned through the median. Tags
+are fetched only for those roads (141 in Lviv on 2026-10-21, 234 of 241111
+nodes); the rest of the city comes without tags, which would time Overpass out.
+Most of Lviv's pavements are drawn without that tag on the road beside them, so
+the rule fixes a street only once it is tagged in OpenStreetMap.
 
 Walks are Dijkstra on that graph, scipy's (`scipy.sparse.csgraph.dijkstra`),
 about ten times faster than one in Python. A point steps onto the graph
@@ -348,7 +369,8 @@ map: a walk follows the footpath graph (`walk.path`), and a ride is its shape cu
 between the stop it is boarded at and the stop it is left at. Both are simplified
 to 4 m. The clients draw the option you tap - walks dotted, rides solid in the
 route's colour, one pill of times per stop where getting off and getting on
-share the reading, and no times for a walk under a minute, which somebody
+share the reading, centred on the stop or, on a saved place, standing above it
+clear of the place's name, and no times for a walk under a minute, which somebody
 already at the stop would read as walking from 18:35 to 18:35 - and wipe it,
 with the A and B marks, when you leave the planner. The first tap on an option only picks it; its stops and routes open
 their own views once it is picked.
@@ -472,13 +494,26 @@ cannot. It asks two sources. The first is a local index, `data/lviv-search.sqlit
 built by osm-mapidx (https://github.com/rhusiev/osm-mapidx) with
 `python -m mapidx.cli build ukraine-latest.osm.pbf --region lviv`; its search
 code is vendored as `commuterlviv/mapidx/`. It forgives typos and Latin
-transliteration, and leads for queries without a digit. The second is Photon
-over OpenStreetMap, biased to the city, which leads when the query has a digit,
-since house numbers are what it is best at. Both are clamped to the box the map
+transliteration, and holds each street once, but no house numbers. The second is
+Photon over OpenStreetMap, biased to the city, which has both. A query with a
+digit is a house address, so Photon leads it. Otherwise the index's places with
+the query in their own name lead, streets first, then Photon's, then the index's
+places only on or near something of that name: "проспект Шевченка" is the avenue
+before the cafés on it, and "зелена" is Зелена вулиця before Зелена Сливка.
+Photon answers a street once per stretch of it in OpenStreetMap, so its street
+of one name in one district is kept once, and none is kept where the index found
+a street of that name. Both are clamped to the box the map
 frames can place a vehicle in (`wire.py`), widened by the footpaths' reach past
 the stops (`walk.MARGIN`), which `/api/plan` also refuses points outside of:
-past it there is no walk to a line. The same name
-within 100 m is kept once. Answers are cached for a day.
+past it there is no walk to a line. The index applies the box itself, before it
+cuts its candidates to the best-named: it covers the whole oblast, and a common
+name such as "шевченка" matches thousands of places there. Places named only by
+a house number ("7а", "12/2б"), plots OpenStreetMap tags as places, are left out
+of both (`geocode.HOUSE_NUMBER`), unless Photon knows their street: then they go
+by their address, "вулиця Шевченка 55". That box takes in villages up to 15 km out
+that share the city's street names, so places within 8 km of Rynok Square (the
+city's own; `geocode.CITY`) come first, each source's order kept among them and
+among the rest. The same name within 100 m is kept once. Answers are cached for a day.
 The index is not in the image. `.github/workflows/places.yml` rebuilds it from
 OpenStreetMap on the 3rd of every month and publishes it on this repository's
 `places` release, because the build streams the whole Ukraine extract and peaks
@@ -493,7 +528,8 @@ next night. Without any index the local half is simply absent.
 it leaves the local index alone; with neither, searching falls back to stop
 names. Stop names themselves are matched in the client by word prefix, in any
 order, with й/и, ї/і and apostrophes folded and one typo allowed in a word of
-four letters or more (`match.dart`, `match.ts`).
+four letters or more (`match.dart`, `match.ts`). A word typed whole ranks above
+one it only begins, so the code "61" lists stop 61 before 610 to 619.
 
 ## The planner's caches
 
@@ -520,12 +556,16 @@ onto edges, lacks them, so it is rebuilt once. Without them the service still st
 ## Route shapes
 
 `GET /api/shapes` is where a route physically goes: per route, the polylines its
-trips follow, each marked with the feed direction it runs. Direction is drawn by
+trips follow, each marked with the feed direction it runs and listing the stops
+it calls at in order, as catalog positions (`stops`). Those are the longest trip
+on that shape, so a short working does not cut the list short; they are what the
+Lines tab lists a line by, one direction at a time. Direction is drawn by
 the clients, not served - a run both ways gets two tracks of chevrons, one per
 side, spaced on screen rather than on the ground, which is why nothing here has
-to be respaced per zoom. 245 KB, 33 KB gzipped, one ETag per feed, and both clients ask for it
-only the first time something wants to draw a line - tapping a vehicle's badge
-to see its route, or the button that puts the whole network on the map. Nobody
+to be respaced per zoom. 245 KB, 33 KB gzipped before the stops were added, one ETag per
+feed, and both clients ask for it only the first time something wants to draw or
+list a line - opening one in the Lines tab, or the button that puts the whole
+network on the map. Nobody
 who opens neither pays for it.
 
 ## Keeping the city current
@@ -590,6 +630,50 @@ The planner is also missing while it is first built (see above). Then
 `/api/plan` answers 503 with `"preparing": true`, and both clients say the
 planner is getting ready, rather than that there is none.
 
+## Stops the vehicles drive past
+
+The feed lists every stop of a trip and has no pickup or drop-off columns, so a
+stop a route never calls at looks like any other. The recording shows it. A
+vehicle that calls at a stop stands near it on most trips, and one that drives
+past does not (`commuterlviv/skipped.py`):
+
+1. After each night's check (above), the last 7 days of the recording are read
+   in a worker thread - only the fixes slower than 0.5 m/s that name a trip,
+   through the `veh_ts` index. A week of them is about 4.8 million rows and,
+   on a spinning disk, takes about 2 minutes to read and judge.
+2. Each fix goes to its trip's pattern - one route and one stop list - and,
+   within 40 m, to the nearest stop of that pattern. A stop's count is the
+   number of trips that stood there at least once.
+3. A pattern's usual count is the median over its stops. The first and last
+   stops are left out: a vehicle takes its next trip's id only once it leaves
+   the first, and often stands away from the last one's pole. A pattern
+   under 30 trips at its usual stop is not judged.
+4. A stop under a tenth of the usual count is flagged, for that route and
+   direction alone. Another route through the same pole is judged on its own
+   pattern.
+5. The service logs the count and the first 20, and `/api/status` carries all
+   of them under `skipped`, with the time of the check (`null` until the first
+   night).
+
+It only reports. A flagged stop is not always one the route skips: a pole
+drawn away from where vehicles stand, or a stretch the route was diverted off
+that week, looks the same. A person looks, and takes a stop off a route with a
+`[[remove]]` rule in `overrides.toml` ([how it works](how-it-works.md)). The
+network is built with those rules, so a removed stop is no longer on that
+route's patterns to be flagged again. `python -m commuterlviv skipped` runs the
+same check from the command line, `--days` and `--until` choosing the window.
+
+On the week of 2026-09-16..23, with the rules in `overrides.toml` applied, 223
+stops of a pattern were flagged: 110 stops on 47 routes. Колодзінського (0800)
+northbound is the one a rider reported. Before its two rules, А16 stood there
+on 0 trips of 367 at its usual stop and А53 on 3 of 349. It is still flagged
+for А23, А32, А40 and А41, which have no rule. The opposite pole, 801, came out
+at 0.13-0.14 of the usual count and is not flagged: southbound buses partly
+stand 20-40 m short of it. Some flags gather on one stop across several
+routes. Ребілітаційний центр Незламні (632, 633) is flagged on seven, whose
+lines pass within 7 m of its poles while their slow fixes lie 200-550 m away.
+That reads as a diversion that week, and is not checked.
+
 ## The model across restarts
 
 What the model has learned is kept in `data/model.npz` (`commuterlviv/snapshot.py`).
@@ -631,8 +715,7 @@ two hours of recording cannot replay.
 
 A missing or unreadable snapshot is not an error - the model starts from the
 timetable, as it did before the file existed, and the log says so. The
-snapshot is about 111 MB, and only the per-cell online models
-(`snapshot.supported`) have one. It also carries each route's recent early
+snapshot is about 111 MB. It also carries each route's recent early
 turnarounds at its termini and the minutes of stands its departure model
 learns from ([trips after this one](#trips-after-this-one)) and the passed
 stops the ETA correction learns from

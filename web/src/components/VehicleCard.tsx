@@ -3,13 +3,15 @@ import { api, EPOCH_MS } from "../lib/api";
 import { Close } from "./Cross";
 import { countdown } from "../lib/eta";
 import { t } from "../lib/i18n";
-import { RouteBadge } from "./RouteBadge";
+import { RouteChip } from "./RouteChip";
 import type { Aboard, Call, Catalog } from "../lib/types";
 
 export function VehicleCard({
   catalog,
   veh,
   onStop,
+  watching,
+  onToggle,
   onRoute,
   onAboard,
   onClose,
@@ -17,6 +19,10 @@ export function VehicleCard({
   catalog: Catalog;
   veh: number;
   onStop: (i: number) => void;
+  /** The routes picked, by id */
+  watching: Set<string>;
+  onToggle: (id: string) => void;
+  /** The line, from the route chip's `›` */
   onRoute: (i: number) => void;
   /** Plans a journey from on board it */
   onAboard: (from: Aboard) => void;
@@ -53,9 +59,13 @@ export function VehicleCard({
     <div className="panel pointer-events-auto p-3">
       <div className="flex items-start gap-2">
         {route && at !== undefined && (
-          <button onClick={() => onRoute(at)} title={t.routeLine} className="shrink-0">
-            <RouteBadge route={route} className="px-1.5 py-0.5 text-xs" />
-          </button>
+          <RouteChip
+            route={route}
+            watched={watching.has(route.id)}
+            onWatch={() => onToggle(route.id)}
+            onLine={() => onRoute(at)}
+            className="shrink-0"
+          />
         )}
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-medium text-slate-100">

@@ -46,6 +46,18 @@ def _overpass():
     ]}
 
 
+NORTH = 10    # the id of the way along the north pavement
+
+
+def _road(tags):
+    """The street with the north pavement drawn as a road tagged `tags`."""
+    raw = _overpass()
+    north = next(el for el in raw["elements"] if el.get("nodes") == [1, 2])
+    north["id"] = NORTH
+    raw["elements"].append({"type": "way", "id": NORTH, "tags": tags})
+    return footpaths.Walk(*footpaths.compile_graph(raw))
+
+
 @pytest.fixture
 def walk():
     return footpaths.Walk(*footpaths.compile_graph(_overpass()))
@@ -104,6 +116,36 @@ def test_a_slower_walker_takes_as_much_longer_to_a_stop(walk):
     slower = stands.paced(pace).read(seen * pace)
 
     assert slower[0] == pytest.approx(stands.read(seen)[0] * pace)
+
+
+def _along_north(walk):
+    """Seconds from one end of the north pavement to the other."""
+    stands = walk.stands(*np.array([_at(LENGTH_M, GAP_M)]).T)
+    return _from(walk, *_at(0, GAP_M), stands)[0]
+
+
+@pytest.mark.parametrize("key", footpaths.SIDEWALKS)
+def test_a_road_with_its_pavement_drawn_apart_is_walked_round(key):
+    walk = _road({"highway": "secondary", key: "separate"})
+
+    # down to the south pavement, along it and back up
+    assert _along_north(walk) == pytest.approx(
+        walk.flat(LENGTH_M + 2 * GAP_M), abs=1.0)
+
+
+@pytest.mark.parametrize("tags", [
+    {"highway": "secondary", "sidewalk": "both"},
+    {"highway": "secondary", "sidewalk": "separate", "foot": "yes"},
+])
+def test_a_road_with_its_pavement_on_it_is_walked_along(tags):
+    walk = _road(tags)
+
+    assert _along_north(walk) == pytest.approx(walk.flat(LENGTH_M), abs=1.0)
+
+
+@pytest.mark.parametrize("key", footpaths.SIDEWALKS)
+def test_the_tags_of_roads_with_their_pavement_apart_are_fetched(key):
+    assert f'way.walk["{key}"="separate"];' in footpaths.query((0, 0, 1, 1))
 
 
 def test_transfers_saved_with_stops_on_nodes_are_rebuilt(net, tmp_path):

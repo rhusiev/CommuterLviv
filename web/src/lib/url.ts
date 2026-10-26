@@ -5,11 +5,25 @@ export type UrlState = {
   /** Null when the address bar says nothing and the active set should decide */
   routes: string[] | null;
   stop: string | null;
+  /** The line open in the Lines tab; kept while another tab is open */
   route: string | null;
-  tab: "map" | "times" | "plan" | "saved" | "route";
+  tab: Tab;
 };
 
-const TABS: UrlState["tab"][] = ["map", "times", "plan", "saved", "route"];
+export type Tab = "map" | "lines" | "plan" | "mine";
+
+export const TABS: Tab[] = ["map", "lines", "plan", "mine"];
+
+/** Tabs an older link may name, and the tab that holds what they held now. The
+ * old one-line tab is the Lines tab, which opens on the link's `route` */
+const MOVED: Record<string, Tab> = { times: "mine", saved: "mine", route: "lines" };
+
+/** The tab a link's `tab` names, an old name read as its successor */
+export function tabOf(named: string | null): Tab {
+  if (named === null) return "map";
+  if (Object.hasOwn(MOVED, named)) return MOVED[named]!;
+  return TABS.includes(named as Tab) ? (named as Tab) : "map";
+}
 
 export function readUrl(): UrlState {
   const q = new URLSearchParams(location.search);
@@ -18,7 +32,7 @@ export function readUrl(): UrlState {
     routes: routes === null ? null : routes.split(",").filter(Boolean),
     stop: q.get("stop"),
     route: q.get("route"),
-    tab: TABS.includes(q.get("tab") as UrlState["tab"]) ? (q.get("tab") as UrlState["tab"]) : "map",
+    tab: tabOf(q.get("tab")),
   };
 }
 

@@ -82,15 +82,22 @@ class Calendar:
     DAYS = ("monday", "tuesday", "wednesday", "thursday", "friday",
             "saturday", "sunday")
 
-    def __init__(self):
+    def __init__(self, weekly=(), dates=()):
+        """From the rows of calendar.txt and calendar_dates.txt."""
         self.weekly = {
             r["service_id"]: ({i for i, d in enumerate(self.DAYS) if r[d] == "1"},
                               r["start_date"], r["end_date"])
-            for r in table("calendar.txt", optional=True)}
+            for r in weekly}
         self.changed = {}  # "YYYYMMDD" -> {service_id: added, not removed}
-        for r in table("calendar_dates.txt", optional=True):
+        for r in dates:
             self.changed.setdefault(r["date"], {})[r["service_id"]] = \
                 r["exception_type"] == "1"
+
+    @classmethod
+    def read(cls):
+        """The held feed's calendar."""
+        return cls(table("calendar.txt", optional=True),
+                   table("calendar_dates.txt", optional=True))
 
     def runs(self, service, day):
         key = day.strftime("%Y%m%d")

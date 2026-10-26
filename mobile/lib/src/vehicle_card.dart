@@ -10,7 +10,7 @@ import 'package:flutter/material.dart' as material show Theme;
 import 'api.dart';
 import 'eta.dart';
 import 'models.dart';
-import 'route_badge.dart';
+import 'route_chip.dart';
 import 'strings.dart';
 
 class VehicleCard extends StatefulWidget {
@@ -20,6 +20,8 @@ class VehicleCard extends StatefulWidget {
     required this.catalog,
     required this.veh,
     required this.onStop,
+    required this.watching,
+    required this.onWatch,
     required this.onRoute,
     required this.onAboard,
   });
@@ -30,6 +32,12 @@ class VehicleCard extends StatefulWidget {
   final int veh;
   final void Function(int stop) onStop;
 
+  /// The routes watched: the screen behind changes this set in place on
+  /// [onWatch], and the card rebuilds itself after it.
+  final Set<int> watching;
+  final void Function(int route) onWatch;
+
+  /// The line, from the route chip's `›`.
   final void Function(int route) onRoute;
 
   /// Plans a journey from on board it
@@ -86,12 +94,14 @@ class _VehicleCardState extends State<VehicleCard> {
             Row(
               children: [
                 if (route != null && at != null) ...[
-                  Tooltip(
-                    message: txt.showRoute,
-                    child: InkWell(
-                      onTap: () => widget.onRoute(at),
-                      child: RouteBadge(route: route),
-                    ),
+                  RouteChip(
+                    route: route,
+                    watched: widget.watching.contains(at),
+                    onWatch: () {
+                      widget.onWatch(at);
+                      setState(() {});
+                    },
+                    onLine: () => widget.onRoute(at),
                   ),
                   const SizedBox(width: 10),
                 ],

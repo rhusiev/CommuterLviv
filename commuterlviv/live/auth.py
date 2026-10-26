@@ -17,6 +17,7 @@ from . import security
 
 GRACE = 30.0     # s an already-rotated remember-me token stays acceptable
 ARGON2_AT_ONCE = 2  # hashes in flight; each holds `argon2` memory_cost of RAM
+TOUCH_EVERY = 60.0  # s at least between writes of a session's idle expiry
 
 # threads start on first use; a pool, unlike a semaphore, is bound to no loop
 _argon2_pool = ThreadPoolExecutor(ARGON2_AT_ONCE, thread_name_prefix="argon2")
@@ -56,12 +57,12 @@ async def register(pool, ph, username, password, code=None, mode="code"):
     from the unique index, so neither can be raced."""
     name = security.clean_username(username)
     if name is None:
-        return None, "username must be 3-32 characters of a-z, 0-9, dot, dash or underscore"
+        return None, "A username must be 3-32 characters of a-z, 0-9, dot, dash or underscore"
     why = security.check_password(password, name)
     if why:
         return None, why
     if mode == "closed":
-        return None, "registration is closed"
+        return None, "Registration is closed"
 
     hashed = await _argon2(ph.hash, password)
     async with pool.acquire() as con:
@@ -73,13 +74,13 @@ async def register(pool, ph, username, password, code=None, mode="code"):
                     "AND (expires_at IS NULL OR expires_at > now()) "
                     "RETURNING code_hash", security.digest(code or ""))
                 if spent is None:
-                    return None, "that invite code is not valid"
+                    return None, "That invite code is not valid"
             try:
                 uid = await con.fetchval(
                     "INSERT INTO users(username, password_hash) VALUES($1,$2) "
                     "RETURNING id", name, hashed)
             except UniqueViolationError:
-                return None, "that username is taken"
+                return None, "That username is taken"
     return uid, None
 
 
@@ -110,10 +111,10 @@ async def change_password(pool, ph, user_id, old, new, keep_session=None):
     row = await pool.fetchrow(
         "SELECT username, password_hash FROM users WHERE id = $1", user_id)
     if row is None:
-        return "no such user"
+        return "No such user"
     ok, _ = await _argon2(security.verify, ph, row["password_hash"], old)
     if not ok:
-        return "the current password is wrong"
+        return "The current password is wrong"
     why = security.check_password(new, row["username"])
     if why:
         return why
@@ -154,7 +155,7 @@ async def load_session(pool, raw, idle, max_life, touch=True):
     if now - row["created_at"] > _delta(max_life):
         await pool.execute("DELETE FROM sessions WHERE id = $1", row["id"])
         return None
-    if touch and now - row["last_seen"] > _delta(60):
+    if touch and now - row["last_seen"] > _delta(TOUCH_EVERY):
         await pool.execute(
             "UPDATE sessions SET last_seen = now(), expires_at = $2 WHERE id = $1",
             row["id"], min(now + _delta(idle), row["created_at"] + _delta(max_life)))

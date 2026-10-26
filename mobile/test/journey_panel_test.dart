@@ -31,7 +31,10 @@ Future<void> pump(
   LatLng? from,
   Aboard? aboard,
   LatLng? to,
+  Map<LatLng, String> named = const {},
   void Function(Journey? journey)? onShow,
+  void Function(int stop)? onStop,
+  void Function(int route)? onLine,
   bool ask = false,
   VoidCallback? onAsked,
 }) async {
@@ -57,9 +60,10 @@ Future<void> pump(
             onFold: (to) => setState(() => folded = to),
             onSwap: () {},
             onHere: (_) {},
-            onStop: (_) {},
-            onLine: (_) {},
+            onStop: onStop ?? (_) {},
+            onLine: onLine ?? (_) {},
             places: const [],
+            named: named,
             onSave: (_, _) {},
             onPlace: (_, _) {},
             onShow: onShow ?? (_) {},
@@ -100,6 +104,7 @@ Map<String, Object> _ride(
   int route,
   int dep, {
   List<Object> backups = const [],
+  String confidence = 'live',
 }) => {
   'kind': 'ride',
   'dep': dep,
@@ -108,6 +113,7 @@ Map<String, Object> _ride(
   'b': 1,
   'route': route,
   'live': true,
+  'confidence': confidence,
   'backups': backups,
 };
 
@@ -139,7 +145,11 @@ Map<String, Object> _journey(
 
 /// Answers a search with one option, riding [route], backed by a ride that is
 /// no option of its own, and that ride's way when asked for it, noting the asks.
-Future<HttpServer> _serve(List<Uri> asked, {int route = 0}) async {
+Future<HttpServer> _serve(
+  List<Uri> asked, {
+  int route = 0,
+  String confidence = 'live',
+}) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   final later = _ride(1, 900);
   server.listen((req) {
@@ -153,6 +163,7 @@ Future<HttpServer> _serve(List<Uri> asked, {int route = 0}) async {
             _ride(
               route,
               60,
+              confidence: confidence,
               backups: [
                 {
                   'rides': [later],
@@ -180,6 +191,40 @@ Future<HttpServer> _serve(List<Uri> asked, {int route = 0}) async {
   return server;
 }
 
+/// The length of the one option [_serve] answers: it leaves at 0 and is at the
+/// door 12 minutes later
+final _length = find.text(txt.minutes(12));
+
+/// The smallest target a finger hits reliably, as Material sizes it
+const _tapPx = kMinInteractiveDimension;
+
+/// Scrolls [target] into the panel's view, taps it, and lets what it opens settle
+Future<void> _tapOn(WidgetTester tester, Finder target) async {
+  await tester.ensureVisible(target);
+  await tester.pumpAndSettle();
+  await tester.tap(target);
+  await tester.pumpAndSettle();
+}
+
+/// The option's card, while [_serve]'s one option is listed
+final _card = find.ancestor(of: _length, matching: find.byType(Card));
+
+/// Where on the option's card something does something when tapped
+List<Rect> _targets(WidgetTester tester) => [
+  for (final target
+      in find
+          .descendant(
+            of: find.ancestor(of: _length, matching: find.byType(Card)),
+            matching: find.byWidgetPredicate(
+              (w) =>
+                  (w is InkWell && w.onTap != null) ||
+                  (w is ButtonStyleButton && w.onPressed != null),
+            ),
+          )
+          .evaluate())
+    tester.getRect(find.byWidget(target.widget)),
+];
+
 void main() {
   testWidgets('the depart chip leaves at now until a time is picked', (
     tester,
@@ -202,6 +247,21 @@ void main() {
     await tester.tap(find.text(txt.today));
     await tester.pumpAndSettle();
     expect(find.byType(DatePickerDialog), findsOneWidget);
+  });
+
+  testWidgets('the day and time chips are the same shape as the ends', (
+    tester,
+  ) async {
+    await pump(tester);
+
+    ShapeBorder? drawn(Finder of) => tester
+        .widget<Material>(
+          find.descendant(of: of, matching: find.byType(Material)).first,
+        )
+        .shape;
+    expect(drawn(find.byType(OutlinedButton).first), isA<StadiumBorder>());
+    expect(drawn(find.byType(ActionChip)), isA<StadiumBorder>());
+    expect(drawn(find.byType(InputChip)), isA<StadiumBorder>());
   });
 
   testWidgets('a search walks at the usual speed, stepped for it alone', (
@@ -252,13 +312,46 @@ void main() {
     expect(pill, findsOneWidget);
   });
 
+  testWidgets('an end chosen outside the panel reads by its name there', (
+    tester,
+  ) async {
+    const rynok = LatLng(49.8419, 24.0315);
+    await pump(tester, to: rynok, named: {rynok: 'Rynok'});
+
+    expect(find.text('Rynok'), findsOneWidget);
+    expect(find.textContaining('49.8419'), findsNothing);
+  });
+
+  testWidgets('an end nothing names reads by the stop near it', (tester) async {
+    const stop = Stop(
+      id: 's0',
+      name: 'Rynok',
+      code: '',
+      lat: 49.8419,
+      lon: 24.0315,
+      routes: [],
+    );
+    await pump(
+      tester,
+      catalog: const Catalog(
+        routes: [],
+        stops: [stop],
+        index: {},
+        stopIndex: {},
+      ),
+      to: const LatLng(49.8429, 24.0315),
+    );
+
+    expect(find.text(txt.nearStop('Rynok')), findsOneWidget);
+  });
+
   testWidgets('an end offers where I am and the map before a search', (
     tester,
   ) async {
     End? picked;
     await pump(tester, onPick: (end) => picked = end);
 
-    await tester.tap(find.text(txt.findStop).last);
+    await tester.tap(find.text(txt.to));
     await tester.pumpAndSettle();
     expect(find.text(txt.useHere), findsOneWidget);
     expect(find.text(txt.noPlaces), findsOneWidget);
@@ -397,6 +490,130 @@ void main() {
     expect(Prefer.walk.shortlist(all, n: 9), all);
   });
 
+  /// Searches against [_serve], with the one option it answers not yet picked
+  Future<List<Journey?>> searched(
+    WidgetTester tester, {
+    String confidence = 'live',
+    void Function(int stop)? onStop,
+    void Function(int route)? onLine,
+  }) async {
+    allowRealHttp();
+    final server = (await tester.runAsync(
+      () => _serve([], confidence: confidence),
+    ))!;
+    addTearDown(() => server.close(force: true));
+    final shown = <Journey?>[];
+    await pump(
+      tester,
+      server: 'http://${server.address.host}:${server.port}',
+      catalog: _twoLines,
+      from: const LatLng(49.84, 24.03),
+      to: const LatLng(49.81, 24.05),
+      onShow: shown.add,
+      onStop: onStop,
+      onLine: onLine,
+    );
+    await tester.tap(find.text(txt.findRoute));
+    await pumpUntil(tester, () => _length.evaluate().isNotEmpty);
+    expect(shown.whereType<Journey>(), isEmpty);
+    return shown;
+  }
+
+  /// Taps the option's length, which picks it or folds it again
+  Future<void> toggle(WidgetTester tester) => _tapOn(tester, _length);
+
+  testWidgets('an unpicked option picks from wherever it is tapped, and its '
+      'summary folds it again', (tester) async {
+    final shown = await searched(tester, confidence: 'terminus');
+    Finder expandedIs(bool open) => find.descendant(
+      of: _card,
+      matching: find.byWidgetPredicate(
+        (w) => w is Semantics && w.properties.expanded == open,
+      ),
+    );
+
+    for (final spot in [
+      find.byType(HurryPill),
+      find.text(txt.terminusPart),
+      find.text(txt.backupCount(1)),
+    ]) {
+      expect(_targets(tester), hasLength(1));
+      expect(expandedIs(false), findsOneWidget);
+      await _tapOn(tester, spot);
+      expect(shown.last, isNotNull);
+      expect(expandedIs(true), findsOneWidget);
+
+      await toggle(tester);
+      expect(shown.last, isNull);
+    }
+  });
+
+  testWidgets('a picked option says its notes and hurry in place, with no '
+      'info to tap', (tester) async {
+    await searched(tester, confidence: 'terminus');
+    expect(find.text(txt.terminusWhy), findsNothing);
+    expect(find.textContaining(txt.hurryHint), findsNothing);
+
+    await toggle(tester);
+
+    expect(find.text(txt.terminusWhy), findsOneWidget);
+    expect(find.textContaining(txt.hurryHint), findsOneWidget);
+    expect(find.byIcon(Icons.info_outline), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
+  });
+
+  testWidgets('every target on a picked option is big enough to tap', (
+    tester,
+  ) async {
+    await searched(tester, confidence: 'terminus');
+    await toggle(tester);
+
+    final small = [
+      for (final target in _targets(tester))
+        if (target.shortestSide < _tapPx) target,
+    ];
+
+    expect(small, isEmpty);
+    // the summary, the two stops, the line and the backups
+    expect(_targets(tester).toSet(), hasLength(5));
+  });
+
+  testWidgets(
+    "a picked option's line opens from its badge, marked with a map",
+    (tester) async {
+      final lines = <int>[];
+      await searched(tester, onLine: lines.add);
+      final map = find.byIcon(Icons.map_outlined);
+      expect(map, findsNothing);
+
+      await toggle(tester);
+      expect(map, findsOneWidget);
+      await _tapOn(tester, map);
+
+      expect(lines, [0]);
+    },
+  );
+
+  testWidgets("a picked option's stop opens from its row, by its chevron", (
+    tester,
+  ) async {
+    final stops = <int>[];
+    await searched(tester, onStop: stops.add);
+    await toggle(tester);
+    final row = find.ancestor(
+      of: find.text('Work stop'),
+      matching: find.byType(InkWell),
+    );
+    expect(
+      find.descendant(of: row, matching: find.byIcon(Icons.chevron_right)),
+      findsOneWidget,
+    );
+
+    await _tapOn(tester, find.text('Work stop'));
+
+    expect(stops, [1]);
+  });
+
   testWidgets('a backup that is no option is fetched and drawn as one', (
     tester,
   ) async {
@@ -416,10 +633,10 @@ void main() {
     );
 
     await tester.tap(find.text(txt.findRoute));
-    final backups = find.text('· ${txt.backupCount(1)}');
-    await pumpUntil(tester, () => backups.evaluate().isNotEmpty);
-    await tester.tap(backups);
-    await tester.pumpAndSettle();
+    await pumpUntil(tester, () => _length.evaluate().isNotEmpty);
+    await _tapOn(tester, _length);
+    expect(find.byType(AlertDialog), findsNothing);
+    await _tapOn(tester, find.widgetWithText(TextButton, txt.backupCount(1)));
     await tester.tap(find.byTooltip(txt.showWay).last);
     await pumpUntil(tester, () => find.byType(AlertDialog).evaluate().isEmpty);
 
@@ -450,10 +667,9 @@ void main() {
     );
 
     await tester.tap(find.text(txt.findRoute));
-    final backups = find.text('· ${txt.backupCount(1)}');
-    await pumpUntil(tester, () => backups.evaluate().isNotEmpty);
-    await tester.tap(backups);
-    await tester.pumpAndSettle();
+    await pumpUntil(tester, () => _length.evaluate().isNotEmpty);
+    await _tapOn(tester, _length);
+    await _tapOn(tester, find.widgetWithText(TextButton, txt.backupCount(1)));
 
     // the backup rides line 3; the planned ride's line is unknown
     expect(find.widgetWithText(RouteBadge, '3'), findsWidgets);

@@ -14,6 +14,7 @@ import 'api.dart';
 import 'here.dart';
 import 'match.dart';
 import 'models.dart';
+import 'route_badge.dart';
 import 'sheets.dart' show askPlaceName;
 import 'strings.dart';
 
@@ -51,10 +52,13 @@ class StopHit extends Hit {
 }
 
 class PlaceHit extends Hit {
-  const PlaceHit(this.at, this.name);
+  const PlaceHit(this.at, this.name, {this.where = ''});
 
   final LatLng at;
   final String name;
+
+  /// The line under a place found by name; none for a saved one
+  final String where;
 }
 
 class StopSearch extends SearchDelegate<Hit?> {
@@ -65,6 +69,7 @@ class StopSearch extends SearchDelegate<Hit?> {
     required this.onSave,
     this.idle,
     this.here,
+    this.around,
   }) : super(searchFieldLabel: txt.findStop);
 
   final Api api;
@@ -78,16 +83,30 @@ class StopSearch extends SearchDelegate<Hit?> {
   /// Where the phone is, for the stops near it, when [idle] is not shown
   final Here? here;
 
+  /// A point held on the map, whose stops an empty query lists instead
+  final LatLng? around;
+
+  /// The default paints the bar grey whatever the app's theme says
+  @override
+  ThemeData appBarTheme(BuildContext context) => super
+      .appBarTheme(context)
+      .copyWith(appBarTheme: Theme.of(context).appBarTheme);
+
   @override
   List<Widget> buildActions(BuildContext context) => [
     if (query.isNotEmpty)
-      IconButton(onPressed: () => query = '', icon: const Icon(Icons.clear)),
+      IconButton(
+        onPressed: () => query = '',
+        icon: const Icon(Icons.clear),
+        tooltip: txt.clear,
+      ),
   ];
 
   @override
   Widget buildLeading(BuildContext context) => IconButton(
     onPressed: () => close(context, null),
     icon: const BackButtonIcon(),
+    tooltip: MaterialLocalizations.of(context).backButtonTooltip,
   );
 
   @override
@@ -102,6 +121,14 @@ class StopSearch extends SearchDelegate<Hit?> {
         catalog: catalog,
         places: places,
         query: query.trim(),
+        onPick: pick,
+        onSave: onSave,
+      );
+    }
+    if (around case final around?) {
+      return _Around(
+        near: nearest(catalog, around),
+        catalog: catalog,
         onPick: pick,
         onSave: onSave,
       );
@@ -179,20 +206,51 @@ class _Near extends StatelessWidget {
   }
 }
 
-/// Stop [i] as a row, with [under] beneath its name.
+/// The stops nearest a point held on the map, [near] them first.
+class _Around extends StatelessWidget {
+  const _Around({
+    required this.near,
+    required this.catalog,
+    required this.onPick,
+    required this.onSave,
+  });
+
+  final List<(int, double)> near;
+  final Catalog catalog;
+  final void Function(Hit hit) onPick;
+  final void Function(String name, LatLng at) onSave;
+
+  @override
+  Widget build(BuildContext context) => near.isEmpty
+      ? _Said(txt.nothingNearHere)
+      : ListView(
+          children: [
+            _Heading(txt.nearHere),
+            for (final (i, m) in near)
+              _stop(context, catalog, i, txt.metres(m.round()), onPick, onSave),
+          ],
+        );
+}
+
+/// A stop row names this many of its routes, so a hub's does not fill the list
+const _shownRoutes = 6;
+
+/// Stop [i] as a row, with [under] or the badges of [routes] beneath its name.
 Widget _stop(
   BuildContext context,
   Catalog catalog,
   int i,
   String under,
   void Function(Hit hit) onPick,
-  void Function(String name, LatLng at) onSave,
-) {
+  void Function(String name, LatLng at) onSave, {
+  List<TransitRoute> routes = const [],
+}) {
   final s = catalog.stops[i];
   return _Row(
     icon: Icons.directions_bus_outlined,
     title: s.name,
     under: under,
+    routes: routes,
     onTap: () => onPick(StopHit(i)),
     onSave: () => _saveAs(context, onSave, s.name, LatLng(s.lat, s.lon)),
   );
@@ -249,7 +307,7 @@ class _ResultsState extends State<_Results> {
     setState(() {
       _found = const [];
       _failed = false;
-      _busy = widget.query.length >= minTyped;
+      _busy = _asked;
     });
     if (_busy) _timer = Timer(searchDebounce, () => unawaited(_ask()));
   }
@@ -276,6 +334,8 @@ class _ResultsState extends State<_Results> {
 
   Future<void> _save(String was, LatLng at) =>
       _saveAs(context, widget.onSave, was, at);
+
+  bool get _asked => widget.query.length >= minTyped;
 
   @override
   Widget build(BuildContext context) {
@@ -306,6 +366,9 @@ class _ResultsState extends State<_Results> {
       children: [
         if (_busy) const LinearProgressIndicator(minHeight: 2),
         if (_failed) _Said(txt.noSearch),
+        // Only once the place search has answered, as places may yet come
+        if (_asked && !_busy && !_failed && rows.isEmpty)
+          _Said(txt.nothingFound),
         Expanded(
           child: ListView.builder(
             itemCount: rows.length,
@@ -317,12 +380,15 @@ class _ResultsState extends State<_Results> {
                   context,
                   catalog,
                   row,
-                  [
-                    for (final r in catalog.stops[row].routes)
-                      catalog.routes[r].short,
-                  ].join(' · '),
+                  '',
                   widget.onPick,
                   widget.onSave,
+                  routes: [
+                    for (final r in catalog.stops[row].routes.take(
+                      _shownRoutes,
+                    ))
+                      catalog.routes[r],
+                  ],
                 );
               }
               if (row is Place) {
@@ -338,7 +404,8 @@ class _ResultsState extends State<_Results> {
                 icon: Icons.place_outlined,
                 title: p.name,
                 under: p.where,
-                onTap: () => widget.onPick(PlaceHit(p.at, p.name)),
+                onTap: () =>
+                    widget.onPick(PlaceHit(p.at, p.name, where: p.where)),
                 onSave: () => _save(p.name, p.at),
               );
             },
@@ -375,6 +442,8 @@ class _Said extends StatelessWidget {
   );
 }
 
+const _badgeGap = 4.0;
+
 class _Row extends StatelessWidget {
   const _Row({
     required this.icon,
@@ -382,12 +451,16 @@ class _Row extends StatelessWidget {
     required this.under,
     required this.onTap,
     this.onSave,
+    this.routes = const [],
   });
 
   final IconData icon;
   final String title;
   final String under;
   final VoidCallback onTap;
+
+  /// Shown as badges in place of [under]
+  final List<TransitRoute> routes;
 
   /// Null for a place already saved
   final VoidCallback? onSave;
@@ -396,7 +469,18 @@ class _Row extends StatelessWidget {
   Widget build(BuildContext context) => ListTile(
     leading: Icon(icon),
     title: Text(title, overflow: TextOverflow.ellipsis),
-    subtitle: under.isEmpty
+    subtitle: routes.isNotEmpty
+        ? Padding(
+            padding: const EdgeInsets.only(top: _badgeGap),
+            child: Wrap(
+              spacing: _badgeGap,
+              runSpacing: _badgeGap,
+              children: [
+                for (final r in routes) RouteBadge(route: r, fontSize: 10),
+              ],
+            ),
+          )
+        : under.isEmpty
         ? null
         : Text(under, overflow: TextOverflow.ellipsis),
     onTap: onTap,

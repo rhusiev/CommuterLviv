@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
@@ -16,6 +17,8 @@ import 'package:commuterlviv/src/here.dart';
 import 'package:commuterlviv/src/live.dart';
 import 'package:commuterlviv/src/models.dart';
 import 'package:commuterlviv/src/strings.dart';
+
+import 'back.dart';
 
 const lat0 = 49.84;
 const lon0 = 24.03;
@@ -68,6 +71,9 @@ const _missedAheadS = 150;
 /// in this long is caught only by hurrying - and said at once, being under 120 s.
 /// With the 35 s to spare this far ahead, the 200 m need 9.6 km/h
 const _hurryAheadS = 110;
+
+/// A Pixel 6, in logical pixels
+const _phone = Size(411, 914);
 
 /// `Watch` holds a worse word back 10 s
 const _heldS = 10;
@@ -251,6 +257,22 @@ void main() {
     expect(find.widgetWithText(HurryPill, txt.kmh(10)), findsOneWidget);
   });
 
+  testWidgets('the pace a ride needs says why when tapped', (tester) async {
+    final here = await pump(
+      tester,
+      away: false,
+      hurrySpeed: 2 * walkKmh.usual,
+      following: leaving(_hurryAheadS),
+    );
+    here.move(0, 0);
+    await tester.pump();
+
+    await tester.tap(find.byType(HurryPill));
+    await tester.pumpAndSettle();
+
+    expect(find.text(txt.paceHint), findsOneWidget);
+  });
+
   testWidgets('a word held back is said once its hold ends, with no fix to '
       'prompt it', (tester) async {
     final here = await pump(
@@ -312,6 +334,37 @@ void main() {
     await tester.tap(find.byTooltip(txt.hideSteps));
     await tester.pump();
     expect(find.text('Stop 0 → Stop 1'), findsNothing);
+  });
+
+  testWidgets('back folds the steps rather than leaving the app', (
+    tester,
+  ) async {
+    final here = await pump(tester, away: false);
+    here.move(0, 100);
+    await tester.pump();
+    await tester.tap(find.byTooltip(txt.showSteps));
+    await tester.pump();
+
+    expect(await pressBack(tester), isFalse);
+    expect(find.text('Stop 0 → Stop 1'), findsNothing);
+    expect(await pressBack(tester), isTrue);
+  });
+
+  testWidgets('a step too long for one line wraps onto a second', (
+    tester,
+  ) async {
+    tester.view.physicalSize = _phone;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final here = await pump(tester, away: false);
+    here.move(0, 100);
+    await tester.pump();
+
+    // Two lines on a phone in the test font, whose every glyph is a square
+    final head = tester.renderObject<RenderParagraph>(
+      find.text(txt.walkTo('Stop 0')),
+    );
+    expect(head.didExceedMaxLines, isFalse);
   });
 
   testWidgets('a step at a stop or on a route the catalog lacks still lists', (

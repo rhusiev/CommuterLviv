@@ -18,11 +18,10 @@ import time
 import numpy as np
 
 from . import files, gtfs, layover
-from .model import PaceModel
 
 PATH = gtfs.DATA / "model.npz"
-UNIT = ("cf", "cs", "cd")       # per unit, beside the profile's `pr`
-CORR = ("rf", "rs", "rd")       # per corridor
+UNIT = ("cf", "cs")             # per unit, beside the profile's `pr`
+CORR = ("rf", "rs")             # per corridor
 LENGTH_TOL = 0.01               # a shape longer or shorter than this has moved
 LAYOVER = "layover."            # before each of `layover.FIELDS`
 STANDS = "layover.rows"         # the minutes of stands its departure model learns from
@@ -30,20 +29,13 @@ PASSED = "boost.rows"           # the passed stops the ETA correction learns fro
 PASSED_ROUTES = "boost.routes"  # the route ids its rows number
 
 
-def supported(model):
-    """Per-cell online models only: a section is numbered by stop pattern, and
-    the other estimators keep no EWMAs."""
-    return type(model) is PaceModel and model.cfg.unit == "cell"
-
-
 def _ewmas(model):
     """Every learned array, named and tagged with what indexes it."""
     for layer in ("pace", "hold"):
         one = getattr(model, layer)
         for part in UNIT + CORR + ("g",):
-            if (e := getattr(one, part)) is not None:
-                kind = "unit" if part in UNIT else "corr" if part in CORR else "g"
-                yield f"{layer}.{part}", kind, e
+            kind = "unit" if part in UNIT else "corr" if part in CORR else "g"
+            yield f"{layer}.{part}", kind, getattr(one, part)
         for i, e in enumerate(one.pr or ()):
             yield f"{layer}.pr{i}", "unit", e
 
@@ -82,7 +74,7 @@ def restore(model, data):
     The training rows and turnarounds hold no shape, so they are restored even
     when no shape fits any more: the recording they came from must then not
     be replayed into them again, which a None would have the caller do."""
-    if not supported(model) or str(data["variant"]) != model.cfg.name:
+    if str(data["variant"]) != model.cfg.name:
         return None
     if all(LAYOVER + k in data for k in layover.FIELDS):
         model.layovers.restore(*(data[LAYOVER + k] for k in layover.FIELDS))
@@ -132,7 +124,7 @@ def save(data, path=PATH):
 
 def load(model, path=PATH):
     """Restore from disk; the time the snapshot was taken, or None."""
-    if not path.exists() or not supported(model):
+    if not path.exists():
         return None
     try:
         with np.load(path, allow_pickle=False) as z:

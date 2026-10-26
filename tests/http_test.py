@@ -10,7 +10,7 @@ from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from commuterlviv import network
-from commuterlviv.live import app, journeys, quiet, wire
+from commuterlviv.live import admin, app, journeys, quiet, wire
 
 from . import city, service
 
@@ -76,6 +76,20 @@ def test_the_data_needs_a_session(client):
     assert client.get("/api/catalog").status_code == 401
 
 
+def test_an_operator_reads_the_nights_skipped_stops_in_the_status(client, database):
+    name = service.username("operator")
+    client.post("/api/register", headers={"Origin": ORIGIN},
+                json={"username": name, "password": service.PASSWORD})
+    assert admin.run(admin.operator(name, st=service.settings_for(database, ORIGIN)))
+    found = {"at": 1790000000, "stops": [{"route": "А1", "stop": "s2"}]}
+    client.app.state.skipped = found
+
+    r = client.get("/api/status")
+
+    assert r.status_code == 200, r.text
+    assert r.json()["skipped"] == found
+
+
 def test_registering_needs_the_apps_origin(client):
     r = client.post("/api/register", headers={"Origin": "https://evil.example"},
                     json={"username": "mallory", "password": service.PASSWORD})
@@ -110,6 +124,51 @@ def test_a_body_that_is_not_a_small_json_object_is_refused(client, sent, status,
     r = client.post("/api/pins", headers=headers, content=sent)
 
     assert (r.status_code, r.json()) == (status, {"error": said})
+
+
+@pytest.mark.parametrize(("path", "sent", "said"), [
+    ("/api/password", {"old": "not it", "new": service.PASSWORD + "-new"},
+     "The current password is wrong"),
+    ("/api/password", {"old": service.PASSWORD, "new": "short"},
+     "The password must be between"),
+    ("/api/pins", {"pins": 5}, "Pins must be a list"),
+    ("/api/places", {"places": [{"name": "home"}]}, "A place needs a lat and a lon"),
+    ("/api/sets", {"name": "", "routes": []}, "A name must be 1 to"),
+    ("/api/sets", {"name": "home", "routes": ["nope"]}, "No such route: 'nope'"),
+], ids=["wrong password", "short password", "pins", "place", "set name", "set route"])
+def test_a_refusal_is_said_as_a_sentence(client, path, sent, said):
+    headers = _signed_in(client, "refused")
+
+    r = client.post(path, headers=headers, json=sent)
+
+    assert r.status_code == 400 and r.json()["error"].startswith(said), r.text
+
+
+def test_a_refused_registration_is_said_as_a_sentence(client):
+    def register(username):
+        return client.post("/api/register", headers={"Origin": ORIGIN},
+                           json={"username": username, "password": service.PASSWORD})
+
+    name = service.username("twice")
+
+    bad = register("no spaces allowed")
+    first, again = register(name), register(name)
+
+    assert bad.json()["error"].startswith("A username must be 3-32 characters")
+    assert first.status_code == 200, first.text
+    assert again.json() == {"error": "That username is taken"}
+
+
+@pytest.mark.parametrize(("refused", "said"), [
+    (lambda: app._departure("soon"), "At must be a unix time in seconds"),
+    (lambda: app._departure(str(time.time() + 10 ** 9)), "At must be within the next"),
+    (lambda: app._kmh("99", "speed", app.WALK_KMH), "Speed must be between"),
+], ids=["at not a time", "at too far", "speed"])
+def test_a_refused_plan_is_said_as_a_sentence(refused, said):
+    value, why = refused()
+
+    assert value is None and why.startswith(said)
+
 
 def test_the_catalog_lists_the_citys_routes_and_stops(client):
     _signed_in(client, "catalog")

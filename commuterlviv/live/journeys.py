@@ -4,7 +4,7 @@ Optional: without `data/walk.npz` and `data/transfers.npz` the endpoint answers
 503 and everything else is untouched. `arrange` builds them once in the
 background; COMMUTERLVIV_BUILD_PLANNER=false leaves that to the operator.
 
-This is also where `plan.py`'s stop numbering is translated into the catalog's,
+This is also where `plan`'s stop numbering is translated into the catalog's,
 which is what the wire uses.
 """
 import asyncio
@@ -21,6 +21,11 @@ from . import geometry
 
 DETAIL = 4.0    # m a drawn leg may stray from the real line
 HURRIED = 1     # the leg a hurried journey hurries to: the ride after its first walk
+USUAL_KMH = footpaths.SPEED * 3.6   # the pace the footpaths are timed at, in km/h
+# a walk is drawn along the footpath found within its timed seconds times
+# DRAWN_SLACK, plus DRAWN_EXTRA s
+DRAWN_SLACK = 1.5
+DRAWN_EXTRA = 60.0
 
 
 class Planner:
@@ -119,7 +124,7 @@ class Planner:
     def _paced(self, speed):
         if speed is None:
             return self.walk, self.transfers
-        pace = footpaths.SPEED * 3.6 / speed
+        pace = USUAL_KMH / speed
         return self.walk.paced(pace), self.transfers.paced(pace)
 
     def wire(self, j, path=None, between=None):
@@ -189,7 +194,7 @@ class Planner:
     def _line(self, leg, origin, dest, arrivals, walk, stretch=1.0):
         a, b = self._where(leg.a, origin), self._where(leg.b, dest)
         if leg.kind == "walk":
-            limit = (leg.arr - leg.dep) * stretch * 1.5 + 60.0
+            limit = (leg.arr - leg.dep) * stretch * DRAWN_SLACK + DRAWN_EXTRA
             return network.to_xy(*np.array(walk.path(a, b, limit)).T)
         stretch = self._stretch(leg.route, leg.a, leg.b)
         if stretch is not None:
@@ -318,5 +323,5 @@ async def arrange(state, net, cat, log):
 def _hurry(speed, hurry):
     """The share of the walk's time at `speed` it takes at `hurry`, both km/h
     or None for the usual."""
-    usual = footpaths.SPEED * 3.6 if speed is None else speed
+    usual = USUAL_KMH if speed is None else speed
     return 1.0 if hurry is None else min(usual / hurry, 1.0)

@@ -7,7 +7,7 @@ import 'package:flutter/material.dart' as material show Theme;
 import 'due.dart';
 import 'live.dart';
 import 'models.dart';
-import 'route_badge.dart';
+import 'route_chip.dart';
 import 'strings.dart';
 
 class StopCard extends StatefulWidget {
@@ -31,11 +31,15 @@ class StopCard extends StatefulWidget {
   /// card tracks its own taps from here.
   final bool pinned;
 
+  /// The routes watched: the screen behind changes this set in place on
+  /// [onRoute], and the card rebuilds itself after it.
   final Set<int> watching;
   final VoidCallback onPin;
+
+  /// Watches the route or stops watching it, from a chip's body.
   final void Function(int route) onRoute;
 
-  /// The line, on a long press: a tap picks the route to watch.
+  /// The line, from a chip's `›`.
   final void Function(int route) onLine;
 
   @override
@@ -45,11 +49,17 @@ class StopCard extends StatefulWidget {
 class _StopCardState extends State<StopCard> {
   late bool _pinned = widget.pinned;
 
+  void _watch(int route) {
+    widget.onRoute(route);
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final catalog = widget.catalog;
     final stop = widget.stop;
     final s = catalog.stops[stop];
+    final title = s.title;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -60,8 +70,22 @@ class _StopCardState extends State<StopCard> {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    s.name,
+                  // The code in brackets, as every other place names the stop
+                  child: Text.rich(
+                    TextSpan(
+                      text: title.name,
+                      children: [
+                        if (title.code.isNotEmpty)
+                          TextSpan(
+                            text: ' (${title.code})',
+                            style: TextStyle(
+                              color: material.Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                          ),
+                      ],
+                    ),
                     style: material.Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
@@ -77,14 +101,13 @@ class _StopCardState extends State<StopCard> {
                 ),
               ],
             ),
-            if (s.code.isNotEmpty) Text(s.code),
             const SizedBox(height: 8),
             AnimatedBuilder(
               animation: widget.live,
               builder: (context, _) {
                 final due = widget.live.arrivals[stop] ?? const <Arrival>[];
                 if (due.isEmpty) {
-                  return Text(txt.nothingDueWatched);
+                  return Text(txt.nothingDue);
                 }
                 return Wrap(
                   spacing: 6,
@@ -94,6 +117,8 @@ class _StopCardState extends State<StopCard> {
                       Due(
                         route: catalog.routes[a.route],
                         arrival: a,
+                        watched: widget.watching.contains(a.route),
+                        onWatch: () => _watch(a.route),
                         onLine: () => widget.onLine(a.route),
                       ),
                   ],
@@ -111,22 +136,13 @@ class _StopCardState extends State<StopCard> {
               runSpacing: 4,
               children: [
                 for (final r in s.routes)
-                  GestureDetector(
-                    onLongPress: () => widget.onLine(r),
-                    child: ActionChip(
-                      label: RouteBadge(route: catalog.routes[r], muted: true),
-                      avatar: widget.watching.contains(r)
-                          ? const Icon(Icons.check, size: 16)
-                          : null,
-                      onPressed: () => widget.onRoute(r),
-                    ),
+                  RouteChip(
+                    route: catalog.routes[r],
+                    watched: widget.watching.contains(r),
+                    onWatch: () => _watch(r),
+                    onLine: () => widget.onLine(r),
                   ),
               ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              txt.holdForLine,
-              style: material.Theme.of(context).textTheme.bodySmall,
             ),
           ],
         ),

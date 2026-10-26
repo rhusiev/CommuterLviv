@@ -52,6 +52,24 @@ class Stop {
   final double lat;
   final double lon;
   final List<int> routes;
+
+  /// The city writes most stops' codes into their names too, "ТРЦ Кінг Кросс
+  /// (320)", and some stops' codes only there
+  static final _codeInName = RegExp(r'\s*\(([\d-]+)\)$');
+
+  /// The feed pads its codes with zeros the names do not: "0074-01" for "74-01"
+  static final _padding = RegExp(r'^0+(?=\d)');
+
+  /// The name and code for where both are shown, the code said once and as
+  /// the names say it. The name's own code comes first: the feed's disagrees
+  /// with it for a few stops, "Площа Франка (311)" coded 0280.
+  ({String name, String code}) get title {
+    final inName = _codeInName.firstMatch(name);
+    if (inName == null) {
+      return (name: name, code: code.replaceFirst(_padding, ''));
+    }
+    return (name: name.substring(0, inName.start), code: inName.group(1)!);
+  }
 }
 
 class Catalog {
@@ -93,10 +111,24 @@ class Catalog {
 
   List<int> stopsAt(List<String> ids) => [for (final id in ids) ?stopIndex[id]];
 
+  /// The stops one of [routes] calls at, and every other one, which the map
+  /// draws faint and only from close in.
+  ({List<int> stops, List<int> faint}) splitStops(Set<int> routes) {
+    final stops = <int>[];
+    final faint = <int>[];
+    for (var i = 0; i < this.stops.length; i++) {
+      (this.stops[i].routes.any(routes.contains) ? stops : faint).add(i);
+    }
+    return (stops: stops, faint: faint);
+  }
+
   /// A stop's name, or none for a position this catalog lacks: the server
   /// sends -1 for a stop missing from it, and a newer catalog may be longer
-  String stopName(int stop) =>
-      stop >= 0 && stop < stops.length ? stops[stop].name : '';
+  String stopName(int stop) => stopAt(stop)?.name ?? '';
+
+  /// The stop at [stop], or null for a position this catalog lacks
+  Stop? stopAt(int stop) =>
+      stop >= 0 && stop < stops.length ? stops[stop] : null;
 
   /// The route at [route], or null for a position this catalog lacks
   TransitRoute? routeAt(int? route) =>
@@ -143,6 +175,14 @@ class Place {
     'lat': at.latitude,
     'lon': at.longitude,
   };
+
+  /// Within about eleven metres.
+  static const _same = 1e-4;
+
+  /// Whether [point] is this place.
+  bool isAt(LatLng point) =>
+      (at.latitude - point.latitude).abs() < _same &&
+      (at.longitude - point.longitude).abs() < _same;
 }
 
 class Sets {
@@ -431,6 +471,15 @@ class Journey {
   int get walking =>
       legs.where((l) => l.walking).fold(0, (s, l) => s + l.arr - l.dep);
 
+  /// What its legs go along, and the stops they meet at: a leg from an older
+  /// service may have no points
+  List<LatLng> extent(Catalog catalog) => [
+    for (final leg in legs) ...leg.pts,
+    for (final leg in legs)
+      for (final i in [leg.a, leg.b])
+        if (catalog.stopAt(i) case final stop?) LatLng(stop.lat, stop.lon),
+  ];
+
   /// As [Journey.fromJson] reads it, without the legs' backups
   Map<String, Object?> toJson() => {
     'dep': dep,
@@ -583,7 +632,11 @@ class Traffic {
 /// direction is what tells a stretch run both ways from a one-way one, so the
 /// chevrons on it can be drawn as two tracks rather than one.
 class RouteLine {
-  const RouteLine({required this.dir, required this.pts});
+  const RouteLine({
+    required this.dir,
+    required this.pts,
+    this.stops = const [],
+  });
 
   factory RouteLine.fromJson(Map<String, dynamic> j) => RouteLine(
     dir: j['dir'] as int,
@@ -591,10 +644,15 @@ class RouteLine {
       for (final p in j['pts'] as List)
         LatLng(((p as List)[0] as num).toDouble(), (p[1] as num).toDouble()),
     ],
+    stops: [for (final s in j['stops'] as List? ?? const []) s as int],
   );
 
   final int dir;
   final List<LatLng> pts;
+
+  /// Catalog positions of the stops called at along it, in order; none from
+  /// a server older than the field
+  final List<int> stops;
 }
 
 class RouteShape {

@@ -88,35 +88,27 @@ class Ewma:
 class Layer:
     """One quantity, learned at unit / corridor / global scale.
 
-    Upper layers can be switched off; the global number is always there.
-    `day_hl` adds a third term beside the fast and slow ones. `prof_hl` is not a
-    term but a back-off target sitting between the corridor and the unit: one
-    number per unit per hour of the day.
+    `prof_hl` is not a term but a back-off target sitting between the corridor
+    and the unit, none if 0.0: one number per unit per hour of the day.
     """
 
     def __init__(self, nunit, ncorr, unit_corr, init, fast_hl, slow_hl,
-                 k_unit=4.0, k_corr=4.0, fast=True, corridor=True, day_hl=0.0,
-                 prof_hl=0.0, nslot=SLOTS):
+                 k_unit=4.0, k_corr=4.0, prof_hl=0.0, nslot=SLOTS):
         self.unit_corr = unit_corr
-        self.fast, self.corridor = fast, corridor
         self.k_unit, self.k_corr = k_unit, k_corr
         self.cf = Ewma(nunit, fast_hl, init)
         self.cs = Ewma(nunit, slow_hl, init)
         self.rf = Ewma(ncorr, fast_hl, init)
         self.rs = Ewma(ncorr, slow_hl, init)
-        self.cd = Ewma(nunit, day_hl, init) if day_hl else None
-        self.rd = Ewma(ncorr, day_hl, init) if day_hl else None
         self.pr = [Ewma(nunit, prof_hl, init) for _ in range(nslot)] \
             if prof_hl else None
         self.g = Ewma(1, slow_hl, init)
 
     def _cells(self):
-        return ((self.cf,) if self.fast else ()) + (self.cs,) + \
-            ((self.cd,) if self.cd is not None else ())
+        return self.cf, self.cs
 
     def _corrs(self):
-        return ((self.rf,) if self.fast else ()) + (self.rs,) + \
-            ((self.rd,) if self.rd is not None else ())
+        return self.rf, self.rs
 
     def update(self, units, vals, now, weights, corr, slot=0):
         total = weights.sum()
@@ -126,10 +118,9 @@ class Layer:
             ewma.update(units, vals, now, weights)
         if self.pr is not None:
             self.pr[slot].update(units, vals, now, weights)
-        if self.corridor:
-            cu, vu, wu = corr
-            for ewma in self._corrs():
-                ewma.update(cu, vu, now, wu)
+        cu, vu, wu = corr
+        for ewma in self._corrs():
+            ewma.update(cu, vu, now, wu)
         self.g.update(np.zeros(1, dtype=int),
                       np.array([np.average(vals, weights=weights)]),
                       now, np.array([total]))
@@ -143,22 +134,16 @@ class Layer:
 
     def read(self, now, slot=0):
         gm, _ = self.g.read(now)
-        if self.corridor:
-            corr = self._blend(now, self._corrs(), gm[0], self.k_corr)
-            base = corr[self.unit_corr]
-        else:
-            base = gm[0]
+        corr = self._blend(now, self._corrs(), gm[0], self.k_corr)
+        base = corr[self.unit_corr]
         if self.pr is not None:
             base = self._blend(now, (self.pr[slot],), base, self.k_unit)
         return self._blend(now, self._cells(), base, self.k_unit)
 
 
-class BaseModel:
-    """Geometry, timetable prior and ETA arithmetic, shared by every estimator.
-
-    A subclass supplies only `_absorb` (what to do with an observation) and
-    `refresh` (where a ratio and a hold come from when asked).
-    """
+class PaceModel:
+    """Geometry, timetable prior and ETA arithmetic around the two quantities,
+    each a `Layer`: three layers, two half-lives."""
 
     def __init__(self, net, cfg=None):
         self.cfg = cfg = cfg or config.FULL
@@ -181,15 +166,13 @@ class BaseModel:
             s = net.shapes[sid]
             self.cell_len[b:b + s.cells] = s.length / s.cells
 
-        self.unit = (self._sections() if cfg.unit == "section"
-                     else np.arange(self.ncell))
-        self.nunit = int(self.unit.max()) + 1
-        self.unit_len = np.bincount(self.unit, self.cell_len, self.nunit)
-        self.unit_corr = np.zeros(self.nunit, dtype=np.int64)
-        self.unit_corr[self.unit] = self.cell_corr
+        # what a travel time is learned per: every cell its own
+        self.unit = np.arange(self.ncell)
+        self.nunit = self.ncell
+        self.unit_len = self.cell_len
+        self.unit_corr = self.cell_corr
 
-        self.prior = (np.full((SLOTS, self.ncell), PACE0) if cfg.prior == "off"
-                      else self._schedule_prior())
+        self.prior = self._schedule_prior()
         if cfg.prior == "shape":
             self.prior = self.prior * (PACE0 / self._level(self.prior))
 
@@ -199,6 +182,8 @@ class BaseModel:
         self.emitting = False   # set by the replay: is this epoch being scored
         self.layovers = layover.Layovers(net, localtime.TZ)
         self.boost = boost.Boost(net, localtime.TZ)
+        self.pace = self._layer(1.0)
+        self.hold = self._layer(0.0)
 
     def _level(self, prior):
         """The one number a whole prior array is worth: its length-weighted mean.
@@ -208,35 +193,6 @@ class BaseModel:
         """
         return float(np.average(prior, weights=np.broadcast_to(
             self.cell_len, prior.shape)))
-
-    def _sections(self):
-        """Map every cell to the stop-to-stop section it falls in.
-
-        A shape with several stop patterns uses the one running the most trips.
-        """
-        seen = {}
-        for trip, key in self.net.pattern_of.items():
-            n, _ = seen.get(key, (0, None))
-            seen[key] = (n + 1, trip)
-        best = {}
-        for (sid, _), (n, trip) in seen.items():
-            if n > best.get(sid, (0, None))[0]:
-                best[sid] = (n, trip)
-
-        out = np.zeros(self.ncell, dtype=np.int64)
-        nxt = 0
-        for sid, b in self.shape_base.items():
-            s = self.net.shapes[sid]
-            if sid not in best:
-                k = np.arange(s.cells)       # no pattern here: leave it as cells
-            else:
-                edges = self.net.trip_stops[best[sid][1]][1]
-                centre = (np.arange(s.cells) + 0.5) * (s.length / s.cells)
-                k = np.clip(np.searchsorted(edges, centre) - 1,
-                            0, max(len(edges) - 2, 0))
-            out[b:b + s.cells] = nxt + k
-            nxt += int(k.max()) + 1
-        return out
 
     def _schedule_prior(self):
         """Timetabled pace for every cell, at every hour of the day.
@@ -310,9 +266,6 @@ class BaseModel:
         """
         cells = np.asarray(cells)
         held = np.clip(hold, *HOLD_CLIP)
-        if not self.cfg.hold:
-            pace = pace + held / np.maximum(dist, 1.0)
-            held = np.zeros_like(held)
         ratio = np.clip(pace / self.prior_at(now)[cells], *RATIO_CLIP)
         units = self.unit[cells]
         self._absorb(units, self.cell_corr[cells], ratio, held,
@@ -357,21 +310,12 @@ class BaseModel:
         return self.integrate(shape_id, d0, d1)
 
 
-class PaceModel(BaseModel):
-    """The shipped estimator: two quantities, three layers, two half-lives."""
-
-    def __init__(self, net, cfg=None):
-        super().__init__(net, cfg)
-        self.pace = self._layer(1.0)
-        self.hold = self._layer(0.0)
-
     def _layer(self, init):
-        """One layer of the two; the only thing `MedianModel` overrides."""
+        """One `Layer` of the two, pace or hold."""
         return Layer(self.nunit, self.ncorr, self.unit_corr, init,
                      self.cfg.fast_hl, self.cfg.slow_hl,
                      k_unit=self.cfg.k_unit, k_corr=self.cfg.k_corr,
-                     fast=self.cfg.fast, corridor=self.cfg.corridor,
-                     day_hl=self.cfg.day_hl, prof_hl=self.cfg.prof_hl)
+                     prof_hl=self.cfg.prof_hl)
 
     def _absorb(self, units, corr, ratio, held, w_pace, w_hold, now):
         slot = self.slot(now)

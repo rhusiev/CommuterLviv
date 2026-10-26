@@ -400,6 +400,13 @@ class Api {
       : _keep('following', json);
 
   /// Null means the phone's own, which is what `main` falls back to.
+  /// Route ids of the lines opened lately, latest first; on this device only
+  List<String> get recentLines =>
+      _prefs.getStringList('commuterlviv.recentLines') ?? const [];
+
+  Future<void> setRecentLines(List<String> ids) =>
+      _prefs.setStringList('commuterlviv.recentLines', ids);
+
   String? get language => _setting<String?>('lang', null);
 
   Future<void> setLanguage(String code) => _keep('lang', code);

@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type { Origin, Point } from "../components/JourneyPanel";
+import { t } from "./i18n";
 import { hereOnce, ONE_FIX, type NoFix } from "./position";
 
 /** The journey planner's two ends and how they are being set. Kept above the
@@ -20,7 +21,8 @@ export function usePlanner(shown: boolean, onNoFix: (why: NoFix) => void) {
     const asked = boarded.current;
     if (!navigator.geolocation) return;
     hereOnce(ONE_FIX).then((pos) => {
-      const at = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      // Named, so the field reads as where I was rather than as coordinates
+      const at = { lat: pos.coords.latitude, lon: pos.coords.longitude, name: t.useHere };
       // A fix asked for before getting on board is no longer the start
       if (which === "to") setTo(at);
       else if (asked === boarded.current) setFrom(at);

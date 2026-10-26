@@ -47,3 +47,12 @@ export function journeyTags(legs: Leg[]): Tag[] {
   }
   return out;
 }
+
+/** Whether a pill at `at` stands on a saved place, whose name is drawn beside
+ * its dot */
+export function onPlace(
+  at: { lat: number; lon: number },
+  places: { lat: number; lon: number }[],
+): boolean {
+  return places.some((place) => metres(place, at) < SAME_STOP_M);
+}

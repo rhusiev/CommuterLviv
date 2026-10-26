@@ -1,27 +1,32 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { Map as MapLibre } from "maplibre-gl";
 import WORKER from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import {
+  ALL_STOPS_ZOOM,
   BOUNDS,
   loadView,
   MAX_ZOOM,
   metresPerPixel,
   MIN_ZOOM,
+  pickable,
   saveView,
   screen,
   STOPS_ZOOM,
   type View,
 } from "../lib/geo";
+import { Hold, listenForHold } from "../lib/hold";
 import { sync } from "../lib/layers";
 import { sample, type Live } from "../lib/live";
 import { watchHere } from "../lib/position";
 import type { Pace } from "../lib/traffic";
 import { build, colour, R, type Sprites } from "../lib/sprites";
 import { t } from "../lib/i18n";
-import { journeyTags } from "../lib/tags";
+import { fitPadding } from "../lib/padding";
+import { journeyTags, onPlace } from "../lib/tags";
 import { ink, styleUrl, type Theme } from "../lib/theme";
 import type { Catalog, Journey, Place, Shapes } from "../lib/types";
 import { MOVING_FLAG, STALE_FLAG } from "../lib/wire";
+import type { Held } from "./HoldMenu";
 import { Icon } from "./Icon";
 
 /** The vehicle/stop overlay is a 2D canvas drawn from MapLibre's own `render`
@@ -29,6 +34,8 @@ import { Icon } from "./Icon";
  * reads the camera one frame late. No React state changes during the draw. */
 
 const STOP_R = 3.5;
+/** How strongly a stop no route on the map calls at is drawn */
+const FAINT_ALPHA = 0.35;
 
 /** A pinned stop is ringed at every zoom, a saved place is a dot with its name.
  * The ring is the quieter of the two: a pin marks a stop that is already drawn,
@@ -38,6 +45,10 @@ const PLACE_R = 5;
 
 /** Below this a name is more clutter than help, so places are dots alone */
 const LABEL_ZOOM = 12.5;
+/** A journey pill's height, and the gap a pill on a saved place keeps above
+ * it: more than half the name's plate, which is drawn level with the dot */
+const TAG_H = 18;
+const TAG_LIFT = 10;
 /** Where the map comes in to on a place it is sent to, close enough to read the
  * streets around it */
 const NEAR_ZOOM = 16;
@@ -45,6 +56,8 @@ const FLY_SPEED = 1.6;
 
 const HIT = 14;
 const TAU = Math.PI * 2;
+/** Phone width: the `sm` breakpoint app.css hides the zoom buttons under */
+const NARROW = "(width < 40rem)";
 
 type Locating = "off" | "waiting" | "on" | "denied";
 type Fix = { lat: number; lon: number; accuracy: number };
@@ -53,6 +66,8 @@ type Props = {
   catalog: Catalog;
   live: Live;
   stops: number[];
+  /** Every other stop: drawn faint and clickable from `ALL_STOPS_ZOOM` */
+  faint: number[];
   selected: number | null;
   onPickStop: (i: number | null) => void;
   vehicle: number | null;
@@ -61,11 +76,13 @@ type Props = {
   focus: { lat: number; lon: number } | null;
   /** `[west, south, east, north]` */
   fit: [number, number, number, number] | null;
+  /** The panel lying over the map, if one is open: a fit frames clear of it */
+  panel: RefObject<HTMLElement | null>;
   /** A click sets a journey end instead of choosing a stop */
   picking: boolean;
   onPickPoint: (lat: number, lon: number) => void;
-  /** A long press or right click, to save the spot */
-  onHoldPoint: (lat: number, lon: number) => void;
+  /** A long press or right click: the point, and where on the page it was */
+  onHoldPoint: (at: Held) => void;
   marks: { lat: number; lon: number; label: string }[];
   /** The planner option picked: walks dotted, rides solid, each leg timed */
   journey: Journey | null;
@@ -81,6 +98,9 @@ type Props = {
   directed: number | null;
   traffic: Pace | null;
   theme: Theme;
+  /** A panel lies over the map's corner, which on a phone hides the locate
+   * button under it */
+  covered: boolean;
 };
 
 const viewOf = (m: MapLibre): View => {
@@ -94,11 +114,13 @@ export function MapCanvas(props: Props) {
     live,
     focus,
     fit,
+    panel,
     locate,
     shapes,
     directed,
     traffic,
     theme,
+    covered,
   } = props;
   const box = useRef<HTMLDivElement>(null);
   const under = useRef<HTMLDivElement>(null);
@@ -137,6 +159,12 @@ export function MapCanvas(props: Props) {
     const g = el.getContext("2d")!;
     let map: MapLibre | null = null;
     let gone = false;
+    const hold = new Hold(({ clientX: x, clientY: y }) => {
+      if (!map) return;
+      const rect = map.getCanvasContainer().getBoundingClientRect();
+      const at = map.unproject([x - rect.left, y - rect.top]);
+      latest.current.onHoldPoint({ lat: at.lat, lon: at.lng, x, y });
+    });
     let w = 0;
     let h = 0;
 
@@ -166,7 +194,8 @@ export function MapCanvas(props: Props) {
       const m = map!;
       const p = screen(viewOf(m), w, h);
       const now = performance.now();
-      const { lines, stops, selected, pinned, places, journey, marks, vehicle } = latest.current;
+      const { lines, stops, faint, selected, pinned, places, journey, marks, vehicle } =
+        latest.current;
       const c = paint.current;
 
       g.clearRect(0, 0, w, h);
@@ -204,10 +233,10 @@ export function MapCanvas(props: Props) {
         }
       }
 
-      if (m.getZoom() >= STOPS_ZOOM) {
-        // One path for every stop: one fill and one stroke, not two per circle
+      // One path for many stops: one fill and one stroke, not two per circle
+      const rings = (which: number[], alpha: number) => {
         const ring = new Path2D();
-        for (const i of stops) {
+        for (const i of which) {
           const s = catalog.stops[i]!;
           const x = p.x(s.lon);
           const y = p.y(s.lat);
@@ -215,12 +244,17 @@ export function MapCanvas(props: Props) {
           ring.moveTo(x + STOP_R, y);
           ring.arc(x, y, STOP_R, 0, TAU);
         }
+        g.globalAlpha = alpha;
         g.fillStyle = c.stop;
         g.strokeStyle = c.edge;
         g.lineWidth = 1.5;
         g.fill(ring);
         g.stroke(ring);
-
+        g.globalAlpha = 1;
+      };
+      if (m.getZoom() >= ALL_STOPS_ZOOM) rings(faint, FAINT_ALPHA);
+      if (m.getZoom() >= STOPS_ZOOM) {
+        rings(stops, 1);
         if (selected !== null && catalog.stops[selected]) {
           const s = catalog.stops[selected]!;
           g.beginPath();
@@ -393,13 +427,14 @@ export function MapCanvas(props: Props) {
 
       // Timestamps only, one pill per stop; durations stay in the planner's
       // list. The pills name the ends while the journey is drawn, so the A/B
-      // marks rest until it is cleared.
-      const tags: { x: number; y: number; text: string }[] =
-        journeyTags(legs).map((tag) => ({
-          x: p.x(tag.lon),
-          y: p.y(tag.lat),
-          text: tag.text,
-        }));
+      // marks rest until it is cleared. On a saved place a pill stands above
+      // it, clear of the name.
+      const tags: PlacedTag[] = journeyTags(legs).map((tag) => ({
+        x: p.x(tag.lon),
+        y: p.y(tag.lat),
+        rise: onPlace(tag, places) ? -(TAG_H / 2 + TAG_LIFT) : 0,
+        text: tag.text,
+      }));
       placeTags(g, c, tags);
 
       // Vehicles move between camera changes, so keep asking for frames
@@ -426,6 +461,7 @@ export function MapCanvas(props: Props) {
         pitchWithRotate: false,
         touchPitch: false,
         attributionControl: { compact: true },
+        locale: t.mapLocale,
         canvasContextAttributes: { antialias: false, powerPreference: "high-performance" },
       });
       map.touchZoomRotate.disableRotation();
@@ -433,6 +469,13 @@ export function MapCanvas(props: Props) {
       // No compass: the overlay projects from centre and zoom alone, so
       // rotation is disabled and the map is held at north
       map.addControl(new NavigationControl({ showCompass: false }), "bottom-right");
+      // A compact attribution opens on its own and stays open until the first
+      // drag; on a phone it then runs under the tab bar. The (i) still opens it
+      if (matchMedia(NARROW).matches) {
+        map.once("idle", () =>
+          map?.getContainer().querySelector(".maplibregl-compact-show")?.classList.remove("maplibregl-compact-show"),
+        );
+      }
 
       map.on("error", (e) => console.warn("basemap:", e.error?.message ?? e));
       map.on("moveend", () => saveView(viewOf(map!)));
@@ -440,8 +483,15 @@ export function MapCanvas(props: Props) {
       map.on("dragstart", () => {
         keep.current = false;
       });
-      // Mobile browsers raise a long press as `contextmenu` too
-      map.on("contextmenu", (e) => latest.current.onHoldPoint(e.lngLat.lat, e.lngLat.lng));
+      // Android's browsers raise a long press as `contextmenu` too, iOS Safari
+      // does not, so a long press is also told from the touches
+      listenForHold(map.getCanvasContainer(), hold);
+      map.on("movestart", () => hold.cancel());
+      map.on("contextmenu", (e) => {
+        if (hold.menu()) return;
+        const { clientX: x, clientY: y } = e.originalEvent;
+        latest.current.onHoldPoint({ lat: e.lngLat.lat, lon: e.lngLat.lng, x, y });
+      });
       map.on("click", (e) => {
         if (latest.current.picking) {
           latest.current.onPickPoint(e.lngLat.lat, e.lngLat.lng);
@@ -469,7 +519,8 @@ export function MapCanvas(props: Props) {
 
         let best: number | null = null;
         let bestD = HIT * HIT;
-        for (const i of latest.current.stops) {
+        const { stops, faint } = latest.current;
+        for (const i of pickable(map!.getZoom(), stops, faint)) {
           const s = catalog.stops[i]!;
           const dx = p.x(s.lon) - e.point.x;
           const dy = p.y(s.lat) - e.point.y;
@@ -495,6 +546,7 @@ export function MapCanvas(props: Props) {
 
     return () => {
       gone = true;
+      hold.cancel();
       observer.disconnect();
       held.current = null;
       setReady(false);
@@ -525,11 +577,15 @@ export function MapCanvas(props: Props) {
         timer = window.setTimeout(go, 100);
         return;
       }
-      m.fitBounds([fit[0], fit[1], fit[2], fit[3]], { padding: 48, duration: 800 });
+      const padding = fitPadding(
+        m.getContainer().getBoundingClientRect(),
+        panel.current?.getBoundingClientRect() ?? null,
+      );
+      m.fitBounds([fit[0], fit[1], fit[2], fit[3]], { padding, duration: 800 });
     };
     go();
     return () => clearTimeout(timer);
-  }, [fit]);
+  }, [fit, panel]);
 
   useEffect(() => {
     if (!focus) return;
@@ -596,7 +652,7 @@ export function MapCanvas(props: Props) {
           }
         }}
         title={locating === "denied" ? t.noFix.refused : t.whereAmI}
-        className={`fab absolute right-3 top-19 z-10 ${
+        className={`fab absolute right-3 top-19 z-10 ${covered ? "max-sm:hidden" : ""} ${
           locating === "denied"
             ? "text-slate-600"
             : locating === "on"
@@ -610,32 +666,37 @@ export function MapCanvas(props: Props) {
   );
 }
 
+/** A journey tag on the screen: its stop at `x, y`, its pill's centre `rise`
+ * px below that, so negative is above */
+type PlacedTag = { x: number; y: number; rise: number; text: string };
+
 /** Journey tags, each stepped aside until it clears the ones already drawn.
  * A pill that had to move keeps a leader line to its stop, so stepping aside
  * on zoom-out never reads as teleporting somewhere else. */
 function placeTags(
   g: CanvasRenderingContext2D,
   c: ReturnType<typeof ink>,
-  tags: { x: number; y: number; text: string }[],
+  tags: PlacedTag[],
 ) {
   const drawn: { x0: number; y0: number; x1: number; y1: number }[] = [];
   for (const tag of tags) {
     g.font = "bold 11px system-ui, sans-serif";
     const w = g.measureText(tag.text).width + 10;
-    for (const dy of [0, -22, 22, -44, 44]) {
+    for (const step of [0, -22, 22, -44, 44]) {
+      const dy = tag.rise + step;
       const x0 = tag.x - w / 2;
-      const y0 = tag.y - 9 + dy;
+      const y0 = tag.y - TAG_H / 2 + dy;
       const clear = drawn.every(
-        (r) => x0 + w < r.x0 - 2 || x0 > r.x1 + 2 || y0 + 18 < r.y0 - 2 || y0 > r.y1 + 2,
+        (r) => x0 + w < r.x0 - 2 || x0 > r.x1 + 2 || y0 + TAG_H < r.y0 - 2 || y0 > r.y1 + 2,
       );
       if (!clear) continue;
-      drawn.push({ x0, y0, x1: x0 + w, y1: y0 + 18 });
-      if (dy !== 0) {
+      drawn.push({ x0, y0, x1: x0 + w, y1: y0 + TAG_H });
+      if (step !== 0) {
         g.globalAlpha = 0.7;
         g.strokeStyle = c.edge;
         g.lineWidth = 1;
         g.beginPath();
-        g.moveTo(tag.x, tag.y + dy - Math.sign(dy) * 9);
+        g.moveTo(tag.x, tag.y + dy - Math.sign(dy) * (TAG_H / 2));
         g.lineTo(tag.x, tag.y);
         g.stroke();
         g.globalAlpha = 1;

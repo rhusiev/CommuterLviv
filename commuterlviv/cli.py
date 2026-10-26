@@ -4,6 +4,7 @@
     walk        fetch the city's footpaths once, for the journey planner
     plan        door to door: walk, ride, walk, ranked by arrival
     report      search a reported journey again, beside what was served
+    skipped     list stops the feed gives a route that its vehicles drive past
     serve       run the live service: the model, over HTTP and websockets
     admin       mint invite links, list accounts, disable or delete one
 """
@@ -29,6 +30,11 @@ def _plan(rest):
 def _report(rest):
     from .live import reports
     reports.main(rest)
+
+
+def _skipped(rest):
+    from . import skipped
+    skipped.main(rest)
 
 
 def _serve(rest):
@@ -89,7 +95,8 @@ def _admin(rest):
 
 
 COMMANDS = {"collect": _collect, "walk": _walk, "plan": _plan,
-            "report": _report, "serve": _serve, "admin": _admin}
+            "report": _report, "skipped": _skipped, "serve": _serve,
+            "admin": _admin}
 
 
 def main(argv=None):

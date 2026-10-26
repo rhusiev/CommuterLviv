@@ -34,6 +34,7 @@ SESSION_RECHECK = 60.0          # s between asking whether an open socket still 
 PLAN_WORKERS = 4                # journey searches running at once, city-wide
 MAX_ID_DIGITS = 9               # `int` raises on a long enough digit string
 NO_SUCH_SET = "No such set"     # missing, or another user's
+PLACE_QUERY = (2, 120)          # characters a place search needs, and is cut to
 
 
 def _address(raw):
@@ -209,14 +210,19 @@ async def me(request, session):
                          "password_change": app.settings.password_change})
 
 
+def _too_many(guard, ip):
+    """The refusal of a sign-in or registration over its limit, saying when the
+    address may try again."""
+    return error("Too many attempts", 429, retry=round(guard.auth_ip.retry_after(ip)))
+
+
 async def register(request):
     app = request.app.state
     g, st = app.guard, app.settings
     if not g.origin_ok(request):
         return error("Bad origin", 403)
     if not g.auth_ip.take(g.ip(request)):
-        return error("Too many attempts", 429,
-                     retry=round(g.auth_ip.retry_after(g.ip(request))))
+        return _too_many(g, g.ip(request))
     data = await body(request)
     # the code may arrive in the path, since what an admin hands out is a link
     code = request.path_params.get("code") or data.get("code")
@@ -238,8 +244,7 @@ async def login(request):
     data = await body(request)
     name = security.clean_username(data.get("username")) or "?"
     if not g.auth_ip.take(ip) or not g.auth_user.take((ip, name)):
-        return error("Too many attempts", 429,
-                     retry=round(g.auth_ip.retry_after(ip)))
+        return _too_many(g, ip)
     uid = await auth.login(app.pool, app.hasher, data.get("username"),
                            data.get("password"))
     if uid is None:
@@ -401,10 +406,10 @@ def _departure(raw):
     try:
         at = float(raw)
     except ValueError:
-        return None, "at must be a unix time in seconds"
+        return None, "At must be a unix time in seconds"
     now = time.time()
     if at < now - PLAN_PAST_S or at > now + PLAN_AHEAD_DAYS * localtime.DAY_S:
-        return None, f"at must be within the next {PLAN_AHEAD_DAYS} days"
+        return None, f"At must be within the next {PLAN_AHEAD_DAYS} days"
     return at, None
 
 
@@ -423,8 +428,21 @@ def _kmh(raw, name, bounds):
         kmh = math.nan
     lo, hi = bounds
     if not lo <= kmh <= hi:
-        return None, f"{name} must be between {lo:g} and {hi:g} km/h"
+        return None, f"{name.capitalize()} must be between {lo:g} and {hi:g} km/h"
     return kmh, None
+
+
+async def _planned(app, what, failed, work, *args):
+    """`work(*args)` on a planning worker, and None; or, should it raise, None
+    and the 500 saying `failed`. Answered as JSON on purpose: an unhandled
+    exception leaves Starlette with a plain-text 500, which every client reads
+    as a JSON.parse failure rather than as what went wrong."""
+    try:
+        async with app.planning:
+            return await asyncio.to_thread(work, *args), None
+    except Exception as exc:
+        log(f"{what} failed:", brief(exc))
+        return None, error(failed, 500)
 
 
 async def journey(request, session):
@@ -460,16 +478,12 @@ async def journey(request, session):
     if planner.cat is not live.cat:
         return error("The city is being renewed; try again in a moment", 503)
     arrivals, asked = live.arrivals, time.time()
-    try:
-        async with app.planning:
-            found, ways = await asyncio.to_thread(planner.search, origin, dest,
-                                                  arrivals, at, speed, hurry)
-    except Exception as exc:
-        # answered as JSON on purpose: an unhandled exception leaves Starlette
-        # with a plain-text 500, which every client reads as a JSON.parse
-        # failure rather than as what went wrong
-        log("plan failed:", brief(exc))
-        return error("Could not plan that journey", 500)
+    searched, failed = await _planned(app, "plan", "Could not plan that journey",
+                                      planner.search, origin, dest, arrivals, at,
+                                      speed, hurry)
+    if failed is not None:
+        return failed
+    found, ways = searched
     rid = app.recent.hold(session["user_id"], {
         "from": origin, "to": dest, "t": found["t"], "asked": asked,
         "speed": speed, "hurry": hurry, "arrivals": arrivals, "cat": live.cat,
@@ -497,15 +511,12 @@ async def backup(request, session):
         return error("That search has no such backup", 404)
     if app.planning.locked():
         return error("The planner is busy; try that again", 503)
-    try:
-        async with app.planning:
-            found = await asyncio.to_thread(
-                planner.backup, held["from"], held["to"], held["arrivals"],
-                held["speed"], held["hurry"], held["journeys"][option], leg, n)
-    except Exception as exc:
-        # as JSON for the same reason as a failed search's
-        log("backup failed:", brief(exc))
-        return error("Could not draw that way", 500)
+    found, failed = await _planned(
+        app, "backup", "Could not draw that way", planner.backup, held["from"],
+        held["to"], held["arrivals"], held["speed"], held["hurry"],
+        held["journeys"][option], leg, n)
+    if failed is not None:
+        return failed
     if found is None:
         return error("That search has no such backup", 404)
     return JSONResponse(found)
@@ -539,12 +550,13 @@ async def places_near(request, session):
     if not app.geocoder.ready():
         return error("This service has no place search", status=503)
     q = (request.query_params.get("q") or "").strip()
-    if len(q) < 2:
+    shortest, longest = PLACE_QUERY
+    if len(q) < shortest:
         return JSONResponse({"places": []})
     if not app.guard.search.take(session["user_id"]):
         return error("Slow down", 429)
     try:
-        found = await asyncio.to_thread(app.geocoder.find, q[:120])
+        found = await asyncio.to_thread(app.geocoder.find, q[:longest])
     except Exception as exc:
         log("geocode:", brief(exc))
         return error("Place search is unavailable", status=502)
@@ -580,17 +592,21 @@ async def places(request, session):
     return JSONResponse({"places": saved})
 
 
+def _set_fields(app, data):
+    """A set's name and routes from a request body, checked; or None and why not."""
+    return prefs.clean(data.get("name"), data.get("routes") or [],
+                       app.svc.live.cat.route_i)
+
+
 async def sets(request, session):
     app = request.app.state
     uid = session["user_id"]
     if request.method == "GET":
         return JSONResponse(await prefs.listing(app.pool, uid))
-    data = await body(request)
-    valid = app.svc.live.cat.route_i
-    ok, why = prefs.clean(data.get("name"), data.get("routes") or [], valid)
+    fields, why = _set_fields(app, await body(request))
     if why:
         return error(why)
-    row, why = await prefs.create(app.pool, uid, *ok)
+    row, why = await prefs.create(app.pool, uid, *fields)
     return error(why) if why else JSONResponse(row, status_code=201)
 
 
@@ -600,12 +616,10 @@ async def one_set(request, session):
     if request.method == "DELETE":
         return (JSONResponse({"ok": True}) if await prefs.delete(app.pool, sid, uid)
                 else error(NO_SUCH_SET, 404))
-    data = await body(request)
-    ok, why = prefs.clean(data.get("name"), data.get("routes") or [],
-                          app.svc.live.cat.route_i)
+    fields, why = _set_fields(app, await body(request))
     if why:
         return error(why)
-    row, why = await prefs.update(app.pool, sid, uid, *ok)
+    row, why = await prefs.update(app.pool, sid, uid, *fields)
     if why:
         return error(why)
     return JSONResponse(row) if row else error(NO_SUCH_SET, 404)
@@ -636,12 +650,13 @@ async def health(request):
 
 
 async def status(request, session):
-    """Engine health and socket counts; operators only
-    (`python -m commuterlviv admin operator <name>` grants it)."""
+    """Engine health, socket counts and the last night's skipped stops;
+    operators only (`python -m commuterlviv admin operator <name>` grants it)."""
     if not session["operator"]:
         return error("Not found", 404)
     app = request.app.state
-    return JSONResponse({**app.svc.health(), **app.hub.stats()})
+    return JSONResponse({**app.svc.health(), **app.hub.stats(),
+                         "skipped": app.skipped})
 
 
 async def socket(ws):
@@ -735,6 +750,7 @@ def build(st=None, net=None):
         refresh.install(s, refresh.served(loaded, s.svc.live))
         s.planner = journeys.Planner.maybe(loaded, cat, log)
         s.preparing = False
+        s.skipped = None        # until the first night's check
         # read each epoch, since a renew or `arrange` replaces the planner
         s.svc.timetable = lambda: s.planner and s.planner.tt
         s.geocoder = geocode.Geocoder(st.photon_url)

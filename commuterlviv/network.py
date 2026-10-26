@@ -16,6 +16,19 @@ KY = gtfs.LAT_M
 
 CACHE = os.path.join(gtfs.DATA, "network.pkl")
 
+EPS = 1e-9              # m (or m²) a length is floored at, so none divides by zero
+HEADING_SPAN = 25.0     # m either side of a cell's middle its heading is read over
+GRID_ROW = 100003       # more grid cells than the city spans: (gx, gy) as one id
+
+# the stop placement's costs, in metres of lateral error
+EARLIER = 1e-4          # per metre along: of two places as close, the earlier
+STOP_GAP = 1.0          # m a stop must lie past the one before it
+OUT_OF_ORDER = 1e3      # for a stop with no place past the one before it
+STOP_SPREAD = 1e-3      # m between stops placed at one point, to keep them in order
+SLACK = 250.0           # m farther than the closest a point's other places may lie
+SLACK_MAX = 400.0       # m of slack however much a caller asks for
+CANDIDATES = 10         # places kept per point, closest first
+
 
 @dataclass(frozen=True)
 class Geometry:
@@ -40,6 +53,16 @@ def to_ll(xy):
     return np.stack([xy[..., 1] / KY + LAT0, xy[..., 0] / KX + LON0], axis=-1)
 
 
+def _to_segments(a, b, p):
+    """Where `p` falls on each segment a-b: the fraction along it, clamped to
+    the segment, the segment's squared length, and the squared distance."""
+    ab = b - a
+    l2 = np.maximum((ab * ab).sum(1), EPS)
+    t = np.clip(((p - a) * ab).sum(1) / l2, 0.0, 1.0)
+    d2 = ((a + t[:, None] * ab - p) ** 2).sum(1)
+    return t, l2, d2
+
+
 def project(xy, cum, p, lo=None, hi=None):
     """Nearest point on a polyline. Returns (distance along, lateral offset)."""
     a, b = xy[:-1], xy[1:]
@@ -52,11 +75,7 @@ def project(xy, cum, p, lo=None, hi=None):
         base = i0
     else:
         base = 0
-    ab = b - a
-    l2 = np.maximum((ab * ab).sum(1), 1e-9)
-    t = np.clip(((p - a) * ab).sum(1) / l2, 0.0, 1.0)
-    proj = a + t[:, None] * ab
-    d2 = ((proj - p) ** 2).sum(1)
+    t, l2, d2 = _to_segments(a, b, p)
     i = int(np.argmin(d2))
     return cum[base + i] + t[i] * np.sqrt(l2[i]), float(np.sqrt(d2[i]))
 
@@ -73,19 +92,19 @@ class Shape:
         self.cells = n
         mid = (np.arange(n) + 0.5) * (self.length / n)
         pts = self.at(mid)
-        head = self.at(np.minimum(mid + 25.0, self.length)) - \
-            self.at(np.maximum(mid - 25.0, 0.0))
+        head = self.at(np.minimum(mid + HEADING_SPAN, self.length)) - \
+            self.at(np.maximum(mid - HEADING_SPAN, 0.0))
         k = 2 * np.pi / geom.octants
         oct_ = np.round(np.arctan2(head[:, 0], head[:, 1]) / k).astype(int) % geom.octants
         gx = np.floor(pts[:, 0] / geom.grid).astype(np.int64)
         gy = np.floor(pts[:, 1] / geom.grid).astype(np.int64)
-        self.corridor = (gx * 100003 + gy) * geom.octants + oct_
+        self.corridor = (gx * GRID_ROW + gy) * geom.octants + oct_
 
     def at(self, d):
         """Position at distance d along the line (vectorised)."""
         d = np.clip(np.asarray(d, dtype=float), 0.0, self.length)
         i = np.clip(np.searchsorted(self.cum, d) - 1, 0, len(self.cum) - 2)
-        seg = np.maximum(self.cum[i + 1] - self.cum[i], 1e-9)
+        seg = np.maximum(self.cum[i + 1] - self.cum[i], EPS)
         f = ((d - self.cum[i]) / seg)[..., None]
         return self.xy[i] + f * (self.xy[i + 1] - self.xy[i])
 
@@ -93,7 +112,7 @@ class Shape:
 class Net:
     # bump when a field is added or its meaning changes: the cache is keyed by
     # the feed alone, so an older one would otherwise load with fields missing
-    VERSION = 3
+    VERSION = 4
 
     def __init__(self):
         self.version = self.VERSION
@@ -104,26 +123,24 @@ class Net:
         self.trip_shape = {}
         self.trip_route = {}
         self.trip_dir = {}          # trip_id -> 0 or 1, the feed's direction_id
+        self.trip_service = {}      # trip_id -> the feed's service_id
+        self.calendar = gtfs.Calendar()     # which services run on a date
         self.trip_stops = {}        # trip_id -> (stop_ids, dist[], sched_sec[])
         self.pattern_of = {}        # trip_id -> pattern key
         self.trip_next = {}         # trip_id -> the block's next trip, same vehicle
 
 
-def candidates(shape, p, slack=250.0, cap=10):
+def candidates(shape, p, slack=SLACK, cap=CANDIDATES):
     """Every plausible place on the shape this point could be: the local minima
     of distance-to-line. A shape that doubles back passes each stop twice."""
-    a, b = shape.xy[:-1], shape.xy[1:]
-    ab = b - a
-    l2 = np.maximum((ab * ab).sum(1), 1e-9)
-    t = np.clip(((p - a) * ab).sum(1) / l2, 0.0, 1.0)
-    d2 = ((a + t[:, None] * ab - p) ** 2).sum(1)
+    t, l2, d2 = _to_segments(shape.xy[:-1], shape.xy[1:], p)
     if len(d2) == 1:
         loc = np.array([0])
     else:
         pad = np.concatenate([[np.inf], d2, [np.inf]])
         loc = np.nonzero((pad[1:-1] <= pad[:-2]) & (pad[1:-1] <= pad[2:]))[0]
     err = np.sqrt(d2[loc])
-    keep = loc[err <= max(err.min(), 1e-9) + min(slack, 400.0)]
+    keep = loc[err <= max(err.min(), EPS) + min(slack, SLACK_MAX)]
     err = np.sqrt(d2[keep])
     order = np.argsort(err)[:cap]
     keep, err = keep[order], err[order]
@@ -135,23 +152,23 @@ def _stop_dists(shape, stop_xy):
     """Assign each stop a position on the shape: least total lateral error over
     all strictly increasing assignments (Viterbi over the candidate sets)."""
     cands = [candidates(shape, p) for p in stop_xy]
-    prev_cost = np.asarray(cands[0][1], dtype=float) + 1e-4 * cands[0][0]
+    prev_cost = np.asarray(cands[0][1], dtype=float) + EARLIER * cands[0][0]
     back = []
     for k in range(1, len(cands)):
         pd, pe = cands[k - 1]
         cd, ce = cands[k]
-        ok = cd[:, None] > pd[None, :] + 1.0
+        ok = cd[:, None] > pd[None, :] + STOP_GAP
         cost = np.where(ok, prev_cost[None, :], np.inf)
         j = np.argmin(cost, axis=1)
         best = cost[np.arange(len(cd)), j]
         dead = ~np.isfinite(best)
         if dead.all():
             j = np.full(len(cd), int(np.argmin(prev_cost)))
-            best = prev_cost[j] + 1e3
+            best = prev_cost[j] + OUT_OF_ORDER
         elif dead.any():
             best[dead] = np.inf
         back.append(j)
-        prev_cost = best + ce + 1e-4 * cd
+        prev_cost = best + ce + EARLIER * cd
 
     idx = [int(np.argmin(prev_cost))]
     for j in reversed(back):
@@ -159,7 +176,7 @@ def _stop_dists(shape, stop_xy):
     idx.reverse()
     out = np.array([cands[k][0][idx[k]] for k in range(len(cands))], dtype=float)
     err = float(max(cands[k][1][idx[k]] for k in range(len(cands))))
-    out = np.maximum.accumulate(out + np.arange(len(out)) * 1e-3)
+    out = np.maximum.accumulate(out + np.arange(len(out)) * STOP_SPREAD)
     return out, err
 
 
@@ -173,6 +190,7 @@ def build():
     _read_shapes(net)
     _read_stops_and_routes(net)
     blocks = _read_trips(net)
+    net.calendar = gtfs.Calendar.read()
     _solve_patterns(net)
     for trips in blocks.values():
         trips = sorted((t for t in trips if t in net.trip_stops),
@@ -205,7 +223,8 @@ def _read_stops_and_routes(net):
 
 
 def _read_trips(net):
-    """Fills in each trip's shape, route and direction; the trips of each block."""
+    """Fills in each trip's shape, route, direction and service; the trips of
+    each block."""
     blocks = {}
     for t in gtfs.table("trips.txt"):
         if t.get("block_id"):
@@ -213,6 +232,7 @@ def _read_trips(net):
         net.trip_shape[t["trip_id"]] = t["shape_id"]
         net.trip_route[t["trip_id"]] = t["route_id"]
         net.trip_dir[t["trip_id"]] = int(t["direction_id"] or 0)
+        net.trip_service[t["trip_id"]] = t["service_id"]
     return blocks
 
 

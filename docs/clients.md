@@ -15,7 +15,8 @@ npm run preview  # http://localhost:5174, the built files with the same proxy
 Lviv itself is MapLibre GL JS drawing VersaTiles OpenStreetMap vector tiles -
 no key and no account - in one of eight styles picked in the layers panel:
 colorful, natural, muted and gray, each light and dark (`THEMES` in
-`web/src/lib/theme.ts`, `mapThemes` in `mobile/lib/src/map_theme.dart`). They
+`web/src/lib/theme.ts`, `mapThemes` in `mobile/lib/src/map_theme.dart`), named
+in the language's strings (`themeNames`). They
 come from the deployment's own `/tiles` when `/api/health` says it has them,
 and from `tiles.versatiles.org` otherwise - see
 [the basemap](deployment.md#the-basemap). A style saved under one of the names
@@ -25,15 +26,35 @@ successor.
 Vehicles are coloured circles carrying their route number, with a wedge on the
 rim pointing where they are going - solid while the vehicle is under way, an
 outline while it stands, so a marker always says which way it faces without
-claiming it is moving. Stops are small circles, drawn only for the routes you
-have picked. Clicking one lists every route through it with the next
-arrival for each, and pinning it puts it in the Times tab. Clicking a vehicle
+claiming it is moving. Stops are small circles, drawn for the routes you have
+picked. From zoom 16 (`ALL_STOPS_ZOOM`, 17 in the app's tiles) every other stop
+is drawn too, faint, and opens its card like the rest, so a stop can be looked
+up without watching a route first. The routes to pick are in the Lines tab,
+grouped under buses, trams and trolleybuses, because tram 1 and bus 1 are
+different lines. A route is drawn as the same split chip wherever it shows -
+the Lines tab, a stop's card, the Mine tab's pinned stops, a vehicle's card: a
+click on its body watches it or stops watching it, and the `›` beside it opens
+its line. A chip hides nothing behind a right click or a long press. On the map
+itself a right click, or a long press on a phone, opens a menu for that point:
+save it under a name typed into the menu, plan the way there or from there, or
+list the stops within 2 km of it in the search, as ◎ does for where you are.
+A place is known by its name, so a name another saved place goes by is said to
+replace that place: in the menu under the name typed, and before a save from the
+search, a card or the planner in a dialog that saves only on "Replace". Saving a
+place again where it stands asks nothing.
+Clicking a stop opens its card: the next arrival of each route due there, and
+under "Calls here" every route through it. Pinning it
+puts it in the Mine tab. Clicking a vehicle
 asks the opposite question: `GET /api/vehicle?veh=<id>` answers with every stop
 that vehicle is predicted to reach and when, out to the model's 45-minute
 horizon, read off the same predictions the stop card shows - so the two cannot
-disagree. A third tab plans a journey: tap where you are and where you are
+disagree. The Journey tab plans a journey: tap where you are and where you are
 going, and it answers with ways to get there, ranked by arrival - walk to a
-stop, ride, maybe change, walk to the door. Already on a vehicle, "I'm on it"
+stop, ride, maybe change, walk to the door. An end put where you are reads
+"Where I am" in its field rather than its coordinates. A point nothing named,
+in its field and at the top of the map's menu, is called by the stop within
+300 m nearest to it ("Near Stop 4"), and only past that by its coordinates; the
+app does the same, and also under Mine. Already on a vehicle, "I'm on it"
 on its card plans from on board it: the From field shows it, there is no time
 to leave at, and only its id is sent (docs/service.md). It lasts only while
 the planner is open: leaving the planner, or following a journey, drops it, as
@@ -41,6 +62,23 @@ the vehicle goes on without the planner. Named sets of routes -
 one for work, one for home - live on the server, so they follow the account
 rather than the browser. Serve `dist/` with a history fallback: every path has to
 return `index.html`, or `/join/<code>` is a 404 and the invite link is dead.
+
+An option the planner lists is one click target until it is drawn on the map: a
+click anywhere on it draws it and opens it, and nothing on it opens anything
+else. Folded, it says in words what is worth knowing - the hurry pill, its
+weakest ride's note on how sure its time is, and how many backups it has. Its
+summary row stays the one target that folds it again and never turns into
+anything else. Opened, every control below it is drawn as one and is at least
+44 px tall: a stop's row has a chevron and opens the stop's card, a route's
+badge sits in a ring with a map and opens its line, "N backups ›" lists the
+backups, and Follow follows it. A note and the hurry pill say why in place,
+under them, with nothing to tap for it. The app does the same
+(`mobile/README.md`). Drawing an option also frames the map on it - its
+walks, its rides and the stops they meet. The framing, and a line's from the
+Lines tab, keeps clear of the panel open over the map. The app keeps it above
+its bottom panel. The web uses the widest strip the panel leaves free, measured as
+the fit is made, or the whole map when no strip is 120 px wide past its
+padding (`lib/padding.ts`).
 
 An option can be followed. Follow on it moves to the map, turns on the dot
 where you are and puts a card at the bottom that says what to do now: walk to
@@ -92,10 +130,12 @@ only on foot, with an amber pill giving the pace that gets to the stop with time
 to spare, from the metres left (`needKmh`). The time to spare is half
 (`MARGIN_SHARE`, chosen, not derived) of the slack the planner keeps for a
 change that far ahead (`CHANGE_AHEAD`/`CHANGE_SLACK`, copied from
-`commuterlviv/plan.py`), as a vehicle comes early as well as late. When that
+`commuterlviv/plan/scan.py`), as a vehicle comes early as well as late. When that
 pace is over 12 km/h (`HURRY_KMH`), the pill gives the one that gets there as
 the vehicle leaves; either is rounded up to 0.5 km/h. A hurry option in the
 planner carries the same pill for its walk to the first stop (`plannedKmh`).
+On the follow card its ⓘ says why under it; an opened option says it from the
+start.
 The pace is only said: whether the ride is caught is judged at the hurrying
 speed set, as above. On a ride the card warns ahead that the change will need it, with
 "Find another way". A missed ride says the journey no longer works, with
@@ -139,7 +179,7 @@ because the map underneath is the context. Nothing outside `app.css` names a
 
 Nothing is docked to an edge. The map is the whole window in both clients and
 every piece of chrome floats over it: a search bar and a menu at the top, the
-map/times/plan pill at the bottom where a thumb is, round buttons for locate and
+tab pill at the bottom where a thumb is, round buttons for locate and
 zoom (on the web only from the `sm` width up, since below it the cards span the
 window and would cover them), and cards that rise off the bottom rather than out of it. That is why the
 web layout is one `relative` box of absolutely positioned pieces instead of a
@@ -148,15 +188,48 @@ column, and why the phone's `Scaffold` has neither an `appBar` nor a
 what anything scrollable uses to clear the two floating bars.
 
 What goes where is decided by what a control does, not by how often it is
-wanted. Routes choose what is tracked and open the routes panel. Layers change
+wanted. Which routes are tracked is the Lines tab's. Layers change
 what the map draws - the route lines, the traffic, the basemap - and live in one
 sheet behind a layers button, whose icon is lit while anything in it is on.
-Everything belonging to the account rather than to the map - what is saved, the
-language, the server, the password, signing out - lives behind an account button, with signing
-out below a rule so it is never the tap next to anything else. Nothing that is a
-toggle and nothing that signs you out sits loose on the map. That is
-`LayersSheet` and `AccountSheet` in `mobile/lib/src/sheets.dart`, and
-`LayersPanel.tsx` and `AccountMenu.tsx` on the web.
+Everything belonging to the account rather than to the map is one tab, Mine. A
+switch at its top shows one list at a time, so none hides another below it:
+Stops, the pinned stops with what is due at each, dragged by a grip to reorder;
+Places, the saved places; and Sets, the route sets (a tap makes one the watched
+selection). In the app a row of any of them is renamed or removed from a menu on
+a long press - a pinned stop is only unpinned, as it wears the stop's name; the
+web gives each row its own buttons. The tab keeps the list it was left on.
+Beside the switch, a button named with the username opens the account itself -
+the language, the walking speeds, the server, the password, signing out - with
+signing out below a rule so it is never the tap next to anything else. In the
+app that is a sheet; on the web it takes the lists' place until it is pressed
+again. A pinned stop is listed there once, with its arrivals.
+Nothing that is a toggle and nothing that signs you out sits loose on the map.
+That is `LayersSheet` and `AccountSheet` in `mobile/lib/src/sheets.dart` and
+`mine_tab.dart`, and `LayersPanel.tsx`, `MinePanel.tsx` and
+`AccountSettings.tsx` on the web.
+
+The four tabs are Map, Lines, Journey and Mine - in Ukrainian Мапа, Лінії,
+Поїздка and Моє, since "Маршрут" for a journey read as one of the "Маршрути", the
+routes. Lines browses every route: All, Watching (the ticked ones) or Near me
+(the routes of the stops within 500 m of the device's fix, asked for only when
+picked; 500 m is chosen, not derived), the route sets to make one the watched
+selection or save the ticks as one, the last five lines opened (kept on the
+device), and the grid of route chips, whose body ticks a route and whose `›`
+opens its line. Renaming and deleting a set is in Mine. An open line
+uncovers the map and draws only that route, over a followed or planned journey,
+beside a panel with a back button, a toggle between its two ways named by the
+last stop, Watch, and its stops in order. Each stop shows when this route is
+next due there, greyed while the vehicle is still finishing its previous trip,
+and a vehicle is marked at the stop it reaches soonest. The order is the
+server's: each shape line carries the stops of the longest trip on it
+(docs/service.md). That way's stops are watched after the pins, the open stop
+and a followed journey's, up to the server's cap of 64. That is `LinesPanel.tsx`
+and `lib/lines.ts` on the web, `lines_tab.dart` and `lines.dart` on the phone.
+On the phone the tab pill shows only the picked tab's label, as four labelled
+tabs are wider than a phone. The web's `?tab=` names the open tab - `map`,
+`lines`, `plan` or `mine` - and `?route=` the open line. A link from before,
+`?tab=times` or `?tab=saved`, opens Mine, and `?tab=route` the Lines tab, on
+the line when the link names one.
 
 Changing the password is offered only where the service says it allows it
 (`password_change` in `/api/me`), which it does not by default. Where offered, it
@@ -190,17 +263,18 @@ the service is not answering, which is the truth: the times come from the socket
 
 When the service says the vehicles have gone quiet - too few reporting for the
 trips the timetable has under way, see
-[the service](service.md#when-the-vehicles-go-quiet) - an amber banner over the
-map says that few vehicles are reporting, possibly because of an air raid alert,
-and that positions and arrival times may be missing or off. It says "possibly":
+[the service](service.md#when-the-vehicles-go-quiet) - an amber banner with a
+siren over the map is titled "Possibly an air raid alert", and below the title
+says that few vehicles are reporting, so positions and arrival times may be
+missing or off. It says "possibly":
 a failing feed looks the same. Closing it hides it until the vehicles report
 again and go quiet anew, and it is never shown while the socket is down, when
 the service cannot say either way.
 
 The language is Ukrainian, with English for a browser that asks for it;
-`web/src/lib/i18n.ts` holds both dictionaries and the picker is in the route
-panel. Changing it reloads the page; the phone app, which shares the same keys,
-switches without a restart.
+`web/src/lib/i18n.ts` holds both dictionaries, MapLibre's own button labels
+included, and the picker is in the account menu. Changing it reloads the page;
+the phone app, which shares the same keys, switches without a restart.
 
 Smoothness is the reason for the shape of the code. Positions arrive every five
 seconds, and between them each vehicle is interpolated towards where the server
@@ -219,12 +293,27 @@ uses, so panning moves the city and the vehicles in the same frame.
 endpoint and no model - the browser and the phone see the same city, the same
 route sets and the same predictions, and the same journey planner behind the
 third choice in the tab pill. Both also carry the same three views added since:
-a saved list where a place can be renamed or dropped, a search that finds
+a list of saved places in the Mine tab where a place can be renamed, though not
+to another place's name, or dropped, a search that finds
 addresses and shops as well as stop names, with matching saved places above
 both, and lists the stops within 2 km of where you are (the web's ◎ in the search
 bar, the app's search before anything is typed), traffic drawn over the streets
 the model can see, following a journey as you travel it, and the banner that
 warns when the vehicles go quiet.
+
+The city writes most stops' codes into their names as well, "ТРЦ Кінг Кросс
+(320)", and some stops' codes only there. Both stop cards take the code out of
+the title and show it once, in brackets after the name, as the names write it:
+the feed's zero padding ("0320") dropped, and the name's code taken over the
+feed's where the two disagree. Everywhere else a name keeps its code, which is
+what tells two stops of one name apart.
+
+A place picked from the search or the Mine tab gets a card of its own and a
+dot on the map, both gone once the card is closed or a stop or vehicle is picked
+instead. The card names the place over its address, or says it is saved, keeps
+it by its star, and plans the way there: the place becomes the destination under
+its name, the start stays whatever it was or becomes where you are, and the
+search runs as soon as both ends are set.
 
 ```sh
 cd mobile && flutter pub get

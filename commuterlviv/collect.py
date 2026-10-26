@@ -10,6 +10,7 @@ is still disk left. A heartbeat line says which of those is happening.
 """
 import argparse
 import collections
+import contextlib
 import datetime
 import os
 import queue
@@ -33,7 +34,16 @@ BATCH_S = 2.0            # how often the writer commits
 CHECKPOINT_S = 300.0     # how often the write-ahead log is folded back in
 HEARTBEAT_S = 300.0
 BACKOFF_MAX = 120.0      # s between attempts at a feed that keeps failing
+DOUBLINGS = 16           # of a failing feed's wait at most; BACKOFF_MAX stops it sooner
+LEAST_WAIT_S = 0.5       # between polls, however long the last one took
 PRUNE_EVERY_S = HOUR_S   # between deletions of rows older than --keep-days
+DB_WAIT_S = 60           # a connection waits this long for another's lock
+WRITE_RETRY_S = 2.0      # before a failed batch is tried once more
+FEED_TIMEOUT_S = 30      # a fetch of a realtime feed may take
+LAD_TIMEOUT_S = 20       # a fetch of one stop's board may take
+FEED_RETRY_S = 0.5       # before a failed fetch is retried, doubling each time
+DRAIN_S = 1.5            # for the pollers' last rows to reach the writer on stopping
+WAKE_S = 1.0             # the idle writer waits for rows before its batch and checkpoint clocks
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -100,7 +110,7 @@ def writer():
         for attempt in (0, 1):
             try:
                 if db is None:
-                    db = sqlite3.connect(DB, timeout=60)
+                    db = sqlite3.connect(DB, timeout=DB_WAIT_S)
                     db.executescript(SCHEMA)
                 for kind, rows in pending.items():
                     db.executemany(sql[kind], rows)
@@ -111,22 +121,21 @@ def writer():
             except sqlite3.Error as exc:
                 log("write failed", brief(exc))
                 count(write_errors=1)
-                try:
-                    if db is not None:
+                # the failure is logged already; closing what failed may fail too
+                if db is not None:
+                    with contextlib.suppress(sqlite3.Error):
                         db.close()
-                except sqlite3.Error:
-                    pass
                 db = None
                 if attempt:
                     count(dropped=sum(len(r) for r in pending.values()))
                     pending.clear()
                 else:
-                    time.sleep(2.0)
+                    time.sleep(WRITE_RETRY_S)
 
     done = False
     while not done:
         try:
-            item = writes.get(timeout=1.0)
+            item = writes.get(timeout=WAKE_S)
             if item is None:
                 done = True
             else:
@@ -153,6 +162,20 @@ def _polled(t0, feed, header, n, err):
     emit("poll", (t0, feed, header, n, int((time.time() - t0) * 1000), err))
 
 
+def next_poll(period, fails, began):
+    """Seconds from now to the next poll of a feed polled every `period` s,
+    whose last poll began at `began` and which has failed `fails` times in a
+    row: each failure doubles the wait, up to BACKOFF_MAX."""
+    wait = min(period * 2 ** min(fails, DOUBLINGS), BACKOFF_MAX) if fails else period
+    return max(LEAST_WAIT_S, wait - (time.time() - began))
+
+
+def worth_logging(fails):
+    """Whether the `fails`-th failure in a row is logged: the first, the fifth
+    and every fiftieth, so a feed down for hours does not flood the log."""
+    return fails in (1, 5) or fails % 50 == 0
+
+
 def poll_loop(feed, period, once):
     """Run `once` forever; each consecutive failure doubles the wait, one
     success clears it."""
@@ -168,23 +191,23 @@ def poll_loop(feed, period, once):
             _polled(t0, feed, 0, 0, brief(exc))
             count(**{f"{feed}_errors": 1})
             fails += 1
-            if fails in (1, 5) or fails % 50 == 0:
+            if worth_logging(fails):
                 log(f"{feed} error x{fails}", brief(exc))
-        wait = min(period * 2 ** min(fails, 16), BACKOFF_MAX) if fails else period
-        stop_flag.wait(max(0.5, wait - (time.time() - t0)))
+        stop_flag.wait(next_poll(period, fails, t0))
 
 
 def rt(endpoint, tries=3):
     for attempt in range(tries):
         try:
-            body = requests.get(f"{BASE}/{endpoint}", timeout=30).content
+            body = requests.get(f"{BASE}/{endpoint}",
+                                timeout=FEED_TIMEOUT_S).content
             msg = gtfs_realtime_pb2.FeedMessage()
             msg.ParseFromString(body)
             return msg
         except Exception:
             if attempt == tries - 1:
                 raise
-            time.sleep(0.5 * 2 ** attempt)
+            time.sleep(FEED_RETRY_S * 2 ** attempt)
 
 
 def vehicles():
@@ -266,7 +289,8 @@ def collect_lad(period, limit):
                 break
             t0 = time.time()
             try:
-                r = session.get(f"https://api.lad.lviv.ua/stops/{code}", timeout=20)
+                r = session.get(f"https://api.lad.lviv.ua/stops/{code}",
+                                timeout=LAD_TIMEOUT_S)
                 rows = r.json().get("timetable", []) if r.status_code == 200 else []
                 for e in rows:
                     when = datetime.datetime.strptime(
@@ -283,7 +307,7 @@ def collect_lad(period, limit):
                 _polled(t0, "lad", 0, 0, brief(exc))
                 count(lad_errors=1)
             stop_flag.wait(max(0.05, gap - (time.time() - t0)))
-        stop_flag.wait(max(0.5, period - (time.time() - cycle)))
+        stop_flag.wait(next_poll(period, 0, cycle))
 
 
 def db_bytes():
@@ -297,7 +321,7 @@ def prune(keep_days):
     Shrinks the file only if the database was created with auto_vacuum on.
     """
     cutoff = time.time() - keep_days * DAY_S
-    db = sqlite3.connect(DB, timeout=60)
+    db = sqlite3.connect(DB, timeout=DB_WAIT_S)
     try:
         for t, col in (("veh", "poll_ts"), ("pred", "poll_ts"),
                        ("lad", "poll_ts"), ("poll", "ts")):
@@ -381,7 +405,7 @@ def main(argv=None):
         if deadline and time.time() > deadline:
             break
     stop_flag.set()
-    time.sleep(1.5)
+    time.sleep(DRAIN_S)
     writes.put(None)
     w.join()
     with stats_lock:

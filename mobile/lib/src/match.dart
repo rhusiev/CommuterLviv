@@ -3,7 +3,7 @@
 /// or more. "шевч пл" finds "Площа Шевченка", "стрийска" finds "Стрийська".
 library;
 
-import 'dart:math' show min;
+import 'dart:math' show max, min;
 
 import 'models.dart';
 
@@ -96,12 +96,15 @@ int _prefixEdits(String q, String w) {
   return row.reduce(min);
 }
 
+/// A whole word beats a prefix, so a stop's code "61" comes before 610-619.
 int _wordScore(String q, List<String> name) {
   var best = 0;
   for (final w in name) {
-    if (w.startsWith(q)) return 3;
-    if (q.length >= 3 && w.contains(q)) {
-      best = 2;
+    if (w == q) return 4;
+    if (w.startsWith(q)) {
+      best = 3;
+    } else if (q.length >= 3 && w.contains(q)) {
+      best = max(best, 2);
     } else if (q.length >= 4 && best < 1 && _prefixEdits(q, w) <= 1) {
       best = 1;
     }

@@ -46,7 +46,7 @@ export function LayersPanel(p: Props) {
               : "text-slate-300 hover:bg-raised/70"
           }`}
         >
-          {m.name}
+          {t.themeNames[m.id]}
         </button>
       ))}
     </div>

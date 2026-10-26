@@ -7,11 +7,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:commuterlviv/src/api.dart';
 import 'package:commuterlviv/src/here.dart';
 import 'package:commuterlviv/src/models.dart';
+import 'package:commuterlviv/src/route_badge.dart';
 import 'package:commuterlviv/src/stop_search.dart';
 import 'package:commuterlviv/src/strings.dart';
 
 const _catalog = Catalog(
-  routes: [],
+  routes: [
+    TransitRoute(
+      id: 'r0',
+      short: 'Тр25',
+      long: 'Market - Depot',
+      type: 'trolleybus',
+    ),
+  ],
   stops: [
     Stop(
       id: 's0',
@@ -19,7 +27,7 @@ const _catalog = Catalog(
       code: '100',
       lat: 49.84,
       lon: 24.03,
-      routes: [],
+      routes: [0],
     ),
     Stop(
       id: 's1',
@@ -75,15 +83,26 @@ class _Here extends Here {
   }
 }
 
+/// A service whose place search finds nothing
+class _NoPlaces implements Api {
+  @override
+  Future<List<Found>> find(String q) async => const [];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 /// Opens the search over [places]; the hit it closes with lands in [picked]
 Future<void> open(
   WidgetTester tester,
   void Function(Hit?) picked, {
   Here? here,
+  Api? service,
+  LatLng? around,
 }) async {
   SharedPreferences.setMockInitialValues({});
   FlutterSecureStorage.setMockInitialValues({});
-  final api = await Api.open();
+  final api = service ?? await Api.open();
   await tester.pumpWidget(
     MaterialApp(
       home: Builder(
@@ -97,6 +116,7 @@ Future<void> open(
                 places: const [_work, _home],
                 onSave: (_, _) {},
                 here: here,
+                around: around,
               ),
             ),
           ),
@@ -110,6 +130,26 @@ Future<void> open(
 }
 
 void main() {
+  testWidgets('the clear and back buttons say what they do', (tester) async {
+    Hit? picked;
+    await open(tester, (hit) => picked = hit);
+    await tester.enterText(find.byType(TextField), 'mark');
+    await tester.pump(_settled);
+
+    await tester.tap(find.byTooltip(txt.clear));
+    await tester.pump();
+    expect(find.text('mark'), findsNothing);
+    expect(find.byTooltip(txt.clear), findsNothing);
+
+    final back = MaterialLocalizations.of(
+      tester.element(find.byType(TextField)),
+    ).backButtonTooltip;
+    await tester.tap(find.byTooltip(back));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    expect(picked, isNull);
+  });
+
   testWidgets('a saved place the query matches comes first, and is picked as '
       'a place', (tester) async {
     Hit? picked;
@@ -125,6 +165,30 @@ void main() {
     await tester.tap(find.text(_home.name));
     await tester.pumpAndSettle();
     expect(picked, isA<PlaceHit>().having((p) => p.at, 'at', _home.at));
+  });
+
+  testWidgets('a stop found names its routes by their badges, not by the '
+      "feed's names", (tester) async {
+    await open(tester, (_) {});
+
+    await tester.enterText(find.byType(TextField), 'mark');
+    await tester.pump(_settled);
+
+    expect(find.byType(RouteBadge), findsOneWidget);
+    expect(find.text('25'), findsOneWidget);
+    expect(find.textContaining('Тр25'), findsNothing);
+  });
+
+  testWidgets('a query nothing matches says so once places have been looked '
+      'for', (tester) async {
+    await open(tester, (_) {}, service: _NoPlaces());
+
+    await tester.enterText(find.byType(TextField), 'nowhere');
+    await tester.pump();
+    expect(find.text(txt.nothingFound), findsNothing);
+    await tester.pump(_settled);
+
+    expect(find.text(txt.nothingFound), findsOneWidget);
   });
 
   test('the stops near a point are those within reach, nearest first', () {
@@ -189,5 +253,24 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text(txt.nothingNear), findsOneWidget);
+  });
+
+  testWidgets('a point held on the map lists the stops near it, nearest '
+      'first, without asking where the phone is', (tester) async {
+    final here = _Here(null);
+    await open(tester, (_) {}, here: here, around: _me);
+
+    expect(here.started, 0);
+    expect(find.text(txt.nearHere), findsOneWidget);
+    expect(find.text(txt.metres(22)), findsOneWidget);
+    expect(find.text('Airport'), findsNothing);
+    final depot = tester.getTopLeft(find.text('Depot')).dy;
+    expect(tester.getTopLeft(find.text('Market')).dy, greaterThan(depot));
+  });
+
+  testWidgets('a point held far from every stop is told so', (tester) async {
+    await open(tester, (_) {}, around: const LatLng(50.45, 30.52));
+
+    expect(find.text(txt.nothingNearHere), findsOneWidget);
   });
 }

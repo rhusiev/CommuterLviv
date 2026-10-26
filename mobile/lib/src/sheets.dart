@@ -1,22 +1,16 @@
-/// The sheets the top bar opens, and [showFloatingSheet] that puts every sheet
-/// in the app on screen.
+/// The layers and account sheets, and [showFloatingSheet] that puts every
+/// sheet in the app on screen.
 library;
 
 import 'dart:async' show unawaited;
-import 'dart:math' show max;
 
 import 'package:flutter/material.dart' hide Theme;
 import 'package:flutter/material.dart' as material show Theme;
 
 import 'api.dart';
 import 'map_theme.dart';
-import 'models.dart';
-import 'route_badge.dart';
 import 'strings.dart';
 import 'theme.dart';
-
-/// The share of the screen the route sheet opens to.
-const _routeSheetShare = 0.7;
 
 /// A sheet that floats rather than docks. `showModalBottomSheet` is docked by
 /// construction, so the sheet itself is transparent and the gap is padding
@@ -29,6 +23,8 @@ Future<T?> showFloatingSheet<T>(
 }) => showModalBottomSheet<T>(
   context: context,
   isScrollControlled: scrollControlled,
+  // A scroll-controlled sheet may grow to the full height, under the status bar
+  useSafeArea: true,
   backgroundColor: Colors.transparent,
   builder: (context) => Padding(
     padding: const EdgeInsets.all(floatingGap),
@@ -112,11 +108,13 @@ class _NameDialogState extends State<_NameDialog> {
 }
 
 /// What a long press on a saved thing offers. A thing that cannot be renamed -
-/// a pinned stop wears the stop's own name - passes a null [onRename].
+/// a pinned stop wears the stop's own name - passes a null [onRename], and
+/// one that is let go of rather than deleted names that in [deleteLabel].
 Future<void> manage(
   BuildContext context, {
   Future<void> Function()? onRename,
   required Future<void> Function() onDelete,
+  String? deleteLabel,
 }) async {
   final what = await showModalBottomSheet<String>(
     context: context,
@@ -131,7 +129,7 @@ Future<void> manage(
             ),
           ListTile(
             leading: const Icon(Icons.delete_outline),
-            title: Text(txt.delete),
+            title: Text(deleteLabel ?? txt.delete),
             onTap: () => Navigator.pop(context, 'delete'),
           ),
         ],
@@ -160,7 +158,7 @@ class _Handle extends StatelessWidget {
 /// Everything that changes what the map shows, in one place: the overlays as
 /// switches, the basemap as a choice. Anything here is visible on the map the
 /// moment it is touched, which is the rule for what belongs in this sheet
-/// rather than behind the account button.
+/// rather than in the Mine tab.
 class LayersSheet extends StatefulWidget {
   const LayersSheet({
     super.key,
@@ -221,7 +219,7 @@ class _LayersSheetState extends State<LayersSheet> {
               leading: Icon(
                 t.dark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
               ),
-              title: Text(t.name),
+              title: Text(txt.themeNames[t.id] ?? t.id),
               trailing: t.id == _theme.id ? const Icon(Icons.check) : null,
               onTap: () {
                 setState(() => _theme = t);
@@ -245,7 +243,6 @@ class AccountSheet extends StatefulWidget {
     required this.hurry,
     required this.followAway,
     required this.onFollowAway,
-    required this.onSaved,
     required this.onLanguage,
     required this.onSpeed,
     required this.onServer,
@@ -262,7 +259,6 @@ class AccountSheet extends StatefulWidget {
   final double? hurry;
   final bool followAway;
   final ValueChanged<bool> onFollowAway;
-  final VoidCallback onSaved;
   final VoidCallback onLanguage;
   final VoidCallback onSpeed;
   final VoidCallback onServer;
@@ -282,56 +278,53 @@ class _AccountSheetState extends State<AccountSheet> {
   Widget build(BuildContext context) {
     final colours = material.Theme.of(context).colorScheme;
     return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.bookmark_outline),
-            title: Text(txt.saved),
-            onTap: widget.onSaved,
-          ),
-          ListTile(
-            leading: const Icon(Icons.translate),
-            title: Text(txt.language),
-            trailing: Text(lang == Lang.uk ? 'Українська' : 'English'),
-            onTap: widget.onLanguage,
-          ),
-          ListTile(
-            leading: const Icon(Icons.directions_walk),
-            title: Text(txt.paces),
-            subtitle: Text(txt.pacesNow(widget.speed, widget.hurry)),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: widget.onSpeed,
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.notifications_outlined),
-            title: Text(txt.followAway),
-            subtitle: Text(txt.followAwayHint),
-            value: _followAway,
-            onChanged: (on) {
-              setState(() => _followAway = on);
-              widget.onFollowAway(on);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.dns_outlined),
-            title: Text(txt.server),
-            subtitle: Text(widget.server),
-            onTap: widget.onServer,
-          ),
-          if (widget.onPassword case final onPassword?)
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             ListTile(
-              leading: const Icon(Icons.password),
-              title: Text(txt.changePassword),
-              onTap: onPassword,
+              leading: const Icon(Icons.translate),
+              title: Text(txt.language),
+              trailing: Text(lang == Lang.uk ? 'Українська' : 'English'),
+              onTap: widget.onLanguage,
             ),
-          const Divider(height: 1),
-          ListTile(
-            leading: Icon(Icons.logout, color: colours.error),
-            title: Text(txt.signOut, style: TextStyle(color: colours.error)),
-            onTap: widget.onOut,
-          ),
-        ],
+            ListTile(
+              leading: const Icon(Icons.directions_walk),
+              title: Text(txt.paces),
+              subtitle: Text(txt.pacesNow(widget.speed, widget.hurry)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: widget.onSpeed,
+            ),
+            SwitchListTile(
+              secondary: const Icon(Icons.notifications_outlined),
+              title: Text(txt.followAway),
+              subtitle: Text(txt.followAwayHint),
+              value: _followAway,
+              onChanged: (on) {
+                setState(() => _followAway = on);
+                widget.onFollowAway(on);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.dns_outlined),
+              title: Text(txt.server),
+              subtitle: Text(widget.server),
+              onTap: widget.onServer,
+            ),
+            if (widget.onPassword case final onPassword?)
+              ListTile(
+                leading: const Icon(Icons.password),
+                title: Text(txt.changePassword),
+                onTap: onPassword,
+              ),
+            const Divider(height: 1),
+            ListTile(
+              leading: Icon(Icons.logout, color: colours.error),
+              title: Text(txt.signOut, style: TextStyle(color: colours.error)),
+              onTap: widget.onOut,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -375,276 +368,4 @@ class LanguageSheet extends StatelessWidget {
       ],
     ),
   );
-}
-
-/// Routes, and the saved sets of routes. Sets live on the server; the current
-/// ticks are local until saved as one.
-class RouteSheet extends StatefulWidget {
-  const RouteSheet({
-    super.key,
-    required this.api,
-    required this.catalog,
-    required this.sets,
-    required this.picked,
-    required this.onToggle,
-    required this.onClear,
-    required this.onActivated,
-    required this.onSets,
-    required this.onRoute,
-  });
-
-  final Api api;
-  final Catalog catalog;
-  final Sets? sets;
-
-  /// Route positions, the screen's own live set.
-  final Set<int> picked;
-  final void Function(int route) onToggle;
-  final VoidCallback onClear;
-
-  final void Function(RouteSet set, Iterable<int> routes) onActivated;
-
-  final void Function(Sets sets) onSets;
-
-  /// The line, opened by a long press: a tap already toggles the route.
-  final void Function(int route) onRoute;
-
-  @override
-  State<RouteSheet> createState() => _RouteSheetState();
-}
-
-class _RouteSheetState extends State<RouteSheet> {
-  /// The narrowest a route chip may be, and the space between two.
-  static const _cell = 76.0;
-  static const _gap = 6.0;
-
-  String _filter = '';
-
-  /// The sheet is its own route, built once, so later `sets` never reach it.
-  late String? _active = widget.sets?.active;
-  late List<RouteSet> _sets = widget.sets?.sets ?? const [];
-
-  /// Why the last change to the sets did not go through
-  String? _failed;
-
-  List<String> get _ids => [
-    for (final i in widget.picked) widget.catalog.routes[i].id,
-  ];
-
-  /// Runs [change], saying under the buttons why it failed if it does.
-  Future<void> _guard(Future<void> Function() change) async {
-    setState(() => _failed = null);
-    try {
-      await change();
-    } on Exception catch (e) {
-      if (mounted) setState(() => _failed = widget.api.failure(e));
-    }
-  }
-
-  Future<void> _reload() async {
-    final sets = await widget.api.sets();
-    if (!mounted) return;
-    widget.onSets(sets);
-    setState(() => _sets = sets.sets);
-  }
-
-  Future<void> _save() async {
-    final name = await askName(context, txt.nameSet);
-    if (name == null || name.isEmpty) return;
-    final made = await widget.api.createSet(name, _ids);
-    try {
-      await widget.api.activateSet(made.id);
-      _active = made.id;
-    } finally {
-      // made, the set belongs in the list even if it could not be activated
-      if (mounted) await _reload();
-    }
-  }
-
-  Future<void> _update(RouteSet set) async {
-    await widget.api.updateSet(set.id, set.name, _ids);
-    await _reload();
-  }
-
-  Future<void> _rename(RouteSet set) async {
-    final name = await askName(context, txt.rename, was: set.name);
-    if (name == null || name.isEmpty || name == set.name) return;
-    await widget.api.updateSet(set.id, name, set.routes);
-    await _reload();
-  }
-
-  Future<void> _delete(RouteSet set) async {
-    await widget.api.deleteSet(set.id);
-    if (set.id == _active) _active = null;
-    await _reload();
-  }
-
-  Future<void> _manage(RouteSet set) => manage(
-    context,
-    onRename: () => _guard(() => _rename(set)),
-    onDelete: () => _guard(() => _delete(set)),
-  );
-
-  Future<void> _activate(RouteSet set) async {
-    await widget.api.activateSet(set.id);
-    if (!mounted) return;
-    widget.onActivated(set, widget.catalog.routesAt(set.routes));
-    setState(() => _active = set.id);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final catalog = widget.catalog;
-    final needle = _filter.toLowerCase();
-    final shown = [
-      for (var i = 0; i < catalog.routes.length; i++)
-        if (needle.isEmpty ||
-            catalog.routes[i].short.toLowerCase().contains(needle) ||
-            catalog.routes[i].long.toLowerCase().contains(needle))
-          i,
-    ];
-    final sets = _sets;
-    final active = sets.where((s) => s.id == _active).firstOrNull;
-    final changed =
-        active != null &&
-        (active.routes.length != _ids.length ||
-            !active.routes.toSet().containsAll(_ids));
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: _routeSheetShare,
-      builder: (context, controller) => ListView(
-        controller: controller,
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        children: [
-          if (sets.isNotEmpty) ...[
-            Text(
-              txt.sets,
-              style: material.Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              children: [
-                for (final s in sets)
-                  GestureDetector(
-                    onLongPress: () => _manage(s),
-                    child: ChoiceChip(
-                      label: Text(s.name),
-                      // A checkmark widens the chip, shuffling the ones after it
-                      showCheckmark: false,
-                      selected: s.id == _active,
-                      onSelected: (_) => _guard(() => _activate(s)),
-                    ),
-                  ),
-              ],
-            ),
-            const Divider(height: 24),
-          ],
-          TextField(
-            onChanged: (v) => setState(() => _filter = v),
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search),
-              hintText: txt.filterRoutes,
-            ),
-          ),
-          const SizedBox(height: 12),
-          LayoutBuilder(
-            builder: (context, box) {
-              // Equal cells, as many as fit, so the grid has straight edges
-              // whatever a route is called
-              final cols = max(
-                1,
-                ((box.maxWidth + _gap) / (_cell + _gap)).floor(),
-              );
-              final width = (box.maxWidth - _gap * (cols - 1)) / cols;
-              return Wrap(
-                spacing: _gap,
-                runSpacing: 4,
-                children: [
-                  for (final i in shown)
-                    SizedBox(
-                      width: width,
-                      child: GestureDetector(
-                        onLongPress: () {
-                          Navigator.pop(context);
-                          widget.onRoute(i);
-                        },
-                        child: FilterChip(
-                          label: Center(
-                            child: RouteBadge(
-                              route: catalog.routes[i],
-                              muted: !widget.picked.contains(i),
-                            ),
-                          ),
-                          // No tooltip: a chip's own tooltip fires on long press
-                          // and wins the gesture arena, so the line would never
-                          // open
-                          showCheckmark: false,
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          labelPadding: EdgeInsets.zero,
-                          selected: widget.picked.contains(i),
-                          onSelected: (_) {
-                            widget.onToggle(i);
-                            setState(() {});
-                          },
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 6),
-          Text(
-            txt.holdForLine,
-            style: material.Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              IconButton(
-                onPressed: widget.picked.isEmpty
-                    ? null
-                    : () {
-                        widget.onClear();
-                        setState(() {});
-                      },
-                icon: const Icon(Icons.clear_all),
-                tooltip: txt.clear,
-              ),
-              const SizedBox(width: 8),
-              if (changed) ...[
-                Expanded(
-                  child: FilledButton.tonal(
-                    onPressed: () => _guard(() => _update(active)),
-                    child: Text(
-                      txt.updateSet(active.name),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Expanded(
-                child: FilledButton.tonal(
-                  onPressed: widget.picked.isEmpty ? null : () => _guard(_save),
-                  child: Text(txt.saveAsSet, overflow: TextOverflow.ellipsis),
-                ),
-              ),
-            ],
-          ),
-          if (_failed case final failed?)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                failed,
-                style: material.Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: material.Theme.of(context).colorScheme.error,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }

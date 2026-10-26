@@ -16,11 +16,16 @@ class JourneyLayer extends StatelessWidget {
     required this.journey,
     required this.catalog,
     required this.theme,
+    required this.places,
   });
 
   final Journey journey;
   final Catalog catalog;
   final MapTheme theme;
+
+  /// Saved places, whose names are printed beside their dots: a pill on one
+  /// is lifted above it, clear of the name.
+  final List<Place> places;
 
   @override
   Widget build(BuildContext context) {
@@ -53,9 +58,19 @@ class JourneyLayer extends StatelessWidget {
                     ),
           ],
         ),
-        MarkerLayer(markers: [for (final c in _clusters(tags)) _stack(c, ink)]),
+        MarkerLayer(
+          markers: [
+            for (final c in _clusters(tags))
+              _stack(c, ink, lifted: _onPlace(c.first.point)),
+          ],
+        ),
       ],
     );
+  }
+
+  bool _onPlace(LatLng point) {
+    const near = Distance();
+    return places.any((place) => near(place.at, point) < sameStopM);
   }
 
   Color _colour(Leg leg, Palette ink) {
@@ -94,22 +109,34 @@ List<List<_Tag>> _clusters(List<_Tag> tags) {
   return out;
 }
 
-Marker _stack(List<_Tag> tags, Palette ink) => Marker(
-  point: tags.first.point,
-  width: 96,
-  height: 22.0 * tags.length + 2.0 * (tags.length - 1),
-  child: Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < tags.length; i++) ...[
-          if (i > 0) const SizedBox(height: 2),
-          _pill(tags[i], ink),
-        ],
-      ],
+/// A lifted stack's gap above its point: more than half a place's name plate,
+/// which is drawn level with the place's dot.
+const _lift = 10.0;
+
+/// Centred on its point, or [lifted] to stand above it.
+Marker _stack(List<_Tag> tags, Palette ink, {required bool lifted}) {
+  final gap = lifted ? _lift : 0.0;
+  return Marker(
+    point: tags.first.point,
+    width: 96,
+    height: 22.0 * tags.length + 2.0 * (tags.length - 1) + gap,
+    alignment: lifted ? Alignment.topCenter : Alignment.center,
+    child: Padding(
+      padding: EdgeInsets.only(bottom: gap),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < tags.length; i++) ...[
+              if (i > 0) const SizedBox(height: 2),
+              _pill(tags[i], ink),
+            ],
+          ],
+        ),
+      ),
     ),
-  ),
-);
+  );
+}
 
 Widget _pill(_Tag tag, Palette ink) => DecoratedBox(
   decoration: BoxDecoration(

@@ -64,10 +64,10 @@ export type Catch =
   | { kind: "hurry" | "missed"; leg: number; dep: number; riding: boolean; kmh: number | null };
 
 /** A tracked vehicle missed by this little is still caught: the driver waits
- * for somebody waving or running. `GRACE` in `commuterlviv/plan.py`. */
+ * for somebody waving or running. `GRACE` in `commuterlviv/plan/scan.py`. */
 export const GRACE_S = 10;
 /** Seconds ahead, and the slack a change needs that far ahead: `CHANGE_AHEAD`
- * and `CHANGE_SLACK` in `commuterlviv/plan.py` */
+ * and `CHANGE_SLACK` in `commuterlviv/plan/scan.py` */
 const CHANGE_AHEAD = [60, 210, 450, 750, 1050, 1500, 2250];
 const CHANGE_SLACK = [60, 90, 150, 180, 210, 270, 300];
 /** A change is broken by either vehicle's forecast missing, a walk to a stop

@@ -1,0 +1,63 @@
+# Deletes the `<version>-dev.<n>` pre-releases nobody needs any more, with their tags: one
+# whose commit a `v*` release already includes, and one older than `KEEP_DAYS`
+# unless it is the newest, so there is always a build of `dev` to install.
+#
+# Runs daily and after every release. Both triggers only fire from the default
+# branch, so this does nothing until it is on `main`. A run by hand from the
+# Actions tab can be a dry run, which only lists what it would delete.
+name: prune-prereleases
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_run:
+    workflows:
+      - release
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: List what would be deleted, delete nothing
+        type: boolean
+        default: true
+
+concurrency:
+  group: prune-prereleases
+
+permissions:
+  contents: write
+
+env:
+  KEEP_DAYS: 14
+
+jobs:
+  prune:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DRY_RUN: ${{ inputs.dry-run == true }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete released and stale pre-releases
+        run: |
+          prereleases=$(gh release list --limit 1000 --json tagName,isPrerelease,createdAt \
+            -q '[.[] | select(.isPrerelease and (.tagName | test("-dev\\.[0-9]+$")))] | sort_by(.createdAt)')
+          newest=$(jq -r 'last | .tagName // ""' <<<"$prereleases")
+          cutoff=$(date -u -d "-$KEEP_DAYS days" +%s)
+          jq -r '.[] | "\(.tagName) \(.createdAt)"' <<<"$prereleases" |
+            while read -r tag created; do
+              if [ -n "$(git tag --contains "$tag" -l 'v*')" ]; then
+                why="a release includes it"
+              elif [ "$tag" != "$newest" ] && [ "$(date -u -d "$created" +%s)" -lt "$cutoff" ]; then
+                why="older than $KEEP_DAYS days"
+              else
+                continue
+              fi
+              echo "$tag: $why"
+              [ "$DRY_RUN" = true ] || gh release delete "$tag" --cleanup-tag --yes
+            done

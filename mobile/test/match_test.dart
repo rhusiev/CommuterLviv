@@ -52,6 +52,17 @@ void main() {
     );
   });
 
+  test(
+    'a whole word outranks a prefix, so a code finds its own stop first',
+    () {
+      expect(
+        of('61', 'Площа Ринок (61)'),
+        greaterThan(of('61', 'Хімічна (616)')),
+      );
+      expect(of('ринок', 'Ринок Шувар'), greaterThan(of('ринок', 'Ринковий')));
+    },
+  );
+
   test('saved places match the way stops are matched', () {
     expect(names('роб', ['Дім', 'Робота']), ['Робота']);
     expect(names('мами д', ['Дім мами', 'Дім']), ['Дім мами']);

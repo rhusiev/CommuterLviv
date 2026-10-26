@@ -2,8 +2,9 @@
 
 Computed here once so every client draws the same line: the thinned shapes, each
 marked with the feed direction it runs, which is what lets a client draw a
-two-way stretch as two tracks. All in metres on the projected plane, converted
-to degrees only on the way out.
+two-way stretch as two tracks, and the stops it calls at in order, which is what
+lets a client list a line stop by stop. All in metres on the projected plane,
+converted to degrees only on the way out.
 """
 import numpy as np
 
@@ -12,20 +13,30 @@ from .. import network
 SIMPLIFY = 8.0       # m a thinned line may stray from the real one
 
 
-def describe(net, route_ids):
-    """Every route's geometry, indexed the way the catalog indexes routes."""
+def describe(net, cat):
+    """Every route's geometry, indexed the way the catalog `cat` indexes routes,
+    its stops by `cat`'s stop positions."""
     by_route = {}
+    calls = {}
     for trip, r in net.trip_route.items():
         sid = net.trip_shape.get(trip)
         if sid in net.shapes:
-            by_route.setdefault(r, set()).add((net.trip_dir.get(trip, 0), sid))
-    return {"routes": [_route(net, sorted(by_route.get(r, ()))) for r in route_ids]}
+            line = (net.trip_dir.get(trip, 0), sid)
+            by_route.setdefault(r, set()).add(line)
+            ids = net.trip_stops.get(trip, ((),))[0]
+            # A short working calls at fewer stops of the same shape
+            if len(ids) > len(calls.get(line, ())):
+                calls[line] = ids
+    return {"routes": [_route(net, cat, sorted(by_route.get(r, ())), calls)
+                       for r in cat.routes]}
 
 
-def _route(net, pairs):
+def _route(net, cat, lines, calls):
     return {"lines": [
-        {"dir": d, "pts": points(simplify(net.shapes[sid].xy, SIMPLIFY))}
-        for d, sid in pairs]}
+        {"dir": d, "pts": points(simplify(net.shapes[sid].xy, SIMPLIFY)),
+         "stops": [cat.stop_i[s] for s in calls.get((d, sid), ())
+                   if s in cat.stop_i]}
+        for d, sid in lines]}
 
 
 def points(xy):

@@ -1,26 +1,39 @@
 import { useEffect, useState } from "react";
 import { countdown, nextPerRoute } from "../lib/eta";
+import { useReorder } from "../lib/reorder";
 import type { Arrival, Catalog } from "../lib/types";
 import { t } from "../lib/i18n";
-import { RouteBadge } from "./RouteBadge";
+import { RouteChip } from "./RouteChip";
 import { Icon } from "./Icon";
+import { Grip } from "./Grip";
 
 /** How often the countdowns move on */
 const TICK_MS = 5000;
 
-/** The clock ticks locally between epochs: the predictions change once a
+/** The pinned stops, each with what is due there, in the order the account
+ * chose; a stop is dragged by its grip to change it.
+ *
+ * The clock ticks locally between epochs: the predictions change once a
  * minute, but a countdown that only moves once a minute looks broken. */
 export function Timetable({
   catalog,
   stops,
   arrivals,
-  onUnpin,
+  onPins,
+  onStop,
+  watching,
+  onToggle,
   onRoute,
 }: {
   catalog: Catalog;
   stops: number[];
   arrivals: Record<string, Arrival[]>;
-  onUnpin: (i: number) => void;
+  onPins: (next: number[]) => void;
+  onStop: (i: number) => void;
+  /** The routes picked, by id */
+  watching: Set<string>;
+  onToggle: (id: string) => void;
+  /** The line, from a chip's `›` */
   onRoute: (i: number) => void;
 }) {
   const [now, setNow] = useState(() => Date.now() / 1000);
@@ -28,23 +41,31 @@ export function Timetable({
     const id = setInterval(() => setNow(Date.now() / 1000), TICK_MS);
     return () => clearInterval(id);
   }, []);
+  const pinned = useReorder(stops, onPins);
 
   if (!stops.length) {
-    return <p className="p-6 text-sm text-slate-500">{t.nothingPinned}</p>;
+    return <p className="text-sm text-slate-500">{t.nothingPinned}</p>;
   }
 
   return (
-    <div className="h-full space-y-4 overflow-y-auto p-4">
-      {stops.map((i) => {
+    <div className="space-y-4">
+      {pinned.shown.map((i, at) => {
         const s = catalog.stops[i];
         if (!s) return null;
         const due = nextPerRoute(arrivals[String(i)] ?? []);
         return (
-          <section key={i}>
-            <div className="flex items-baseline gap-2">
-              <h3 className="truncate font-medium text-slate-100">{s.name}</h3>
+          <section key={s.id} {...pinned.row(at)}>
+            <div className="flex items-center gap-1">
+              <Grip />
               <button
-                onClick={() => onUnpin(i)}
+                onClick={() => onStop(i)}
+                title={t.showOnMap}
+                className="min-w-0 truncate rounded-md px-1 py-1 text-left font-medium text-slate-100 hover:bg-raised/70"
+              >
+                {s.name}
+              </button>
+              <button
+                onClick={() => onPins(stops.filter((p) => p !== i))}
                 title={t.unpin}
                 className="text-accent hover:text-rose-300"
               >
@@ -60,11 +81,15 @@ export function Timetable({
                   return (
                     <li key={a.route} className="flex items-center gap-2 py-1.5">
                       {r ? (
-                        <button onClick={() => onRoute(a.route)} title={t.showLine}>
-                          <RouteBadge route={r} className="w-14 px-1.5 py-0.5 text-sm" />
-                        </button>
+                        <RouteChip
+                          route={r}
+                          watched={watching.has(r.id)}
+                          onWatch={() => onToggle(r.id)}
+                          onLine={() => onRoute(a.route)}
+                          className="w-24 shrink-0"
+                        />
                       ) : (
-                        <span className="w-14 text-center text-sm text-slate-500">?</span>
+                        <span className="w-24 text-center text-sm text-slate-500">?</span>
                       )}
                       <span className="flex-1 truncate text-sm text-slate-400">{r?.long}</span>
                       <span

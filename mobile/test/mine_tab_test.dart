@@ -1,0 +1,305 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:commuterlviv/src/api.dart';
+import 'package:commuterlviv/src/due.dart';
+import 'package:commuterlviv/src/live.dart';
+import 'package:commuterlviv/src/mine_tab.dart';
+import 'package:commuterlviv/src/models.dart';
+import 'package:commuterlviv/src/strings.dart';
+
+final _catalog = Catalog(
+  routes: const [
+    TransitRoute(id: 'r48', short: '48', long: 'A to B', type: 'bus'),
+  ],
+  stops: const [
+    Stop(
+      id: 's1',
+      name: 'Opera',
+      code: '1',
+      lat: 49.84,
+      lon: 24.03,
+      routes: [0],
+    ),
+  ],
+  index: const {'r48': 0},
+  stopIndex: const {'s1': 0},
+);
+
+/// A 1080 px wide phone, in logical pixels.
+const _phone = Size(411, 914);
+
+const _home = Place(name: 'Home', at: LatLng(49.8, 24.0));
+const _work = Place(name: 'Work', at: LatLng(49.9, 24.1));
+const _set = RouteSet(id: 'x', name: 'Commute', routes: ['r48'], ord: 0);
+
+/// What the tab reported back, one field per callback.
+class _Heard {
+  List<int>? pins;
+  List<Place>? places;
+  Place? place;
+  int? stop;
+  RouteSet? activated;
+  (RouteSet, String)? renamed;
+  RouteSet? deleted;
+  bool account = false;
+}
+
+Future<_Heard> _pump(
+  WidgetTester tester, {
+  List<int> pins = const [],
+  List<Place> places = const [],
+  List<RouteSet> sets = const [],
+  Map<int, List<Arrival>> arrivals = const {},
+}) async {
+  SharedPreferences.setMockInitialValues({});
+  FlutterSecureStorage.setMockInitialValues({});
+  final live = Live(await Api.open(), onRenewed: () {})..arrivals = arrivals;
+  final heard = _Heard();
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: MineTab(
+          catalog: _catalog,
+          live: live,
+          pins: pins,
+          onPins: (next) => heard.pins = next,
+          onStop: (stop) => heard.stop = stop,
+          watching: const {},
+          onWatch: (_) {},
+          onLine: (_) {},
+          places: places,
+          onPlaces: (next) => heard.places = next,
+          onPlace: (place) => heard.place = place,
+          sets: Sets(sets: sets, active: null, pins: const [], places: places),
+          onActivate: (set) => heard.activated = set,
+          onRename: (set, name) async => heard.renamed = (set, name),
+          onDelete: (set) async => heard.deleted = set,
+          username: 'tester',
+          onAccount: () => heard.account = true,
+        ),
+      ),
+    ),
+  );
+  return heard;
+}
+
+double _top(WidgetTester tester, String text) =>
+    tester.getTopLeft(find.text(text)).dy;
+
+/// Which of the rows given to [_pump] are on screen.
+List<String> _shown() => [
+  for (final text in ['Opera', 'Home', 'Work', 'Commute'])
+    if (find.text(text).evaluate().isNotEmpty) text,
+];
+
+Future<void> _open(WidgetTester tester, String section) async {
+  await tester.tap(find.widgetWithText(ChoiceChip, section));
+  await tester.pump();
+}
+
+void main() {
+  testWidgets('one list shows at a time, the pinned stops first', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      pins: const [0],
+      places: const [_home],
+      sets: const [_set],
+    );
+
+    expect(_shown(), ['Opera']);
+    await _open(tester, txt.minePlaces);
+    expect(_shown(), ['Home']);
+    await _open(tester, txt.sets);
+    expect(_shown(), ['Commute']);
+  });
+
+  testWidgets('the account opens from beside the switch, whichever list is '
+      'shown', (tester) async {
+    final heard = await _pump(tester, sets: const [_set]);
+    await _open(tester, txt.sets);
+
+    await tester.tap(find.byTooltip('${txt.account}: tester'));
+
+    expect(heard.account, isTrue);
+  });
+
+  testWidgets('a pinned stop shows what is due and unpins on a hold', (
+    tester,
+  ) async {
+    final soon = DateTime.now().millisecondsSinceEpoch ~/ 1000 + 300;
+    final heard = await _pump(
+      tester,
+      pins: const [0],
+      arrivals: {
+        0: [Arrival(route: 0, veh: 7, t: soon)],
+      },
+    );
+
+    expect(find.text('Opera'), findsOneWidget);
+    expect(find.text('48'), findsOneWidget);
+    await tester.tap(find.text('Opera'));
+    expect(heard.stop, 0);
+
+    expect(heard.pins, isNull);
+    await tester.longPress(find.text('Opera'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(txt.unpin));
+    await tester.pumpAndSettle();
+    expect(heard.pins, isEmpty);
+  });
+
+  testWidgets('a pinned stop flows its due chips from under its name', (
+    tester,
+  ) async {
+    final soon = DateTime.now().millisecondsSinceEpoch ~/ 1000 + 300;
+    await _pump(
+      tester,
+      pins: const [0],
+      arrivals: {
+        0: [
+          Arrival(route: 0, veh: 7, t: soon),
+          Arrival(route: 0, veh: 8, t: soon + 300),
+        ],
+      },
+    );
+
+    final chips = find.byType(Due);
+    final first = tester.getTopLeft(chips.at(0));
+    final second = tester.getTopLeft(chips.at(1));
+    expect(first.dx, tester.getTopLeft(find.text('Opera')).dx);
+    expect(second.dy, first.dy);
+    expect(second.dx, greaterThan(first.dx));
+  });
+
+  testWidgets('a pinned stop gives its due chips the width under its handle', (
+    tester,
+  ) async {
+    tester.view.physicalSize = _phone;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final soon = DateTime.now().millisecondsSinceEpoch ~/ 1000 + 300;
+    await _pump(
+      tester,
+      pins: const [0],
+      arrivals: {
+        0: [Arrival(route: 0, veh: 7, t: soon)],
+      },
+    );
+
+    // The test font is wider than a phone's: on Roboto a due chip is about
+    // 135 px, so two need the room the handle would otherwise keep
+    final room = tester.getRect(
+      find.ancestor(of: find.byType(Due), matching: find.byType(Wrap)),
+    );
+    final handle = tester.getRect(find.byIcon(Icons.drag_handle));
+    expect(room.right, greaterThanOrEqualTo(handle.right));
+  });
+
+  testWidgets('a rename rewrites the whole list, in order', (tester) async {
+    final heard = await _pump(tester, places: const [_home, _work]);
+
+    await _open(tester, txt.minePlaces);
+    await tester.longPress(find.text('Home'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(txt.rename));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Flat');
+    await tester.tap(find.text(txt.save));
+    await tester.pumpAndSettle();
+
+    expect([for (final p in heard.places!) p.name], ['Flat', 'Work']);
+    expect(heard.places!.first.at, _home.at);
+  });
+
+  testWidgets('a rename to the name of another place is refused, and says '
+      'so', (tester) async {
+    final heard = await _pump(tester, places: const [_home, _work]);
+
+    await _open(tester, txt.minePlaces);
+    await tester.longPress(find.text('Home'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(txt.rename));
+    await tester.pumpAndSettle();
+    // Trimmed, as the server keys the names
+    await tester.enterText(find.byType(TextField), ' Work ');
+    await tester.tap(find.text(txt.save));
+    await tester.pumpAndSettle();
+
+    expect(find.text(txt.placeNameTaken), findsOneWidget);
+    expect(heard.places, isNull);
+    expect(_top(tester, 'Home'), lessThan(_top(tester, 'Work')));
+  });
+
+  testWidgets('a place near a stop is called by it, else by where it is', (
+    tester,
+  ) async {
+    const atOpera = Place(name: 'Flat', at: LatLng(49.841, 24.03));
+    await _pump(tester, places: const [atOpera, _home]);
+    await _open(tester, txt.minePlaces);
+
+    expect(find.text(txt.nearStop('Opera')), findsOneWidget);
+    expect(find.text('49.8000, 24.0000'), findsOneWidget);
+  });
+
+  testWidgets('a tap shows the place', (tester) async {
+    final heard = await _pump(tester, places: const [_home]);
+    await _open(tester, txt.minePlaces);
+
+    await tester.tap(find.text('Home'));
+
+    expect((heard.place?.name, heard.place?.at), ('Home', _home.at));
+  });
+
+  testWidgets('a set activates on a tap and renames on a hold', (tester) async {
+    final heard = await _pump(tester, sets: const [_set]);
+    await _open(tester, txt.sets);
+
+    await tester.tap(find.text('Commute'));
+    expect(heard.activated?.id, 'x');
+
+    await tester.longPress(find.text('Commute'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(txt.rename));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Work run');
+    await tester.tap(find.text(txt.save));
+    await tester.pumpAndSettle();
+
+    expect((heard.renamed?.$1.id, heard.renamed?.$2), ('x', 'Work run'));
+  });
+
+  testWidgets('each empty list says how it fills', (tester) async {
+    await _pump(tester);
+
+    expect(find.text(txt.pinAStop), findsOneWidget);
+    await _open(tester, txt.minePlaces);
+    expect(find.text(txt.saveHow), findsOneWidget);
+    await _open(tester, txt.sets);
+    expect(find.text(txt.noSets), findsOneWidget);
+  });
+
+  testWidgets('a row lifted by its handle is drawn while it moves', (
+    tester,
+  ) async {
+    await _pump(tester, pins: const [0], places: const [_home, _work]);
+
+    for (final section in [txt.mineStops, txt.minePlaces]) {
+      await _open(tester, section);
+      final drag = await tester.startGesture(
+        tester.getCenter(find.byIcon(Icons.drag_handle).first),
+      );
+      await drag.moveBy(const Offset(0, 40));
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      await drag.up();
+      await tester.pumpAndSettle();
+    }
+  });
+}

@@ -3,6 +3,7 @@
 library;
 
 export 'end_field.dart' show End;
+export 'journey_option.dart' show legNote;
 
 import 'dart:async';
 
@@ -14,23 +15,13 @@ import 'api.dart';
 import 'backups_dialog.dart';
 import 'end_field.dart';
 import 'eta.dart';
-import 'follow.dart' show followable, plannedKmh;
-import 'hurry_pill.dart';
+import 'journey_option.dart';
 import 'models.dart';
 import 'route_badge.dart';
 import 'sheets.dart';
 import 'strings.dart';
 import 'theme.dart';
 import 'walk_speed.dart';
-
-/// A word on a ride not resting on a tracked vehicle, and what it means; null
-/// on one that is.
-(String, String)? legNote(Confidence confidence) => switch (confidence) {
-  Confidence.live => null,
-  Confidence.terminus => (txt.terminusPart, txt.terminusWhy),
-  Confidence.schedule => (txt.schedulePart, txt.scheduleWhy),
-  Confidence.quiet => (txt.quietPart, txt.quietWhy),
-};
 
 class JourneyPanel extends StatefulWidget {
   const JourneyPanel({
@@ -49,6 +40,7 @@ class JourneyPanel extends StatefulWidget {
     required this.onStop,
     required this.onLine,
     required this.places,
+    this.named = const {},
     required this.onSave,
     required this.onPlace,
     required this.onShow,
@@ -80,6 +72,9 @@ class JourneyPanel extends StatefulWidget {
   final void Function(int route) onLine;
 
   final List<Place> places;
+
+  /// What ends were called where they were chosen, outside the panel
+  final Map<LatLng, String> named;
   final void Function(String name, LatLng at) onSave;
   final void Function(End end, LatLng at) onPlace;
 
@@ -116,6 +111,8 @@ class _JourneyPanelState extends State<JourneyPanel> {
 
   /// What the points picked by name were called, so they keep reading so
   final _names = <LatLng, String>{};
+
+  String? _nameOf(LatLng? at) => _names[at] ?? widget.named[at];
 
   /// Unix seconds to leave at; null is now, which is what the server assumes.
   int? _at;
@@ -361,7 +358,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
               catalog: widget.catalog,
               onPick: () => widget.onPick(end),
               onHere: () => widget.onHere(end),
-              name: _names[end == End.from ? widget.from : widget.to],
+              name: _nameOf(end == End.from ? widget.from : widget.to),
               places: widget.places,
               onPlace: (at, name) {
                 if (name != null) _names[at] = name;
@@ -400,16 +397,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
                 ),
               ),
             ),
-          if (_options != null)
-            Flexible(child: _results())
-          else if (!ready && _failed == null && !_busy)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(
-                txt.planHint,
-                style: material.Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
+          if (_options != null) Flexible(child: _results()),
           if (_options != null && _reportSaid != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -446,6 +434,9 @@ class _JourneyPanelState extends State<JourneyPanel> {
     ],
   );
 
+  /// The chips' shape, the same as the fields' above them
+  static const _pill = StadiumBorder();
+
   /// When to set off - unless already on board - and how to rank the options.
   Widget _when() => Row(
     children: [
@@ -456,11 +447,13 @@ class _JourneyPanelState extends State<JourneyPanel> {
           child: ActionChip(
             label: Text(_dayName(_leaving)),
             onPressed: _pickDay,
+            shape: _pill,
           ),
         ),
         const SizedBox(width: 8),
         InputChip(
           label: Text(_at == null ? txt.now : clockTime(_at!)),
+          shape: _pill,
           onPressed: _pickTime,
           onDeleted: _at == null ? null : () => _leave(null),
         ),
@@ -495,7 +488,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
       shrinkWrap: true,
       padding: EdgeInsets.zero,
       itemCount: ranked.length,
-      itemBuilder: (_, i) => _Option(
+      itemBuilder: (_, i) => JourneyOption(
         journey: ranked[i],
         shown: ranked[i] == _shown,
         onShow: () =>
@@ -587,271 +580,6 @@ class _Folded extends StatelessWidget {
               icon: const Icon(Icons.expand_less),
               tooltip: txt.showPanel,
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Option extends StatelessWidget {
-  const _Option({
-    required this.journey,
-    required this.shown,
-    required this.onShow,
-    required this.prefer,
-    required this.place,
-    required this.catalog,
-    required this.onStop,
-    required this.onLine,
-    required this.onWay,
-    required this.onFollow,
-  });
-
-  final Journey journey;
-
-  /// Whether this is the option drawn on the map; a tap toggles it. Its stops
-  /// and lines take taps of their own only once it is
-  final bool shown;
-  final VoidCallback onShow;
-  final Prefer prefer;
-
-  /// Where an option, by its index in the plan, is in the list, from 1.
-  final int Function(int option) place;
-  final Catalog catalog;
-  final void Function(int stop) onStop;
-
-  final void Function(int route) onLine;
-  final Future<String?> Function(WayPick? pick) onWay;
-  final VoidCallback onFollow;
-
-  @override
-  Widget build(BuildContext context) {
-    final changes = journey.rides - 1;
-    return Card(
-      margin: const EdgeInsets.only(top: 8),
-      clipBehavior: Clip.antiAlias,
-      shape: shown
-          ? RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(
-                color: material.Theme.of(context).colorScheme.primary,
-                width: 2,
-              ),
-            )
-          : null,
-      child: InkWell(
-        onTap: onShow,
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    txt.minutes(spanMinutes(journey.arr - journey.dep)),
-                    style: material.Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(width: 8),
-                  Text('${clockTime(journey.dep)} - ${clockTime(journey.arr)}'),
-                  const Spacer(),
-                  Text(
-                    journey.rides == 0
-                        ? txt.wholeWalk
-                        : changes <= 0
-                        ? txt.noChange
-                        : txt.changeCount(changes),
-                    style: material.Theme.of(context).textTheme.bodySmall,
-                  ),
-                  if (journey.rides > 0 && journey.backup > 0)
-                    InkWell(
-                      onTap: () => showBackups(
-                        context,
-                        journey: journey,
-                        prefer: prefer,
-                        catalog: catalog,
-                        place: place,
-                        onWay: onWay,
-                      ),
-                      borderRadius: BorderRadius.circular(6),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        child: Text(
-                          '· ${txt.backupCount(journey.backup)}',
-                          style: material.Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Colors.greenAccent,
-                                decoration: TextDecoration.underline,
-                                decorationStyle: TextDecorationStyle.dotted,
-                                decorationColor: Colors.greenAccent,
-                              ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              if (journey.hurry)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: _hurried(journey),
-                ),
-              for (final leg in journey.legs)
-                IgnorePointer(
-                  ignoring: !shown,
-                  child: _LegRow(
-                    leg: leg,
-                    catalog: catalog,
-                    onStop: onStop,
-                    onLine: onLine,
-                  ),
-                ),
-              if (shown && followable(journey))
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Tooltip(
-                    message: txt.followHint,
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.tonal(
-                        onPressed: onFollow,
-                        child: Text(txt.follow),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// An option caught only by hurrying, with the pace that catches it
-Widget _hurried(Journey journey) {
-  final kmh = plannedKmh(journey);
-  return kmh == null
-      ? HurryPill(text: txt.hurry, hint: txt.hurryHint)
-      : HurryPill(
-          text: txt.hurryAt(txt.kmh(kmh)),
-          hint: '${txt.hurryHint}. ${txt.paceHint}',
-        );
-}
-
-class _LegRow extends StatelessWidget {
-  const _LegRow({
-    required this.leg,
-    required this.catalog,
-    required this.onStop,
-    required this.onLine,
-  });
-
-  final Leg leg;
-  final Catalog catalog;
-  final void Function(int stop) onStop;
-
-  final void Function(int route) onLine;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = material.Theme.of(context);
-    final small = theme.textTheme.bodySmall;
-    // A walk between two rides is a leg of its own on the wire, so it is one
-    // here too: its own duration, and the stop it ends at
-    final where = leg.b < 0 ? txt.toDoor : catalog.stopName(leg.b);
-    return InkWell(
-      onTap: leg.b < 0 ? null : () => onStop(leg.b),
-      child: Padding(
-        padding: const EdgeInsets.only(top: 6),
-        child: Row(
-          children: [
-            if (leg.walking)
-              SizedBox(
-                width: 92,
-                child: Tooltip(
-                  message: txt.walkLeg(spanMinutes(leg.arr - leg.dep)),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.directions_walk,
-                        size: 16,
-                        color: small?.color,
-                      ),
-                      Text(
-                        txt.minutes(spanMinutes(leg.arr - leg.dep)),
-                        style: small,
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else ...[
-              SizedBox(width: 44, child: Text(clockTime(leg.dep))),
-              // Inside a row that opens the stop, so the badge takes its own
-              // taps
-              if (catalog.routeAt(leg.route) case final route?)
-                InkWell(
-                  onTap: () => onLine(leg.route!),
-                  borderRadius: BorderRadius.circular(6),
-                  child: RouteBadge(route: route, fontSize: 11),
-                ),
-              const SizedBox(width: 8),
-            ],
-            Expanded(child: Text(where, overflow: TextOverflow.ellipsis)),
-            if (legNote(leg.confidence) case (final part, final why))
-              _Note(
-                part: part,
-                why: why,
-                colour: leg.confidence == Confidence.quiet
-                    ? theme.colorScheme.error
-                    : small?.color,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// A word on what a ride rests on, which explains itself when tapped.
-class _Note extends StatelessWidget {
-  const _Note({required this.part, required this.why, required this.colour});
-
-  final String part;
-  final String why;
-  final Color? colour;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = material.Theme.of(context).textTheme.bodySmall
-        ?.copyWith(color: colour);
-    return InkWell(
-      onTap: () => showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog.adaptive(
-          title: Text(part),
-          content: Text(why),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(MaterialLocalizations.of(context).okButtonLabel),
-            ),
-          ],
-        ),
-      ),
-      borderRadius: BorderRadius.circular(6),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(part, style: style),
-            const SizedBox(width: 2),
-            Icon(Icons.info_outline, size: 14, color: colour),
           ],
         ),
       ),

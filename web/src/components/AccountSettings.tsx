@@ -8,12 +8,11 @@ import { Speed } from "./Speed";
  * sits below a rule, so it is never the click next to anything else. */
 
 type Props = {
-  username: string;
   passwordChange: boolean;
   onOut: () => void;
 };
 
-export function AccountMenu(p: Props) {
+export function AccountSettings(p: Props) {
   const [speed, setSpeed] = useState(heldSpeed);
   const [hurry, setHurry] = useState(heldHurry);
   const keepHurry = (v: number | null) => {
@@ -22,8 +21,7 @@ export function AccountMenu(p: Props) {
   };
   return (
     <div className="flex flex-col gap-1">
-      <p className="truncate px-2 py-1 text-sm font-medium text-slate-200">{p.username}</p>
-      <h2 className="mt-1 px-2 text-xs uppercase tracking-wide text-slate-500">
+      <h2 className="px-2 text-xs uppercase tracking-wide text-slate-500">
         {t.language}
       </h2>
       {(["uk", "en"] as const).map((l) => (

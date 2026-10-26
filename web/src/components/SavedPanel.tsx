@@ -1,96 +1,41 @@
 import { useState, type ComponentProps } from "react";
-import { stopName } from "../lib/catalog";
 import { t } from "../lib/i18n";
-import { dropped, renamed } from "../lib/places";
+import { dropped, renamed, taken } from "../lib/places";
 import { useReorder } from "../lib/reorder";
-import type { Catalog, Place } from "../lib/types";
+import type { Place } from "../lib/types";
 import { Remove } from "./Cross";
+import { Grip } from "./Grip";
 
-/** Everything the account has kept: places by name, stops by id. Both lists are
- * in the order the account chose, and a row is dragged by its grip to change it.
- * A place is renamed by writing the whole list with the old name gone and the new
- * one in its position, because the name is what identifies it server-side. A
- * pinned stop has no name of its own - it is the catalog's - so it is only
- * shown, unpinned, or opened. */
+/** The places kept by name, in the order the account chose; a row is dragged
+ * by its grip to change it. A place is renamed by writing the whole list with
+ * the old name gone and the new one in its position, because the name is what
+ * identifies it server-side - and so not to a name another place goes by. */
 
 export function SavedPanel({
-  catalog,
   places,
   onPlaces,
-  pins,
-  onPins,
   onPlace,
-  onStop,
 }: {
-  catalog: Catalog;
   places: Place[];
   onPlaces: (next: Place[]) => void;
-  pins: number[];
-  onPins: (next: number[]) => void;
   onPlace: (place: Place) => void;
-  onStop: (stop: number) => void;
 }) {
   const kept = useReorder(places, onPlaces);
-  const pinned = useReorder(pins, onPins);
-  const empty = places.length === 0 && pins.length === 0;
+  if (places.length === 0) return <p className="text-sm text-slate-500">{t.nothingSaved}</p>;
   return (
-    <div className="flex h-full flex-col gap-3 overflow-y-auto">
-      {empty && <p className="text-sm text-slate-500">{t.nothingSaved}</p>}
-
-      {places.length > 0 && (
-        <section>
-          <h2 className="text-xs uppercase tracking-wide text-slate-500">{t.places}</h2>
-          <ul className="mt-2 space-y-1">
-            {kept.shown.map((p, i) => (
-              <PlaceRow
-                key={p.name}
-                place={p}
-                drag={kept.row(i)}
-                onShow={() => onPlace(p)}
-                onRename={(name) => onPlaces(renamed(places, p, name))}
-                onForget={() => onPlaces(dropped(places, p.name))}
-              />
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {pins.length > 0 && (
-        <section>
-          <h2 className="text-xs uppercase tracking-wide text-slate-500">{t.pinnedStops}</h2>
-          <ul className="mt-2 space-y-1">
-            {pinned.shown.map((i, at) => (
-              <li
-                key={catalog.stops[i]?.id ?? i}
-                {...pinned.row(at)}
-                className="flex items-center gap-1"
-              >
-                <Grip />
-                <button
-                  onClick={() => onStop(i)}
-                  title={t.showOnMap}
-                  className="min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-sm text-slate-300 hover:bg-raised/70"
-                >
-                  {stopName(catalog, i)}
-                </button>
-                <Remove onClick={() => onPins(pins.filter((p) => p !== i))} />
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </div>
-  );
-}
-
-function Grip() {
-  return (
-    <span
-      title={t.dragToOrder}
-      className="cursor-grab select-none px-1 text-xs leading-none text-slate-600"
-    >
-      ⠿
-    </span>
+    <ul className="space-y-1">
+      {kept.shown.map((p, i) => (
+        <PlaceRow
+          key={p.name}
+          place={p}
+          drag={kept.row(i)}
+          onShow={() => onPlace(p)}
+          isTaken={(name) => taken(places, name, p)}
+          onRename={(name) => onPlaces(renamed(places, p, name))}
+          onForget={() => onPlaces(dropped(places, p.name))}
+        />
+      ))}
+    </ul>
   );
 }
 
@@ -98,16 +43,19 @@ function PlaceRow({
   place,
   drag,
   onShow,
+  isTaken,
   onRename,
   onForget,
 }: {
   place: Place;
   drag: ComponentProps<"li">;
   onShow: () => void;
+  isTaken: (name: string) => boolean;
   onRename: (name: string) => void;
   onForget: () => void;
 }) {
   const [name, setName] = useState<string | null>(null);
+  const clash = name !== null && isTaken(name);
 
   if (name !== null)
     return (
@@ -116,6 +64,7 @@ function PlaceRow({
           className="flex gap-1"
           onSubmit={(e) => {
             e.preventDefault();
+            if (clash) return;
             if (name.trim()) onRename(name.trim());
             setName(null);
           }}
@@ -125,12 +74,14 @@ function PlaceRow({
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Escape" && setName(null)}
+            aria-invalid={clash}
             className="field min-w-0 flex-1 py-1.5"
           />
           <button className="btn-quiet px-3 py-0" title={t.keepName}>
             {t.save}
           </button>
         </form>
+        {clash && <p className="mt-1 px-2 text-xs text-rose-300">{t.placeTaken}</p>}
       </li>
     );
 
@@ -150,7 +101,7 @@ function PlaceRow({
       >
         {t.rename}
       </button>
-      <Remove onClick={onForget} />
+      <Remove title={t.deletePlace} onClick={onForget} />
     </li>
   );
 }

@@ -35,6 +35,9 @@ const _judgeEvery = Duration(seconds: 1);
 /// The steps list scrolls past this height
 const _stepsMaxHeight = 256.0;
 
+/// A long stop name wraps rather than losing its end, as on the web
+const _headLines = 2;
+
 /// Room for a step's `HH:MM - HH:MM`
 const _clockWidth = 96.0;
 
@@ -256,82 +259,90 @@ class _FollowCardState extends State<FollowCard> {
     final progress = _progress;
     final done = progress?.stage.kind == StageKind.arrived;
     final faint = material.Theme.of(context).textTheme.bodySmall;
-    return Floating(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(panelRadius),
-        side: const BorderSide(color: hair),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Tooltip(
-                    message: _steps ? txt.hideSteps : txt.showSteps,
-                    child: InkWell(
-                      onTap: () => setState(() => _steps = !_steps),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: progress != null
-                                ? _Step(
-                                    said: _said(progress),
-                                    route: _route(progress),
-                                  )
-                                : widget.here.state == Locating.denied
-                                ? Text(
-                                    txt.noLocation,
-                                    style: TextStyle(
-                                      color: material.Theme.of(context)
-                                          .colorScheme
-                                          .error,
-                                    ),
-                                  )
-                                : Text(txt.locating, style: faint),
-                          ),
-                          Icon(
-                            _steps ? Icons.expand_less : Icons.expand_more,
-                            size: 18,
-                          ),
-                        ],
+    // Back folds the steps first: the card is on the map, where back would
+    // otherwise leave the app
+    return PopScope(
+      canPop: !_steps,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(() => _steps = false);
+      },
+      child: Floating(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(panelRadius),
+          side: const BorderSide(color: hair),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Tooltip(
+                      message: _steps ? txt.hideSteps : txt.showSteps,
+                      child: InkWell(
+                        onTap: () => setState(() => _steps = !_steps),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: progress != null
+                                  ? _Step(
+                                      said: _said(progress),
+                                      route: _route(progress),
+                                    )
+                                  : widget.here.state == Locating.denied
+                                  ? Text(
+                                      txt.noLocation,
+                                      style: TextStyle(
+                                        color: material.Theme.of(context)
+                                            .colorScheme
+                                            .error,
+                                      ),
+                                    )
+                                  : Text(txt.locating, style: faint),
+                            ),
+                            Icon(
+                              _steps ? Icons.expand_less : Icons.expand_more,
+                              size: 18,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  done
+                      ? FilledButton(
+                          onPressed: widget.onEnd,
+                          child: Text(txt.endFollow),
+                        )
+                      : TextButton(
+                          onPressed: widget.onEnd,
+                          child: Text(txt.endFollow),
+                        ),
+                ],
+              ),
+              if (!done && _caught.kind != CatchKind.ok)
+                _CatchRow(
+                  said: _catchSaid(widget.catalog, widget.journey, _caught)!,
+                  missed: _caught.kind == CatchKind.missed,
+                  kmh: _caught.kmh,
+                  action: _caught.kind == CatchKind.missed
+                      ? txt.planAgain
+                      : _caught.riding
+                      ? txt.findAnother
+                      : null,
+                  onTap: () => widget.onSearch(_follower.progress.stage),
                 ),
-                const SizedBox(width: 8),
-                done
-                    ? FilledButton(
-                        onPressed: widget.onEnd,
-                        child: Text(txt.endFollow),
-                      )
-                    : TextButton(
-                        onPressed: widget.onEnd,
-                        child: Text(txt.endFollow),
-                      ),
-              ],
-            ),
-            if (!done && _caught.kind != CatchKind.ok)
-              _CatchRow(
-                said: _catchSaid(widget.catalog, widget.journey, _caught)!,
-                missed: _caught.kind == CatchKind.missed,
-                kmh: _caught.kmh,
-                action: _caught.kind == CatchKind.missed
-                    ? txt.planAgain
-                    : _caught.riding
-                    ? txt.findAnother
-                    : null,
-                onTap: () => widget.onSearch(_follower.progress.stage),
-              ),
-            if (_steps)
-              _Steps(
-                catalog: widget.catalog,
-                journey: widget.journey,
-                stage: progress?.stage,
-              ),
-          ],
+              if (_steps)
+                _Steps(
+                  catalog: widget.catalog,
+                  journey: widget.journey,
+                  stage: progress?.stage,
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -479,6 +490,7 @@ class _Step extends StatelessWidget {
               child: Text(
                 said.head,
                 style: theme.textTheme.titleSmall,
+                maxLines: _headLines,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
