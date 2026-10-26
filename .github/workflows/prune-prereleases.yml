@@ -1,4 +1,4 @@
-# Deletes the `dev-*` pre-releases nobody needs any more, with their tags: one
+# Deletes the `<version>-dev.<n>` pre-releases nobody needs any more, with their tags: one
 # whose commit a `v*` release already includes, and one older than `KEEP_DAYS`
 # unless it is the newest, so there is always a build of `dev` to install.
 #
@@ -46,7 +46,7 @@ jobs:
       - name: Delete released and stale pre-releases
         run: |
           prereleases=$(gh release list --limit 1000 --json tagName,isPrerelease,createdAt \
-            -q '[.[] | select(.isPrerelease and (.tagName | startswith("dev-")))] | sort_by(.createdAt)')
+            -q '[.[] | select(.isPrerelease and (.tagName | test("-dev\\.[0-9]+$")))] | sort_by(.createdAt)')
           newest=$(jq -r 'last | .tagName // ""' <<<"$prereleases")
           cutoff=$(date -u -d "-$KEEP_DAYS days" +%s)
           jq -r '.[] | "\(.tagName) \(.createdAt)"' <<<"$prereleases" |

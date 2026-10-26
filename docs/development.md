@@ -123,15 +123,18 @@ what makes one. Bumping the pubspec as well is what makes it an app release.
 reproducibility before a merge; it publishes nothing.
 
 A pre-release is a build of `dev` for testing before a release:
-`.github/workflows/prerelease.yml` runs on a pushed `dev-*` tag on `dev`, builds
-and signs the same APKs through the action `release.yml` uses
-(`.github/actions/apks`), and publishes them as a GitHub pre-release. It refuses
-a pubspec version no `v<app>` release has shipped, since F-Droid would build
-that tag; so the app keeps its released version and installs over it. It
-deploys nothing - the server and web app of that commit run where you put them.
-`.github/workflows/prune-prereleases.yml` deletes a pre-release and its tag once
-a `v*` release includes its commit, or once it is 14 days old unless it is the
-newest. It runs daily and after each release, from `main` only.
+`.github/workflows/prerelease.yml` runs on a pushed tag on `dev` named by
+`deploy/prerelease-tag.sh` - the next version and how many commits `dev` is past
+the last release, `0.19.2-dev.37` - so GitHub, which sorts releases by their
+tags as versions, lists the newest first. It builds and signs the same APKs
+through the action `release.yml` uses (`.github/actions/apks`), and publishes
+them as a GitHub pre-release. It refuses a pubspec version no `v<app>` release
+has shipped, since F-Droid would build that tag; so the app keeps its released
+version and installs over it. It deploys nothing - the server and web app of
+that commit run where you put them. `.github/workflows/prune-prereleases.yml`
+deletes a pre-release and its tag once a `v*` release includes its commit, or
+once it is 14 days old unless it is the newest. It runs daily and after each
+release, from `main` only.
 
 The `places` release is not a version. `.github/workflows/places.yml` replaces
 its `lviv-search.sqlite` on the 3rd of every month, and can be run by hand from
