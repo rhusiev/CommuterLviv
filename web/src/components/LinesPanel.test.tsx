@@ -53,6 +53,8 @@ const line = (over: Partial<Parameters<typeof LineView>[0]> = {}) =>
       onWatch={() => {}}
       onStop={() => {}}
       onBack={() => {}}
+      folded={false}
+      onFold={() => {}}
       {...over}
     />,
   );
@@ -125,6 +127,15 @@ describe("LineView", () => {
     expect(html.split(t.vehicleHere)).toHaveLength(3); // title and label, once
     expect(row).toContain(t.vehicleHere);
     expect(row).toContain(t.minutes(SOON_S / 60));
+  });
+
+  test("folds down to its title, keeping the stops off the map's way", () => {
+    const html = line({ folded: true });
+
+    expect(html).toContain("Вокзал - Сихів");
+    expect(html).toContain(`title="${t.showStops}"`);
+    expect(html).not.toContain("Площа Ринок");
+    expect(html).not.toContain(t.watchLine);
   });
 
   test("says when the shapes hold no stops for the line", () => {

@@ -297,6 +297,9 @@ type LineProps = {
   onWatch: () => void;
   onStop: (i: number) => void;
   onBack: () => void;
+  /** Down to its title alone, so the map shows the line */
+  folded: boolean;
+  onFold: (folded: boolean) => void;
 };
 
 /** One line: its stops one way, with what this route has due at each and
@@ -320,7 +323,27 @@ export function LineView(p: LineProps) {
         </button>
         <RouteBadge route={r} className="px-1.5 py-0.5 text-xs" />
         <p className="min-w-0 flex-1 truncate text-sm text-slate-300">{r.long}</p>
+        <button
+          onClick={() => p.onFold(!p.folded)}
+          title={p.folded ? t.showStops : t.hideStops}
+          aria-expanded={!p.folded}
+          className="-m-2 p-2 text-slate-400 hover:text-slate-200"
+        >
+          <Icon name={p.folded ? "down" : "up"} />
+        </button>
       </div>
+      {!p.folded && <LineBody {...p} rows={rows} last={last} now={now} />}
+    </div>
+  );
+}
+
+/** Below the line's title: its way, Watch, and its stops in order */
+function LineBody(
+  p: LineProps & { rows: ReturnType<typeof lineRows>; last: number | undefined; now: number },
+) {
+  const { rows, last, now } = p;
+  return (
+    <>
       <div className="flex items-center gap-1">
         {last !== undefined && (
           <button
@@ -370,6 +393,6 @@ export function LineView(p: LineProps) {
           </li>
         ))}
       </ol>
-    </div>
+    </>
   );
 }

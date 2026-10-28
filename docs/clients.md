@@ -238,8 +238,8 @@ the grid of route chips, whose body ticks a route and whose `›` opens its
 line. Renaming and deleting a set is in Mine. An open line
 uncovers the map and draws only that route, over a followed or planned journey,
 beside a panel with a back button, a toggle between its two ways named by the
-last stop, Watch, and its stops in order. On a phone that panel takes the lower
-42% of the screen, so the line is framed in the larger part above it. Each stop shows when this route is
+last stop, Watch, and its stops in order. Its chevron folds it to its title,
+leaving the map to the line, and a line opened next starts unfolded. Each stop shows when this route is
 next due there, greyed while the vehicle is still finishing its previous trip,
 and a vehicle is marked at the stop it reaches soonest. The order is the
 server's: each shape line carries the stops of the longest trip on it

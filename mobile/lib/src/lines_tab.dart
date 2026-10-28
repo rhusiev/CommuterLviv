@@ -424,11 +424,17 @@ class LinePanel extends StatelessWidget {
     required this.onWatch,
     required this.onStop,
     required this.onBack,
+    required this.folded,
+    required this.onFold,
   });
 
   final Catalog catalog;
   final Live live;
   final int route;
+
+  /// Down to its title alone, so the map shows the line.
+  final bool folded;
+  final ValueChanged<bool> onFold;
 
   /// Each way the line runs; empty until the shapes are in.
   final List<Direction> ways;
@@ -475,59 +481,72 @@ class LinePanel extends StatelessWidget {
                     style: theme.textTheme.bodyMedium,
                   ),
                 ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                // All the width Watch leaves, not the half a Flexible beside a
-                // Spacer gets; the chip itself is only as wide as its name
-                Expanded(
-                  child: Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: switch (shown?.stops.lastOrNull) {
-                      final last? => Tooltip(
-                        message: txt.otherWay,
-                        child: ActionChip(
-                          label: Text(
-                            '→ ${catalog.stops[last].name}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          onPressed: ways.length < 2
-                              ? null
-                              : () => onWay((way + 1) % ways.length),
-                        ),
-                      ),
-                      null => const SizedBox.shrink(),
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                FilterChip(
-                  label: Text(txt.watchLine),
-                  selected: watching,
-                  onSelected: (_) => onWatch(),
+                IconButton(
+                  tooltip: folded ? txt.showStops : txt.hideStops,
+                  onPressed: () => onFold(!folded),
+                  icon: Icon(folded ? Icons.expand_less : Icons.expand_more),
                 ),
               ],
             ),
           ),
-          if (ways.isNotEmpty && (shown?.stops.isEmpty ?? true))
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(txt.noLineStops, style: theme.textTheme.bodySmall),
-            ),
-          if (shown != null)
-            Flexible(
-              child: AnimatedBuilder(
-                animation: live,
-                builder: (context, _) => _rows(shown.stops),
-              ),
-            ),
+          if (!folded) ..._body(context, shown),
         ],
       ),
     );
+  }
+
+  /// Below the title: the way, Watch, and the stops in order.
+  List<Widget> _body(BuildContext context, Direction? shown) {
+    final theme = material.Theme.of(context);
+    return [
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: [
+            // All the width Watch leaves, not the half a Flexible beside a
+            // Spacer gets; the chip itself is only as wide as its name
+            Expanded(
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: switch (shown?.stops.lastOrNull) {
+                  final last? => Tooltip(
+                    message: txt.otherWay,
+                    child: ActionChip(
+                      label: Text(
+                        '→ ${catalog.stops[last].name}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onPressed: ways.length < 2
+                          ? null
+                          : () => onWay((way + 1) % ways.length),
+                    ),
+                  ),
+                  null => const SizedBox.shrink(),
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilterChip(
+              label: Text(txt.watchLine),
+              selected: watching,
+              onSelected: (_) => onWatch(),
+            ),
+          ],
+        ),
+      ),
+      if (ways.isNotEmpty && (shown?.stops.isEmpty ?? true))
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Text(txt.noLineStops, style: theme.textTheme.bodySmall),
+        ),
+      if (shown != null)
+        Flexible(
+          child: AnimatedBuilder(
+            animation: live,
+            builder: (context, _) => _rows(shown.stops),
+          ),
+        ),
+    ];
   }
 
   Widget _rows(List<int> stops) {

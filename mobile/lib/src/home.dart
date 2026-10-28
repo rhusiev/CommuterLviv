@@ -45,13 +45,9 @@ import 'strings.dart';
 /// How far a tap may land from a stop and still count.
 const _hitRadius = 22.0;
 
-/// The share of the screen the planner's panel may grow to,
+/// The share of the screen the planner or an open line's panel may grow to,
 /// the map keeping the rest.
 const _panelShare = 0.6;
-
-/// An open line is read on the map, so its stop list leaves the map the larger
-/// part of the screen. The web's line panel on a phone is as tall
-const _linePanelShare = 0.42;
 
 /// The margin a framed line or option keeps from each edge of the map
 const _framePad = 40.0;
@@ -109,6 +105,9 @@ class _HomeScreenState extends State<HomeScreen> {
   late List<String> _recent = widget.api.recentLines;
   late bool _allLines = widget.api.showLines;
   late bool _blur = widget.api.blur;
+
+  /// The open line down to its title, so the map shows it.
+  bool _lineFolded = false;
   Shapes? _shapes;
   List<int> _drawn = const [];
 
@@ -429,7 +428,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void _openRoute(int route) {
     final recent = opened(_recent, _catalog!.routes[route].id);
     setState(() {
-      if (route != _route) _way = 0;
+      if (route != _route) {
+        _way = 0;
+        _lineFolded = false;
+      }
       _route = route;
       _recent = recent;
       _tab = _linesTab;
@@ -1278,7 +1280,7 @@ class _HomeScreenState extends State<HomeScreen> {
       alignment: Alignment.bottomCenter,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * _linePanelShare,
+          maxHeight: MediaQuery.sizeOf(context).height * _panelShare,
         ),
         child: LinePanel(
           key: _lineKey,
@@ -1295,6 +1297,8 @@ class _HomeScreenState extends State<HomeScreen> {
           onWatch: () => _toggleRoute(_route!),
           onStop: (stop) => _openStop(stop, fly: true),
           onBack: _closeRoute,
+          folded: _lineFolded,
+          onFold: (folded) => setState(() => _lineFolded = folded),
         ),
       ),
     ),

@@ -89,6 +89,8 @@ class Strings {
     required this.nothingNear,
     required this.nothingFound,
     required this.traffic,
+    required this.hideStops,
+    required this.showStops,
     required this.blur,
     required this.departAt,
     required this.preferBy,
@@ -318,6 +320,8 @@ class Strings {
   final String nothingNear;
   final String nothingFound;
   final String traffic;
+  final String hideStops;
+  final String showStops;
   final String blur;
   final String departAt;
   final String preferBy;
@@ -555,6 +559,8 @@ const _en = Strings(
   nothingNear: 'No stop within 2 km of where you are',
   nothingFound: 'No stop or place by that name',
   traffic: 'Traffic',
+  hideStops: 'Hide the stops, keeping the line on the map',
+  showStops: 'Show the stops',
   blur: 'Blur behind panels',
   departAt: 'Leave at',
   preferBy: 'Order',
@@ -822,6 +828,8 @@ const _uk = Strings(
   nothingNear: 'Немає зупинки ближче ніж за 2 км',
   nothingFound: 'Немає зупинки чи місця з такою назвою',
   traffic: 'Затори',
+  hideStops: 'Сховати зупинки, лишивши лінію на мапі',
+  showStops: 'Показати зупинки',
   blur: 'Розмиття під панелями',
   departAt: 'Виїзд о',
   preferBy: 'Порядок',

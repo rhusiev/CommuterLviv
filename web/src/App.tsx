@@ -122,6 +122,7 @@ export function App() {
     document.documentElement.classList.toggle("no-blur", noBlur);
   }, [noBlur]);
   const [layersOpen, setLayersOpen] = useState(false);
+  const [lineFolded, setLineFolded] = useState(false);
 
   const openTab = (next: UrlState["tab"]) => {
     setTab(next);
@@ -310,7 +311,10 @@ export function App() {
 
   const openRoute = (i: number) => {
     if (!cat) return;
-    if (i !== route) setWay(0);
+    if (i !== route) {
+      setWay(0);
+      setLineFolded(false);
+    }
     setRoute(i);
     const next = openedLately(recent, cat.routes[i]!.id);
     setRecent(next);
@@ -584,9 +588,8 @@ export function App() {
       {tab === "lines" && (
         <aside
           ref={panel}
-          // An open line is read on the map: on a phone its stop list is a
-          // sheet over the lower part, the app's `_linePanelShare`
-          className={`panel absolute left-3 top-19 bottom-20 z-20 w-80 max-w-[calc(100vw-1.5rem)] p-3 ${route === null ? "" : "max-sm:top-auto max-sm:h-[42vh]"}`}
+          // A folded line is its title alone, so the map shows the line
+          className={`panel absolute left-3 top-19 z-20 w-80 max-w-[calc(100vw-1.5rem)] p-3 ${route !== null && lineFolded ? "" : "bottom-20"}`}
         >
           {route === null ? (
             <LinesBrowse
@@ -615,6 +618,8 @@ export function App() {
               onWatch={() => session.togglePicked(cat.routes[route]!.id)}
               onStop={showStop}
               onBack={() => setRoute(null)}
+              folded={lineFolded}
+              onFold={setLineFolded}
             />
           )}
         </aside>

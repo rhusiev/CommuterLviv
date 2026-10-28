@@ -370,6 +370,7 @@ void main() {
           1: [Arrival(route: 0, veh: 7, t: now + 5 * minute)],
         };
       var way = 0;
+      var folded = false;
       int? stop;
       final semantics = tester.ensureSemantics();
       await tester.pumpWidget(
@@ -390,6 +391,8 @@ void main() {
                 onWatch: () {},
                 onStop: (s) => stop = s,
                 onBack: () {},
+                folded: folded,
+                onFold: (f) => setState(() => folded = f),
               ),
             ),
           ),
@@ -421,6 +424,14 @@ void main() {
 
       await tester.tap(find.text('C'));
       expect(stop, 1);
+
+      await tester.tap(find.byTooltip(txt.hideStops));
+      await tester.pumpAndSettle();
+      expect(find.text('A'), findsNothing);
+      expect(find.text(txt.watchLine), findsNothing);
+      await tester.tap(find.byTooltip(txt.showStops));
+      await tester.pumpAndSettle();
+      expect(find.text('A'), findsOneWidget);
       semantics.dispose();
     },
   );
@@ -470,6 +481,8 @@ void main() {
               onWatch: () {},
               onStop: (_) {},
               onBack: () {},
+              folded: false,
+              onFold: (_) {},
             ),
           ),
         ),
