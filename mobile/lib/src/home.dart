@@ -14,7 +14,8 @@ import 'package:vector_map_tiles/vector_map_tiles.dart';
 import 'api.dart';
 import 'eta.dart' show clockTime;
 import 'basemap_style.dart';
-import 'follow.dart' show Stage, StageKind;
+import 'follow.dart' show Progress, Stage, StageKind;
+import 'legs.dart' show walkingFrom;
 import 'follow_card.dart';
 import 'followed.dart';
 import 'haptics.dart';
@@ -109,6 +110,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// The open line down to its title, so the map shows it.
   bool _lineFolded = false;
+
+  /// The follower's last progress, and the journey it is of.
+  (Journey, Progress)? _walked;
   Shapes? _shapes;
   List<int> _drawn = const [];
 
@@ -323,7 +327,21 @@ class _HomeScreenState extends State<HomeScreen> {
       ? null
       : _planning
       ? _journey
-      : _following;
+      : _walkedOn(_following);
+
+  /// The journey followed with the walk under way drawn from where I am.
+  Journey? _walkedOn(Journey? following) {
+    final walked = _walked;
+    final here = _here.fix;
+    if (following == null || walked == null || here == null) return following;
+    if (walked.$1 != following) return following;
+    return walkingFrom(
+      following,
+      walked.$2,
+      here.point,
+      here.t ~/ Duration.millisecondsPerSecond,
+    );
+  }
 
   List<int> get _lines {
     if (_lineOpen) return [_route!];
@@ -1161,6 +1179,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 stage: _followed!.stage,
                 away: _followAway,
                 onMoved: _moved,
+                onProgress: (progress) {
+                  final was = _walked?.$2.stage.kind;
+                  // Only a walk is drawn from the fix, so only a walk, or the
+                  // step off one, needs the map drawn again
+                  if (progress.stage.kind != StageKind.walk &&
+                      was != StageKind.walk) {
+                    return;
+                  }
+                  setState(() => _walked = (_following!, progress));
+                },
                 onSearch: _searchAgain,
                 onEnd: _endFollow,
               ),

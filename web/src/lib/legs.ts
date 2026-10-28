@@ -1,4 +1,5 @@
-import type { Stage } from "./follow";
+import type { Progress, Stage } from "./follow";
+import { metres } from "./geo";
 import type { Journey } from "./types";
 
 /** One line of a journey's plan: a leg, or the wait at a stop before a ride.
@@ -52,3 +53,29 @@ export function riddenBy(journey: Journey | null): Set<number> {
   for (const leg of journey?.legs ?? []) if (leg.veh != null) ids.add(leg.veh);
   return ids;
 }
+
+/** The journey as it is being walked: the walk under way drawn from where the
+ *  device is, along the last `left` metres of its line, and setting off now.
+ *  Every other stage leaves it as planned. */
+export function walkingFrom(
+  j: Journey,
+  progress: Progress,
+  here: { lat: number; lon: number; t: number },
+): Journey {
+  const { stage, left } = progress;
+  if (stage.kind !== "walk" || progress.astray) return j;
+  const leg = j.legs[stage.leg]!;
+  const pts = leg.pts ?? [];
+  const rest: [number, number][] = [];
+  let gone = 0;
+  for (let i = pts.length - 1; i > 0; i--) {
+    rest.unshift(pts[i]!);
+    const [lat, lon] = pts[i]!;
+    const [lat0, lon0] = pts[i - 1]!;
+    gone += metres({ lat, lon }, { lat: lat0, lon: lon0 });
+    if (gone >= left) break;
+  }
+  const walking = { ...leg, dep: Math.min(here.t, leg.arr), pts: [[here.lat, here.lon] as [number, number], ...rest] };
+  return { ...j, legs: j.legs.map((l, i) => (i === stage.leg ? walking : l)) };
+}
+

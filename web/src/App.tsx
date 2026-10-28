@@ -28,6 +28,7 @@ import { takeRenewed, useLive } from "./lib/useLive";
 import { useMapLayers } from "./lib/useMapLayers";
 import { usePlanner } from "./lib/usePlanner";
 import { useSession } from "./lib/useSession";
+import { walkingFrom } from "./lib/legs";
 import type { Catalog, Journey, Me, Place } from "./lib/types";
 import { t } from "./lib/i18n";
 
@@ -239,12 +240,20 @@ export function App() {
   }, [live, cat, watched]);
 
   // Here rather than in its card, which a change of tab unmounts
-  const { progress, caught } = useFollow(
+  const { progress, caught, here } = useFollow(
     following,
     live,
     cat ?? undefined,
     // where a journey followed before the page loaded had got to
     followed?.stage,
+  );
+  // The walk under way is drawn from where I am, not from where it was planned
+  const onMap = useMemo(
+    () =>
+      drawn !== null && drawn === following && here && progress !== null && progress !== "denied"
+        ? walkingFrom(drawn, progress, here)
+        : drawn,
+    [drawn, following, here, progress],
   );
 
   const follow = (next: Followed | null) => {
@@ -385,7 +394,7 @@ export function App() {
             ? [...planner.marks, { lat: place.lat, lon: place.lon, label: PLACE_MARK }]
             : planner.marks
         }
-        journey={drawn}
+        journey={onMap}
         locate={following !== null}
         pinned={pins}
         places={places}

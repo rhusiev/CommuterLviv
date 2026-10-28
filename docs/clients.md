@@ -94,7 +94,10 @@ where you are and puts a card at the bottom that says what to do now: walk to
 the stop, wait there, with when the vehicle is due, get off at the next, or that
 you went past it or off the way. The map keeps the dot in the middle with each
 fix, through a zoom too. A pan by hand lets go of it, so the way ahead can be
-looked at, and the locate button takes it back. `Follower` in `web/src/lib/follow.ts`, ported
+looked at, and the locate button takes it back. While you walk, the walk under
+way is drawn from the dot along what is left of its line (`walkingFrom` in
+`lib/legs`), so the start moves with you; the plan itself is not searched again
+until a ride is missed or you are off the way, which the card says. `Follower` in `web/src/lib/follow.ts`, ported
 line for line to `mobile/lib/src/follow.dart`, works it out from the device's
 own fixes and the vehicles as the map draws them, on the device: where you are
 is never sent anywhere. Boarding is told from the fixes, not from a vehicle
