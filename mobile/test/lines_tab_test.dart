@@ -429,7 +429,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('A'), findsNothing);
       expect(find.text(txt.watchLine), findsNothing);
-      await tester.tap(find.byTooltip(txt.showStops));
+      // The folded title opens it as the chevron does
+      await tester.tap(find.text('A to B'));
       await tester.pumpAndSettle();
       expect(find.text('A'), findsOneWidget);
       semantics.dispose();

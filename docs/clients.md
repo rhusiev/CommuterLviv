@@ -194,7 +194,12 @@ phone that stutters under it, and the surfaces that blurred are then solid
 Whatever looks like one control is one target to its edge: a bar's inset is its
 buttons' own padding, with the highlight on a span inside (the tab bar), and a
 bare icon gets padding taken back by a negative margin (`-m-2 p-2`) rather than
-a hit area the size of its glyph. A pill holding two targets, the route chip,
+a hit area the size of its glyph. Everything that folds says so the same way:
+its chevron points where the content will go. A card opens downwards, so it
+shows ▼ closed and ▲ open. The panels fold away from the map - up under the
+search bar on the web, down above the tabs in the app - so there an open panel
+shows ▲ (web) or ▼ (app), and a folded one, which its title opens again as well
+as its chevron, the other. A pill holding two targets, the route chip,
 is a split button - two shapes a hair apart - since one pill with a divider lit
 only the half pressed and read as a pill that does not all respond.
 

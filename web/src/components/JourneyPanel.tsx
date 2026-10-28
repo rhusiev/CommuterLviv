@@ -259,7 +259,11 @@ export function JourneyPanel({
         ) : (
           <span className="flex-1 font-medium">{t.plan}</span>
         )}
-        <Icon name="up" className="size-4 text-slate-400" />
+        {/* Folded up under the search bar: it opens downwards. Drawn as the
+            fold button it was, though the whole strip is the target */}
+        <span className="btn-quiet px-2">
+          <Icon name="down" className="size-4" />
+        </span>
       </button>
     );
 
@@ -294,7 +298,7 @@ export function JourneyPanel({
           title={t.hidePanel}
           className="btn-quiet px-2"
         >
-          <Icon name="down" className="size-4" />
+          <Icon name="up" className="size-4" />
         </button>
       </div>
       {field("from", start, aboard)}

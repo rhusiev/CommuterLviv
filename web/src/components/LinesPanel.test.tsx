@@ -106,7 +106,9 @@ describe("LinesBrowse", () => {
 describe("LineView", () => {
   test("lists the stops of the way shown, towards its last stop", () => {
     const html = line();
-    const at = ["Вокзал</span>", "Площа Ринок", "Сихів</span>"].map((s) => html.indexOf(s));
+    // The stop list alone: the line's title names both ends too
+    const list = html.slice(html.indexOf("<ol"));
+    const at = ["Вокзал</span>", "Площа Ринок", "Сихів</span>"].map((s) => list.indexOf(s));
 
     expect(html).toContain("→ Сихів");
     expect(at.every((i) => i >= 0)).toBe(true);
@@ -115,9 +117,10 @@ describe("LineView", () => {
 
   test("turns the other way round", () => {
     const html = line({ way: 1 });
+    const list = html.slice(html.indexOf("<ol"));
 
     expect(html).toContain("→ Вокзал");
-    expect(html.indexOf("Сихів</span>")).toBeLessThan(html.indexOf("Площа Ринок"));
+    expect(list.indexOf("Сихів</span>")).toBeLessThan(list.indexOf("Площа Ринок"));
   });
 
   test("puts the vehicle and the countdown at the stop it is heading for", () => {

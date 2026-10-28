@@ -472,15 +472,33 @@ class LinePanel extends StatelessWidget {
                   onPressed: onBack,
                   icon: const Icon(Icons.arrow_back),
                 ),
-                RouteBadge(route: line),
-                const SizedBox(width: 10),
+                // Folded, the title opens it again, as a folded journey's
+                // strip does
                 Expanded(
-                  child: Text(
-                    line.long,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium,
+                  child: InkWell(
+                    onTap: folded ? () => onFold(false) : null,
+                    borderRadius: BorderRadius.circular(controlRadius),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        minHeight: kMinInteractiveDimension,
+                      ),
+                      child: Row(
+                        children: [
+                          RouteBadge(route: line),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              line.long,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
+                // At the bottom, like the journey: down folds, up opens
                 IconButton(
                   tooltip: folded ? txt.showStops : txt.hideStops,
                   onPressed: () => onFold(!folded),

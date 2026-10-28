@@ -321,15 +321,24 @@ export function LineView(p: LineProps) {
         <button onClick={p.onBack} title={t.back} aria-label={t.back} className="-m-2 p-2 text-slate-400 hover:text-slate-200">
           <Icon name="left" />
         </button>
-        <RouteBadge route={r} className="px-1.5 py-0.5 text-xs" />
-        <p className="min-w-0 flex-1 truncate text-sm text-slate-300">{r.long}</p>
+        {/* Folded, the title opens it again, as a folded journey's strip does */}
+        <button
+          onClick={() => p.folded && p.onFold(false)}
+          disabled={!p.folded}
+          title={p.folded ? t.showStops : undefined}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <RouteBadge route={r} className="px-1.5 py-0.5 text-xs" />
+          <span className="min-w-0 flex-1 truncate text-sm text-slate-300">{r.long}</span>
+        </button>
+        {/* Folded up under the search bar, like the journey: up folds, down opens */}
         <button
           onClick={() => p.onFold(!p.folded)}
           title={p.folded ? t.showStops : t.hideStops}
           aria-expanded={!p.folded}
-          className="-m-2 p-2 text-slate-400 hover:text-slate-200"
+          className="btn-quiet px-2"
         >
-          <Icon name={p.folded ? "down" : "up"} />
+          <Icon name={p.folded ? "down" : "up"} className="size-4" />
         </button>
       </div>
       {!p.folded && <LineBody {...p} rows={rows} last={last} now={now} />}
