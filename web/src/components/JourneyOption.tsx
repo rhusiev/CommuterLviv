@@ -155,7 +155,7 @@ function Flags({ journey }: { journey: Journey }) {
     <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
       {hurry && <HurryPill hint={hurry.hint}>{hurry.text}</HurryPill>}
       {loudest && <span className={loudest.tone}>{loudest.word}</span>}
-      {backups && <span className="text-slate-500">{t.backupCount(journey.backup)}</span>}
+      {backups && <span className="text-emerald-300">{t.backupCount(journey.backup)}</span>}
     </span>
   );
 }

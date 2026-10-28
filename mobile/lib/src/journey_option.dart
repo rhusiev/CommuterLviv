@@ -34,6 +34,9 @@ const _smallIconSize = 16.0;
 const _cornerRadius = 12.0;
 const _shownBorderWidth = 2.0;
 
+/// The backups count, the same open or closed, so it is seen before opening
+const _backupColour = Colors.greenAccent;
+
 /// An option caught only by hurrying: what its pill says, with the pace that
 /// catches it, and why
 (String, String) _hurried(Journey journey) {
@@ -282,7 +285,11 @@ class _Flags extends StatelessWidget {
                 color: _noteColour(theme, loudest.confidence),
               ),
             ),
-          if (backups) Text(txt.backupCount(journey.backup), style: small),
+          if (backups)
+            Text(
+              txt.backupCount(journey.backup),
+              style: small?.copyWith(color: _backupColour),
+            ),
         ],
       ),
     );
@@ -355,7 +362,7 @@ class _Opened extends StatelessWidget {
                   TextButton(
                     onPressed: onBackups,
                     style: TextButton.styleFrom(
-                      foregroundColor: Colors.greenAccent,
+                      foregroundColor: _backupColour,
                       minimumSize: const Size.square(kMinInteractiveDimension),
                     ),
                     child: Row(

@@ -66,7 +66,8 @@ return `index.html`, or `/join/<code>` is a 404 and the invite link is dead.
 An option the planner lists is one click target until it is drawn on the map: a
 click anywhere on it draws it and opens it, and nothing on it opens anything
 else. Folded, it says in words what is worth knowing - the hurry pill, its
-weakest ride's note on how sure its time is, and how many backups it has. Its
+weakest ride's note on how sure its time is, and how many backups it has, in
+the green of the backups button it opens into. Its
 summary row stays the one target that folds it again and never turns into
 anything else. Opened, every control below it is drawn as one and is at least
 44 px tall: a stop's row has a chevron and opens the stop's card, a route's
