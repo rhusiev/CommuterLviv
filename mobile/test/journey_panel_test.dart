@@ -103,12 +103,13 @@ const _twoLines = Catalog(
 Map<String, Object> _ride(
   int route,
   int dep, {
+  int? arr,
   List<Object> backups = const [],
   String confidence = 'live',
 }) => {
   'kind': 'ride',
   'dep': dep,
-  'arr': dep + 600,
+  'arr': arr ?? dep + 600,
   'a': 0,
   'b': 1,
   'route': route,
@@ -143,12 +144,14 @@ Map<String, Object> _journey(
   ],
 };
 
-/// Answers a search with one option, riding [route], backed by a ride that is
-/// no option of its own, and that ride's way when asked for it, noting the asks.
+/// Answers a search with one option, riding [route] after [wait] seconds at the
+/// stop, backed by a ride that is no option of its own, and that ride's way
+/// when asked for it, noting the asks.
 Future<HttpServer> _serve(
   List<Uri> asked, {
   int route = 0,
   String confidence = 'live',
+  int wait = 0,
 }) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   final later = _ride(1, 900);
@@ -162,7 +165,8 @@ Future<HttpServer> _serve(
           _journey(
             _ride(
               route,
-              60,
+              60 + wait,
+              arr: 660,
               confidence: confidence,
               backups: [
                 {
@@ -494,12 +498,13 @@ void main() {
   Future<List<Journey?>> searched(
     WidgetTester tester, {
     String confidence = 'live',
+    int wait = 0,
     void Function(int stop)? onStop,
     void Function(int route)? onLine,
   }) async {
     allowRealHttp();
     final server = (await tester.runAsync(
-      () => _serve([], confidence: confidence),
+      () => _serve([], confidence: confidence, wait: wait),
     ))!;
     addTearDown(() => server.close(force: true));
     final shown = <Journey?>[];
@@ -576,6 +581,39 @@ void main() {
     expect(small, isEmpty);
     // the summary, the two stops, the line and the backups
     expect(_targets(tester).toSet(), hasLength(5));
+  });
+
+  testWidgets('an option tells the minutes waited at the stop apart from the '
+      'minutes ridden, folded and picked', (tester) async {
+    await searched(tester, wait: 180);
+    Finder onCard(Finder f) => find.descendant(of: _card, matching: f);
+    Finder tip(String message) => onCard(
+      find.byWidgetPredicate((w) => w is Tooltip && w.message == message),
+    );
+
+    expect(tip(txt.waitLeg(3)), findsOneWidget);
+    expect(tip(txt.rideLeg(7)), findsOneWidget);
+
+    await toggle(tester);
+    expect(onCard(find.text(txt.wait)), findsOneWidget);
+    expect(onCard(find.text(txt.minutes(3))), findsOneWidget);
+    expect(onCard(find.text(txt.rideLeg(7))), findsOneWidget);
+  });
+
+  testWidgets('a ride boarded as the walk reaches the stop says no wait', (
+    tester,
+  ) async {
+    await searched(tester);
+    await toggle(tester);
+
+    expect(
+      find.descendant(of: _card, matching: find.text(txt.wait)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: _card, matching: find.byIcon(Icons.schedule)),
+      findsNothing,
+    );
   });
 
   testWidgets(

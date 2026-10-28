@@ -344,7 +344,8 @@ vehicle says nothing more; one resting on the timetable says so, and one on a
 line nothing has been seen running on says that in the error colour. An option
 not yet drawn is one tap target (`journey_option.dart`): a tap anywhere on it
 draws it and opens it, and nothing on it opens anything else. Folded, it says
-the hurry pill, its weakest ride's note and its backup count in words; its
+the hurry pill, its weakest ride's note and its backup count in words, and
+its strip tells the minutes waited for a ride from the minutes ridden; its
 summary row folds it again and never turns into anything else. Opened, every
 control is drawn as one and as tall as `kMinInteractiveDimension`: a stop's row
 has a chevron and opens its card, a route's badge sits in a ring with a map and

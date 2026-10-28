@@ -37,6 +37,13 @@ const _shownBorderWidth = 2.0;
 /// The backups count, the same open or closed, so it is seen before opening
 const _backupColour = Colors.greenAccent;
 
+/// Under half a minute at the stop is boarding, not waiting
+const _waitSaidS = 30;
+
+/// The seconds stood at the stop before leg [i], a ride, leaves
+int _waitBefore(Journey journey, int i) =>
+    journey.legs[i].dep - (i > 0 ? journey.legs[i - 1].arr : journey.dep);
+
 /// An option caught only by hurrying: what its pill says, with the pace that
 /// catches it, and why
 (String, String) _hurried(Journey journey) {
@@ -185,8 +192,9 @@ class _Summary extends StatelessWidget {
   }
 }
 
-/// The legs in a line: a walk by its minutes, a ride by its line's badge, with
-/// a dot where a ride rests on more than a tracked vehicle
+/// The legs in a line: a walk by its minutes, a ride by the minutes waited for
+/// it, its line's badge and the minutes ridden, with a dot where a ride rests
+/// on more than a tracked vehicle
 class _Strip extends StatelessWidget {
   const _Strip({required this.journey, required this.catalog});
 
@@ -224,8 +232,12 @@ class _Strip extends StatelessWidget {
                 Text('${spanMinutes(leg.arr - leg.dep)}', style: small),
               ],
             )
-          else if (catalog.routeAt(leg.route) case final route?)
-            RouteBadge(route: route, fontSize: 11),
+          else
+            _StripRide(
+              leg: leg,
+              wait: _waitBefore(journey, i),
+              catalog: catalog,
+            ),
           if (_noteOn(leg) != null)
             Container(
               width: _dotSize,
@@ -236,6 +248,49 @@ class _Strip extends StatelessWidget {
               ),
             ),
         ],
+      ],
+    );
+  }
+}
+
+/// A ride in the strip: the minutes waited for it, by a clock, then its line's
+/// badge and the minutes ridden
+class _StripRide extends StatelessWidget {
+  const _StripRide({
+    required this.leg,
+    required this.wait,
+    required this.catalog,
+  });
+
+  final Leg leg;
+  final int wait;
+  final Catalog catalog;
+
+  @override
+  Widget build(BuildContext context) {
+    final small = Theme.of(context).textTheme.bodySmall;
+    final ride = spanMinutes(leg.arr - leg.dep);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 4,
+      children: [
+        if (wait >= _waitSaidS)
+          Tooltip(
+            message: txt.waitLeg(spanMinutes(wait)),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.schedule, size: _smallIconSize, color: small?.color),
+                Text('${spanMinutes(wait)}', style: small),
+              ],
+            ),
+          ),
+        if (catalog.routeAt(leg.route) case final route?)
+          RouteBadge(route: route, fontSize: 11),
+        Tooltip(
+          message: txt.rideLeg(ride),
+          child: Text('$ride', style: small),
+        ),
       ],
     );
   }
@@ -338,7 +393,8 @@ class _Opened extends StatelessWidget {
                 ),
               ),
             },
-          for (final (i, leg) in legs.indexed)
+          for (final (i, leg) in legs.indexed) ...[
+            if (!leg.walking) _Wait(seconds: _waitBefore(journey, i)),
             leg.walking
                 ? _Walk(
                     leg: leg,
@@ -354,6 +410,7 @@ class _Opened extends StatelessWidget {
                     onStop: onStop,
                     onLine: onLine,
                   ),
+          ],
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Row(
@@ -411,25 +468,10 @@ class _Walk extends StatelessWidget {
   Widget build(BuildContext context) {
     final small = Theme.of(context).textTheme.bodySmall;
     final minutes = spanMinutes(leg.arr - leg.dep);
-    final lead = Tooltip(
-      message: txt.walkLeg(minutes),
-      child: Row(
-        children: [
-          Icon(
-            Icons.directions_walk,
-            size: _smallIconSize,
-            color: small?.color,
-          ),
-          Flexible(
-            child: Text(
-              txt.minutes(minutes),
-              style: small,
-              softWrap: false,
-              overflow: TextOverflow.fade,
-            ),
-          ),
-        ],
-      ),
+    final lead = _MinutesLead(
+      icon: Icons.directions_walk,
+      minutes: minutes,
+      said: txt.walkLeg(minutes),
     );
     if (leg.b < 0) {
       return _Row(
@@ -442,6 +484,61 @@ class _Walk extends StatelessWidget {
       lead: lead,
       name: change ? txt.changeAt(name) : name,
       onTap: () => onStop(leg.b),
+    );
+  }
+}
+
+/// The minutes stood at the stop before a ride, once there are any
+class _Wait extends StatelessWidget {
+  const _Wait({required this.seconds});
+
+  final int seconds;
+
+  @override
+  Widget build(BuildContext context) {
+    if (seconds < _waitSaidS) return const SizedBox.shrink();
+    final minutes = spanMinutes(seconds);
+    return _Row(
+      lead: _MinutesLead(
+        icon: Icons.schedule,
+        minutes: minutes,
+        said: txt.waitLeg(minutes),
+      ),
+      child: Text(txt.wait, style: Theme.of(context).textTheme.bodySmall),
+    );
+  }
+}
+
+/// A row's lead: minutes after an icon, said in full by its tooltip
+class _MinutesLead extends StatelessWidget {
+  const _MinutesLead({
+    required this.icon,
+    required this.minutes,
+    required this.said,
+  });
+
+  final IconData icon;
+  final int minutes;
+  final String said;
+
+  @override
+  Widget build(BuildContext context) {
+    final small = Theme.of(context).textTheme.bodySmall;
+    return Tooltip(
+      message: said,
+      child: Row(
+        children: [
+          Icon(icon, size: _smallIconSize, color: small?.color),
+          Flexible(
+            child: Text(
+              txt.minutes(minutes),
+              style: small,
+              softWrap: false,
+              overflow: TextOverflow.fade,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -479,6 +576,7 @@ class _Ride extends StatelessWidget {
               children: [
                 if (catalog.routeAt(leg.route) case final route?)
                   _LineButton(route: route, onTap: () => onLine(leg.route!)),
+                Text(txt.rideLeg(spanMinutes(leg.arr - leg.dep)), style: small),
                 const Spacer(),
                 if (note case (final part, _))
                   Text(

@@ -64,7 +64,8 @@ origins in `COMMUTERLVIV_ORIGINS`. Everything it downloads or learns lives in
   due there and where its vehicles are.
 - **Journey.** Tap where you are and where you are going. You get ways there ranked
   by arrival, each ride marked live, timetabled or on a vehicle's next trip,
-  with the backups behind each ride should you miss it. Sort by fastest, less
+  with the minutes you wait for it apart from the minutes you ride it, and the
+  backups behind each ride should you miss it. Sort by fastest, less
   walking, fewer changes or most backups, set your walking speed, or plan for
   later. A bus you would just miss is offered as one to hurry for, with how
   fast to walk to make it, and you can set how fast you would hurry. An

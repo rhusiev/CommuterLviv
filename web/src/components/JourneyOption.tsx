@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { stopName } from "../lib/catalog";
 import { clock, mins } from "../lib/eta";
 import { followable, plannedKmh } from "../lib/follow";
@@ -7,7 +7,7 @@ import type { Prefer } from "../lib/prefer";
 import type { Catalog, Confidence, Journey, Leg } from "../lib/types";
 import { Backups, type WayPick } from "./Backups";
 import { HurryPill } from "./HurryPill";
-import { Icon } from "./Icon";
+import { Icon, type IconName } from "./Icon";
 import { RouteBadge } from "./RouteBadge";
 
 /** What a ride not on a tracked vehicle rests on, how loudly to say so, and why
@@ -28,6 +28,15 @@ function rests(leg: Leg) {
   const confidence = leg.confidence ?? (leg.live ? "live" : "schedule");
   return confidence === "live" ? null : RESTS[confidence];
 }
+
+/** The seconds spent standing at the stop before leg `i`, a ride, leaves */
+function waitBefore(journey: Journey, i: number) {
+  const before = i > 0 ? journey.legs[i - 1]!.arr : journey.dep;
+  return journey.legs[i]!.dep - before;
+}
+
+/** Under half a minute at the stop is boarding, not waiting */
+const WAIT_SAID_S = 30;
 
 /** A button's focus ring, the same on every target of the card */
 const FOCUS = "outline-none focus-visible:ring-2 focus-visible:ring-accent/70";
@@ -116,13 +125,13 @@ function Summary({ journey, catalog, shown }: { journey: Journey; catalog: Catal
   );
 }
 
-/** The legs in a line: a walk by its minutes, a ride by its line's badge, with
- *  a dot where a ride rests on more than a tracked vehicle */
+/** The legs in a line: a walk by its minutes, a ride by the minutes waited for
+ *  it, its line's badge and the minutes ridden, with a dot where a ride rests
+ *  on more than a tracked vehicle */
 function Strip({ journey, catalog }: { journey: Journey; catalog: Catalog }) {
   return (
     <span className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-slate-400">
       {journey.legs.map((leg, i) => {
-        const route = leg.route === undefined ? undefined : catalog.routes[leg.route];
         const note = rests(leg);
         return (
           <span key={i} className="flex items-center gap-1">
@@ -133,13 +142,32 @@ function Strip({ journey, catalog }: { journey: Journey; catalog: Catalog }) {
                 {mins(leg.arr - leg.dep)}
               </span>
             ) : (
-              route && <RouteBadge route={route} className="px-1.5 text-xs" />
+              <StripRide leg={leg} wait={waitBefore(journey, i)} catalog={catalog} />
             )}
             {note && <span className={`size-1.5 rounded-full ${note.dot}`} />}
           </span>
         );
       })}
     </span>
+  );
+}
+
+/** A ride in the strip: the minutes waited for it, by a clock, then its
+ *  line's badge and the minutes ridden */
+function StripRide({ leg, wait, catalog }: { leg: Leg; wait: number; catalog: Catalog }) {
+  const route = leg.route === undefined ? undefined : catalog.routes[leg.route];
+  const ride = mins(leg.arr - leg.dep);
+  return (
+    <>
+      {wait >= WAIT_SAID_S && (
+        <span title={t.waitLeg(mins(wait))} className="flex items-center">
+          <Icon name="clock" className="size-3.5" />
+          {mins(wait)}
+        </span>
+      )}
+      {route && <RouteBadge route={route} className="px-1.5 text-xs" />}
+      <span title={t.rideLeg(ride)}>{ride}</span>
+    </>
   );
 }
 
@@ -198,7 +226,10 @@ function Opened({
         leg.kind === "walk" ? (
           <Walk key={i} journey={journey} i={i} catalog={catalog} onStop={onStop} />
         ) : (
-          <Ride key={i} leg={leg} catalog={catalog} onStop={onStop} onLine={onLine} />
+          <Fragment key={i}>
+            <Wait seconds={waitBefore(journey, i)} />
+            <Ride leg={leg} catalog={catalog} onStop={onStop} onLine={onLine} />
+          </Fragment>
         ),
       )}
       <div className="flex items-center gap-2 px-1 pt-1">
@@ -234,15 +265,7 @@ function Walk({
   onStop: (i: number) => void;
 }) {
   const leg = journey.legs[i]!;
-  const minutes = (
-    <span
-      title={t.walkLeg(mins(leg.arr - leg.dep))}
-      className="flex w-12 shrink-0 items-center gap-0.5 text-xs text-slate-500"
-    >
-      <Icon name="walk" className="size-3.5" />
-      {t.minutes(mins(leg.arr - leg.dep))}
-    </span>
-  );
+  const minutes = <MinutesLead icon="walk" minutes={mins(leg.arr - leg.dep)} said={t.walkLeg} />;
   if (leg.b < 0)
     return (
       <div className="flex min-h-9 items-center gap-2 px-2 text-sm text-slate-400">
@@ -258,6 +281,27 @@ function Walk({
     <StopRow icon={minutes} onClick={() => onStop(leg.b)}>
       <span className="text-slate-300">{change ? t.changeAt(name) : name}</span>
     </StopRow>
+  );
+}
+
+/** The minutes stood at the stop before a ride, once there are any */
+function Wait({ seconds }: { seconds: number }) {
+  if (seconds < WAIT_SAID_S) return null;
+  return (
+    <div className="flex min-h-9 items-center gap-2 px-2 text-sm text-slate-400">
+      <MinutesLead icon="clock" minutes={mins(seconds)} said={t.waitLeg} />
+      {t.wait}
+    </div>
+  );
+}
+
+/** A row's lead: minutes after an icon, said in full by its title */
+function MinutesLead({ icon, minutes, said }: { icon: IconName; minutes: number; said: (m: number) => string }) {
+  return (
+    <span title={said(minutes)} className="flex w-12 shrink-0 items-center gap-0.5 text-xs text-slate-500">
+      <Icon name={icon} className="size-3.5" />
+      {t.minutes(minutes)}
+    </span>
   );
 }
 
@@ -290,6 +334,7 @@ function Ride({
             </span>
           </button>
         )}
+        <span className="text-xs text-slate-400">{t.rideLeg(mins(leg.arr - leg.dep))}</span>
         {note && <span className={`ml-auto text-xs ${note.tone}`}>{note.word}</span>}
       </div>
       {note && <div className="px-2 pb-1 pl-16"><Said>{note.why}</Said></div>}

@@ -200,6 +200,9 @@ class Strings {
     required this.metres,
     required this.km,
     required this.walkLeg,
+    required this.waitLeg,
+    required this.rideLeg,
+    required this.wait,
     required this.changeCount,
     required this.changeAt,
     required this.backupCount,
@@ -447,6 +450,9 @@ class Strings {
   final String Function(int metres) metres;
   final String Function(double km) km;
   final String Function(int minutes) walkLeg;
+  final String Function(int minutes) waitLeg;
+  final String Function(int minutes) rideLeg;
+  final String wait;
   final String Function(int changes) changeCount;
   final String Function(String stops) changeAt;
   final String Function(int backups) backupCount;
@@ -654,6 +660,9 @@ const _en = Strings(
   metres: _enMetres,
   km: _enKm,
   walkLeg: _enWalkLeg,
+  waitLeg: _enWaitLeg,
+  rideLeg: _enRideLeg,
+  wait: 'Wait',
   changeCount: _enChangeCount,
   changeAt: _enChangeAt,
   backupCount: _enBackupCount,
@@ -676,6 +685,8 @@ String _enWatchingLines(int n) => 'Watching $n';
 String _enNothingNearLines(int metres) =>
     'No stop within $metres m of where you are';
 String _enWalkLeg(int m) => 'Walk $m min';
+String _enWaitLeg(int m) => 'Wait $m min';
+String _enRideLeg(int m) => 'Ride $m min';
 String _enChangeCount(int n) => n == 1 ? '1 change' : '$n changes';
 String _enChangeAt(String stops) => 'Change at $stops';
 String _enBackupCount(int n) => n == 1 ? '1 backup' : '$n backups';
@@ -913,6 +924,9 @@ const _uk = Strings(
   metres: _ukMetres,
   km: _ukKm,
   walkLeg: _ukWalkLeg,
+  waitLeg: _ukWaitLeg,
+  rideLeg: _ukRideLeg,
+  wait: 'Чекати',
   changeCount: _ukChangeCount,
   changeAt: _ukChangeAt,
   backupCount: _ukBackupCount,
@@ -935,6 +949,8 @@ String _ukWatchingLines(int n) => 'Відстежую $n';
 String _ukNothingNearLines(int metres) =>
     'Немає зупинки ближче ніж за $metres м';
 String _ukWalkLeg(int m) => 'Пішки $m хв';
+String _ukWaitLeg(int m) => 'Чекати $m хв';
+String _ukRideLeg(int m) => 'Їхати $m хв';
 String _ukChangeCount(int n) => n == 1 ? '1 пересадка' : 'Пересадок: $n';
 String _ukChangeAt(String stops) => 'Пересадка: $stops';
 String _ukBackupCount(int n) => n == 1 ? '1 запасний' : 'Запасних: $n';
