@@ -11,6 +11,12 @@ export type Row =
 /** A shorter gap before a ride is not worth a line of its own */
 export const WAIT_MIN_S = 60;
 
+/** The seconds between leg `i` leaving and the leg before it arriving: the
+ *  wait at the stop when `i` is a ride. Nothing comes before the first leg */
+export function waitBefore(j: Journey, i: number): number {
+  return i > 0 ? j.legs[i]!.dep - j.legs[i - 1]!.arr : 0;
+}
+
 /** The journey's legs in order, with a wait wherever a ride leaves a minute or
  *  more after the leg before it got there */
 export function rows(j: Journey): Row[] {
@@ -23,9 +29,8 @@ export function rows(j: Journey): Row[] {
       out.push({ kind: "walk", leg: i, dep: leg.dep, arr: leg.arr, to: leg.b, change });
       return;
     }
-    const before = i > 0 ? j.legs[i - 1]!.arr : null;
-    if (before !== null && leg.dep - before >= WAIT_MIN_S)
-      out.push({ kind: "wait", leg: i, dep: before, arr: leg.dep, at: leg.a });
+    if (waitBefore(j, i) >= WAIT_MIN_S)
+      out.push({ kind: "wait", leg: i, dep: j.legs[i - 1]!.arr, arr: leg.dep, at: leg.a });
     out.push({ kind: "ride", leg: i, dep: leg.dep, arr: leg.arr, route: leg.route, a: leg.a, b: leg.b });
   });
   return out;

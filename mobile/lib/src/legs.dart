@@ -35,6 +35,11 @@ class PlanRow {
 /// A shorter gap before a ride is not worth a line of its own
 const waitMinS = 60;
 
+/// The seconds between leg [i] leaving and the leg before it arriving: the wait
+/// at the stop when [i] is a ride. Nothing comes before the first leg
+int waitBefore(Journey j, int i) =>
+    i > 0 ? j.legs[i].dep - j.legs[i - 1].arr : 0;
+
 /// The journey's legs in order, with a wait wherever a ride leaves a minute or
 /// more after the leg before it got there
 List<PlanRow> rows(Journey j) {
@@ -57,13 +62,12 @@ List<PlanRow> rows(Journey j) {
       );
       continue;
     }
-    final before = i > 0 ? j.legs[i - 1].arr : null;
-    if (before != null && leg.dep - before >= waitMinS) {
+    if (waitBefore(j, i) >= waitMinS) {
       out.add(
         PlanRow(
           PlanRowKind.wait,
           i,
-          dep: before,
+          dep: j.legs[i - 1].arr,
           arr: leg.dep,
           a: leg.a,
           b: leg.a,

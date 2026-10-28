@@ -10,6 +10,7 @@ import 'backups_dialog.dart';
 import 'eta.dart';
 import 'follow.dart' show followable, plannedKmh;
 import 'hurry_pill.dart';
+import 'legs.dart' show waitBefore, waitMinS;
 import 'models.dart';
 import 'route_badge.dart';
 import 'strings.dart';
@@ -39,13 +40,6 @@ const _quietRow = 32.0;
 
 /// The backups count, the same open or closed, so it is seen before opening
 const _backupColour = Colors.greenAccent;
-
-/// Under half a minute at the stop is boarding, not waiting
-const _waitSaidS = 30;
-
-/// The seconds stood at the stop before leg [i], a ride, leaves
-int _waitBefore(Journey journey, int i) =>
-    journey.legs[i].dep - (i > 0 ? journey.legs[i - 1].arr : journey.dep);
 
 /// An option caught only by hurrying: what its pill says, with the pace that
 /// catches it, and why
@@ -238,7 +232,7 @@ class _Strip extends StatelessWidget {
           else
             _StripRide(
               leg: leg,
-              wait: _waitBefore(journey, i),
+              wait: waitBefore(journey, i),
               catalog: catalog,
             ),
           if (_noteOn(leg) != null)
@@ -277,7 +271,7 @@ class _StripRide extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       spacing: 4,
       children: [
-        if (wait >= _waitSaidS)
+        if (wait >= waitMinS)
           Tooltip(
             message: txt.waitLeg(spanMinutes(wait)),
             child: Row(
@@ -397,7 +391,7 @@ class _Opened extends StatelessWidget {
               ),
             },
           for (final (i, leg) in legs.indexed) ...[
-            if (!leg.walking) _Wait(seconds: _waitBefore(journey, i)),
+            if (!leg.walking) _Wait(seconds: waitBefore(journey, i)),
             leg.walking
                 ? _Walk(
                     leg: leg,
@@ -500,7 +494,7 @@ class _Wait extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (seconds < _waitSaidS) return const SizedBox.shrink();
+    if (seconds < waitMinS) return const SizedBox.shrink();
     final minutes = spanMinutes(seconds);
     return _Row(
       minHeight: _quietRow,

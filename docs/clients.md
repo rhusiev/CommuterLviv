@@ -69,8 +69,9 @@ else. Folded, it says in words what is worth knowing - the hurry pill, its
 weakest ride's note on how sure its time is, and how many backups it has, in
 the green of the backups button it opens into. Its strip of legs gives a walk
 its minutes and a ride the minutes waited for it, by a clock, then its badge and
-the minutes ridden; opened, a wait of half a minute or more is a row of its own
-before the ride, and the ride says "Ride N min". Its
+the minutes ridden; opened, a wait of a minute or more (`WAIT_MIN_S`, the
+follow card's) is a row of its own before the ride, and the ride says "Ride N
+min". Its
 summary row stays the one target that folds it again and never turns into
 anything else. Opened, every control below it is drawn as one and is at least
 44 px tall: a stop's row has a chevron and opens the stop's card, a route's

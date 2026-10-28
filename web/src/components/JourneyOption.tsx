@@ -2,6 +2,7 @@ import { Fragment, useState, type ReactNode } from "react";
 import { stopName } from "../lib/catalog";
 import { clock, mins } from "../lib/eta";
 import { followable, plannedKmh } from "../lib/follow";
+import { WAIT_MIN_S, waitBefore } from "../lib/legs";
 import { t } from "../lib/i18n";
 import type { Prefer } from "../lib/prefer";
 import type { Catalog, Confidence, Journey, Leg } from "../lib/types";
@@ -28,15 +29,6 @@ function rests(leg: Leg) {
   const confidence = leg.confidence ?? (leg.live ? "live" : "schedule");
   return confidence === "live" ? null : RESTS[confidence];
 }
-
-/** The seconds spent standing at the stop before leg `i`, a ride, leaves */
-function waitBefore(journey: Journey, i: number) {
-  const before = i > 0 ? journey.legs[i - 1]!.arr : journey.dep;
-  return journey.legs[i]!.dep - before;
-}
-
-/** Under half a minute at the stop is boarding, not waiting */
-const WAIT_SAID_S = 30;
 
 /** A button's focus ring, the same on every target of the card */
 const FOCUS = "outline-none focus-visible:ring-2 focus-visible:ring-accent/70";
@@ -159,7 +151,7 @@ function StripRide({ leg, wait, catalog }: { leg: Leg; wait: number; catalog: Ca
   const ride = mins(leg.arr - leg.dep);
   return (
     <>
-      {wait >= WAIT_SAID_S && (
+      {wait >= WAIT_MIN_S && (
         <span title={t.waitLeg(mins(wait))} className="flex items-center">
           <Icon name="clock" className="size-3.5" />
           {mins(wait)}
@@ -286,7 +278,7 @@ function Walk({
 
 /** The minutes stood at the stop before a ride, once there are any */
 function Wait({ seconds }: { seconds: number }) {
-  if (seconds < WAIT_SAID_S) return null;
+  if (seconds < WAIT_MIN_S) return null;
   return (
     <div className="flex min-h-8 items-center gap-2 px-2 text-sm text-slate-400">
       <MinutesLead icon="clock" minutes={mins(seconds)} said={t.waitLeg} />
