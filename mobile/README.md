@@ -320,8 +320,8 @@ The Journey tab opens `journey_panel.dart` over the map.
 Tapping either end opens the same search as the top bar (`stop_search.dart`):
 typing finds stops, addresses and shops, and before anything is typed it offers
 where I am, choosing on the map, and the saved places. The locate button beside
-each field is where I am in one tap, and the field then says so rather than
-giving the coordinates. A point nothing names, in its field and at the top of
+each field is where I am in one tap, and the field then says where I was and
+when ("Where I was at 08:31") rather than giving the coordinates. A point nothing names, in its field and at the top of
 the long-press sheet, is called by the stop nearest it within 300 m ("Near
 Rynok"), and only past that by its coordinates, as on the web; Mine says where
 a saved place is the same way, under its name. While an end is being picked on the map

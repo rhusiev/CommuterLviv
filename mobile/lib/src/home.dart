@@ -12,6 +12,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:vector_map_tiles/vector_map_tiles.dart';
 
 import 'api.dart';
+import 'eta.dart' show clockTime;
 import 'basemap_style.dart';
 import 'follow.dart' show Stage, StageKind;
 import 'follow_card.dart';
@@ -843,9 +844,11 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  /// Named, so the field reads as where I was rather than as coordinates.
+  /// Named with the time of the fix rather than as coordinates: the end stays
+  /// where it was taken, and "where I am" read as if it moved along.
   void _atHere(End which, LatLng at) {
-    _named[at] = txt.useHere;
+    final t = _here.fix?.t ?? DateTime.now().millisecondsSinceEpoch;
+    _named[at] = txt.hereAt(clockTime(t ~/ Duration.millisecondsPerSecond));
     _at(which, at);
   }
 

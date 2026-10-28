@@ -130,6 +130,7 @@ class Strings {
     required this.to,
     required this.tapMap,
     required this.useHere,
+    required this.hereAt,
     required this.swap,
     required this.findRoute,
     required this.searching,
@@ -372,6 +373,7 @@ class Strings {
   final String to;
   final String tapMap;
   final String useHere;
+  final String Function(String time) hereAt;
   final String swap;
   final String findRoute;
   final String searching;
@@ -596,6 +598,7 @@ const _en = Strings(
   to: 'To',
   tapMap: 'Tap the map',
   useHere: 'Where I am',
+  hereAt: _enHereAt,
   swap: 'Swap',
   findRoute: 'Find a way',
   searching: 'Looking for a way',
@@ -700,6 +703,7 @@ String _enRoutesOn(int n) => '$n on';
 String _enNothingNearLines(int metres) =>
     'No stop within $metres m of where you are';
 String _enWalkLeg(int m) => 'Walk $m min';
+String _enHereAt(String time) => 'Where I was at $time';
 String _enWaitLeg(int m) => 'Wait $m min';
 String _enRideLeg(int m) => 'Ride $m min';
 String _enChangeCount(int n) => n == 1 ? '1 change' : '$n changes';
@@ -866,6 +870,7 @@ const _uk = Strings(
   to: 'Куди',
   tapMap: 'Торкніться мапи',
   useHere: 'Де я',
+  hereAt: _ukHereAt,
   swap: 'Поміняти',
   findRoute: 'Знайти шлях',
   searching: 'Шукаємо шлях',
@@ -969,6 +974,7 @@ String _ukRoutesOn(int n) => 'Увімкнено $n';
 String _ukNothingNearLines(int metres) =>
     'Немає зупинки ближче ніж за $metres м';
 String _ukWalkLeg(int m) => 'Пішки $m хв';
+String _ukHereAt(String time) => 'Моє місце о $time';
 String _ukWaitLeg(int m) => 'Чекати $m хв';
 String _ukRideLeg(int m) => 'Їхати $m хв';
 String _ukChangeCount(int n) => n == 1 ? '1 пересадка' : 'Пересадок: $n';

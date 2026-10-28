@@ -10,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:commuterlviv/src/api.dart';
+import 'package:commuterlviv/src/eta.dart' show clockTime;
 import 'package:commuterlviv/src/home.dart';
 import 'package:commuterlviv/src/journey_panel.dart' show JourneyPanel;
 import 'package:commuterlviv/src/lines_tab.dart' show LinePanel;
@@ -223,7 +224,11 @@ void main() {
     // Not settled: the dot where I am pulses for as long as it is drawn
     await tester.pump();
 
-    expect(find.widgetWithText(OutlinedButton, txt.useHere), findsOneWidget);
+    // Named by when the fix was taken, which stays where it was
+    expect(
+      find.widgetWithText(OutlinedButton, txt.hereAt(clockTime(0))),
+      findsOneWidget,
+    );
     expect(find.textContaining('49.8419'), findsNothing);
     await tester.pump(_firstTrim);
     FlutterError.onError = reported;
