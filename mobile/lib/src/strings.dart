@@ -33,8 +33,10 @@ class Strings {
     required this.map,
     required this.mine,
     required this.lines,
-    required this.allLines,
-    required this.watchingLines,
+    required this.onMap,
+    required this.allRoutes,
+    required this.onlyWatched,
+    required this.routesOn,
     required this.nearLines,
     required this.nothingNearLines,
     required this.noneWatched,
@@ -238,8 +240,10 @@ class Strings {
   /// The routes, and one line of them open; "Lines" so it does not read as the
   /// journey tab in Ukrainian, which spends "Маршрут" on a route
   final String lines;
-  final String allLines;
-  final String Function(int n) watchingLines;
+  final String onMap;
+  final String allRoutes;
+  final String onlyWatched;
+  final String Function(int n) routesOn;
   final String nearLines;
   final String Function(int metres) nothingNearLines;
   final String noneWatched;
@@ -484,8 +488,10 @@ const _en = Strings(
   map: 'Map',
   mine: 'Mine',
   lines: 'Lines',
-  allLines: 'All',
-  watchingLines: _enWatchingLines,
+  onMap: 'On the map',
+  allRoutes: 'All routes',
+  onlyWatched: 'Watched only',
+  routesOn: _enRoutesOn,
   nearLines: 'Near me',
   nothingNearLines: _enNothingNearLines,
   noneWatched: 'Nothing watched yet. Tap a route to watch it.',
@@ -681,7 +687,7 @@ const _en = Strings(
 );
 
 String _enUpdateSet(String name) => 'Update “$name”';
-String _enWatchingLines(int n) => 'Watching $n';
+String _enRoutesOn(int n) => '$n on';
 String _enNothingNearLines(int metres) =>
     'No stop within $metres m of where you are';
 String _enWalkLeg(int m) => 'Walk $m min';
@@ -748,8 +754,10 @@ const _uk = Strings(
   map: 'Мапа',
   mine: 'Моє',
   lines: 'Лінії',
-  allLines: 'Усі',
-  watchingLines: _ukWatchingLines,
+  onMap: 'На мапі',
+  allRoutes: 'Усі маршрути',
+  onlyWatched: 'Лише відстежувані',
+  routesOn: _ukRoutesOn,
   nearLines: 'Поруч',
   nothingNearLines: _ukNothingNearLines,
   noneWatched: 'Поки нічого не відстежується. Торкніться маршруту, щоб відстежувати його.',
@@ -945,7 +953,7 @@ const _uk = Strings(
 );
 
 String _ukUpdateSet(String name) => 'Оновити «$name»';
-String _ukWatchingLines(int n) => 'Відстежую $n';
+String _ukRoutesOn(int n) => 'Увімкнено $n';
 String _ukNothingNearLines(int metres) =>
     'Немає зупинки ближче ніж за $metres м';
 String _ukWalkLeg(int m) => 'Пішки $m хв';

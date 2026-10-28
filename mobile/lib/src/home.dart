@@ -1247,7 +1247,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ..addAll(routes);
         _sets = Sets(
           sets: _sets!.sets,
-          active: set.id,
+          active: set?.id,
           pins: _sets!.pins,
           places: _sets!.places,
         );

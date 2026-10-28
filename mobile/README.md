@@ -182,7 +182,7 @@ refused and the map stays empty while everything else works.
 | `lib/src/vehicle_layer.dart` | one `CustomPaint` for the whole city                                    |
 | `lib/src/home.dart`          | the state the tabs share, and nothing that draws                        |
 | `lib/src/map_tab.dart`       | the basemap, the vehicles and the attribution                           |
-| `lib/src/lines_tab.dart`     | every route, by filter and set, and one line's stops over the map       |
+| `lib/src/lines_tab.dart`     | what the map watches, every route to tick, and one line's stops       |
 | `lib/src/lines.dart`         | a line's ways and stop rows, the routes near you, the lines opened      |
 | `lib/src/mine_tab.dart`      | pinned stops with what is due, places, sets, and the account row        |
 | `lib/src/stop_card.dart`     | one stop, from the bottom of the map                                    |

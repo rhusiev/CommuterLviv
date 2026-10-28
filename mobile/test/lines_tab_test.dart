@@ -86,6 +86,7 @@ Future<void> _pump(
   String? server,
   Here? here,
   void Function(int route)? onOpen,
+  void Function(RouteSet? set, Iterable<int> routes)? onActivated,
 }) async {
   SharedPreferences.setMockInitialValues({});
   FlutterSecureStorage.setMockInitialValues({});
@@ -103,7 +104,7 @@ Future<void> _pump(
             picked: picked,
             onToggle: (_) {},
             onClear: () {},
-            onActivated: (_, _) {},
+            onActivated: onActivated ?? (_, _) {},
             onSets: (sets) => setState(() => held = sets),
             onOpen: onOpen ?? (_) {},
             recent: recent,
@@ -152,7 +153,70 @@ Future<HttpServer> _refusingActivation() async {
   return server;
 }
 
+/// Answers every request with an empty success, noting the active set asked for.
+Future<HttpServer> _accepting(List<Object?> activated) async {
+  final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+  server.listen((req) async {
+    final body = await utf8.decodeStream(req);
+    if (req.uri.path == '/api/sets/active') {
+      activated.add((jsonDecode(body) as Map)['id']);
+    }
+    req.response
+      ..persistentConnection = false
+      ..headers.contentType = ContentType.json
+      ..write('{}')
+      ..close();
+  });
+  return server;
+}
+
 void main() {
+  testWidgets('all routes watches every route as no saved set', (tester) async {
+    allowRealHttp();
+    final activated = <Object?>[];
+    final server = (await tester.runAsync(() => _accepting(activated)))!;
+    addTearDown(() => server.close(force: true));
+    final got = <(RouteSet?, List<int>)>[];
+    await _pump(
+      tester,
+      catalog: _mixed,
+      server: 'http://${server.address.host}:${server.port}',
+      onActivated: (set, routes) => got.add((set, routes.toList())),
+    );
+
+    await tester.tap(find.widgetWithText(ChoiceChip, txt.allRoutes));
+    await pumpUntil(tester, () => got.isNotEmpty);
+
+    expect(activated, [null]);
+    expect(got.single.$1, isNull);
+    expect(got.single.$2, [for (var i = 0; i < _mixed.routes.length; i++) i]);
+  });
+
+  testWidgets('all routes is chosen once every route is watched and no set', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      catalog: _mixed,
+      picked: {for (var i = 0; i < _mixed.routes.length; i++) i},
+    );
+
+    final chip = tester.widget<ChoiceChip>(
+      find.widgetWithText(ChoiceChip, txt.allRoutes),
+    );
+    expect(chip.selected, isTrue);
+  });
+
+  testWidgets('the list filters are toggles apart from the choice of the map', (
+    tester,
+  ) async {
+    await _pump(tester, catalog: _mixed);
+
+    expect(find.widgetWithText(FilterChip, txt.nearLines), findsOneWidget);
+    expect(find.widgetWithText(FilterChip, txt.onlyWatched), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, txt.nearLines), findsNothing);
+  });
+
   testWidgets('routes are grouped under their vehicle type', (tester) async {
     await _pump(tester, catalog: _mixed);
     expect(find.text(txt.kinds['bus']!), findsOneWidget);
@@ -198,7 +262,7 @@ void main() {
   testWidgets('watching lists only the routes watched', (tester) async {
     await _pump(tester, catalog: _mixed, picked: {1});
 
-    await tester.tap(find.text(txt.watchingLines(1)));
+    await tester.tap(find.text(txt.onlyWatched));
     await tester.pumpAndSettle();
 
     expect(_chip('t1'), findsOneWidget);
@@ -208,7 +272,7 @@ void main() {
   testWidgets('watching nothing says so', (tester) async {
     await _pump(tester, catalog: _mixed);
 
-    await tester.tap(find.text(txt.watchingLines(0)));
+    await tester.tap(find.text(txt.onlyWatched));
     await tester.pumpAndSettle();
 
     expect(find.text(txt.noneWatched), findsOneWidget);
