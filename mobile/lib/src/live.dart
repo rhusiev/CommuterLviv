@@ -63,6 +63,13 @@ class Live extends ChangeNotifier {
   final VoidCallback onRenewed;
   final Map<int, Vehicle> vehicles = {};
 
+  /// On [nowMs]'s clock: until when a vehicle still eases to its last report,
+  /// so whoever draws them knows to keep drawing.
+  int easingUntil = 0;
+
+  /// Ticks on every position frame, which no widget otherwise hears of.
+  final ValueNotifier<int> moves = ValueNotifier(0);
+
   Map<int, List<Arrival>> arrivals = {};
   Connection connection = Connection.connecting;
 
@@ -94,6 +101,7 @@ class Live extends ChangeNotifier {
     _retry?.cancel();
     _sub?.cancel();
     _ws?.sink.close();
+    moves.dispose();
     super.dispose();
   }
 
@@ -243,7 +251,9 @@ class Live extends ChangeNotifier {
         vehicles.remove(id);
       }
     }
-    // Moves alone change nothing a widget shows; the painter repaints anyway
+    easingUntil = now + _ease.inMilliseconds;
+    moves.value++;
+    // Moves alone change nothing a widget shows; the painter hears of them
     if (f.kind == wire.snapshot || f.gone.isNotEmpty) notifyListeners();
   }
 }

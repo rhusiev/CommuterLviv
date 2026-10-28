@@ -127,20 +127,39 @@ class _VehicleLayerState extends State<VehicleLayer>
   final Map<int, ui.Paragraph> _badges = {};
   final Map<String, ui.Paragraph> _labels = {};
 
+  /// Frames are drawn only while a vehicle eases to its last report: between
+  /// reports nothing moves, and a repaint would only re-blur what floats above.
   @override
   void initState() {
     super.initState();
-    _ticker = createTicker((_) => _frame.value++)..start();
+    _ticker = createTicker(_tick);
+    widget.live.moves.addListener(_moved);
+    _moved();
+  }
+
+  void _moved() {
+    if (!_ticker.isActive) _ticker.start();
+  }
+
+  void _tick(Duration _) {
+    _frame.value++;
+    if (widget.live.nowMs >= widget.live.easingUntil) _ticker.stop();
   }
 
   @override
   void didUpdateWidget(VehicleLayer old) {
     super.didUpdateWidget(old);
     if (old.catalog != widget.catalog) _badges.clear();
+    if (old.live != widget.live) {
+      old.live.moves.removeListener(_moved);
+      widget.live.moves.addListener(_moved);
+      _moved();
+    }
   }
 
   @override
   void dispose() {
+    widget.live.moves.removeListener(_moved);
     _ticker.dispose();
     _frame.dispose();
     super.dispose();
@@ -183,7 +202,8 @@ class _VehicleLayerState extends State<VehicleLayer>
       child: CustomPaint(
         size: Size.infinite,
         painter: _Painter(
-          repaint: _frame,
+          // A fix is read at paint time, so its arrival must paint too
+          repaint: Listenable.merge([_frame, widget.here]),
           camera: camera,
           catalog: widget.catalog,
           live: widget.live,

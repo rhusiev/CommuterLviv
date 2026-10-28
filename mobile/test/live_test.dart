@@ -13,6 +13,9 @@ import 'package:commuterlviv/src/live.dart';
 
 const _patience = Duration(seconds: 5);
 
+/// How long a vehicle slides to a new report, as `live.dart` eases it.
+const _easeMs = 1200;
+
 /// Completes once [met] holds after a change [live] announces.
 Future<void> _until(Live live, bool Function() met) {
   final done = Completer<void>();
@@ -74,4 +77,24 @@ void main() {
       expect(live.quiet, isFalse);
     },
   );
+
+  test('a position frame says so, and asks for drawing as long as the '
+      'slide it starts', () async {
+    final ws = await accepted();
+    final bytes =
+        (jsonDecode(File('../tests/wire_frame.json').readAsStringSync())
+                as Map<String, dynamic>)['bytes']
+            as List<dynamic>;
+    final moved = Completer<void>();
+    live.moves.addListener(() {
+      if (!moved.isCompleted) moved.complete();
+    });
+    final before = live.nowMs;
+
+    ws.add(bytes.cast<int>());
+    await moved.future.timeout(_patience);
+
+    expect(live.easingUntil, greaterThanOrEqualTo(before + _easeMs));
+    expect(live.easingUntil, lessThanOrEqualTo(live.nowMs + _easeMs));
+  });
 }

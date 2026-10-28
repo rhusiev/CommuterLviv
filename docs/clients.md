@@ -302,7 +302,13 @@ connection, the arrivals and the vehicle count. Route badges are rendered once
 into offscreen canvases, so drawing four hundred vehicles is four hundred blits
 rather than four hundred text layouts. The overlay draws inside MapLibre's own
 render pass and projects points with the same Web Mercator formula the basemap
-uses, so panning moves the city and the vehicles in the same frame.
+uses, so panning moves the city and the vehicles in the same frame. It asks
+MapLibre for the next frame only while a vehicle still eases to its last report
+(`Live.easingUntil`, 1.2 s after each five-second frame); otherwise a camera
+move, a new report, a fix or a change of what is shown asks. Asking every frame
+kept the whole map rendering at the display's rate with nothing moving: idle on
+the map, headless Chromium's main thread went from always busy to idle, and
+with every route watched to busy 30% of the time (2026-10-28).
 
 ## The phone app
 
@@ -345,7 +351,8 @@ be the real server. The sign-in screen takes any other address and remembers it.
 
 The shape of the code is the shape of the web app's, for the same reason. Every
 vehicle and every stop is one `CustomPaint` repainted from a `Ticker`, not four
-hundred widgets; positions are eased between the five-second frames; and the
+hundred widgets, and the ticker runs only while a vehicle eases (`Live.moves`
+starts it, `Live.easingUntil` stops it); positions are eased between the five-second frames; and the
 route badge for each route is laid out once into a `ui.Paragraph` and drawn
 thereafter, which is what the offscreen badge canvases do in the browser. The
 two maps count zoom differently - flutter_map's tiles are 256 px, MapLibre's

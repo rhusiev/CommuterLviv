@@ -167,6 +167,7 @@ export function MapCanvas(props: Props) {
     latest.current = props;
     paint.current = ink(theme.dark);
     beneath.current = { shapes, directed, traffic, dark: theme.dark };
+    held.current?.triggerRepaint();
   });
 
   useEffect(() => {
@@ -174,6 +175,7 @@ export function MapCanvas(props: Props) {
     const g = el.getContext("2d")!;
     let map: MapLibre | null = null;
     let gone = false;
+    let stopMoves = () => {};
     const hold = new Hold(({ clientX: x, clientY: y }) => {
       if (!map) return;
       const rect = map.getCanvasContainer().getBoundingClientRect();
@@ -450,8 +452,9 @@ export function MapCanvas(props: Props) {
       }));
       placeTags(g, c, tags);
 
-      // Vehicles move between camera changes, so keep asking for frames
-      m.triggerRepaint();
+      // Vehicles move between camera changes while they ease to a report; then
+      // nothing moves until the next one, a fix or a prop change asks again
+      if (now < live.easingUntil) m.triggerRepaint();
     };
 
     void Promise.all([import("maplibre-gl"), import("maplibre-gl/dist/maplibre-gl.css")]).then(([{ Map, NavigationControl, setWorkerUrl }]) => {
@@ -547,6 +550,7 @@ export function MapCanvas(props: Props) {
         latest.current.onPickStop(best);
       });
       map.on("render", draw);
+      stopMoves = live.onMove(() => map?.triggerRepaint());
       // Every style swap throws the sources and layers away and leaves this the
       // only notice of it, so the layers are rebuilt from here rather than from
       // the effect that asked for the new style
@@ -559,6 +563,7 @@ export function MapCanvas(props: Props) {
 
     return () => {
       gone = true;
+      stopMoves();
       hold.cancel();
       observer.disconnect();
       held.current = null;
@@ -630,6 +635,7 @@ export function MapCanvas(props: Props) {
       (pos) => {
         const { latitude, longitude, accuracy } = pos.coords;
         here.current = { lat: latitude, lon: longitude, accuracy };
+        held.current?.triggerRepaint();
         if (first) {
           first = false;
           held.current?.flyTo({ center: [longitude, latitude], zoom: NEAR_ZOOM, speed: FLY_SPEED });
@@ -643,6 +649,7 @@ export function MapCanvas(props: Props) {
         // only a refusal ends the watch
         if (err.code !== err.PERMISSION_DENIED) return;
         here.current = null;
+        held.current?.triggerRepaint();
         setLocating("denied");
       },
     );

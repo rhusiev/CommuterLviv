@@ -216,7 +216,9 @@ form is never dismissed the way a native one is, so without that call the
 manager is never asked whether to save.
 
 **Nothing on the map is a widget.** Four hundred vehicles are four hundred
-circles in one painter, repainted from a `Ticker` at the display's rate. The
+circles in one painter, repainted from a `Ticker` at the display's rate while
+a vehicle eases to its last report, and not between: a repaint there would
+change nothing and re-blur whatever floats over the map. The
 socket delivers a position every five seconds and `sample()` eases between the
 last two, so movement is smooth without the network being fast. Widgets listen
 to `Live` only for what changes rarely: the connection, the arrival times, and

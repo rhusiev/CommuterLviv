@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { Live, sample, type Vehicle } from "./live";
 
@@ -79,5 +80,28 @@ describe("sample", () => {
   test("ends the slide at the vehicle's new position", () => {
     const [lat, lon] = sample(moving(0), LATER_MS);
     expect([lat, lon]).toEqual([49.9, 24.1]);
+  });
+});
+
+/** A frame the server wrote (`tests/wire_frame.json`, as `wire.test.ts` reads it) */
+const FRAME: number[] = JSON.parse(
+  readFileSync(new URL("../../../tests/wire_frame.json", import.meta.url), "utf8"),
+).bytes;
+/** How long a vehicle slides to a new report, as `live.ts` eases it */
+const EASE_MS = 1200;
+
+describe("the drawing a frame asks for", () => {
+  test("is told of each position frame, and lasts as long as the slide it starts", () => {
+    const live = new Live(() => {});
+    live.open();
+    const moved = vi.fn();
+    live.onMove(moved);
+    const before = performance.now();
+
+    FakeSocket.last.onmessage?.({ data: new Uint8Array(FRAME).buffer });
+
+    expect(moved).toHaveBeenCalledOnce();
+    expect(live.easingUntil).toBeGreaterThanOrEqual(before + EASE_MS);
+    expect(live.easingUntil).toBeLessThanOrEqual(performance.now() + EASE_MS);
   });
 });
