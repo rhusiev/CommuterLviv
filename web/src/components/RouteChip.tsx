@@ -5,7 +5,9 @@ import { RouteBadge } from "./RouteBadge";
 
 /** A route, the same chip wherever one is shown: its body watches the route on
  * the map or stops watching it, and the `›` beside it opens the route's line.
- * Both are drawn as targets, so nothing hides behind a long press. */
+ * Both are drawn as targets of their own - a split button, two shapes a hair
+ * apart - so a press lights the whole of what it presses and nothing hides
+ * behind a long press. */
 export function RouteChip({
   route,
   watched,
@@ -23,14 +25,12 @@ export function RouteChip({
   className?: string;
 }) {
   return (
-    <span
-      className={`inline-flex items-stretch overflow-hidden rounded-control bg-raised/70 text-sm ${className}`}
-    >
+    <span className={`inline-flex items-stretch gap-0.5 text-sm ${className}`}>
       <button
         onClick={onWatch}
         aria-pressed={watched}
         title={watched ? t.unwatchRoute : t.watchRoute}
-        className="flex min-w-0 flex-1 items-center gap-1.5 py-1 pl-1 pr-1.5 hover:bg-raised"
+        className="flex min-w-0 flex-1 items-center gap-1.5 rounded-l-control rounded-r-sm bg-raised/70 py-1 pl-1 pr-1.5 hover:bg-raised"
       >
         <RouteBadge
           route={route}
@@ -43,7 +43,7 @@ export function RouteChip({
         onClick={onLine}
         aria-label={t.lineOf(route.short)}
         title={t.showLine}
-        className="w-8 shrink-0 border-l border-hair text-slate-400 hover:bg-raised hover:text-slate-100"
+        className="w-8 shrink-0 rounded-l-sm rounded-r-control bg-raised/70 text-slate-400 hover:bg-raised hover:text-slate-100"
       >
         ›
       </button>

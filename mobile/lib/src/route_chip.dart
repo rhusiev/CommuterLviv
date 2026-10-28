@@ -13,9 +13,21 @@ import 'theme.dart';
 const _height = 36.0;
 const _lineWidth = 32.0;
 
+/// The gap between the two targets, and how round their inner corners are: a
+/// split button, so each press lights the whole of what it presses.
+const _split = 2.0;
+const _inner = Radius.circular(4);
+const _outer = Radius.circular(_height / 2);
+const _bodyShape = RoundedRectangleBorder(
+  borderRadius: BorderRadius.horizontal(left: _outer, right: _inner),
+);
+const _lineShape = RoundedRectangleBorder(
+  borderRadius: BorderRadius.horizontal(left: _inner, right: _outer),
+);
+
 /// The body watches [route] on the map or stops watching it, and the `›`
-/// beside it opens the route's line. Both are drawn as targets, so nothing
-/// hides behind a long press. [trailing] follows the badge in the body, such
+/// beside it opens the route's line. Both are drawn as targets of their own,
+/// so nothing hides behind a long press. [trailing] follows the badge in the body, such
 /// as a countdown. With a [width] the body takes what the `›` leaves; without
 /// one the chip is as wide as what it holds, so a row of them flows.
 class RouteChip extends StatelessWidget {
@@ -76,23 +88,39 @@ class RouteChip extends StatelessWidget {
       height: kMinInteractiveDimension,
       child: Center(
         widthFactor: 1,
-        child: Material(
-          color: raised,
-          shape: stadium,
-          clipBehavior: Clip.antiAlias,
-          child: SizedBox(
-            height: _height,
-            child: Row(
-              mainAxisSize: width == null ? MainAxisSize.min : MainAxisSize.max,
-              children: [
-                if (width == null) body else Expanded(child: body),
-                const VerticalDivider(width: 1),
-                line,
-              ],
-            ),
+        child: SizedBox(
+          height: _height,
+          child: Row(
+            mainAxisSize: width == null ? MainAxisSize.min : MainAxisSize.max,
+            children: [
+              if (width == null)
+                _Segment(shape: _bodyShape, child: body)
+              else
+                Expanded(
+                  child: _Segment(shape: _bodyShape, child: body),
+                ),
+              const SizedBox(width: _split),
+              _Segment(shape: _lineShape, child: line),
+            ],
           ),
         ),
       ),
     );
   }
+}
+
+/// One of the chip's two targets, drawn as a whole: a press lights all of it.
+class _Segment extends StatelessWidget {
+  const _Segment({required this.shape, required this.child});
+
+  final ShapeBorder shape;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: raised,
+    shape: shape,
+    clipBehavior: Clip.antiAlias,
+    child: child,
+  );
 }

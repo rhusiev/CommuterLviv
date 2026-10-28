@@ -187,7 +187,9 @@ blurs it. Nothing outside `app.css` names a `slate-*` shade for a surface.
 Whatever looks like one control is one target to its edge: a bar's inset is its
 buttons' own padding, with the highlight on a span inside (the tab bar), and a
 bare icon gets padding taken back by a negative margin (`-m-2 p-2`) rather than
-a hit area the size of its glyph.
+a hit area the size of its glyph. A pill holding two targets, the route chip,
+is a split button - two shapes a hair apart - since one pill with a divider lit
+only the half pressed and read as a pill that does not all respond.
 
 Nothing is docked to an edge. The map is the whole window in both clients and
 every piece of chrome floats over it: a search bar and a menu at the top, the
