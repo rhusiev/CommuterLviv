@@ -26,7 +26,7 @@ function Modal({
   }, [first]);
   // To the body: a panel's backdrop blur would otherwise hold a fixed overlay inside it
   return createPortal(
-    <div onClick={onCancel} className="fixed inset-0 z-50 flex cursor-default items-center justify-center bg-black/50 p-4">
+    <div onClick={onCancel} className="fixed inset-0 z-50 flex cursor-default items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div
         role={role}
         aria-modal

@@ -178,8 +178,9 @@ are the two colours in `web/public/icon.svg`, so both apps are the colour of
 their own icon. Above that sit the utilities everything is built from - `panel`,
 `bar`, `fab`, `inset-panel`, `btn`, `btn-quiet`, `field`, `field-bar` - and each
 is translucent, blurred, a hairline ring and a soft shadow rather than a border,
-because the map underneath is the context. Nothing outside `app.css` names a
-`slate-*` shade for a surface.
+because the map underneath is the context. The app's `Floating` is the same 80%
+panel over a blur of the map behind it. A dialog dims the page and, on the web,
+blurs it. Nothing outside `app.css` names a `slate-*` shade for a surface.
 
 Nothing is docked to an edge. The map is the whole window in both clients and
 every piece of chrome floats over it: a search bar and a menu at the top, the
