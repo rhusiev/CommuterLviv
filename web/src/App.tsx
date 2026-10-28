@@ -571,7 +571,12 @@ export function App() {
       )}
 
       {tab === "lines" && (
-        <aside ref={panel} className="panel absolute left-3 top-19 bottom-20 z-20 w-80 max-w-[calc(100vw-1.5rem)] p-3">
+        <aside
+          ref={panel}
+          // An open line is read on the map: on a phone its stop list is a
+          // sheet over the lower part, the app's `_linePanelShare`
+          className={`panel absolute left-3 top-19 bottom-20 z-20 w-80 max-w-[calc(100vw-1.5rem)] p-3 ${route === null ? "" : "max-sm:top-auto max-sm:h-[42vh]"}`}
+        >
           {route === null ? (
             <LinesBrowse
               catalog={cat}

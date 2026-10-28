@@ -45,9 +45,13 @@ import 'strings.dart';
 /// How far a tap may land from a stop and still count.
 const _hitRadius = 22.0;
 
-/// The share of the screen the planner or an open line's panel may grow to,
+/// The share of the screen the planner's panel may grow to,
 /// the map keeping the rest.
 const _panelShare = 0.6;
+
+/// An open line is read on the map, so its stop list leaves the map the larger
+/// part of the screen. The web's line panel on a phone is as tall
+const _linePanelShare = 0.42;
 
 /// The margin a framed line or option keeps from each edge of the map
 const _framePad = 40.0;
@@ -1265,7 +1269,7 @@ class _HomeScreenState extends State<HomeScreen> {
       alignment: Alignment.bottomCenter,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * _panelShare,
+          maxHeight: MediaQuery.sizeOf(context).height * _linePanelShare,
         ),
         child: LinePanel(
           key: _lineKey,
