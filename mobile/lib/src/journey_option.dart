@@ -34,6 +34,9 @@ const _smallIconSize = 16.0;
 const _cornerRadius = 12.0;
 const _shownBorderWidth = 2.0;
 
+/// The height of a row nothing on it is tapped in
+const _quietRow = 32.0;
+
 /// The backups count, the same open or closed, so it is seen before opening
 const _backupColour = Colors.greenAccent;
 
@@ -374,7 +377,7 @@ class _Opened extends StatelessWidget {
     final small = Theme.of(context).textTheme.bodySmall;
     final legs = journey.legs;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 0, 6, _gap),
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -476,6 +479,7 @@ class _Walk extends StatelessWidget {
     if (leg.b < 0) {
       return _Row(
         lead: lead,
+        minHeight: _quietRow,
         child: Text(txt.toDoor, style: small),
       );
     }
@@ -499,6 +503,7 @@ class _Wait extends StatelessWidget {
     if (seconds < _waitSaidS) return const SizedBox.shrink();
     final minutes = spanMinutes(seconds);
     return _Row(
+      minHeight: _quietRow,
       lead: _MinutesLead(
         icon: Icons.schedule,
         minutes: minutes,
@@ -687,14 +692,21 @@ class _StopRow extends StatelessWidget {
 
 /// A leg's row, as tall as a finger needs: what leads it, then what it names
 class _Row extends StatelessWidget {
-  const _Row({required this.lead, required this.child});
+  const _Row({
+    required this.lead,
+    required this.child,
+    this.minHeight = kMinInteractiveDimension,
+  });
 
   final Widget lead;
   final Widget child;
 
+  /// A target's row is as tall as a finger needs; one only read, [_quietRow]
+  final double minHeight;
+
   @override
   Widget build(BuildContext context) => ConstrainedBox(
-    constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+    constraints: BoxConstraints(minHeight: minHeight),
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: _gap),
       child: Row(

@@ -215,7 +215,7 @@ function Opened({
 }) {
   const hurry = journey.hurry ? hurried(journey) : null;
   return (
-    <div className="space-y-1 border-t border-hair px-1.5 pt-1.5 pb-2">
+    <div className="space-y-0.5 border-t border-hair px-1 pt-1 pb-1">
       {hurry && (
         <div className="space-y-1 px-1 py-1">
           <HurryPill hint={hurry.hint}>{hurry.text}</HurryPill>
@@ -268,7 +268,7 @@ function Walk({
   const minutes = <MinutesLead icon="walk" minutes={mins(leg.arr - leg.dep)} said={t.walkLeg} />;
   if (leg.b < 0)
     return (
-      <div className="flex min-h-9 items-center gap-2 px-2 text-sm text-slate-400">
+      <div className="flex min-h-8 items-center gap-2 px-2 text-sm text-slate-400">
         {minutes}
         {t.toDoor}
       </div>
@@ -288,7 +288,7 @@ function Walk({
 function Wait({ seconds }: { seconds: number }) {
   if (seconds < WAIT_SAID_S) return null;
   return (
-    <div className="flex min-h-9 items-center gap-2 px-2 text-sm text-slate-400">
+    <div className="flex min-h-8 items-center gap-2 px-2 text-sm text-slate-400">
       <MinutesLead icon="clock" minutes={mins(seconds)} said={t.waitLeg} />
       {t.wait}
     </div>
@@ -319,7 +319,7 @@ function Ride({
   const route = leg.route === undefined ? undefined : catalog.routes[leg.route];
   const note = rests(leg);
   return (
-    <div className="rounded-lg bg-white/[0.03] py-1">
+    <div className="rounded-lg bg-white/[0.03] py-0.5">
       <div className="flex items-center gap-2 px-2">
         <span className="w-12 shrink-0 text-xs text-slate-300 tabular-nums">{clock(leg.dep)}</span>
         {route && (
