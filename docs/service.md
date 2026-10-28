@@ -655,7 +655,12 @@ HTTP cache.
 
 Any step that fails leaves the old city serving, the new feed is put back to
 the one served (`gtfs.restore`) so a restart does not pick it up either, and the
-next night tries again. The cost of a swap is about 15 s of CPU in the background and, while it
+next night tries again. Only these nights, and a start, fetch the feed:
+reading it (`gtfs.table`) never does, so a failed night is not retried by
+whatever reads the feed next, and the feed is never swapped under the running
+city. A start fetches a held feed over a day old (`gtfs.MAX_AGE`), as the nights
+the service was down would have, and serves the held one if that fails.
+The cost of a swap is about 15 s of CPU in the background and, while it
 lasts, a second copy of the city in memory. The cost to a rider is one reconnect
 and, on the web, one reload.
 

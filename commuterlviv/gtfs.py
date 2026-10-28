@@ -22,17 +22,24 @@ LAT_M = 111320.0
 
 
 def static_zip():
-    """The cached static feed, re-fetched once a day."""
-    if not ZIP.exists() or time.time() - ZIP.stat().st_mtime > MAX_AGE:
+    """The held static feed, fetched only when there is none. Reading never
+    refetches a held one: a feed swapped under the running service is not the
+    one its city was built from, so `refresh` alone decides when to fetch."""
+    if not ZIP.exists():
         refetch()
     return zipfile.ZipFile(ZIP)
+
+
+def stale():
+    """Whether a feed is held and is older than `MAX_AGE`."""
+    return ZIP.exists() and time.time() - ZIP.stat().st_mtime > MAX_AGE
 
 
 def refetch():
     """Downloads the feed now; whether it differs from the one held.
 
     An unchanged feed keeps its bytes and only gets its mtime bumped, which
-    `static_zip` reads as its age. A changed one keeps the one it replaced as
+    `stale` reads as its age. A changed one keeps the one it replaced as
     `PREV`, for `restore`.
     """
     DATA.mkdir(parents=True, exist_ok=True)

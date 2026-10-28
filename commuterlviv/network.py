@@ -287,7 +287,7 @@ def load(rebuild=False, geom=DEFAULT):
 
 
 def _load(rebuild):
-    gtfs.static_zip()   # so a feed that changed overnight invalidates the cache
+    gtfs.static_zip()   # fetched first when there is none, so `source` hashes it
     src = source()
     if not rebuild and os.path.exists(CACHE):
         with open(CACHE, "rb") as f:

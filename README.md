@@ -48,7 +48,9 @@ python3 -m commuterlviv admin     # invite links and accounts
 
 `serve` needs a Postgres URL in `COMMUTERLVIV_DATABASE_URL` and the allowed
 origins in `COMMUTERLVIV_ORIGINS`. Everything it downloads or learns lives in
-`data/`. The web app is `cd web && npm install && npm run dev`, the phone app
+`data/`. Only `serve` fetches a newer static feed; the other commands read
+the held `data/static.zip` as it is, and fetch one only when there is none.
+The web app is `cd web && npm install && npm run dev`, the phone app
 `cd mobile && flutter run`.
 
 ## Using it

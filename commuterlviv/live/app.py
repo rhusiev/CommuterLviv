@@ -788,6 +788,8 @@ def build(st=None, net=None):
         s.hasher = security.hasher(**st.argon2)
         s.pool = await db.connect(st.database_url)
         await db.migrate(s.pool, log)
+        if net is None:
+            refresh.feed_at_start(log)
         loaded = net if net is not None else network.load()
         s.source = network.source()
         s.svc = service.Service(st, loaded, log=log, persist=net is None)

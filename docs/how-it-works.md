@@ -26,7 +26,7 @@ or 60 s in the future, is thrown away.
 ## 2. The fix is placed on a line, not a map
 
 `network.py` builds the geometry once from the static GTFS feed
-(`static.zip`, refreshed daily) and caches it in `data/network.pkl`.
+(`static.zip`, refreshed nightly by the service) and caches it in `data/network.pkl`.
 
 Latitude and longitude are converted to metres by a flat local projection about
 49.84 N, 24.03 E - over a city this size the error is negligible and it makes
