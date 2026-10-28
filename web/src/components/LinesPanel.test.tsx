@@ -25,6 +25,7 @@ const browse = (over: Partial<Parameters<typeof LinesBrowse>[0]> = {}) =>
       picked={new Set(["r1"])}
       onToggle={() => {}}
       onClear={() => {}}
+      onPickAll={() => {}}
       onOpen={() => {}}
       recent={["r2", "gone"]}
       sets={[{ id: "a", name: "Commute", routes: ["r1"], ord: 0 }]}
@@ -57,14 +58,42 @@ const line = (over: Partial<Parameters<typeof LineView>[0]> = {}) =>
   );
 
 describe("LinesBrowse", () => {
-  test("offers the filters, the sets, the lines opened lately and the routes, in that order", () => {
+  test("offers what the map watches, the lines opened lately, then the routes and their filters, in that order", () => {
     const html = browse();
-    const at = [t.allLines, t.watchingLines(1), t.nearLines, "Commute", t.recentLines, "Левандівка", t.routes].map(
+    const at = [t.onMap, t.allRoutes, "Commute", t.recentLines, "Левандівка", t.routes, t.nearLines, t.onlyWatched].map(
       (s) => html.indexOf(s),
     );
 
     expect(at.every((i) => i >= 0)).toBe(true);
     expect(at).toEqual([...at].sort((a, b) => a - b));
+  });
+
+  /** The choice of what the map watches, by its label: whether it is checked */
+  const chosen = (html: string, label: string) =>
+    html.match(new RegExp(`role="radio" aria-checked="(true|false)"[^>]*>${label}<`))?.[1];
+
+  test("checks the set the map watches, and not every route", () => {
+    const html = browse();
+
+    expect(chosen(html, "Commute")).toBe("true");
+    expect(chosen(html, t.allRoutes)).toBe("false");
+  });
+
+  test("checks every route once each is watched and no set is", () => {
+    const html = browse({ picked: new Set(["r1", "r2"]), active: null });
+
+    expect(chosen(html, t.allRoutes)).toBe("true");
+    expect(chosen(html, "Commute")).toBe("false");
+  });
+
+  test("filters the list with toggles, which are no choice of what the map watches", () => {
+    const html = browse();
+    const toggle = (label: string) =>
+      new RegExp(`<button aria-pressed="false"[^>]*>(?:(?!</button>).)*${label}</button>`).test(html);
+
+    expect(toggle(t.nearLines)).toBe(true);
+    expect(toggle(t.onlyWatched)).toBe(true);
+    expect(html.match(/role="radio"/g)).toHaveLength(2);
   });
 
   test("leaves out the lines opened lately once none of them is in the catalog", () => {

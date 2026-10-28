@@ -583,6 +583,7 @@ export function App() {
               picked={picked}
               onToggle={session.togglePicked}
               onClear={session.clearPicked}
+              onPickAll={() => session.routeSets.pickAll(cat.routes.map((r) => r.id))}
               onOpen={openRoute}
               recent={recent}
               sets={session.routeSets.sets}

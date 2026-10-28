@@ -57,9 +57,9 @@ origins in `COMMUTERLVIV_ORIGINS`. Everything it downloads or learns lives in
   updates, with its route number and heading. Pick routes to see their stops,
   or zoom in close to see every stop; tap a stop for the next arrival of every route through it, tap a vehicle for
   every stop it will reach and when.
-- **Lines.** Every route, to pick the ones the map shows with their stops -
-  all of them, the ones watched, or the ones calling near you - with the saved
-  sets of them and the lines opened lately. Open one line and the map shows only
+- **Lines.** What the map shows - every route, a saved set, or the routes
+  you tick - above the list of routes to tick from, which you can narrow to the
+  ones calling near you or the ones watched, and the lines opened lately. Open one line and the map shows only
   it, beside its stops one way or the other, each with when the route is next
   due there and where its vehicles are.
 - **Journey.** Tap where you are and where you are going. You get ways there ranked

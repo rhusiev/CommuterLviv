@@ -6,7 +6,7 @@ import type { Arrival, Catalog, Route, RouteSet } from "../lib/types";
 import { t } from "../lib/i18n";
 import { RouteBadge } from "./RouteBadge";
 import { RouteChip } from "./RouteChip";
-import { Icon } from "./Icon";
+import { Icon, type IconName } from "./Icon";
 
 /** The routes, to watch or to open one line of; and the one line open.
  *
@@ -20,13 +20,13 @@ export const NEAR_LINES_M = 500;
 const NEAR_FIX_AGE_MS = 60_000;
 const TICK_MS = 15_000;
 
-export type Filter = "all" | "watching" | "near";
-
 type BrowseProps = {
   catalog: Catalog;
   picked: Set<string>;
   onToggle: (id: string) => void;
   onClear: () => void;
+  /** Watches every route in the catalog, as no saved set */
+  onPickAll: () => void;
   /** The line, from a chip's `›` or a recently opened row */
   onOpen: (i: number) => void;
   /** Route ids, latest first */
@@ -38,15 +38,18 @@ type BrowseProps = {
   onUpdate: (set: RouteSet) => Promise<void>;
 };
 
+/** Two things, kept apart: what the map watches - every route, a saved set or
+ *  the routes ticked by hand - and, below, the list of routes, which its own
+ *  filters only narrow */
 export function LinesBrowse(p: BrowseProps) {
-  const [filter, setFilter] = useState<Filter>("all");
+  const [onlyWatched, setOnlyWatched] = useState(false);
   const [near, setNear] = useState<Set<number> | null>(null);
   const [why, setWhy] = useState("");
   const [query, setQuery] = useState("");
 
-  const pickNear = () => {
-    setFilter("near");
+  const toggleNear = () => {
     setWhy("");
+    if (near) return setNear(null);
     hereOnce({ ...ONE_FIX, maximumAge: NEAR_FIX_AGE_MS }).then(
       (pos) => {
         const at = { lat: pos.coords.latitude, lon: pos.coords.longitude };
@@ -61,11 +64,11 @@ export function LinesBrowse(p: BrowseProps) {
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
     const keep = (r: Route, i: number) =>
-      (filter !== "watching" || p.picked.has(r.id)) &&
-      (filter !== "near" || (near?.has(i) ?? false)) &&
+      (!onlyWatched || p.picked.has(r.id)) &&
+      (!near || near.has(i)) &&
       (!q || r.short.toLowerCase().includes(q) || r.long.toLowerCase().includes(q));
     return byKind(p.catalog, keep);
-  }, [p.catalog, p.picked, filter, near, query]);
+  }, [p.catalog, p.picked, onlyWatched, near, query]);
 
   const recent = p.recent
     .map((id) => p.catalog.routes.findIndex((r) => r.id === id))
@@ -73,18 +76,7 @@ export function LinesBrowse(p: BrowseProps) {
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-hidden">
-      <div role="radiogroup" aria-label={t.lines} className="flex gap-1">
-        <FilterButton on={filter === "all"} onClick={() => setFilter("all")}>
-          {t.allLines}
-        </FilterButton>
-        <FilterButton on={filter === "watching"} onClick={() => setFilter("watching")}>
-          {t.watchingLines(p.picked.size)}
-        </FilterButton>
-        <FilterButton on={filter === "near"} onClick={pickNear}>
-          {t.nearLines}
-        </FilterButton>
-      </div>
-      <SetChips {...p} />
+      <Watched {...p} />
       {recent.length > 0 && (
         <section>
           <h2 className="text-xs uppercase tracking-wide text-slate-500">{t.recentLines}</h2>
@@ -106,25 +98,23 @@ export function LinesBrowse(p: BrowseProps) {
         </section>
       )}
       <section className="flex min-h-0 flex-1 flex-col">
-        <div className="flex min-h-5 items-center justify-between">
-          <h2 className="text-xs uppercase tracking-wide text-slate-500">
-            {t.routes}
-            <span className="ml-2 normal-case text-slate-600">{t.on(p.picked.size)}</span>
-          </h2>
-          {p.picked.size > 0 && (
-            <button onClick={p.onClear} title={t.clear} className="text-slate-500 hover:text-slate-300">
-              <Icon name="clear" className="size-4" />
-            </button>
-          )}
-        </div>
+        <h2 className="text-xs uppercase tracking-wide text-slate-500">{t.routes}</h2>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t.filter}
           className="field mt-2 py-1.5"
         />
+        <div className="mt-2 flex flex-wrap gap-1">
+          <Narrow on={near !== null} onClick={toggleNear} icon="locate">
+            {t.nearLines}
+          </Narrow>
+          <Narrow on={onlyWatched} onClick={() => setOnlyWatched((on) => !on)} icon="check">
+            {t.onlyWatched}
+          </Narrow>
+        </div>
         {why && <p className="mt-2 text-xs text-slate-500">{why}</p>}
-        {filter === "watching" && p.picked.size === 0 && (
+        {onlyWatched && p.picked.size === 0 && (
           <p className="mt-2 text-xs text-slate-500">{t.noneWatched}</p>
         )}
         <RouteGrid groups={groups} picked={p.picked} onToggle={p.onToggle} onOpen={p.onOpen} />
@@ -143,33 +133,40 @@ function byKind(cat: Catalog, keep: (r: Route, i: number) => boolean) {
   return [...out];
 }
 
-function FilterButton({
+/** A filter on the list alone, on or off: outlined, with its icon, so it does
+ *  not read as one of the choices of what the map watches above */
+function Narrow({
   on,
   onClick,
+  icon,
   children,
 }: {
   on: boolean;
   onClick: () => void;
+  icon: IconName;
   children: React.ReactNode;
 }) {
   return (
     <button
-      role="radio"
-      aria-checked={on}
+      aria-pressed={on}
       onClick={onClick}
-      className={`rounded-full px-3 py-1 text-sm transition-colors ${
-        on ? "bg-accent/15 text-accent" : "text-slate-400 hover:bg-raised/70 hover:text-slate-200"
+      className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm ring-1 transition-colors ${
+        on ? "text-accent ring-accent/60" : "text-slate-400 ring-hair hover:text-slate-200"
       }`}
     >
+      <Icon name={icon} className="size-4" />
       {children}
     </button>
   );
 }
 
-function SetChips(p: BrowseProps) {
+/** What the map watches: every route, one of the saved sets, or the routes
+ *  ticked below. A set is the selection at the moment it was saved */
+function Watched(p: BrowseProps) {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const current = p.sets.find((s) => s.id === p.active);
+  const all = p.catalog.routes.length > 0 && p.catalog.routes.every((r) => p.picked.has(r.id));
 
   const guard = (fn: () => Promise<void>) => async () => {
     setError("");
@@ -182,19 +179,25 @@ function SetChips(p: BrowseProps) {
 
   return (
     <section>
-      <h2 className="text-xs uppercase tracking-wide text-slate-500">{t.sets}</h2>
-      <div className="mt-2 flex flex-wrap items-center gap-1">
-        {p.sets.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => p.onActivate(s)}
-            aria-pressed={s.id === p.active}
-            className={`rounded-full px-3 py-1 text-sm ${
-              s.id === p.active ? "bg-accent/15 text-accent" : "bg-raised/70 text-slate-300 hover:bg-raised"
-            }`}
-          >
-            {s.name}
+      <div className="flex min-h-5 items-center justify-between">
+        <h2 className="text-xs uppercase tracking-wide text-slate-500">
+          {t.onMap}
+          <span className="ml-2 normal-case text-slate-600">{t.on(p.picked.size)}</span>
+        </h2>
+        {p.picked.size > 0 && (
+          <button onClick={p.onClear} title={t.clear} className="-m-2 p-2 text-slate-500 hover:text-slate-300">
+            <Icon name="clear" className="size-4" />
           </button>
+        )}
+      </div>
+      <div role="radiogroup" aria-label={t.onMap} className="mt-2 flex flex-wrap items-center gap-1">
+        <Choice on={all && current === undefined} onClick={p.onPickAll}>
+          {t.allRoutes}
+        </Choice>
+        {p.sets.map((s) => (
+          <Choice key={s.id} on={s.id === p.active} onClick={() => p.onActivate(s)}>
+            {s.name}
+          </Choice>
         ))}
         {current && (
           <button
@@ -230,6 +233,21 @@ function SetChips(p: BrowseProps) {
       </form>
       {error && <p className="mt-1 text-xs text-rose-400">{error}</p>}
     </section>
+  );
+}
+
+function Choice({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      role="radio"
+      aria-checked={on}
+      onClick={onClick}
+      className={`rounded-full px-3 py-1 text-sm ${
+        on ? "bg-accent/15 text-accent" : "bg-raised/70 text-slate-300 hover:bg-raised"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 

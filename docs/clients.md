@@ -222,12 +222,16 @@ That is `LayersSheet` and `AccountSheet` in `mobile/lib/src/sheets.dart` and
 
 The four tabs are Map, Lines, Journey and Mine - in Ukrainian Мапа, Лінії,
 Поїздка and Моє, since "Маршрут" for a journey read as one of the "Маршрути", the
-routes. Lines browses every route: All, Watching (the ticked ones) or Near me
-(the routes of the stops within 500 m of the device's fix, asked for only when
-picked; 500 m is chosen, not derived), the route sets to make one the watched
-selection or save the ticks as one, the last five lines opened (kept on the
-device), and the grid of route chips, whose body ticks a route and whose `›`
-opens its line. Renaming and deleting a set is in Mine. An open line
+routes. Lines keeps apart what the map watches and the list of routes. On the
+map is one choice - All routes, one of the saved sets, or nothing chosen while
+the ticks are your own - with the count watched, a clear button and the form
+that saves the ticks as a set. All routes is no saved set: it ticks every route
+and leaves no set active. Below are the last five lines opened (kept on the
+device), then the routes: a filter field and two toggles that narrow only the
+list - Near me (the routes of the stops within 500 m of the device's fix, asked
+for only when turned on; 500 m is chosen, not derived) and Watched only - and
+the grid of route chips, whose body ticks a route and whose `›` opens its
+line. Renaming and deleting a set is in Mine. An open line
 uncovers the map and draws only that route, over a followed or planned journey,
 beside a panel with a back button, a toggle between its two ways named by the
 last stop, Watch, and its stops in order. On a phone that panel takes the lower
