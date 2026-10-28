@@ -38,6 +38,9 @@ dependencies:
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
   vector_map_tiles: ^9.0.0-beta.13
+  # Its theme reader, to read the style after `basemap_style.dart` rewrites
+  # what it cannot parse. `vector_map_tiles` already depends on it
+  vector_tile_renderer: ^6.1.0
   web_socket_channel: ^3.0.3
   shared_preferences: ^2.5.5
   # The cookie jar only. Shared preferences are a plain XML file in the app's
@@ -61,6 +64,9 @@ dev_dependencies:
     sdk: flutter
   # Pinned by flutter_test; listed because a test imports it.
   leak_tracker_flutter_testing: any
+  # Pinned by vector_tile_renderer; listed because a test builds a tile with them.
+  vector_tile: any
+  fixnum: any
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

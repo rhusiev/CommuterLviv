@@ -396,6 +396,7 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, txt.replace));
     await pumpUntil(tester, () => sent.isNotEmpty);
     expect(sent.single, [Place(name: 'Home', at: lviv).toJson()]);
+    await pumpQuiet(tester);
     await _done(tester, reported);
   });
 

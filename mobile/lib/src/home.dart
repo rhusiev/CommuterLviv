@@ -12,6 +12,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:vector_map_tiles/vector_map_tiles.dart';
 
 import 'api.dart';
+import 'basemap_style.dart';
 import 'follow.dart' show Stage, StageKind;
 import 'follow_card.dart';
 import 'followed.dart';
@@ -585,11 +586,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final theme = _theme;
     try {
       final read = await StyleReader(uri: theme.styleUrl).read();
+      final themed = await readTheme(theme.styleUrl);
       // Every VersaTiles style parses with theme id `default`, and the renderer
       // caches tile images under that id, so each style needs a distinct one
       final style = Style(
         name: read.name,
-        theme: read.theme.copyWith(id: theme.id),
+        theme: themed.copyWith(id: theme.id),
         providers: read.providers,
         sprites: read.sprites,
         center: read.center,

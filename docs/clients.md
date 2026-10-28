@@ -340,6 +340,10 @@ It is built to be publishable on F-Droid, which is why it is Flutter and not
 Expo: F-Droid builds from source and takes no proprietary SDK, so there is no
 Play Services, no Firebase and no keyed map SDK anywhere in the tree. The
 basemap is the same VersaTiles OpenStreetMap tiles, rendered on the device.
+Its renderer (`vector_tile_renderer`) cannot read the styles' filters of the
+form `["in", x, ["literal", [...]]]` and would leave out every layer that uses
+one - all land use, parks and forests and most roads - so the app reads the
+style through `basemap_style.dart`, which writes them as the equivalent `match`.
 The one cost of that rule is paid by the locate-me button, which is a
 hand-written channel - AOSP's `LocationManager` on Android, `CoreLocation` on
 iOS - rather than the usual package, which brings Play Services with it; see
