@@ -197,9 +197,9 @@ bare icon gets padding taken back by a negative margin (`-m-2 p-2`) rather than
 a hit area the size of its glyph. Everything that folds says so the same way:
 its chevron points where the content will go. A card opens downwards, so it
 shows ▼ closed and ▲ open. The panels fold away from the map - up under the
-search bar on the web, down above the tabs in the app - so there an open panel
-shows ▲ (web) or ▼ (app), and a folded one, which its title opens again as well
-as its chevron, the other. A pill holding two targets, the route chip,
+search bar on the web, down above the tabs in the app - so an open panel shows
+▲ on the web and ▼ in the app, and a folded one the other. A folded panel opens
+from its title as well as from its chevron. A pill holding two targets, the route chip,
 is a split button - two shapes a hair apart - since one pill with a divider lit
 only the half pressed and read as a pill that does not all respond.
 
