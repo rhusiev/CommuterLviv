@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { current, rows, WAIT_MIN_S } from "./legs";
+import { current, riddenBy, rows, WAIT_MIN_S } from "./legs";
 import type { Journey, Leg } from "./types";
 
 const T0 = 1_790_000_000;
@@ -92,5 +92,19 @@ describe("current", () => {
 
   test("arrived is on no row", () => {
     expect(current(list, { kind: "arrived" })).toBe(-1);
+  });
+});
+
+describe("riddenBy", () => {
+  test("is the vehicles the rides are planned on, and none for a ride on the timetable alone", () => {
+    const j = journey(0, 0);
+    j.legs[1] = { ...j.legs[1]!, veh: 412 };
+    j.legs[3] = { ...j.legs[3]!, veh: null };
+
+    expect([...riddenBy(j)]).toEqual([412]);
+  });
+
+  test("is no vehicle while no journey is drawn", () => {
+    expect(riddenBy(null).size).toBe(0);
   });
 });

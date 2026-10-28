@@ -22,6 +22,7 @@ import type { Pace } from "../lib/traffic";
 import { build, colour, R, type Sprites } from "../lib/sprites";
 import { t } from "../lib/i18n";
 import { fitPadding } from "../lib/padding";
+import { riddenBy } from "../lib/legs";
 import { journeyTags, onPlace } from "../lib/tags";
 import { ink, styleUrl, type Theme } from "../lib/theme";
 import type { Catalog, Journey, Place, Shapes } from "../lib/types";
@@ -41,6 +42,12 @@ const FAINT_ALPHA = 0.35;
  * The ring is the quieter of the two: a pin marks a stop that is already drawn,
  * while a place is the only thing marking itself. */
 const PIN_R = 6;
+/** How far a planned ride's ring stands off its badge, and how thick it is */
+const RIDE_RING_GAP = 4;
+const RIDE_RING_W = 3;
+/** How faint a vehicle the drawn journey does not ride is */
+const NOT_RIDDEN_ALPHA = 0.5;
+const STALE_ALPHA = 0.45;
 const PLACE_R = 5;
 
 /** Below this a name is more clutter than help, so places are dots alone */
@@ -61,6 +68,14 @@ const NARROW = "(width < 40rem)";
 
 type Locating = "off" | "waiting" | "on" | "denied";
 type Fix = { lat: number; lon: number; accuracy: number };
+
+function ring(g: CanvasRenderingContext2D, x: number, y: number, r: number, width: number, colour: string) {
+  g.beginPath();
+  g.arc(x, y, r, 0, TAU);
+  g.lineWidth = width;
+  g.strokeStyle = colour;
+  g.stroke();
+}
 
 type Props = {
   catalog: Catalog;
@@ -383,6 +398,7 @@ export function MapCanvas(props: Props) {
       }
 
       const badges = sprites.current!.badges;
+      const ridden = riddenBy(journey);
       for (const [id, veh] of live.vehicles) {
         const [lat, lon, heading] = sample(veh, now);
         const x = p.x(lon);
@@ -390,7 +406,9 @@ export function MapCanvas(props: Props) {
         if (x < -R || y < -R || x > w + R || y > h + R) continue;
 
         // Direction wedge on the rim: solid when under way, outlined when standing
-        g.globalAlpha = veh.flags & STALE_FLAG ? 0.45 : 1;
+        g.globalAlpha =
+          (veh.flags & STALE_FLAG ? STALE_ALPHA : 1) *
+          (ridden.size > 0 && !ridden.has(id) ? NOT_RIDDEN_ALPHA : 1);
         const a = ((heading - 90) * Math.PI) / 180;
         const cos = Math.cos(a);
         const sin = Math.sin(a);
@@ -415,13 +433,8 @@ export function MapCanvas(props: Props) {
           continue;
         }
         g.drawImage(badge, x - R, y - R, R * 2, R * 2);
-        if (id === vehicle) {
-          g.beginPath();
-          g.arc(x, y, R + 3, 0, TAU);
-          g.lineWidth = 2;
-          g.strokeStyle = c.nub;
-          g.stroke();
-        }
+        if (ridden.has(id)) ring(g, x, y, R + RIDE_RING_GAP, RIDE_RING_W, c.here);
+        if (id === vehicle) ring(g, x, y, R + 3, 2, c.nub);
         g.globalAlpha = 1;
       }
 

@@ -13,6 +13,7 @@ import 'package:vector_map_tiles/vector_map_tiles.dart';
 import 'api.dart';
 import 'here.dart';
 import 'journey_layer.dart';
+import 'legs.dart' show riddenBy;
 import 'live.dart';
 import 'map_controls.dart';
 import 'map_theme.dart';
@@ -159,6 +160,7 @@ class MapTab extends StatelessWidget {
               arrowed: arrowed,
               pins: pins,
               places: places,
+              ridden: riddenBy(journey),
             ),
             if (journey case final journey?)
               JourneyLayer(

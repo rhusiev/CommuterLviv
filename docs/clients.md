@@ -79,7 +79,9 @@ badge sits in a ring with a map and opens its line, "N backups ›" lists the
 backups, and Follow follows it. A note and the hurry pill say why in place,
 under them, with nothing to tap for it. The app does the same
 (`mobile/README.md`). Drawing an option also frames the map on it - its
-walks, its rides and the stops they meet. The framing, and a line's from the
+walks, its rides and the stops they meet - and rings the vehicles its rides are
+planned on (`riddenBy`, from each ride's `veh`) in the colour of the location
+dot, fading the other vehicles of its routes. The framing, and a line's from the
 Lines tab, keeps clear of the panel open over the map. The app keeps it above
 its bottom panel. The web uses the widest strip the panel leaves free, measured as
 the fit is made, or the whole map when no strip is 120 px wide past its

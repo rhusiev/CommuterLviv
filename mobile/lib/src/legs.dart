@@ -105,3 +105,8 @@ int current(List<PlanRow> list, Stage stage) {
   final next = list.indexWhere((r) => r.leg > stage.leg);
   return (next < 0 ? list.length : next) - 1;
 }
+
+/// The vehicles a journey's rides are planned on.
+Set<int> riddenBy(Journey? journey) => {
+  for (final leg in journey?.legs ?? const <Leg>[]) ?leg.veh,
+};

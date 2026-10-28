@@ -45,3 +45,10 @@ export function current(list: Row[], stage: Stage): number {
   const next = list.findIndex((r) => r.leg > stage.leg);
   return (next < 0 ? list.length : next) - 1;
 }
+
+/** The vehicles a journey's rides are planned on */
+export function riddenBy(journey: Journey | null): Set<number> {
+  const ids = new Set<number>();
+  for (const leg of journey?.legs ?? []) if (leg.veh != null) ids.add(leg.veh);
+  return ids;
+}

@@ -103,4 +103,30 @@ void main() {
       expect(current(list, const Stage(StageKind.arrived)), -1);
     });
   });
+
+  test('the vehicles ridden are those the rides are planned on', () {
+    final j = journey(0, 0);
+    final legs = [...j.legs];
+    final r = legs[1];
+    legs[1] = Leg(
+      kind: r.kind,
+      dep: r.dep,
+      arr: r.arr,
+      a: r.a,
+      b: r.b,
+      route: r.route,
+      veh: 412,
+    );
+    final planned = Journey(
+      dep: j.dep,
+      arr: j.arr,
+      rides: j.rides,
+      live: j.live,
+      confidence: j.confidence,
+      legs: legs,
+    );
+
+    expect(riddenBy(planned), {412});
+    expect(riddenBy(null), isEmpty);
+  });
 }

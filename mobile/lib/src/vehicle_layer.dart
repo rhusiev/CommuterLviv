@@ -63,6 +63,14 @@ const _arrowZoom = 13.0;
 /// Half the gap between the two tracks of chevrons on a two-way stretch.
 const _twoWayOffset = 3.5;
 
+/// How faint a vehicle is when its position is stale or the drawn journey
+/// rides another.
+const _fadedAlpha = 0.55;
+
+/// How far a ridden vehicle's ring stands off its badge, and how thick it is.
+const _riddenRingGap = 3.0;
+const _riddenRingWidth = 3.0;
+
 class VehicleLayer extends StatefulWidget {
   const VehicleLayer({
     super.key,
@@ -78,10 +86,14 @@ class VehicleLayer extends StatefulWidget {
     required this.arrowed,
     required this.pins,
     required this.places,
+    this.ridden = const {},
   });
 
   final Catalog catalog;
   final Live live;
+
+  /// The vehicles the drawn journey rides: ringed, and every other faded.
+  final Set<int> ridden;
 
   final Shapes? shapes;
 
@@ -184,6 +196,7 @@ class _VehicleLayerState extends State<VehicleLayer>
           arrowed: widget.arrowed,
           pins: widget.pins,
           places: widget.places,
+          ridden: widget.ridden,
           ink: Palette.of(widget.theme.dark),
           badge: _badge,
           label: _label,
@@ -208,6 +221,7 @@ class _Painter extends CustomPainter {
     required this.arrowed,
     required this.pins,
     required this.places,
+    required this.ridden,
     required this.ink,
     required this.badge,
     required this.label,
@@ -226,6 +240,7 @@ class _Painter extends CustomPainter {
   final int? arrowed;
   final List<int> pins;
   final List<Place> places;
+  final Set<int> ridden;
 
   /// Read at paint time: a fix arriving between builds must still be drawn.
   final Here here;
@@ -475,19 +490,25 @@ class _Painter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5
       ..strokeJoin = StrokeJoin.round;
-    final faded = ink.nub.withValues(alpha: 0.55);
-    for (final v in live.vehicles.values) {
+    final faded = ink.nub.withValues(alpha: _fadedAlpha);
+    final ring = Paint()
+      ..color = ink.here
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = _riddenRingWidth;
+    for (final MapEntry(key: id, value: v) in live.vehicles.entries) {
       final at = sample(v, now);
       final p = camera.latLngToScreenOffset(LatLng(at.lat, at.lon));
       if (!margin.contains(p)) continue;
 
       final route = catalog.routes[v.route];
       final fill = Paint()..color = routeColour(route.short, route.type);
-      // Faded: nothing has confirmed this position for half a minute
-      if (v.stale) {
-        fill.color = fill.color.withValues(alpha: 0.55);
+      // Faded: nothing has confirmed this position for half a minute, or the
+      // drawn journey rides another
+      final dim = v.stale || (ridden.isNotEmpty && !ridden.contains(id));
+      if (dim) {
+        fill.color = fill.color.withValues(alpha: _fadedAlpha);
       }
-      nub.color = standing.color = v.stale ? faded : ink.nub;
+      nub.color = standing.color = dim ? faded : ink.nub;
       canvas.drawCircle(p, badgeRadius - 1.5, fill);
       canvas.drawCircle(p, badgeRadius - 1.5, edge);
 
@@ -516,6 +537,9 @@ class _Painter extends CustomPainter {
 
       final text = badge(v.route);
       canvas.drawParagraph(text, p - Offset(badgeRadius, text.height / 2));
+      if (ridden.contains(id)) {
+        canvas.drawCircle(p, badgeRadius + _riddenRingGap, ring);
+      }
     }
   }
 
