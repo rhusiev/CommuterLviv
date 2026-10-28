@@ -168,6 +168,8 @@ class LayersSheet extends StatefulWidget {
     required this.onTraffic,
     required this.theme,
     required this.onTheme,
+    required this.blur,
+    required this.onBlur,
   });
 
   final bool lines;
@@ -176,6 +178,8 @@ class LayersSheet extends StatefulWidget {
   final ValueChanged<bool> onTraffic;
   final MapTheme theme;
   final void Function(MapTheme theme) onTheme;
+  final bool blur;
+  final ValueChanged<bool> onBlur;
 
   @override
   State<LayersSheet> createState() => _LayersSheetState();
@@ -187,6 +191,7 @@ class _LayersSheetState extends State<LayersSheet> {
   late bool _lines = widget.lines;
   late bool _traffic = widget.traffic;
   late MapTheme _theme = widget.theme;
+  late bool _blur = widget.blur;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -210,6 +215,15 @@ class _LayersSheetState extends State<LayersSheet> {
             onChanged: (on) {
               setState(() => _traffic = on);
               widget.onTraffic(on);
+            },
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.blur_on),
+            title: Text(txt.blur),
+            value: _blur,
+            onChanged: (on) {
+              setState(() => _blur = on);
+              widget.onBlur(on);
             },
           ),
           const Divider(height: 1),

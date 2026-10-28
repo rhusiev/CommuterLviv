@@ -33,6 +33,8 @@ import { t } from "./lib/i18n";
 
 const LINES_KEY = "commuterlviv.lines";
 const TRAFFIC_KEY = "commuterlviv.traffic";
+/** Set when the blur is turned off: blurring is the default */
+const NO_BLUR_KEY = "commuterlviv.noBlur";
 const JOIN = /^\/join\/([\w-]+)\/?$/;
 /** A dot in the planner's A/B ring: a place, but neither end of a journey */
 const PLACE_MARK = "•";
@@ -115,6 +117,10 @@ export function App() {
   /** The quiet banner closed; it comes back the next time the vehicles go quiet */
   const [quietShut, setQuietShut] = useState(false);
   const [jams, setJams] = useState(() => loadFlag(TRAFFIC_KEY));
+  const [noBlur, setNoBlur] = useState(() => loadFlag(NO_BLUR_KEY));
+  useEffect(() => {
+    document.documentElement.classList.toggle("no-blur", noBlur);
+  }, [noBlur]);
   const [layersOpen, setLayersOpen] = useState(false);
 
   const openTab = (next: UrlState["tab"]) => {
@@ -465,6 +471,11 @@ export function App() {
             onTheme={(next) => {
               setTheme(next);
               saveTheme(next);
+            }}
+            blur={!noBlur}
+            onBlur={(on) => {
+              setNoBlur(!on);
+              saveFlag(NO_BLUR_KEY, !on);
             }}
           />
         </Menu>

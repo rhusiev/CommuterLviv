@@ -55,22 +55,50 @@ class Floating extends StatelessWidget {
   final Clip clipBehavior;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: panel.withValues(alpha: floatingAlpha),
-    surfaceTintColor: Colors.transparent,
-    shape: shape,
-    elevation: elevation,
-    // The blur reaches as far as the clip, so a surface left unclipped would
-    // blur the whole screen behind it
-    clipBehavior: clipBehavior == Clip.none ? Clip.antiAlias : clipBehavior,
-    child: BackdropFilter(
-      filter: ImageFilter.blur(
-        sigmaX: floatingBlurSigma,
-        sigmaY: floatingBlurSigma,
+  Widget build(BuildContext context) {
+    // Without the blur the map behind an 80% panel is noise under the text,
+    // so the surface is solid instead
+    if (!Blurring.of(context)) {
+      return Material(
+        color: panel,
+        surfaceTintColor: Colors.transparent,
+        shape: shape,
+        elevation: elevation,
+        clipBehavior: clipBehavior,
+        child: child,
+      );
+    }
+    return Material(
+      color: panel.withValues(alpha: floatingAlpha),
+      surfaceTintColor: Colors.transparent,
+      shape: shape,
+      elevation: elevation,
+      // The blur reaches as far as the clip, so a surface left unclipped would
+      // blur the whole screen behind it
+      clipBehavior: clipBehavior == Clip.none ? Clip.antiAlias : clipBehavior,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: floatingBlurSigma,
+          sigmaY: floatingBlurSigma,
+        ),
+        child: child,
       ),
-      child: child,
-    ),
-  );
+    );
+  }
+}
+
+/// Whether what floats over the map blurs it, as the layers sheet sets it. On
+/// where nothing says otherwise.
+class Blurring extends InheritedWidget {
+  const Blurring({super.key, required this.on, required super.child});
+
+  final bool on;
+
+  static bool of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<Blurring>()?.on ?? true;
+
+  @override
+  bool updateShouldNotify(Blurring old) => on != old.on;
 }
 
 /// One round button floating over the map.

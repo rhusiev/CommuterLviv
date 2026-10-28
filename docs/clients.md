@@ -183,7 +183,9 @@ their own icon. Above that sit the utilities everything is built from - `panel`,
 is translucent, blurred, a hairline ring and a soft shadow rather than a border,
 because the map underneath is the context. The app's `Floating` is the same 80%
 panel over a blur of the map behind it. A dialog dims the page and, on the web,
-blurs it. Nothing outside `app.css` names a `slate-*` shade for a surface.
+blurs it. "Blur behind panels" in the layers panel turns all of it off, for a
+phone that stutters under it, and the surfaces that blurred are then solid
+(`no-blur` on the web's `<html>`, `Blurring` in the app). Nothing outside `app.css` names a `slate-*` shade for a surface.
 Whatever looks like one control is one target to its edge: a bar's inset is its
 buttons' own padding, with the highlight on a span inside (the tab bar), and a
 bare icon gets padding taken back by a negative margin (`-m-2 p-2`) rather than

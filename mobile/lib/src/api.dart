@@ -385,6 +385,11 @@ class Api {
 
   bool get showLines => _setting('lines', false);
 
+  /// On unless turned off, for a phone that stutters under it
+  bool get blur => _setting('blur', true);
+
+  Future<void> setBlur(bool on) => _keep('blur', on);
+
   Future<void> setShowLines(bool on) => _keep('lines', on);
 
   /// Off unless asked for: it keeps location on with the app off the screen
