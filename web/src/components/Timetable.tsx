@@ -67,7 +67,7 @@ export function Timetable({
               <button
                 onClick={() => onPins(stops.filter((p) => p !== i))}
                 title={t.unpin}
-                className="text-accent hover:text-rose-300"
+                className="-m-2 p-2 text-accent hover:text-rose-300"
               >
                 <Icon name="pin" filled className="size-4" />
               </button>

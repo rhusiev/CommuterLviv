@@ -678,7 +678,9 @@ export function App() {
       {/* One font weight throughout, so choosing a tab does not resize its
           label and slide the others. Equal columns where they fit; a phone
           has room only for each label's own width */}
-      <nav className="bar absolute bottom-3 left-1/2 z-30 grid w-max -translate-x-1/2 grid-flow-col gap-0.5 p-1 text-sm sm:grid-cols-4 sm:gap-1">
+      {/* The bar's inset is each tab's own padding, so a tap anywhere on the
+          bar lands on a tab */}
+      <nav className="bar absolute bottom-3 left-1/2 z-30 grid w-max -translate-x-1/2 grid-flow-col text-sm sm:grid-cols-4">
         {TABS.map((v) => (
           <button
             key={v}
@@ -686,13 +688,17 @@ export function App() {
               openTab(v);
               setLayersOpen(false);
             }}
-            className={`rounded-full px-2 py-1.5 font-medium transition-colors sm:px-4 ${
-              tab === v
-                ? "bg-accent/15 text-accent"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
+            className="group rounded-full p-1 font-medium"
           >
-            {TAB_NAMES[v]}
+            <span
+              className={`block rounded-full px-2 py-1.5 transition-colors sm:px-4 ${
+                tab === v
+                  ? "bg-accent/15 text-accent"
+                  : "text-slate-400 group-hover:text-slate-200"
+              }`}
+            >
+              {TAB_NAMES[v]}
+            </span>
           </button>
         ))}
       </nav>

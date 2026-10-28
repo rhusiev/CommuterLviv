@@ -43,7 +43,7 @@ export function RouteChip({
         onClick={onLine}
         aria-label={t.lineOf(route.short)}
         title={t.showLine}
-        className="border-l border-hair px-2 text-slate-400 hover:bg-raised hover:text-slate-100"
+        className="w-8 shrink-0 border-l border-hair text-slate-400 hover:bg-raised hover:text-slate-100"
       >
         ›
       </button>

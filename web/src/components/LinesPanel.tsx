@@ -297,7 +297,7 @@ export function LineView(p: LineProps) {
   return (
     <div className="flex h-full flex-col gap-2 overflow-hidden">
       <div className="flex items-center gap-2">
-        <button onClick={p.onBack} title={t.back} aria-label={t.back} className="text-slate-400 hover:text-slate-200">
+        <button onClick={p.onBack} title={t.back} aria-label={t.back} className="-m-2 p-2 text-slate-400 hover:text-slate-200">
           <Icon name="left" />
         </button>
         <RouteBadge route={r} className="px-1.5 py-0.5 text-xs" />
