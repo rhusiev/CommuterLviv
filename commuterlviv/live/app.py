@@ -449,15 +449,20 @@ async def _planned(app, what, failed, work, *args):
         return None, error(failed, 500)
 
 
+def _no_planner(app):
+    """Why there is no journey planner to ask, as the refusal to send."""
+    if app.preparing:
+        return error("The journey planner is getting ready; try again in "
+                     "a few minutes", 503, preparing=True)
+    return error("This service has no journey planner", status=503)
+
+
 async def journey(request, session):
     """Door to door, ranked by arrival; each leg says whether it came from a
     tracked vehicle or from the timetable."""
     app = request.app.state
     if app.planner is None:
-        if app.preparing:
-            return error("The journey planner is getting ready; try again in "
-                         "a few minutes", 503, preparing=True)
-        return error("This service has no journey planner", status=503)
+        return _no_planner(app)
     origin = _origin(request.query_params)
     dest = _point(request.query_params.get("to"))
     if origin is None or dest is None:
@@ -508,6 +513,26 @@ def _avoid(raw):
     if asked == VEHICLE_TYPES:
         return None, "Avoid leaves no vehicle to ride"
     return asked, None
+
+
+async def departures(request, session):
+    """When a line leaves a stop today, by the timetable: the open line's
+    hours and how often it runs. `route` and `stop` are catalog positions."""
+    app = request.app.state
+    q = request.query_params
+    cat = app.svc.live.cat
+    route, stop = _id(q.get("route")), _id(q.get("stop"))
+    if route is None or stop is None or route >= len(cat.routes) \
+            or stop >= len(cat.stops):
+        return error("Route and stop must be catalog positions")
+    planner = app.planner
+    if planner is None:
+        return _no_planner(app)
+    if planner.cat is not cat:
+        return error("The timetable is being renewed; try again in a moment", 503)
+    now = time.time()
+    return JSONResponse({"t": round(now), "dep": planner.departures(
+        cat.routes[route], cat.stops[stop], now)})
 
 
 async def backup(request, session):
@@ -737,6 +762,7 @@ def routes():
         Route("/api/plan", protected(journey), methods=["GET"]),
         Route("/api/report", protected(report), methods=["POST"]),
         Route("/api/backup", protected(backup), methods=["GET"]),
+        Route("/api/departures", protected(departures), methods=["GET"]),
         Route("/api/pins", protected(pins), methods=["GET", "POST"]),
         Route("/api/places", protected(places), methods=["GET", "POST"]),
         Route("/api/search", protected(places_near, unsafe=False)),

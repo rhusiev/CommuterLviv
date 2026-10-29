@@ -9,13 +9,14 @@ which is what the wire uses.
 """
 import asyncio
 import dataclasses
+import datetime
 import time
 from itertools import zip_longest
 
 import numpy as np
 import requests
 
-from .. import network, plan, replay, walk as footpaths
+from .. import localtime, network, plan, replay, walk as footpaths
 from ..logs import brief
 from . import geometry
 
@@ -71,6 +72,30 @@ class Planner:
         path, between = self._drawing(origin, dest, arrivals, speed, hurry)
         return {"t": now,
                 "options": [self.wire(j, path, between) for j in found]}, found
+
+    def departures(self, route, stop, now):
+        """The timetable's departures of `route` from `stop` (feed ids) on the
+        service day `now` falls in, with yesterday's still running past
+        midnight but none of tomorrow's: Unix seconds, soonest first. A
+        pattern that ends at `stop` arrives there, on the way the other way
+        round, so it does not count."""
+        tt = self.tt
+        i = tt.stop_i.get(stop)
+        if i is None:
+            return []
+        midnight = localtime.midnight(now)
+        today = datetime.datetime.fromtimestamp(midnight, localtime.TZ).date()
+        days = [(today - datetime.timedelta(days=1), -localtime.DAY_S),
+                (today, 0.0)]
+        runs = [(np.array([tt.calendar.runs(sv, d) for sv in tt.services],
+                          dtype=bool), shift) for d, shift in days]
+        out = set()
+        for pat in tt.by_route.get(route, ()):
+            for col in np.flatnonzero(pat.stops[:-1] == i):
+                for running, shift in runs:
+                    at = pat.times[running[pat.service], col] + shift
+                    out.update((at[at >= 0] + midnight).astype(int).tolist())
+        return sorted(out)
 
     def backup(self, origin, dest, arrivals, speed, hurry_kmh, j, leg, n):
         """Journey `j` taking the `n`-th backup of its `leg`-th leg as sent,

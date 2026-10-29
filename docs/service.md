@@ -89,6 +89,17 @@ for over five minutes (`STUCK_S`) away from either end of its line (`ENDS_M`,
 reported for `FRESH` (30 s), the `STALE` bit: `"stuck"` and `"silent"`. Both are
 judged on the positions last published, so a stop's board and the map agree.
 
+## When a line runs
+
+`GET /api/departures?route=R&stop=S` (catalog positions) answers `{t, dep}`:
+every timetabled departure of the route from that stop on the service day now
+falls in, as Unix seconds, soonest first (`Planner.departures`). Yesterday's
+trips still running past midnight count, tomorrow's do not, and a pattern that
+ends at the stop does not leave it. The clients read the open line's first and
+last departure and how often it leaves around now from it. It answers 400 for
+a route or stop the catalog lacks and 503 without a planner or while the city
+is renewed.
+
 ## Seconds to each stop, corrected
 
 The pace model reads Lviv as faster than it is - over 2026-09-14..10-08 it
