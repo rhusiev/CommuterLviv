@@ -1,9 +1,14 @@
 type Part = { d: string; dash?: string };
 
+/** Also drawn on the map's canvas, for a low-floor vehicle */
+export const PATHS_WHEELCHAIR =
+  "M11 3.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 1 0 0-3M11 8v6h5l2.5 5M11 11h5M8 10.5a5.5 5.5 0 1 0 7 7.5";
+
 const RING = (r: number) => `M12 ${12 - r}a${r} ${r} 0 1 0 0 ${2 * r}a${r} ${r} 0 1 0 0 ${-2 * r}`;
 
 const PATHS = {
   menu: "M4 7h16M4 12h16M4 17h16",
+  wheelchair: PATHS_WHEELCHAIR,
   account: "M12 4.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 1 0 0-7M5 20c1.2-3.4 4-5 7-5s5.8 1.6 7 5",
   layers: "M12 3 3 8l9 5 9-5-9-5ZM3 13l9 5 9-5",
   follow: [

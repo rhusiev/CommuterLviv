@@ -17,6 +17,8 @@ async function panel(lang: Lang, blur = true) {
     onTheme: () => {},
     blur,
     onBlur: () => {},
+    lowFloor: false,
+    onLowFloor: () => {},
   };
   return renderToStaticMarkup(<LayersPanel {...props} />);
 }

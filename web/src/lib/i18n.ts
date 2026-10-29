@@ -4,6 +4,7 @@
 import type { Connection } from "./live";
 import type { NoFix } from "./position";
 import type { ThemeId } from "./theme";
+import type { Doubt } from "./types";
 
 export type Lang = "uk" | "en";
 
@@ -247,6 +248,16 @@ const en = {
   dragToOrder: "Drag to reorder",
   traffic: "Traffic",
   blur: "Blur behind panels",
+  lowFloorSetting: "Mark low-floor vehicles",
+  lowFloor: "Low floor",
+  doubt: {
+    stuck: (route: string) => `${route} has stood still for over 5 min`,
+    silent: (route: string) => `${route} has stopped reporting where it is`,
+  } satisfies Record<Doubt, (route: string) => string>,
+  fleet: (n: string) => `№ ${n}`,
+  lastSeen: (ago: string) => `Last seen ${ago} ago`,
+  seconds: (n: number) => `${n} s`,
+  followVehicle: "Keep it in the middle of the map",
   trafficFree: "On time",
   trafficSlow: "Crawling",
   trafficHint: "Only on streets where enough trams and buses ran lately",
@@ -491,6 +502,16 @@ const uk: Strings = {
   dragToOrder: "Перетягніть, щоб змінити порядок",
   traffic: "Затори",
   blur: "Розмиття під панелями",
+  lowFloorSetting: "Позначати низькопідлогові",
+  lowFloor: "Низька підлога",
+  doubt: {
+    stuck: (route: string) => `${route} стоїть понад 5 хв`,
+    silent: (route: string) => `${route} перестав повідомляти, де він`,
+  } satisfies Record<Doubt, (route: string) => string>,
+  fleet: (n: string) => `№ ${n}`,
+  lastSeen: (ago: string) => `Востаннє видно ${ago} тому`,
+  seconds: (n: number) => `${n} с`,
+  followVehicle: "Тримати його посередині мапи",
   trafficFree: "За розкладом",
   trafficSlow: "Ледве повзе",
   trafficHint: "Лише на вулицях, де останнім часом проїхало досить транспорту",

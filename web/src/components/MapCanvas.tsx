@@ -26,9 +26,9 @@ import { riddenBy } from "../lib/legs";
 import { journeyTags, onPlace } from "../lib/tags";
 import { ink, styleUrl, type Theme } from "../lib/theme";
 import type { Catalog, Journey, Place, Shapes } from "../lib/types";
-import { MOVING_FLAG, STALE_FLAG } from "../lib/wire";
+import { LOW_FLOOR_FLAG, MOVING_FLAG, STALE_FLAG } from "../lib/wire";
 import type { Held } from "./HoldMenu";
-import { Icon } from "./Icon";
+import { Icon, PATHS_WHEELCHAIR } from "./Icon";
 
 /** The vehicle/stop overlay is a 2D canvas drawn from MapLibre's own `render`
  * event, so the two agree within a frame; drawing on a separate animation frame
@@ -69,6 +69,29 @@ const NARROW = "(width < 40rem)";
 type Locating = "off" | "waiting" | "on" | "denied";
 type Fix = { lat: number; lon: number; accuracy: number };
 
+/** The glyph's disc on a marker's rim, and how its 24-unit icon is scaled in */
+const CHAIR_R = 7;
+const CHAIR_SCALE = 0.42;
+const CHAIR = new Path2D(PATHS_WHEELCHAIR);
+
+/** A low-floor vehicle's mark: the wheelchair glyph on a disc at `x`, `y` */
+function wheelchair(g: CanvasRenderingContext2D, x: number, y: number, c: { here: string; edge: string }) {
+  g.beginPath();
+  g.arc(x, y, CHAIR_R, 0, TAU);
+  g.fillStyle = c.here;
+  g.fill();
+  g.save();
+  g.translate(x, y);
+  g.scale(CHAIR_SCALE, CHAIR_SCALE);
+  g.translate(-12, -12);
+  g.strokeStyle = c.edge;
+  g.lineWidth = 2.5;
+  g.lineCap = "round";
+  g.lineJoin = "round";
+  g.stroke(CHAIR);
+  g.restore();
+}
+
 function ring(g: CanvasRenderingContext2D, x: number, y: number, r: number, width: number, colour: string) {
   g.beginPath();
   g.arc(x, y, r, 0, TAU);
@@ -80,6 +103,8 @@ function ring(g: CanvasRenderingContext2D, x: number, y: number, r: number, widt
 type Props = {
   catalog: Catalog;
   live: Live;
+  /** Mark the vehicles the feed calls low floor */
+  lowFloor?: boolean;
   stops: number[];
   /** Every other stop: drawn faint and clickable from `ALL_STOPS_ZOOM` */
   faint: number[];
@@ -87,6 +112,9 @@ type Props = {
   onPickStop: (i: number | null) => void;
   vehicle: number | null;
   onPickVehicle: (id: number | null) => void;
+  /** A vehicle the camera keeps in the middle, until a pan lets go of it */
+  tracked?: number | null;
+  onUntrack?: () => void;
   /** Compared by identity, so a new object flies even to the same place */
   focus: { lat: number; lon: number } | null;
   /** `[west, south, east, north]` */
@@ -211,7 +239,7 @@ export function MapCanvas(props: Props) {
       const m = map!;
       const p = screen(viewOf(m), w, h);
       const now = performance.now();
-      const { lines, stops, faint, selected, pinned, places, journey, marks, vehicle } =
+      const { lines, stops, faint, selected, pinned, places, journey, marks, vehicle, lowFloor } =
         latest.current;
       const c = paint.current;
 
@@ -436,6 +464,7 @@ export function MapCanvas(props: Props) {
         }
         g.drawImage(badge, x - R, y - R, R * 2, R * 2);
         if (ridden.has(id)) ring(g, x, y, R + RIDE_RING_GAP, RIDE_RING_W, c.here);
+        if (lowFloor && veh.flags & LOW_FLOOR_FLAG) wheelchair(g, x + R, y + R, c);
         if (id === vehicle) ring(g, x, y, R + 3, 2, c.nub);
         g.globalAlpha = 1;
       }
@@ -498,6 +527,7 @@ export function MapCanvas(props: Props) {
       // A pan lets go of the dot; a zoom keeps it in the middle
       map.on("dragstart", () => {
         keep.current = false;
+        if (latest.current.tracked != null) latest.current.onUntrack?.();
       });
       // Android's browsers raise a long press as `contextmenu` too, iOS Safari
       // does not, so a long press is also told from the touches
@@ -654,6 +684,25 @@ export function MapCanvas(props: Props) {
       },
     );
   }, [tracking]);
+
+  // Every frame while a vehicle is followed: it moves between reports, eased
+  const tracked = props.tracked ?? null;
+  useEffect(() => {
+    if (tracked === null || !ready) return;
+    let frame = 0;
+    const keepOn = () => {
+      const m = held.current;
+      const v = live.vehicles.get(tracked);
+      if (m && v) {
+        const [lat, lon] = sample(v, performance.now());
+        const at = m.getCenter();
+        if (at.lat !== lat || at.lng !== lon) m.jumpTo({ center: [lon, lat] });
+      }
+      frame = requestAnimationFrame(keepOn);
+    };
+    keepOn();
+    return () => cancelAnimationFrame(frame);
+  }, [tracked, ready, live]);
 
   return (
     <div ref={box} className="absolute inset-0 touch-none">

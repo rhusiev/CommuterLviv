@@ -36,6 +36,7 @@ const LINES_KEY = "commuterlviv.lines";
 const TRAFFIC_KEY = "commuterlviv.traffic";
 /** Set when the blur is turned off: blurring is the default */
 const NO_BLUR_KEY = "commuterlviv.noBlur";
+const LOW_FLOOR_KEY = "commuterlviv.lowFloor";
 const JOIN = /^\/join\/([\w-]+)\/?$/;
 /** A dot in the planner's A/B ring: a place, but neither end of a journey */
 const PLACE_MARK = "•";
@@ -119,6 +120,9 @@ export function App() {
   const [quietShut, setQuietShut] = useState(false);
   const [jams, setJams] = useState(() => loadFlag(TRAFFIC_KEY));
   const [noBlur, setNoBlur] = useState(() => loadFlag(NO_BLUR_KEY));
+  const [lowFloor, setLowFloor] = useState(() => loadFlag(LOW_FLOOR_KEY));
+  /** The vehicle the map keeps in the middle, while its card is open */
+  const [tracked, setTracked] = useState<number | null>(null);
   useEffect(() => {
     document.documentElement.classList.toggle("no-blur", noBlur);
   }, [noBlur]);
@@ -370,6 +374,10 @@ export function App() {
       <MapCanvas
         catalog={cat}
         live={live}
+        lowFloor={lowFloor}
+        // Only while its card is open: closing it, or picking another, lets go
+        tracked={tracked !== null && tracked === veh ? tracked : null}
+        onUntrack={() => setTracked(null)}
         stops={stops}
         faint={faint}
         selected={stop}
@@ -484,6 +492,11 @@ export function App() {
             onTheme={(next) => {
               setTheme(next);
               saveTheme(next);
+            }}
+            lowFloor={lowFloor}
+            onLowFloor={(on) => {
+              setLowFloor(on);
+              saveFlag(LOW_FLOOR_KEY, on);
             }}
             blur={!noBlur}
             onBlur={(on) => {
@@ -640,6 +653,7 @@ export function App() {
         >
           {stop !== null ? (
             <StopCard
+              lowFloor={lowFloor}
               catalog={cat}
               stop={stop}
               arrivals={live.arrivals[String(stop)]}
@@ -670,6 +684,9 @@ export function App() {
             <VehicleCard
               // Another vehicle is another card, not this one's calls kept
               key={veh}
+              lowFloor={lowFloor}
+              following={tracked === veh}
+              onFollow={(on) => setTracked(on ? veh : null)}
               catalog={cat}
               veh={veh}
               onStop={(i) => {

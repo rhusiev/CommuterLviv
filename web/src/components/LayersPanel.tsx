@@ -15,6 +15,8 @@ type Props = {
   onTheme: (theme: Theme) => void;
   blur: boolean;
   onBlur: (on: boolean) => void;
+  lowFloor: boolean;
+  onLowFloor: (on: boolean) => void;
 };
 
 function Toggle(p: { label: string; on: boolean; onChange: (on: boolean) => void }) {
@@ -36,6 +38,7 @@ export function LayersPanel(p: Props) {
     <div className="flex flex-col gap-1">
       <Toggle label={t.everyRoute} on={p.lines} onChange={p.onLines} />
       <Toggle label={t.traffic} on={p.traffic} onChange={p.onTraffic} />
+      <Toggle label={t.lowFloorSetting} on={p.lowFloor} onChange={p.onLowFloor} />
       <Toggle label={t.blur} on={p.blur} onChange={p.onBlur} />
       <h2 className="mt-2 px-2 text-xs uppercase tracking-wide text-slate-500">
         {t.basemap}

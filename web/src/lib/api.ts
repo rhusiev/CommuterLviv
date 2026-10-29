@@ -1,6 +1,5 @@
 import { readJson, writeJson } from "./storage";
 import type {
-  Call,
   Catalog,
   Found,
   Journey,
@@ -12,6 +11,7 @@ import type {
   Shapes,
   Streets,
   Traffic,
+  VehicleStops,
 } from "./types";
 
 /** Same origin by default: Vite proxies `/api` and `/ws` in development, so the
@@ -105,7 +105,7 @@ export const api = {
   deleteSet: (id: string) => call<void>(`/api/sets/${id}`, { method: "DELETE" }),
   activateSet: (id: string | null) => post<void>("/api/sets/active", { id }),
 
-  vehicle: (veh: number): Promise<{ t: number; veh: number; stops: Call[] }> =>
+  vehicle: (veh: number): Promise<VehicleStops> =>
     call(`/api/vehicle?veh=${veh}`),
   /** `at` in unix seconds leaves at that time instead of now; a future one has
    * no vehicles to see, so every leg comes back on the timetable. `speed` is
