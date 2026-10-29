@@ -71,6 +71,24 @@ the rule by 6.02 and the model by 5.14, and the share foretold over two
 minutes after the vehicle had actually gone was 50%, 17% and 17%. The
 turnarounds and the minutes of stands are kept with the model across restarts.
 
+## What the feed says of a vehicle, and doubted arrivals
+
+Besides where a vehicle is, the feed names it: `license_plate` carries a tram's
+or trolleybus's fleet number and a bus's plate, and `label` reads `low_floor` or
+`high_floor`. The service keeps both per vehicle (`Live.meta`). A vehicle the
+feed calls low floor carries the `LOW_FLOOR` bit (4) in its frame's flags, and
+its arrival rows `low_floor: true`. The word is taken only where it is said: on
+2026-10-29 it named 10 of 71 trams and 28 of 63 trolleybuses low floor but one
+bus in 484, so a vehicle without the bit is unknown, never high floor.
+`/api/vehicle` adds `fleet`, `low_floor` and `seen`, the Unix second of its
+last report.
+
+An arrival is doubted, `doubt` on its row, when its vehicle has stood still
+for over five minutes (`STUCK_S`) away from either end of its line (`ENDS_M`,
+150 m, where standing is laying over) - the `STUCK` bit (8) - or when it has not
+reported for `FRESH` (30 s), the `STALE` bit: `"stuck"` and `"silent"`. Both are
+judged on the positions last published, so a stop's board and the map agree.
+
 ## Seconds to each stop, corrected
 
 The pace model reads Lviv as faster than it is - over 2026-09-14..10-08 it

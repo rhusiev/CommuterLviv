@@ -352,7 +352,8 @@ async def arrivals(request, session):
     cat = app.svc.live.cat
     ids = [i for i in map(_id, want.split(",")[:hub.MAX_STOPS])
            if i is not None and i < len(cat.stops)]
-    return JSONResponse(hub.due(app.svc.live.arrivals, ids))
+    live = app.svc.live
+    return JSONResponse(hub.due(live.arrivals, ids, live.positions))
 
 
 async def vehicle(request, session):
@@ -364,7 +365,8 @@ async def vehicle(request, session):
         return error("Veh must be a number")
     arr = app.svc.live.arrivals
     rows = arr.of(veh)
-    return JSONResponse({"t": arr.t, "veh": veh, "stops": [
+    return JSONResponse({"t": arr.t, "veh": veh,
+                         **(app.svc.live.vehicle(veh) or {}), "stops": [
         {"stop": int(r["stop"]), "route": int(r["route"]), "t": int(r["t"]),
          **({"planned": True} if r["planned"] else {})}
         for r in rows]})
