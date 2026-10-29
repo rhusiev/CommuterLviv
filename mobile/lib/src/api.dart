@@ -250,6 +250,7 @@ class Api {
     int? at,
     required double speed,
     double? hurry,
+    Set<String> avoid = const {},
   }) async {
     // On board, only the vehicle's id leaves the device
     final origin = aboard != null
@@ -260,7 +261,8 @@ class Api {
       '/api/plan?$origin'
           '&to=${to.latitude},${to.longitude}&speed=$speed'
           '${hurry == null ? '' : '&hurry=$hurry'}'
-          '${at == null ? '' : '&at=$at'}',
+          '${at == null ? '' : '&at=$at'}'
+          '${avoid.isEmpty ? '' : '&avoid=${avoid.join(',')}'}',
     ) as Map<String, dynamic>;
     return (
       options: [
@@ -411,6 +413,18 @@ class Api {
 
   Future<void> setRecentLines(List<String> ids) =>
       _prefs.setStringList('commuterlviv.recentLines', ids);
+
+  /// The vehicle types searches leave out; never all of them, which the
+  /// service would refuse
+  Set<String> get avoid {
+    final held = (_prefs.getStringList('commuterlviv.avoid') ?? const [])
+        .where(modes.contains)
+        .toSet();
+    return held.length < modes.length ? held : const {};
+  }
+
+  Future<void> setAvoid(Set<String> avoid) =>
+      _prefs.setStringList('commuterlviv.avoid', avoid.toList());
 
   String? get language => _setting<String?>('lang', null);
 

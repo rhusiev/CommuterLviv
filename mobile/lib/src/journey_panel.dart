@@ -118,6 +118,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
   int? _at;
 
   late Prefer _prefer = widget.api.prefer;
+  late Set<String> _avoid = widget.api.avoid;
 
   /// km/h on the level, starting from the one kept as the usual.
   late double _speed = widget.api.walkSpeed;
@@ -225,6 +226,20 @@ class _JourneyPanelState extends State<JourneyPanel> {
     };
   }
 
+  void _orderBy(Prefer p) {
+    setState(() => _prefer = p);
+    widget.api.setPrefer(p);
+  }
+
+  void _toggleMode(String mode) {
+    final next = {..._avoid};
+    if (!next.remove(mode)) next.add(mode);
+    setState(() => _avoid = next);
+    unawaited(widget.api.setAvoid(next));
+    // Shown options rode what is now left out: ask again
+    if (_options != null) unawaited(_search());
+  }
+
   Future<void> _search() async {
     final from = widget.from;
     final aboard = widget.aboard;
@@ -242,6 +257,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
         at: aboard == null ? _at : null,
         speed: _speed,
         hurry: widget.api.hurrySpeed,
+        avoid: _avoid,
       );
       if (!mounted) return;
       setState(() {
@@ -459,17 +475,39 @@ class _JourneyPanelState extends State<JourneyPanel> {
         ),
       ],
       const Spacer(),
-      PopupMenuButton<Prefer>(
-        icon: const Icon(Icons.sort),
-        tooltip: '${txt.preferBy}: ${txt.prefer(_prefer)}',
+      // How the options are ordered, and below a rule the vehicle types they
+      // may ride: rarely left out, so here rather than in a row of its own,
+      // with a dot on the button while one is
+      PopupMenuButton<Object>(
+        icon: Badge(
+          isLabelVisible: _avoid.isNotEmpty,
+          smallSize: 6,
+          backgroundColor: Colors.amber,
+          child: const Icon(Icons.sort),
+        ),
+        tooltip: [
+          '${txt.preferBy}: ${txt.prefer(_prefer)}',
+          if (_avoid.isNotEmpty)
+            txt.leftOut([for (final m in _avoid) txt.kinds[m] ?? m].join(', ')),
+        ].join('. '),
         initialValue: _prefer,
-        onSelected: (p) {
-          setState(() => _prefer = p);
-          widget.api.setPrefer(p);
+        onSelected: (picked) => switch (picked) {
+          final Prefer p => _orderBy(p),
+          final String mode => _toggleMode(mode),
+          _ => null,
         },
         itemBuilder: (_) => [
           for (final p in Prefer.values)
             PopupMenuItem(value: p, child: Text(txt.prefer(p))),
+          const PopupMenuDivider(),
+          for (final m in modes)
+            CheckedPopupMenuItem(
+              value: m,
+              checked: !_avoid.contains(m),
+              // The last type left cannot go: there would be nothing to ride
+              enabled: _avoid.contains(m) || _avoid.length < modes.length - 1,
+              child: Text(txt.kinds[m] ?? m),
+            ),
         ],
       ),
     ],

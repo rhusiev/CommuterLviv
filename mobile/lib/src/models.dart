@@ -543,6 +543,9 @@ class Aboard {
   final int? route;
 }
 
+/// The vehicle types a search can leave out, as the service names them.
+const modes = ['bus', 'tram', 'trolleybus'];
+
 /// What the options are sorted by. The whole walk goes last wherever changes
 /// or backups are asked for, since it has neither to speak of.
 enum Prefer {

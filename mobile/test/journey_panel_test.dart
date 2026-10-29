@@ -316,6 +316,35 @@ void main() {
     expect(pill, findsOneWidget);
   });
 
+  testWidgets('a type left out in the order menu is sent, and searched again', (
+    tester,
+  ) async {
+    allowRealHttp();
+    final asked = <Uri>[];
+    final server = (await tester.runAsync(() => _serve(asked)))!;
+    addTearDown(() => server.close(force: true));
+    await pump(
+      tester,
+      server: 'http://${server.address.host}:${server.port}',
+      catalog: _twoLines,
+      from: const LatLng(49.84, 24.03),
+      to: const LatLng(49.81, 24.05),
+    );
+    await tester.tap(find.text(txt.findRoute));
+    await pumpUntil(tester, () => _length.evaluate().isNotEmpty);
+    expect(asked.single.queryParameters['avoid'], isNull);
+
+    await tester.tap(find.byIcon(Icons.sort));
+    await tester.pumpAndSettle();
+    // The menu item takes the tap as a whole, not through its label
+    await tester.tap(
+      find.widgetWithText(CheckedPopupMenuItem<Object>, txt.kinds['tram']!),
+    );
+    await pumpUntil(tester, () => asked.length == 2);
+
+    expect(asked.last.queryParameters['avoid'], 'tram');
+  });
+
   testWidgets('an end chosen outside the panel reads by its name there', (
     tester,
   ) async {
