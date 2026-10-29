@@ -133,4 +133,28 @@ void main() {
       expect(opened(many, 'new'), ['new', ...many.take(recentLines - 1)]);
     });
   });
+
+  group('lineHours', () {
+    const min = 60;
+    final dep = [
+      for (final m in [0, 8, 16, 24, 32, 60, 120]) 1000000 + m * min,
+    ];
+
+    test("gives the day's first and last departure and the typical gap around "
+        'now', () {
+      expect(lineHours(dep, dep[2]), (
+        first: dep[0],
+        last: dep[6],
+        every: 8 * min,
+      ));
+    });
+
+    test('says no gap where too few leave around now', () {
+      expect(lineHours(dep, dep[6] + howOftenAroundS)?.every, isNull);
+    });
+
+    test('says nothing of a day without departures', () {
+      expect(lineHours(const [], 0), isNull);
+    });
+  });
 }

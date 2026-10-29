@@ -428,9 +428,11 @@ class LinePanel extends StatelessWidget {
     required this.onFold,
     this.only = false,
     this.onOnly = _none,
+    this.departures = _noDepartures,
   });
 
   static void _none() {}
+  static Future<List<int>> _noDepartures(int route, int stop) async => [];
 
   final Catalog catalog;
   final Live live;
@@ -439,6 +441,9 @@ class LinePanel extends StatelessWidget {
   /// Whether it is the one route watched, and making it so.
   final bool only;
   final VoidCallback onOnly;
+
+  /// The route's timetabled departures from a stop today, for its hours.
+  final Future<List<int>> Function(int route, int stop) departures;
 
   /// Down to its title alone, so the map shows the line.
   final bool folded;
@@ -521,10 +526,16 @@ class LinePanel extends StatelessWidget {
     );
   }
 
-  /// Below the title: the way, Watch, and the stops in order.
+  /// Below the title: when it runs, the way, Watch, and the stops in order.
   List<Widget> _body(BuildContext context, Direction? shown) {
     final theme = material.Theme.of(context);
+    final from = shown?.stops.firstOrNull;
     return [
+      if (from != null)
+        LineHours(
+          key: ValueKey((route, from)),
+          load: () => departures(route, from),
+        ),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
@@ -623,6 +634,70 @@ class LinePanel extends StatelessWidget {
             onTap: () => onStop(stop),
           ),
       ],
+    );
+  }
+}
+
+/// When a line runs and how often, as plain chips: nothing to tap. Shows
+/// nothing until [load] answers, and nothing if it fails.
+class LineHours extends StatefulWidget {
+  const LineHours({super.key, required this.load});
+
+  final Future<List<int>> Function() load;
+
+  @override
+  State<LineHours> createState() => _LineHoursState();
+}
+
+class _LineHoursState extends State<LineHours> {
+  List<int> _dep = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_fetch());
+  }
+
+  Future<void> _fetch() async {
+    try {
+      final dep = await widget.load();
+      if (mounted) setState(() => _dep = dep);
+    } catch (_) {
+      // without them the line is shown as before, its hours left out
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final h = lineHours(_dep, now);
+    if (h == null) return const SizedBox.shrink();
+    final style = material.Theme.of(context).textTheme.bodySmall;
+    final chips = [
+      txt.firstDeparture(clockTime(h.first)),
+      txt.lastDeparture(clockTime(h.last)),
+      if (h.every case final every?) txt.everyMinutes(spanMinutes(every)),
+    ];
+    return Tooltip(
+      message: txt.lineHoursHint,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+        child: Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          children: [
+            for (final c in chips)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  border: Border.all(color: hair),
+                  borderRadius: BorderRadius.circular(controlRadius),
+                ),
+                child: Text(c, style: style),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

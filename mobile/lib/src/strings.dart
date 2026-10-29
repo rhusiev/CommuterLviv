@@ -103,6 +103,10 @@ class Strings {
     required this.recentSearches,
     required this.onlyLine,
     required this.onlyLineHint,
+    required this.firstDeparture,
+    required this.lastDeparture,
+    required this.everyMinutes,
+    required this.lineHoursHint,
     required this.leftOut,
     required this.departAt,
     required this.preferBy,
@@ -347,6 +351,10 @@ class Strings {
   final String recentSearches;
   final String onlyLine;
   final String onlyLineHint;
+  final String Function(String at) firstDeparture;
+  final String Function(String at) lastDeparture;
+  final String Function(int n) everyMinutes;
+  final String lineHoursHint;
   final String Function(String kinds) leftOut;
   final String departAt;
   final String preferBy;
@@ -599,6 +607,10 @@ const _en = Strings(
   recentSearches: 'Recent',
   onlyLine: 'Only',
   onlyLineHint: 'Watch this line alone on the map',
+  firstDeparture: _enFirst,
+  lastDeparture: _enLast,
+  everyMinutes: _enEvery,
+  lineHoursHint: 'By the timetable, from the first stop this way',
   leftOut: _enLeftOut,
   departAt: 'Leave at',
   preferBy: 'Order',
@@ -765,6 +777,9 @@ String _enPrefer(Prefer p) => switch (p) {
   Prefer.reliable => 'Most backups',
 };
 String _enMinutes(int m) => '$m min';
+String _enFirst(String at) => 'First $at';
+String _enLast(String at) => 'Last $at';
+String _enEvery(int m) => 'Every ≈$m min';
 String _enKmh(double v) => '${v.toStringAsFixed(1)} km/h';
 String _enPacesNow(double walk, double? hurry) =>
     '${_enKmh(walk)}, ${hurry == null ? 'not hurrying' : 'hurrying ${_enKmh(hurry)}'}';
@@ -889,6 +904,10 @@ const _uk = Strings(
   recentSearches: 'Нещодавні',
   onlyLine: 'Лише цю',
   onlyLineHint: 'Відстежувати на мапі лише цю лінію',
+  firstDeparture: _ukFirst,
+  lastDeparture: _ukLast,
+  everyMinutes: _ukEvery,
+  lineHoursHint: 'За розкладом, від першої зупинки в цей бік',
   leftOut: _ukLeftOut,
   departAt: 'Виїзд о',
   preferBy: 'Порядок',
@@ -1053,6 +1072,9 @@ String _ukPrefer(Prefer p) => switch (p) {
   Prefer.reliable => 'Більше запасних',
 };
 String _ukMinutes(int m) => '$m хв';
+String _ukFirst(String at) => 'Перший $at';
+String _ukLast(String at) => 'Останній $at';
+String _ukEvery(int m) => 'Кожні ≈$m хв';
 String _ukKmh(double v) =>
     '${v.toStringAsFixed(1).replaceAll('.', ',')} км/год';
 String _ukPacesNow(double walk, double? hurry) =>

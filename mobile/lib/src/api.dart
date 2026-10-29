@@ -239,6 +239,16 @@ class Api {
     await _call('GET', '/api/vehicle?veh=$veh') as Map<String, dynamic>,
   );
 
+  /// The timetabled departures of [route] from [stop] today, unix seconds,
+  /// soonest first.
+  Future<List<int>> departures(int route, int stop) async {
+    final said = await _call(
+      'GET',
+      '/api/departures?route=$route&stop=$stop',
+    ) as Map<String, dynamic>;
+    return [for (final t in said['dep'] as List) t as int];
+  }
+
   /// Door to door, ranked by arrival. Half a second on the server, so ask once
   /// per search. [at] is unix seconds, up to 30 days ahead; null is now.
   /// [speed] is how fast you walk on the level, in km/h, and [hurry] how fast

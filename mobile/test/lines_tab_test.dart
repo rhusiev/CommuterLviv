@@ -9,6 +9,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:commuterlviv/src/api.dart';
+import 'package:commuterlviv/src/eta.dart';
 import 'package:commuterlviv/src/here.dart';
 import 'package:commuterlviv/src/lines_tab.dart';
 import 'package:commuterlviv/src/live.dart';
@@ -537,5 +538,49 @@ void main() {
     expect(chip.selected, isFalse);
     await tester.tap(find.widgetWithText(FilterChip, txt.onlyLine));
     expect(asked, 1);
+  });
+
+  testWidgets('the open line says when it runs, from its first stop this way', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+    final live = Live((await tester.runAsync(Api.open))!, onRenewed: () {});
+    const gapS = 8 * 60;
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final dep = [for (var k = -2; k <= 2; k++) now + k * gapS];
+    final asked = <(int, int)>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LinePanel(
+            catalog: _mixed,
+            live: live,
+            route: 0,
+            ways: const [
+              (dir: 0, stops: [1, 0]),
+            ],
+            way: 0,
+            onWay: (_) {},
+            watching: false,
+            onWatch: () {},
+            onStop: (_) {},
+            onBack: () {},
+            folded: false,
+            onFold: (_) {},
+            departures: (route, stop) async {
+              asked.add((route, stop));
+              return dep;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(asked, [(0, 1)]);
+    expect(find.text(txt.firstDeparture(clockTime(dep.first))), findsOneWidget);
+    expect(find.text(txt.lastDeparture(clockTime(dep.last))), findsOneWidget);
+    expect(find.text(txt.everyMinutes(8)), findsOneWidget);
   });
 }

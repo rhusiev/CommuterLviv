@@ -1351,6 +1351,7 @@ class _HomeScreenState extends State<HomeScreen> {
           watching: _routes.contains(_route),
           onWatch: () => _toggleRoute(_route!),
           only: _routes.length == 1 && _routes.contains(_route),
+          departures: widget.api.departures,
           onOnly: () {
             // Best effort: the server keeps which set is active, and a line
             // alone is none of them

@@ -77,3 +77,27 @@ Set<int> routesNear(Catalog catalog, LatLng at, num radius) {
 /// [id] first, then the rest as they were, [recentLines] at most.
 List<String> opened(List<String> recent, String id) =>
     [id, ...recent.where((r) => r != id)].take(recentLines).toList();
+
+/// Around now means within this of it, either way. Chosen, not derived.
+const howOftenAroundS = 30 * 60;
+
+/// A line's day at one stop: its first and last departure and, around now,
+/// the typical gap between them in seconds - null outside its hours or where
+/// it leaves too seldom to say.
+typedef Hours = ({int first, int last, int? every});
+
+/// [dep] is the day's departures from the stop, soonest first.
+Hours? lineHours(List<int> dep, int now) {
+  if (dep.isEmpty) return null;
+  final near = [
+    for (final t in dep)
+      if ((t - now).abs() <= howOftenAroundS) t,
+  ];
+  final gaps = [for (var i = 1; i < near.length; i++) near[i] - near[i - 1]]
+    ..sort();
+  return (
+    first: dep.first,
+    last: dep.last,
+    every: gaps.isEmpty ? null : gaps[gaps.length ~/ 2],
+  );
+}
