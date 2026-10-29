@@ -619,7 +619,7 @@ export function App() {
               picked={picked}
               onToggle={session.togglePicked}
               onClear={session.clearPicked}
-              onPickAll={() => session.routeSets.pickAll(cat.routes.map((r) => r.id))}
+              onPickAll={() => session.routeSets.watchOnly(cat.routes.map((r) => r.id))}
               onOpen={openRoute}
               recent={recent}
               sets={session.routeSets.sets}
@@ -638,6 +638,8 @@ export function App() {
               arrivals={live.arrivals}
               watching={picked.has(cat.routes[route]!.id)}
               onWatch={() => session.togglePicked(cat.routes[route]!.id)}
+              only={picked.size === 1 && picked.has(cat.routes[route]!.id)}
+              onOnly={() => session.routeSets.watchOnly([cat.routes[route]!.id])}
               onStop={showStop}
               onBack={() => setRoute(null)}
               folded={lineFolded}

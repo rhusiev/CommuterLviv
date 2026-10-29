@@ -295,6 +295,9 @@ type LineProps = {
   arrivals: Record<string, Arrival[]>;
   watching: boolean;
   onWatch: () => void;
+  /** Whether it is the one route watched, and making it so */
+  only?: boolean;
+  onOnly?: () => void;
   onStop: (i: number) => void;
   onBack: () => void;
   /** Down to its title alone, so the map shows the line */
@@ -364,15 +367,29 @@ function LineBody(
             → {p.catalog.stops[last]!.name}
           </button>
         )}
-        <button
-          onClick={p.onWatch}
-          aria-pressed={p.watching}
-          className={`ml-auto rounded-full px-3 py-1 text-sm ${
-            p.watching ? "bg-accent/15 text-accent" : "bg-raised/70 text-slate-300 hover:bg-raised"
-          }`}
-        >
-          {t.watchLine}
-        </button>
+        {/* A split button, as the route chip: Watch adds it to what the map
+            watches, Only makes it all the map watches */}
+        <span className="ml-auto flex gap-0.5 text-sm">
+          <button
+            onClick={p.onWatch}
+            aria-pressed={p.watching}
+            className={`rounded-l-full rounded-r-sm px-3 py-1 ${
+              p.watching ? "bg-accent/15 text-accent" : "bg-raised/70 text-slate-300 hover:bg-raised"
+            }`}
+          >
+            {t.watchLine}
+          </button>
+          <button
+            onClick={p.onOnly}
+            aria-pressed={p.only ?? false}
+            title={t.onlyLineHint}
+            className={`rounded-l-sm rounded-r-full px-3 py-1 ${
+              p.only ? "bg-accent/15 text-accent" : "bg-raised/70 text-slate-300 hover:bg-raised"
+            }`}
+          >
+            {t.onlyLine}
+          </button>
+        </span>
       </div>
       {p.ways.length > 0 && rows.length === 0 && <p className="text-xs text-slate-500">{t.noLineStops}</p>}
       <ol className="min-h-0 flex-1 overflow-y-auto">

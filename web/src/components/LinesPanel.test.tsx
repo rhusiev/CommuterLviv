@@ -141,6 +141,14 @@ describe("LineView", () => {
     expect(html).not.toContain(t.watchLine);
   });
 
+  test("says Only is on while the line is all the map watches", () => {
+    const only = (on: boolean) =>
+      line({ only: on }).match(new RegExp(`aria-pressed="(true|false)"[^>]*>${t.onlyLine}<`))?.[1];
+
+    expect(only(true)).toBe("true");
+    expect(only(false)).toBe("false");
+  });
+
   test("says when the shapes hold no stops for the line", () => {
     expect(line({ ways: [{ dir: 0, stops: [] }] })).toContain(t.noLineStops);
   });
