@@ -951,6 +951,23 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Moves to [at], zooming in to [nearZoom] if further out, as the web does.
+  /// Exactly [routes] on the map: a saved [set], or none for every route or
+  /// one line alone.
+  void _watchOnly(RouteSet? set, Iterable<int> routes) {
+    setState(() {
+      _routes
+        ..clear()
+        ..addAll(routes);
+      _sets = Sets(
+        sets: _sets!.sets,
+        active: set?.id,
+        pins: _sets!.pins,
+        places: _sets!.places,
+      );
+    });
+    _push();
+  }
+
   /// Somewhere else for the camera, which a vehicle followed lets go of.
   void _fly(LatLng at) {
     _vehicleTracking.stop();
@@ -1302,20 +1319,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(_routes.clear);
       _push();
     },
-    onActivated: (set, routes) {
-      setState(() {
-        _routes
-          ..clear()
-          ..addAll(routes);
-        _sets = Sets(
-          sets: _sets!.sets,
-          active: set?.id,
-          pins: _sets!.pins,
-          places: _sets!.places,
-        );
-      });
-      _push();
-    },
+    onActivated: _watchOnly,
     onSets: (sets) => setState(() => _sets = sets),
     onOpen: _openRoute,
     recent: _recent,
@@ -1346,6 +1350,13 @@ class _HomeScreenState extends State<HomeScreen> {
           },
           watching: _routes.contains(_route),
           onWatch: () => _toggleRoute(_route!),
+          only: _routes.length == 1 && _routes.contains(_route),
+          onOnly: () {
+            // Best effort: the server keeps which set is active, and a line
+            // alone is none of them
+            unawaited(widget.api.activateSet(null).catchError((_) {}));
+            _watchOnly(null, [_route!]);
+          },
           onStop: (stop) => _openStop(stop, fly: true),
           onBack: _closeRoute,
           folded: _lineFolded,

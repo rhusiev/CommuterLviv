@@ -426,11 +426,19 @@ class LinePanel extends StatelessWidget {
     required this.onBack,
     required this.folded,
     required this.onFold,
+    this.only = false,
+    this.onOnly = _none,
   });
+
+  static void _none() {}
 
   final Catalog catalog;
   final Live live;
   final int route;
+
+  /// Whether it is the one route watched, and making it so.
+  final bool only;
+  final VoidCallback onOnly;
 
   /// Down to its title alone, so the map shows the line.
   final bool folded;
@@ -548,6 +556,17 @@ class LinePanel extends StatelessWidget {
               label: Text(txt.watchLine),
               selected: watching,
               onSelected: (_) => onWatch(),
+            ),
+            const SizedBox(width: 4),
+            // Watch adds it to what the map watches, Only makes it all of it
+            Tooltip(
+              message: txt.onlyLineHint,
+              child: FilterChip(
+                label: Text(txt.onlyLine),
+                selected: only,
+                showCheckmark: false,
+                onSelected: (_) => onOnly(),
+              ),
             ),
           ],
         ),

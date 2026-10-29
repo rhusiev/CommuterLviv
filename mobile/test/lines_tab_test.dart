@@ -491,7 +491,51 @@ void main() {
       return tester.renderObject<RenderParagraph>(find.text('→ $end'));
     }
 
-    expect((await way('Pohulianka')).didExceedMaxLines, isFalse);
+    // Short enough to fit beside Watch and Only in the test's square glyphs
+    expect((await way('Sykhiv')).didExceedMaxLines, isFalse);
     expect((await way('Pohulianka' * 4)).didExceedMaxLines, isTrue);
+  });
+
+  testWidgets('Only says whether the line is all the map watches, and makes '
+      'it so', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+    final live = Live((await tester.runAsync(Api.open))!, onRenewed: () {});
+    var asked = 0;
+    Future<FilterChip> pump({required bool only}) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: LinePanel(
+              catalog: _mixed,
+              live: live,
+              route: 0,
+              ways: const [
+                (dir: 0, stops: [0, 1]),
+              ],
+              way: 0,
+              onWay: (_) {},
+              watching: only,
+              onWatch: () {},
+              onStop: (_) {},
+              onBack: () {},
+              folded: false,
+              onFold: (_) {},
+              only: only,
+              onOnly: () => asked++,
+            ),
+          ),
+        ),
+      );
+      return tester.widget<FilterChip>(
+        find.widgetWithText(FilterChip, txt.onlyLine),
+      );
+    }
+
+    expect((await pump(only: true)).selected, isTrue);
+    final chip = await pump(only: false);
+    expect(chip.selected, isFalse);
+    await tester.tap(find.widgetWithText(FilterChip, txt.onlyLine));
+    expect(asked, 1);
   });
 }
