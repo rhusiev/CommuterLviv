@@ -39,6 +39,7 @@ class Vehicle {
 
   bool get moving => flags & wire.movingFlag != 0;
   bool get stale => flags & wire.staleFlag != 0;
+  bool get lowFloor => flags & wire.lowFloorFlag != 0;
 }
 
 /// Interpolated position. Heading takes the short way round, so turning past

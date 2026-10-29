@@ -234,14 +234,9 @@ class Api {
   Future<void> activateSet(String? id) =>
       _call('POST', '/api/sets/active', body: {'id': id});
 
-  Future<List<Call>> vehicle(int veh) async {
-    final answer =
-        await _call('GET', '/api/vehicle?veh=$veh') as Map<String, dynamic>;
-    return [
-      for (final c in answer['stops'] as List)
-        Call.fromJson(c as Map<String, dynamic>),
-    ];
-  }
+  Future<VehicleSaid> vehicle(int veh) async => VehicleSaid.fromJson(
+    await _call('GET', '/api/vehicle?veh=$veh') as Map<String, dynamic>,
+  );
 
   /// Door to door, ranked by arrival. Half a second on the server, so ask once
   /// per search. [at] is unix seconds, up to 30 days ahead; null is now.
@@ -387,6 +382,11 @@ class Api {
 
   /// On unless turned off, for a phone that stutters under it
   bool get blur => _setting('blur', true);
+
+  /// Off unless asked for: marks the vehicles the feed calls low floor
+  bool get lowFloor => _setting('lowFloor', false);
+
+  Future<void> setLowFloor(bool on) => _keep('lowFloor', on);
 
   Future<void> setBlur(bool on) => _keep('blur', on);
 

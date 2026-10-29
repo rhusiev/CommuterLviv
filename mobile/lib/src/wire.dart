@@ -24,6 +24,13 @@ const staleFlag = 1;
 /// Bit 1: the vehicle is under way, so its direction is worth drawing.
 const movingFlag = 2;
 
+/// Bit 2: the feed calls the vehicle low floor. Without it, unknown - the feed
+/// names next to no bus either way.
+const lowFloorFlag = 4;
+
+/// Bit 3: standing still mid-route for over five minutes (`STUCK_S`).
+const stuckFlag = 8;
+
 class Frame {
   Frame({
     required this.kind,

@@ -25,6 +25,8 @@ Future<void> _pump(
           onTheme: (_) {},
           blur: true,
           onBlur: onBlur ?? (_) {},
+          lowFloor: false,
+          onLowFloor: (_) {},
         ),
       ),
     ),

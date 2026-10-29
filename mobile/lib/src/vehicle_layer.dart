@@ -67,6 +67,25 @@ const _twoWayOffset = 3.5;
 /// rides another.
 const _fadedAlpha = 0.55;
 
+/// Where a low-floor vehicle's mark sits on its badge's rim, as a share of the
+/// radius along the diagonal, and the size of its disc.
+const _chairAt = 0.75;
+const _chairRadius = 7.0;
+
+/// The wheelchair glyph, laid out once.
+final ui.Paragraph _chair =
+    (ui.ParagraphBuilder(
+            ui.ParagraphStyle(
+              textAlign: TextAlign.center,
+              fontFamily: Icons.accessible.fontFamily,
+              fontSize: _chairRadius * 1.6,
+            ),
+          )
+          ..pushStyle(ui.TextStyle(color: plate))
+          ..addText(String.fromCharCode(Icons.accessible.codePoint)))
+        .build()
+      ..layout(const ui.ParagraphConstraints(width: _chairRadius * 2));
+
 /// How far a ridden vehicle's ring stands off its badge, and how thick it is.
 const _riddenRingGap = 3.0;
 const _riddenRingWidth = 3.0;
@@ -87,6 +106,7 @@ class VehicleLayer extends StatefulWidget {
     required this.pins,
     required this.places,
     this.ridden = const {},
+    this.lowFloor = false,
   });
 
   final Catalog catalog;
@@ -94,6 +114,9 @@ class VehicleLayer extends StatefulWidget {
 
   /// The vehicles the drawn journey rides: ringed, and every other faded.
   final Set<int> ridden;
+
+  /// Mark the vehicles the feed calls low floor.
+  final bool lowFloor;
 
   final Shapes? shapes;
 
@@ -217,6 +240,7 @@ class _VehicleLayerState extends State<VehicleLayer>
           pins: widget.pins,
           places: widget.places,
           ridden: widget.ridden,
+          lowFloor: widget.lowFloor,
           ink: Palette.of(widget.theme.dark),
           badge: _badge,
           label: _label,
@@ -242,6 +266,7 @@ class _Painter extends CustomPainter {
     required this.pins,
     required this.places,
     required this.ridden,
+    required this.lowFloor,
     required this.ink,
     required this.badge,
     required this.label,
@@ -261,6 +286,7 @@ class _Painter extends CustomPainter {
   final List<int> pins;
   final List<Place> places;
   final Set<int> ridden;
+  final bool lowFloor;
 
   /// Read at paint time: a fix arriving between builds must still be drawn.
   final Here here;
@@ -559,6 +585,14 @@ class _Painter extends CustomPainter {
       canvas.drawParagraph(text, p - Offset(badgeRadius, text.height / 2));
       if (ridden.contains(id)) {
         canvas.drawCircle(p, badgeRadius + _riddenRingGap, ring);
+      }
+      if (lowFloor && v.lowFloor) {
+        final rim = p + const Offset(badgeRadius, badgeRadius) * _chairAt;
+        canvas.drawCircle(rim, _chairRadius, Paint()..color = ink.here);
+        canvas.drawParagraph(
+          _chair,
+          rim - Offset(_chairRadius, _chair.height / 2),
+        );
       }
     }
   }

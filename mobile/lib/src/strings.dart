@@ -92,6 +92,18 @@ class Strings {
     required this.hideStops,
     required this.showStops,
     required this.blur,
+    required this.lowFloorSetting,
+    required this.lowFloor,
+    required this.doubtStuck,
+    required this.doubtSilent,
+    required this.fleet,
+    required this.lastSeen,
+    required this.seconds,
+    required this.followVehicle,
+    required this.recentSearches,
+    required this.onlyLine,
+    required this.onlyLineHint,
+    required this.leftOut,
     required this.departAt,
     required this.preferBy,
     required this.quietPart,
@@ -324,6 +336,18 @@ class Strings {
   final String hideStops;
   final String showStops;
   final String blur;
+  final String lowFloorSetting;
+  final String lowFloor;
+  final String Function(String route) doubtStuck;
+  final String Function(String route) doubtSilent;
+  final String Function(String number) fleet;
+  final String Function(String ago) lastSeen;
+  final String Function(int n) seconds;
+  final String followVehicle;
+  final String recentSearches;
+  final String onlyLine;
+  final String onlyLineHint;
+  final String Function(String kinds) leftOut;
   final String departAt;
   final String preferBy;
 
@@ -564,6 +588,18 @@ const _en = Strings(
   hideStops: 'Hide the stops, keeping the line on the map',
   showStops: 'Show the stops',
   blur: 'Blur behind panels',
+  lowFloorSetting: 'Mark low-floor vehicles',
+  lowFloor: 'Low floor',
+  doubtStuck: _enDoubtStuck,
+  doubtSilent: _enDoubtSilent,
+  fleet: _fleet,
+  lastSeen: _enLastSeen,
+  seconds: _enSeconds,
+  followVehicle: 'Keep it in the middle of the map',
+  recentSearches: 'Recent',
+  onlyLine: 'Only',
+  onlyLineHint: 'Watch this line alone on the map',
+  leftOut: _enLeftOut,
   departAt: 'Leave at',
   preferBy: 'Order',
   quietPart: 'Nothing seen running',
@@ -704,6 +740,13 @@ String _enNothingNearLines(int metres) =>
     'No stop within $metres m of where you are';
 String _enWalkLeg(int m) => 'Walk $m min';
 String _enHereAt(String time) => 'Where I was at $time';
+String _enDoubtStuck(String route) => '$route has stood still for over 5 min';
+String _enDoubtSilent(String route) =>
+    '$route has stopped reporting where it is';
+String _fleet(String number) => '№ $number';
+String _enLastSeen(String ago) => 'Last seen $ago ago';
+String _enSeconds(int n) => '$n s';
+String _enLeftOut(String kinds) => 'Leaving out: $kinds';
 String _enWaitLeg(int m) => 'Wait $m min';
 String _enRideLeg(int m) => 'Ride $m min';
 String _enChangeCount(int n) => n == 1 ? '1 change' : '$n changes';
@@ -835,6 +878,18 @@ const _uk = Strings(
   hideStops: 'Сховати зупинки, лишивши лінію на мапі',
   showStops: 'Показати зупинки',
   blur: 'Розмиття під панелями',
+  lowFloorSetting: 'Позначати низькопідлогові',
+  lowFloor: 'Низька підлога',
+  doubtStuck: _ukDoubtStuck,
+  doubtSilent: _ukDoubtSilent,
+  fleet: _fleet,
+  lastSeen: _ukLastSeen,
+  seconds: _ukSeconds,
+  followVehicle: 'Тримати його посередині мапи',
+  recentSearches: 'Нещодавні',
+  onlyLine: 'Лише цю',
+  onlyLineHint: 'Відстежувати на мапі лише цю лінію',
+  leftOut: _ukLeftOut,
   departAt: 'Виїзд о',
   preferBy: 'Порядок',
   quietPart: 'Рейсів не видно',
@@ -975,6 +1030,11 @@ String _ukNothingNearLines(int metres) =>
     'Немає зупинки ближче ніж за $metres м';
 String _ukWalkLeg(int m) => 'Пішки $m хв';
 String _ukHereAt(String time) => 'Моє місце о $time';
+String _ukDoubtStuck(String route) => '$route стоїть понад 5 хв';
+String _ukDoubtSilent(String route) => '$route перестав повідомляти, де він';
+String _ukLastSeen(String ago) => 'Востаннє видно $ago тому';
+String _ukSeconds(int n) => '$n с';
+String _ukLeftOut(String kinds) => 'Без: $kinds';
 String _ukWaitLeg(int m) => 'Чекати $m хв';
 String _ukRideLeg(int m) => 'Їхати $m хв';
 String _ukChangeCount(int n) => n == 1 ? '1 пересадка' : 'Пересадок: $n';

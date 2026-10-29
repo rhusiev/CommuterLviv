@@ -170,6 +170,8 @@ class LayersSheet extends StatefulWidget {
     required this.onTheme,
     required this.blur,
     required this.onBlur,
+    required this.lowFloor,
+    required this.onLowFloor,
   });
 
   final bool lines;
@@ -180,6 +182,8 @@ class LayersSheet extends StatefulWidget {
   final void Function(MapTheme theme) onTheme;
   final bool blur;
   final ValueChanged<bool> onBlur;
+  final bool lowFloor;
+  final ValueChanged<bool> onLowFloor;
 
   @override
   State<LayersSheet> createState() => _LayersSheetState();
@@ -192,6 +196,7 @@ class _LayersSheetState extends State<LayersSheet> {
   late bool _traffic = widget.traffic;
   late MapTheme _theme = widget.theme;
   late bool _blur = widget.blur;
+  late bool _lowFloor = widget.lowFloor;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -215,6 +220,15 @@ class _LayersSheetState extends State<LayersSheet> {
             onChanged: (on) {
               setState(() => _traffic = on);
               widget.onTraffic(on);
+            },
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.accessible),
+            title: Text(txt.lowFloorSetting),
+            value: _lowFloor,
+            onChanged: (on) {
+              setState(() => _lowFloor = on);
+              widget.onLowFloor(on);
             },
           ),
           SwitchListTile(

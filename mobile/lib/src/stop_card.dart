@@ -21,11 +21,15 @@ class StopCard extends StatefulWidget {
     required this.onPin,
     required this.onRoute,
     required this.onLine,
+    this.lowFloor = false,
   });
 
   final Catalog catalog;
   final Live live;
   final int stop;
+
+  /// Mark the vehicles the feed calls low floor.
+  final bool lowFloor;
 
   /// Only the initial state: the screen behind cannot rebuild a sheet, so the
   /// card tracks its own taps from here.
@@ -109,18 +113,26 @@ class _StopCardState extends State<StopCard> {
                 if (due.isEmpty) {
                   return Text(txt.nothingDue);
                 }
-                return Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
+                final shown = due.take(8);
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (final a in due.take(8))
-                      Due(
-                        route: catalog.routes[a.route],
-                        arrival: a,
-                        watched: widget.watching.contains(a.route),
-                        onWatch: () => _watch(a.route),
-                        onLine: () => widget.onLine(a.route),
-                      ),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        for (final a in shown)
+                          Due(
+                            route: catalog.routes[a.route],
+                            arrival: a,
+                            watched: widget.watching.contains(a.route),
+                            onWatch: () => _watch(a.route),
+                            onLine: () => widget.onLine(a.route),
+                            lowFloor: widget.lowFloor,
+                          ),
+                      ],
+                    ),
+                    Doubts(catalog: catalog, due: shown),
                   ],
                 );
               },

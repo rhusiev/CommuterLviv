@@ -254,6 +254,8 @@ class Arrival {
     required this.veh,
     required this.t,
     this.planned = false,
+    this.lowFloor = false,
+    this.doubt,
   });
 
   factory Arrival.fromJson(Map<String, dynamic> j) => Arrival(
@@ -261,6 +263,8 @@ class Arrival {
     veh: j['veh'] as int,
     t: j['t'] as int,
     planned: j['planned'] as bool? ?? false,
+    lowFloor: j['low_floor'] as bool? ?? false,
+    doubt: Doubt.values.asNameMap()[j['doubt']],
   );
 
   final int route;
@@ -272,6 +276,43 @@ class Arrival {
   /// A vehicle still finishing its previous trip: the time is its timetabled
   /// departure or when it can turn around, whichever is later
   final bool planned;
+
+  /// The feed calls its vehicle low floor; false is unknown, not high floor
+  final bool lowFloor;
+
+  /// Why its time is doubted, if it is
+  final Doubt? doubt;
+}
+
+/// Its vehicle has stood still mid-route for long, or gone quiet.
+enum Doubt { stuck, silent }
+
+/// What `/api/vehicle` says: the stops ahead, and of the vehicle itself its
+/// fleet number or plate, whether low floor, and its last report.
+class VehicleSaid {
+  const VehicleSaid({
+    required this.calls,
+    this.fleet,
+    this.lowFloor = false,
+    this.seen,
+  });
+
+  factory VehicleSaid.fromJson(Map<String, dynamic> j) => VehicleSaid(
+    calls: [
+      for (final c in j['stops'] as List)
+        Call.fromJson(c as Map<String, dynamic>),
+    ],
+    fleet: j['fleet'] as String?,
+    lowFloor: j['low_floor'] as bool? ?? false,
+    seen: j['seen'] as int?,
+  );
+
+  final List<Call> calls;
+  final String? fleet;
+  final bool lowFloor;
+
+  /// Unix seconds; absent from an older service
+  final int? seen;
 }
 
 /// One leg of a planned journey. `a` and `b` are catalog stop indexes, or -1

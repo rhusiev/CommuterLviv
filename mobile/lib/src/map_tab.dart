@@ -48,6 +48,7 @@ class MapTab extends StatelessWidget {
     required this.empty,
     required this.marks,
     required this.journey,
+    this.lowFloor = false,
     required this.pins,
     required this.places,
     required this.shapes,
@@ -98,6 +99,9 @@ class MapTab extends StatelessWidget {
   /// The ends of a journey being planned, lettered rather than coloured.
   final List<({LatLng at, String label})> marks;
   final Journey? journey;
+
+  /// Mark the vehicles the feed calls low floor.
+  final bool lowFloor;
 
   /// What the account kept, always on the map: pinned stops ringed, saved places
   /// as named dots.
@@ -161,6 +165,7 @@ class MapTab extends StatelessWidget {
               pins: pins,
               places: places,
               ridden: riddenBy(journey),
+              lowFloor: lowFloor,
             ),
             if (journey case final journey?)
               JourneyLayer(

@@ -107,6 +107,10 @@ class _HomeScreenState extends State<HomeScreen> {
   late List<String> _recent = widget.api.recentLines;
   late bool _allLines = widget.api.showLines;
   late bool _blur = widget.api.blur;
+  late bool _lowFloor = widget.api.lowFloor;
+
+  /// The camera on a vehicle, from its card; a pan lets go.
+  late final _vehicleTracking = VehicleTracking(_map, () => _live);
 
   /// The open line down to its title, so the map shows it.
   bool _lineFolded = false;
@@ -197,6 +201,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _live?.dispose();
     _here.removeListener(_fixArrived);
     _tracking.stop();
+    _vehicleTracking.stop();
     _here.dispose();
     _map.dispose();
     super.dispose();
@@ -734,6 +739,7 @@ class _HomeScreenState extends State<HomeScreen> {
         catalog: _catalog!,
         live: _live!,
         stop: stop,
+        lowFloor: _lowFloor,
         pinned: _pins.contains(stop),
         watching: _routes,
         onPin: () => _pin(stop),
@@ -810,6 +816,10 @@ class _HomeScreenState extends State<HomeScreen> {
         api: widget.api,
         catalog: _catalog!,
         veh: veh,
+        lowFloor: _lowFloor,
+        following: _vehicleTracking.veh == veh,
+        onFollow: (on) =>
+            on ? _vehicleTracking.start(veh) : _vehicleTracking.stop(),
         onStop: (stop) {
           Navigator.pop(context);
           _openStop(stop, fly: true);
@@ -941,7 +951,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Moves to [at], zooming in to [nearZoom] if further out, as the web does.
-  void _fly(LatLng at) => _map.move(at, math.max(_map.camera.zoom, nearZoom));
+  /// Somewhere else for the camera, which a vehicle followed lets go of.
+  void _fly(LatLng at) {
+    _vehicleTracking.stop();
+    _map.move(at, math.max(_map.camera.zoom, nearZoom));
+  }
 
   void _openLayers() => showFloatingSheet<void>(
     context,
@@ -959,6 +973,11 @@ class _HomeScreenState extends State<HomeScreen> {
       },
       theme: _theme,
       onTheme: _setTheme,
+      lowFloor: _lowFloor,
+      onLowFloor: (on) {
+        setState(() => _lowFloor = on);
+        unawaited(widget.api.setLowFloor(on));
+      },
       blur: _blur,
       onBlur: (on) {
         setState(() => _blur = on);
@@ -1151,6 +1170,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (_place != null && !_planning) (at: _place!, label: _placeMark),
       ],
       journey: _onMap,
+      lowFloor: _lowFloor,
       pins: _pins,
       places: _sets?.places ?? const [],
       shapes: _shapes,
