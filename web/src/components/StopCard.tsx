@@ -1,6 +1,7 @@
 import { stopTitle } from "../lib/catalog";
 import { countdown, nextPerRoute } from "../lib/eta";
 import { RouteChip } from "./RouteChip";
+import { number } from "../lib/sprites";
 import type { Arrival, Catalog } from "../lib/types";
 import { t } from "../lib/i18n";
 import { Icon } from "./Icon";
@@ -133,7 +134,7 @@ function Doubts({ catalog, due }: { catalog: Catalog; due: Arrival[] }) {
   return (
     <div className="mt-1.5 space-y-0.5 text-xs text-amber-300">
       {doubted.map((a) => (
-        <p key={a.route}>{t.doubt[a.doubt!](catalog.routes[a.route]!.short)}</p>
+        <p key={a.route}>{t.doubt[a.doubt!](number(catalog.routes[a.route]!.short))}</p>
       ))}
     </div>
   );
