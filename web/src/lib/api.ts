@@ -107,6 +107,9 @@ export const api = {
 
   vehicle: (veh: number): Promise<VehicleStops> =>
     call(`/api/vehicle?veh=${veh}`),
+  /** The timetabled departures of a route from a stop today, unix seconds */
+  departures: (route: number, stop: number): Promise<{ t: number; dep: number[] }> =>
+    call(`/api/departures?route=${route}&stop=${stop}`),
   /** `at` in unix seconds leaves at that time instead of now; a future one has
    * no vehicles to see, so every leg comes back on the timetable. `speed` is
    * how fast you walk on the level, in km/h, and `hurry` how fast you would

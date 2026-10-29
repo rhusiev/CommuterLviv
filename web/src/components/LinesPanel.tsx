@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { countdown } from "../lib/eta";
-import { lineRows, routesNear, type Direction } from "../lib/lines";
+import { api } from "../lib/api";
+import { clock, countdown, mins } from "../lib/eta";
+import { lineHours, lineRows, routesNear, type Direction } from "../lib/lines";
 import { hereOnce, ONE_FIX, type NoFix } from "../lib/position";
 import type { Arrival, Catalog, Route, RouteSet } from "../lib/types";
 import { t } from "../lib/i18n";
@@ -317,6 +318,7 @@ export function LineView(p: LineProps) {
   const shown = p.ways[p.way];
   const rows = shown ? lineRows(shown.stops, p.arrivals, p.route) : [];
   const last = shown?.stops.at(-1);
+  const dep = useDepartures(p.route, shown?.stops[0]);
 
   return (
     <div className="flex h-full flex-col gap-2 overflow-hidden">
@@ -344,18 +346,60 @@ export function LineView(p: LineProps) {
           <Icon name={p.folded ? "down" : "up"} className="size-4" />
         </button>
       </div>
-      {!p.folded && <LineBody {...p} rows={rows} last={last} now={now} />}
+      {!p.folded && <LineBody {...p} rows={rows} last={last} now={now} dep={dep} />}
     </div>
   );
 }
 
-/** Below the line's title: its way, Watch, and its stops in order */
+/** The route's departures today from the stop a way starts at; empty until
+ * known, and when the timetable cannot say */
+function useDepartures(route: number, stop: number | undefined) {
+  const key = `${route}:${stop}`;
+  const [held, setHeld] = useState<{ key: string; dep: number[] } | null>(null);
+  useEffect(() => {
+    if (stop === undefined) return;
+    let dropped = false;
+    const load = async () => {
+      try {
+        const answer = await api.departures(route, stop);
+        if (!dropped) setHeld({ key, dep: answer.dep });
+      } catch {
+        // without them the line is shown as before, its hours left out
+      }
+    };
+    void load();
+    return () => {
+      dropped = true;
+    };
+  }, [key, route, stop]);
+  return held?.key === key ? held.dep : [];
+}
+
+/** When the line runs and how often, as plain chips: nothing to tap */
+export function LineHours({ dep, now }: { dep: number[]; now: number }) {
+  const h = lineHours(dep, now);
+  if (!h) return null;
+  const chips = [t.firstDeparture(clock(h.first)), t.lastDeparture(clock(h.last))];
+  if (h.every !== null) chips.push(t.everyMinutes(mins(h.every)));
+  return (
+    <div title={t.lineHoursHint} className="flex flex-wrap gap-1 text-xs tabular-nums text-slate-400">
+      {chips.map((c) => (
+        <span key={c} className="rounded-full border border-slate-700 px-2 py-0.5">
+          {c}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Below the line's title: when it runs, its way, Watch, and its stops in order */
 function LineBody(
-  p: LineProps & { rows: ReturnType<typeof lineRows>; last: number | undefined; now: number },
+  p: LineProps & { rows: ReturnType<typeof lineRows>; last: number | undefined; now: number; dep: number[] },
 ) {
   const { rows, last, now } = p;
   return (
     <>
+      <LineHours dep={p.dep} now={now} />
       <div className="flex items-center gap-1">
         {last !== undefined && (
           <button

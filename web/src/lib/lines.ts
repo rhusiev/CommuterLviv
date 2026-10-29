@@ -70,3 +70,20 @@ export function loadRecent(): string[] {
 }
 
 export const saveRecent = (recent: string[]) => writeJson(RECENT_KEY, recent);
+
+/** Around now means within this of it, either way. Chosen, not derived */
+export const HOW_OFTEN_AROUND_S = 30 * 60;
+
+/** A line's day at one stop: its first and last departure and, around `now`,
+ * the typical gap between them in seconds - null outside its hours or where
+ * it leaves too seldom to say */
+export type Hours = { first: number; last: number; every: number | null };
+
+/** `dep` is the day's departures from the stop, soonest first */
+export function lineHours(dep: number[], now: number): Hours | null {
+  if (dep.length === 0) return null;
+  const near = dep.filter((t) => Math.abs(t - now) <= HOW_OFTEN_AROUND_S);
+  const gaps = near.slice(1).map((t, i) => t - near[i]!).sort((a, b) => a - b);
+  const every = gaps.length > 0 ? gaps[Math.floor(gaps.length / 2)]! : null;
+  return { first: dep[0]!, last: dep.at(-1)!, every };
+}

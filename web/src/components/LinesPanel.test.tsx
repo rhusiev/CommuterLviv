@@ -1,8 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
+import { clock } from "../lib/eta";
 import { t } from "../lib/i18n";
 import type { Catalog } from "../lib/types";
-import { LineView, LinesBrowse } from "./LinesPanel";
+import { LineHours, LineView, LinesBrowse } from "./LinesPanel";
 
 const CATALOG: Catalog = {
   routes: [
@@ -151,5 +152,22 @@ describe("LineView", () => {
 
   test("says when the shapes hold no stops for the line", () => {
     expect(line({ ways: [{ dir: 0, stops: [] }] })).toContain(t.noLineStops);
+  });
+});
+
+describe("LineHours", () => {
+  const MIN = 60;
+  const dep = [0, 8, 16, 24].map((m) => 1_000_000 + m * MIN);
+
+  test("says when the line runs and how often it leaves now", () => {
+    const html = renderToStaticMarkup(<LineHours dep={dep} now={dep[1]!} />);
+
+    expect(html).toContain(t.firstDeparture(clock(dep[0]!)));
+    expect(html).toContain(t.lastDeparture(clock(dep[3]!)));
+    expect(html).toContain(t.everyMinutes(8));
+  });
+
+  test("shows nothing before the departures are known", () => {
+    expect(renderToStaticMarkup(<LineHours dep={[]} now={0} />)).toBe("");
   });
 });

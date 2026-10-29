@@ -248,7 +248,13 @@ the grid of route chips, whose body ticks a route and whose `›` opens its
 line. Renaming and deleting a set is in Mine. An open line
 uncovers the map and draws only that route, over a followed or planned journey,
 beside a panel with a back button, a toggle between its two ways named by the
-last stop, Watch, and its stops in order. Its chevron folds it to its title,
+last stop, Watch, Only (which makes the line all the map watches), and its stops
+in order. Above the way, three plain chips say when the line runs and how often:
+its first and last departure today from the way's first stop and, around now,
+the typical gap between departures (`lineHours`: the median gap of those within
+30 min either side, chosen, not derived), from `/api/departures`
+(docs/service.md). A gap is left out where fewer than two leave in that window,
+and all three before the departures are known. Its chevron folds it to its title,
 leaving the map to the line, and a line opened next starts unfolded. Each stop shows when this route is
 next due there, greyed while the vehicle is still finishing its previous trip,
 and a vehicle is marked at the stop it reaches soonest. The order is the
