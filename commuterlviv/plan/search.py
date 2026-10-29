@@ -30,7 +30,8 @@ FIRST_WALK = 300.0
 
 
 def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
-             catalog=None, rounds=ROUNDS, keep=8, assess=True, hurry=1.0):
+             catalog=None, rounds=ROUNDS, keep=8, assess=True, hurry=1.0,
+             avoid=frozenset()):
     """Ranked journeys from `origin` to `dest` (both (lat, lon)) leaving at
     `now`, which may be in the future: the vehicles being tracked are still
     used, for as far ahead as their predictions reach.
@@ -43,7 +44,8 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
     `walk` and `transfers` paced to them. `hurry` is the share of that walk's
     time the walk to the first stop takes when they hurry, 1 for not at all;
     the departures only hurrying catches are options of their own
-    (`_Profile.hurrying`).
+    (`_Profile.hurrying`). Nothing of a vehicle type in `avoid` is ridden -
+    no option, backup or hurry - except a ride `origin` is already on.
 
     An `Aboard` origin is searched as getting off at the vehicle's next stop
     when it gets there, with the stops in reach of that one, and each journey
@@ -83,7 +85,8 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
     hi = now + (walked if walked is not None else LONGEST_WALK) + BACKUP_WINDOW
     soonest = access if trip else _quickest(access, hurry)
     for quiet in (False, True):
-        hops, trips = _connections(tt, live, trust, now, midnight, hi, quiet)
+        hops, trips = _connections(tt, live, trust, now, midnight, hi, quiet,
+                                   avoid)
         hops = _corridor(hops, transfers, egress, caps[0],
                          [(u, start + t) for u, t in soonest.items()], hi)
         scan = _Profile(hops, trips, trust, transfers, egress, caps, rounds,

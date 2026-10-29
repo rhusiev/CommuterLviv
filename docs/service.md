@@ -434,7 +434,11 @@ by a preset - fastest, less walking, fewer changes, most backups - picked from
 a sort icon beside the search and remembered on the device; the whole walk goes last
 under the last two. Under those two, a tie is settled by arrival plus the
 minutes walked, so a ride from the door beats one a few minutes earlier behind
-a long walk. `&at=<unix seconds>` plans a trip that starts later instead of
+a long walk. `&avoid=tram,trolleybus` leaves vehicle types out (`bus`, `tram`,
+`trolleybus`, never all three): no option, backup or hurry option rides one,
+but a ride already on board stays, since you are on it. It is filtered where the
+search's hops are made (`hops._connections`), so it costs nothing to build.
+`&at=<unix seconds>` plans a trip that starts later instead of
 now, up to 30 days ahead (`PLAN_AHEAD_DAYS`); past that the city has usually
 changed its timetable. Each day is planned on the trips its services run
 (`calendar.txt`, with `calendar_dates.txt` exceptions winning), so a Sunday
