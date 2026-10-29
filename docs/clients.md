@@ -358,6 +358,25 @@ it by its star, and plans the way there: the place becomes the destination under
 its name, the start stays whatever it was or becomes where you are, and the
 search runs as soon as both ends are set.
 
+A time on a stop card, or under a pinned stop in the app, turns amber when the
+server doubts it (`doubt`, docs/service.md), and one line under the times names
+the route and why: stood still for over 5 min, or stopped reporting. "Mark
+low-floor vehicles" in the layers panel, off by default and kept on the device,
+puts a ♿ on the map marker and after the time of each vehicle the feed calls
+low floor. Nothing is marked "not low floor", since the feed says it of almost
+no bus. A vehicle's card shows its fleet number (a bus's plate) under the title,
+the ♿ when asked for, and, from 30 s after its last report (the age at which
+the map fades it), an amber "Last seen N ago". Its follow button keeps the
+vehicle in the middle of the map until the map is panned, the card is closed or
+another vehicle is picked.
+
+The search offers the last three picks (`SEARCHED_KEPT`, `searched.ts` on the
+web and `searched.dart` in the app), kept on the device only, under "Recent"
+before anything is typed. The journey's order menu also lists Buses, Trams and
+Trolleybuses, ticked by default. Unticking one asks the planner again with
+`avoid=` (docs/service.md) and is kept on the device. The last type ticked
+cannot be unticked, and a dot on the menu's button says while a type is out.
+
 ```sh
 cd mobile && flutter pub get
 flutter test     # the wire decoder, against bytes commuterlviv/live/wire.py made
