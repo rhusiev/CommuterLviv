@@ -14,6 +14,23 @@ export function holdPrefer(p: Prefer) {
   localStorage.setItem(key, p);
 }
 
+/** The vehicle types a search can leave out, as the service names them */
+export const MODES = ["bus", "tram", "trolleybus"] as const;
+export type Mode = (typeof MODES)[number];
+
+const avoidKey = "commuterlviv.avoid";
+
+export function heldAvoid(): Mode[] {
+  const held = (localStorage.getItem(avoidKey) ?? "").split(",");
+  const avoid = MODES.filter((m) => held.includes(m));
+  // Never all of them: the service would refuse the search
+  return avoid.length < MODES.length ? avoid : [];
+}
+
+export function holdAvoid(avoid: Mode[]) {
+  localStorage.setItem(avoidKey, avoid.join(","));
+}
+
 const walking = (j: Journey) =>
   j.legs.reduce((s, l) => s + (l.kind === "walk" ? l.arr - l.dep : 0), 0);
 
