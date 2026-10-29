@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'map_theme.dart';
 import 'models.dart';
+import 'searched.dart';
 import 'strings.dart';
 
 /// Must be listed in the server's `COMMUTERLVIV_ORIGINS`.
@@ -413,6 +414,21 @@ class Api {
 
   Future<void> setRecentLines(List<String> ids) =>
       _prefs.setStringList('commuterlviv.recentLines', ids);
+
+  /// The last few things picked from a search, latest first
+  List<Searched> get searched => [
+    for (final raw in _prefs.getStringList('commuterlviv.searched') ?? const [])
+      ?Searched.fromJson(raw),
+  ];
+
+  /// Keeps [picked] first among [searched], as the list now stands
+  Future<List<Searched>> holdSearched(Searched picked) async {
+    final next = withPicked(searched, picked);
+    await _prefs.setStringList('commuterlviv.searched', [
+      for (final s in next) s.toJson(),
+    ]);
+    return next;
+  }
 
   /// The vehicle types searches leave out; never all of them, which the
   /// service would refuse

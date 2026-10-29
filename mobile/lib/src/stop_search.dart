@@ -14,6 +14,7 @@ import 'api.dart';
 import 'here.dart';
 import 'match.dart';
 import 'models.dart';
+import 'searched.dart';
 import 'route_badge.dart';
 import 'sheets.dart' show askPlaceName;
 import 'strings.dart';
@@ -114,7 +115,11 @@ class StopSearch extends SearchDelegate<Hit?> {
 
   @override
   Widget buildSuggestions(BuildContext context) {
-    void pick(Hit hit) => close(context, hit);
+    void pick(Hit hit) {
+      _remember(hit);
+      close(context, hit);
+    }
+
     if (query.trim().isNotEmpty) {
       return _Results(
         api: api,
@@ -133,11 +138,53 @@ class StopSearch extends SearchDelegate<Hit?> {
         onSave: onSave,
       );
     }
-    if (idle case final idle?) return idle(context, () => close(context, null));
-    if (here case final here?) {
-      return _Near(here: here, catalog: catalog, onPick: pick, onSave: onSave);
-    }
-    return const SizedBox.shrink();
+    final below = switch ((idle, here)) {
+      (final idle?, _) => idle(context, () => close(context, null)),
+      (null, final here?) => _Near(
+        here: here,
+        catalog: catalog,
+        onPick: pick,
+        onSave: onSave,
+      ),
+      _ => const SizedBox.shrink(),
+    };
+    final recent = _recent(context, pick);
+    if (recent.isEmpty) return below;
+    // The recent picks head what an empty query offers, at most three rows
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Heading(txt.recentSearches),
+        ...recent,
+        Expanded(child: below),
+      ],
+    );
+  }
+
+  List<Widget> _recent(BuildContext context, void Function(Hit hit) pick) => [
+    for (final s in api.searched)
+      if (s.stop == null)
+        ListTile(
+          leading: const Icon(Icons.history),
+          title: Text(s.name!),
+          onTap: () => pick(PlaceHit(s.at!, s.name!)),
+        )
+      // A stop a renewed catalog lacks is left out
+      else if (catalog.stopIndex[s.stop] case final i?)
+        _stop(context, catalog, i, '', pick, onSave),
+  ];
+
+  /// A stop or a place found by name is kept to offer again; a saved place
+  /// is offered as one already.
+  void _remember(Hit hit) {
+    final kept = switch (hit) {
+      StopHit(:final stop) => Searched.stop(catalog.stops[stop].id),
+      PlaceHit(:final at, :final name)
+          when !places.any((p) => p.name == name) =>
+        Searched.place(name, at),
+      PlaceHit() => null,
+    };
+    if (kept != null) unawaited(api.holdSearched(kept));
   }
 }
 
