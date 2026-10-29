@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { metres } from "../lib/geo";
 import { MIN_TYPED, score, words } from "../lib/match";
 import { matching, type Shown } from "../lib/places";
+import { heldSearched, holdSearched, type Searched } from "../lib/searched";
 import { hereOnce, ONE_FIX, type NoFix } from "../lib/position";
 import type { Catalog, Found, Place } from "../lib/types";
 import { t } from "../lib/i18n";
@@ -52,6 +53,9 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline, aro
   const [why, setWhy] = useState("");
   // The query the place search last answered, so its silence means no match
   const [answered, setAnswered] = useState("");
+  const [searched, setSearched] = useState<Searched[]>(heldSearched);
+  // Recent picks are offered only while the field is being used
+  const [focused, setFocused] = useState(false);
   const box = useRef<HTMLDivElement>(null);
 
   const names = useMemo(() => catalog.stops.map((s) => words(s.name)), [catalog]);
@@ -151,14 +155,23 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline, aro
       setQuery("");
       setNear(null);
       setWhy("");
+      setFocused(false);
       dismiss();
     };
     document.addEventListener("pointerdown", away);
     return () => document.removeEventListener("pointerdown", away);
   }, []);
 
+  const idle = near === null && query.trim() === "";
+  const recent: Row[] = searched.flatMap((s): Row[] => {
+    if (!("stop" in s)) return [{ place: { ...s, where: "", kind: null } }];
+    const i = catalog.stops.findIndex((x) => x.id === s.stop);
+    return i < 0 ? [] : [{ stop: i }];
+  });
   const sections: Section[] = (
-    near === null
+    idle
+      ? [{ title: t.recentSearches, rows: focused ? recent : [] }]
+      : near === null
       ? [
           { title: t.places, rows: mine.map((saved) => ({ saved })) },
           { title: t.stopHits, rows: hits.map((stop) => ({ stop })) },
@@ -188,13 +201,21 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline, aro
     setNear(null);
     setFound([]);
     setWhy("");
+    setFocused(false);
     inline?.onDismiss();
   };
 
   const go = (row: Row | undefined) => {
     if (!row) return;
-    if ("stop" in row) onGo(row.stop);
-    else onPlace("saved" in row ? row.saved : row.place);
+    if ("stop" in row) {
+      onGo(row.stop);
+      setSearched(holdSearched({ stop: catalog.stops[row.stop]!.id }));
+    } else {
+      const it = "saved" in row ? row.saved : row.place;
+      onPlace(it);
+      // A saved place is offered as one already
+      if ("place" in row) setSearched(holdSearched({ name: it.name, lat: it.lat, lon: it.lon }));
+    }
     clear();
   };
 
@@ -202,6 +223,7 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline, aro
     <div ref={box} className="relative">
       <input
         value={query}
+        onFocus={() => setFocused(true)}
         onChange={(e) => {
           setQuery(e.target.value);
           setNear(null);
@@ -231,14 +253,33 @@ export function StopSearch({ catalog, onGo, onPlace, onSave, places, inline, aro
         </button>
       )}
       {inline && query.trim() === "" && (
-        <div className="panel absolute inset-x-0 top-full z-30 mt-1 p-1 text-sm">{inline.idle}</div>
+        <div className="panel absolute inset-x-0 top-full z-30 mt-1 p-1 text-sm">
+          {/* The recent picks head the field's own offers, as in the bar */}
+          {near === null && recent.length > 0 && (
+            <>
+              <p className="px-2.5 pb-0.5 pt-1.5 text-xs uppercase tracking-wide text-slate-500">
+                {t.recentSearches}
+              </p>
+              {recent.map((row, n) => (
+                <button
+                  key={n}
+                  onClick={() => go(row)}
+                  className="block w-full truncate rounded-control px-2.5 py-1.5 text-left text-slate-300 hover:bg-raised/70"
+                >
+                  {"stop" in row ? catalog.stops[row.stop]!.name : "place" in row ? row.place.name : ""}
+                </button>
+              ))}
+            </>
+          )}
+          {inline.idle}
+        </div>
       )}
       {said !== "" && rows.length === 0 && (
         <p className="panel absolute inset-x-0 top-full z-30 mt-2 px-3 py-2 text-xs text-slate-400">
           {said}
         </p>
       )}
-      {rows.length > 0 && (
+      {rows.length > 0 && !(inline && idle) && (
         // Down to the tab bar, as the panels are; past that the list scrolls
         <ul className="panel absolute inset-x-0 top-full z-30 mt-2 max-h-[calc(100dvh-9rem)] overflow-y-auto p-1">
           {rows.map((row, n) => {
