@@ -245,7 +245,7 @@ def test_a_route_that_calls_at_a_stop_is_watched_from_its_card(page):
     page.get_by_role("button", name="Line А1").last.click()
     expect(page.get_by_text("Stop 0 - Stop 4")).to_be_visible()
     page.get_by_role("button", name="Back").click()
-    expect(page.get_by_text("0 on")).to_be_visible()
+    expect(page.get_by_text("0 of 1 on the map")).to_be_visible()
 
 
 def test_a_route_due_at_a_stop_is_watched_from_its_countdown(page):
@@ -792,7 +792,7 @@ def test_picking_the_route_puts_its_bus_on_the_map(page):
 
     _pick_route(page)
 
-    expect(page.get_by_text("1 on")).to_be_visible()
+    expect(page.get_by_text("1 of 1 on the map")).to_be_visible()
     expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
 
 
