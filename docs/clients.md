@@ -237,19 +237,21 @@ That is `LayersSheet` and `AccountSheet` in `mobile/lib/src/sheets.dart` and
 
 The four tabs are Map, Lines, Journey and Mine - in Ukrainian Мапа, Лінії,
 Поїздка and Моє, since "Маршрут" for a journey read as one of the "Маршрути", the
-routes. Lines keeps apart what the map watches and the list of routes. On the
-map is one choice - All routes, one of the saved sets, or nothing chosen while
-the ticks are your own - with the count watched, a clear button and the form
-that saves the ticks as a set. All routes is no saved set: it ticks every route
-and leaves no set active. Below are the last five lines opened (kept on the
-device), then the routes: a filter field and two toggles that narrow only the
-list - Near me (the routes of the stops within 500 m of the device's fix, asked
-for only when turned on; 500 m is chosen, not derived) and Watched only - and
-the grid of route chips, whose body ticks a route and whose `›` opens its
-line. Renaming and deleting a set is in Mine. An open line
-uncovers the map and draws only that route, over a followed or planned journey,
-beside a panel with a back button, a toggle between its two ways named by the
-last stop, Watch, Only (which makes the line all the map watches), and its stops
+routes. Lines keeps apart what the map watches and the list of routes. What
+the map watches is one toolbar row: a box that, as a mail client's select-all,
+watches every route when none is and none when any is (empty, part-ticked or
+ticked as the routes watched), the count watched out of the catalog's, a picker
+of the saved sets once there are any, and a ⋮ menu that saves the ticks as a
+new set or, once they differ from the set watched, into it. Either end of the
+box leaves no set active. Below are the filter field and two filters that
+narrow only the list, each keeping its icon whether on or off - Near me (the
+routes of the stops within 500 m of the device's fix, asked for only when
+turned on; 500 m is chosen, not derived) and Watched only - then the last five
+lines opened (kept on the device) as a row of the same route chips, then the
+grid of route chips, whose body ticks a route and whose `›` opens its line.
+Renaming and deleting a set is in Mine. An open line uncovers the map and draws
+only that route, over a followed or planned journey, beside a panel with a back
+button, a toggle between its two ways named by the last stop, and its stops
 in order. Above the way, three plain chips say when the line runs and how often:
 its first and last departure today from the way's first stop and, around now,
 the typical gap between departures (`lineHours`: the median gap of those within

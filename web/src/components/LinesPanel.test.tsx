@@ -25,8 +25,7 @@ const browse = (over: Partial<Parameters<typeof LinesBrowse>[0]> = {}) =>
       catalog={CATALOG}
       picked={new Set(["r1"])}
       onToggle={() => {}}
-      onClear={() => {}}
-      onPickAll={() => {}}
+      onPick={() => {}}
       onOpen={() => {}}
       recent={["r2", "gone"]}
       sets={[{ id: "a", name: "Commute", routes: ["r1"], ord: 0 }]}
@@ -50,8 +49,6 @@ const line = (over: Partial<Parameters<typeof LineView>[0]> = {}) =>
       way={0}
       onWay={() => {}}
       arrivals={{ "1": [{ route: 0, veh: 7, t: Date.now() / 1000 + SOON_S }] }}
-      watching={false}
-      onWatch={() => {}}
       onStop={() => {}}
       onBack={() => {}}
       folded={false}
@@ -61,32 +58,30 @@ const line = (over: Partial<Parameters<typeof LineView>[0]> = {}) =>
   );
 
 describe("LinesBrowse", () => {
-  test("offers what the map watches, the lines opened lately, then the routes and their filters, in that order", () => {
+  test("offers what the map watches, then the filters, the lines opened lately and the routes, in that order", () => {
     const html = browse();
-    const at = [t.onMap, t.allRoutes, "Commute", t.recentLines, "Левандівка", t.routes, t.nearLines, t.onlyWatched].map(
-      (s) => html.indexOf(s),
+    const at = [t.onMapOf(1, 2), "Commute", t.nearLines, t.onlyWatched, t.recentLines, t.kinds.bus!].map((s) =>
+      html.indexOf(s),
     );
 
     expect(at.every((i) => i >= 0)).toBe(true);
     expect(at).toEqual([...at].sort((a, b) => a - b));
   });
 
-  /** The choice of what the map watches, by its label: whether it is checked */
-  const chosen = (html: string, label: string) =>
-    html.match(new RegExp(`role="radio" aria-checked="(true|false)"[^>]*>${label}<`))?.[1];
+  /** The select-all box: whether it is ticked, part-ticked ("mixed") or not */
+  const box = (html: string) => html.match(/role="checkbox" aria-checked="(true|false|mixed)"/)?.[1];
 
-  test("checks the set the map watches, and not every route", () => {
-    const html = browse();
-
-    expect(chosen(html, "Commute")).toBe("true");
-    expect(chosen(html, t.allRoutes)).toBe("false");
+  test("part-ticks the box while some routes are watched", () => {
+    expect(box(browse())).toBe("mixed");
   });
 
-  test("checks every route once each is watched and no set is", () => {
-    const html = browse({ picked: new Set(["r1", "r2"]), active: null });
+  test("ticks the box once every route is watched, and empties it with none", () => {
+    expect(box(browse({ picked: new Set(["r1", "r2"]), active: null }))).toBe("true");
+    expect(box(browse({ picked: new Set(), active: null }))).toBe("false");
+  });
 
-    expect(chosen(html, t.allRoutes)).toBe("true");
-    expect(chosen(html, "Commute")).toBe("false");
+  test("shows the set the map watches in the set picker", () => {
+    expect(browse()).toMatch(/<option value="a" selected="">Commute<\/option>/);
   });
 
   test("filters the list with toggles, which are no choice of what the map watches", () => {
@@ -96,7 +91,7 @@ describe("LinesBrowse", () => {
 
     expect(toggle(t.nearLines)).toBe(true);
     expect(toggle(t.onlyWatched)).toBe(true);
-    expect(html.match(/role="radio"/g)).toHaveLength(2);
+    expect(html).not.toContain('role="radio"');
   });
 
   test("leaves out the lines opened lately once none of them is in the catalog", () => {
@@ -139,15 +134,10 @@ describe("LineView", () => {
     expect(html).toContain("Вокзал - Сихів");
     expect(html).toContain(`title="${t.showStops}"`);
     expect(html).not.toContain("Площа Ринок");
-    expect(html).not.toContain(t.watchLine);
   });
 
-  test("says Only is on while the line is all the map watches", () => {
-    const only = (on: boolean) =>
-      line({ only: on }).match(new RegExp(`aria-pressed="(true|false)"[^>]*>${t.onlyLine}<`))?.[1];
-
-    expect(only(true)).toBe("true");
-    expect(only(false)).toBe("false");
+  test("leaves watching the line to the Lines tab: nothing on it is a toggle", () => {
+    expect(line()).not.toContain("aria-pressed");
   });
 
   test("says when the shapes hold no stops for the line", () => {

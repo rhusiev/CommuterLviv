@@ -1103,4 +1103,5 @@ def test_an_old_line_link_opens_the_line_in_the_lines_tab(page):
     expect(page.get_by_title("The other way")).to_be_visible(timeout=SEE_MS)
 
     page.goto("/?tab=route")
-    expect(page.get_by_role("radio", name="All routes")).to_be_visible(timeout=SEE_MS)
+    box = page.get_by_role("checkbox", name=re.compile("^Watch (every route|none)$"))
+    expect(box).to_be_visible(timeout=SEE_MS)
