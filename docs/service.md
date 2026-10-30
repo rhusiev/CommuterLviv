@@ -626,8 +626,12 @@ without a restart (`commuterlviv/live/refresh.py`):
    routes (`SHRINK`) is taken as broken.
 6. The new model takes over what the old one learned. The old model is copied
    under the lock (`snapshot.export`) and read into the new one
-   (`snapshot.restore`) for every shape the feed left alone - same id, same
-   number of cells, length within 1% - and every corridor both cities have.
+   (`snapshot.restore`) for every shape the feed left alone - same id,
+   length within 1% - and every corridor both cities have.
+   A shape cut into cells of another length (`network.Geometry.cell`, 100 m to
+   50 m on 2026-10-30) gives each new cell what the old cell its middle lies in
+   learned: the pace as it was, being a multiplier, and the hold in proportion
+   to the cell's length, so the shape's standing adds up as before.
    It is then warmed on the recording since that copy, which is the last
    minute or so. A shape the feed changed starts from the timetable. The
    learned models are fitted again on the rows it took over, rather than

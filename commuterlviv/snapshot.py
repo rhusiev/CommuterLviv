@@ -9,6 +9,10 @@ one build of the feed - so a snapshot carries what each index meant: the shape
 id, cell count and length behind every unit, and the corridor key behind every
 corridor. Reading it back matches those against the model's network, so a new
 feed keeps everything learned on the shapes and streets it did not change.
+A shape cut into cells of another length (`network.Geometry.cell`) keeps them
+too: each new cell takes what the old cell its middle lies in learned, its
+pace as it was - a multiplier, the same for any length - and its hold in
+proportion to its length, so the shape's standing adds up as before.
 
 Age needs no check. Every weight is stamped with the time it was earned and
 decays from that stamp, so an old snapshot fades back to the prior on its own.
@@ -67,6 +71,12 @@ def export(model, t=None):
     return out
 
 
+def _within(old, new):
+    """For each of `new` cells cut from a shape, the one of its `old` cells
+    the new one's middle lies in."""
+    return ((np.arange(new) + 0.5) * old / new).astype(int)
+
+
 def restore(model, data):
     """Copy what still applies into a fresh model. Returns the time the state
     was taken, or None if it is another model's.
@@ -80,19 +90,20 @@ def restore(model, data):
         model.layovers.restore(*(data[LAYOVER + k] for k in layover.FIELDS))
     restore_rows(model, data)
     net = model.net
-    src, dst = [], []
+    src, dst, share = [], [], []
     base = 0
     for sid, cells, length in zip(data["shapes"], data["cells"],
                                   data["lengths"]):
         sid = str(sid)
         s = net.shapes.get(sid)
-        if (s is not None and s.cells == cells
-                and abs(s.length - length) <= LENGTH_TOL * length):
-            src.append(np.arange(base, base + cells))
-            dst.append(model.shape_base[sid] + np.arange(cells))
+        if s is not None and abs(s.length - length) <= LENGTH_TOL * length:
+            src.append(base + _within(int(cells), s.cells))
+            dst.append(model.shape_base[sid] + np.arange(s.cells))
+            share.append(np.full(s.cells, cells / s.cells))
         base += int(cells)
     unit = ((np.concatenate(src), np.concatenate(dst)) if src
             else (np.empty(0, dtype=int),) * 2)
+    held_share = np.concatenate(share) if share else np.empty(0)
 
     held, now = data["corridors"], _corridors(net)
     at = np.minimum(np.searchsorted(held, now), len(held) - 1)
@@ -105,6 +116,8 @@ def restore(model, data):
         s, d = {"unit": unit, "corr": corr}.get(kind, (slice(None),) * 2)
         for part in ("mean", "w", "t"):
             getattr(e, part)[d] = data[f"{name}.{part}"][s]
+        if kind == "unit" and name.startswith("hold."):
+            e.mean[d] *= held_share
     return float(data["t"])
 
 
