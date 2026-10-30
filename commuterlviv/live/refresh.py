@@ -58,6 +58,18 @@ async def nightly(s, log):
         await stops(s, log)
 
 
+def feed_at_start(log):
+    """A held feed past `gtfs.MAX_AGE` fetched again before the city is built
+    from it, as the nights the service was down would have. A failed fetch
+    serves the held one, as a failed night does."""
+    if not gtfs.stale():
+        return
+    try:
+        gtfs.refetch()
+    except Exception as exc:
+        log("start: keeping the feed held -", brief(exc))
+
+
 async def check(s, log):
     """Fetches what is due, and renews the city if any of it changed."""
     if s.settings.places_url and \

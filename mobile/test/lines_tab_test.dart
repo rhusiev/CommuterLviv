@@ -9,6 +9,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:commuterlviv/src/api.dart';
+import 'package:commuterlviv/src/eta.dart';
 import 'package:commuterlviv/src/here.dart';
 import 'package:commuterlviv/src/lines_tab.dart';
 import 'package:commuterlviv/src/live.dart';
@@ -86,6 +87,7 @@ Future<void> _pump(
   String? server,
   Here? here,
   void Function(int route)? onOpen,
+  void Function(RouteSet? set, Iterable<int> routes)? onActivated,
 }) async {
   SharedPreferences.setMockInitialValues({});
   FlutterSecureStorage.setMockInitialValues({});
@@ -103,7 +105,7 @@ Future<void> _pump(
             picked: picked,
             onToggle: (_) {},
             onClear: () {},
-            onActivated: (_, _) {},
+            onActivated: onActivated ?? (_, _) {},
             onSets: (sets) => setState(() => held = sets),
             onOpen: onOpen ?? (_) {},
             recent: recent,
@@ -152,7 +154,70 @@ Future<HttpServer> _refusingActivation() async {
   return server;
 }
 
+/// Answers every request with an empty success, noting the active set asked for.
+Future<HttpServer> _accepting(List<Object?> activated) async {
+  final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+  server.listen((req) async {
+    final body = await utf8.decodeStream(req);
+    if (req.uri.path == '/api/sets/active') {
+      activated.add((jsonDecode(body) as Map)['id']);
+    }
+    req.response
+      ..persistentConnection = false
+      ..headers.contentType = ContentType.json
+      ..write('{}')
+      ..close();
+  });
+  return server;
+}
+
 void main() {
+  testWidgets('all routes watches every route as no saved set', (tester) async {
+    allowRealHttp();
+    final activated = <Object?>[];
+    final server = (await tester.runAsync(() => _accepting(activated)))!;
+    addTearDown(() => server.close(force: true));
+    final got = <(RouteSet?, List<int>)>[];
+    await _pump(
+      tester,
+      catalog: _mixed,
+      server: 'http://${server.address.host}:${server.port}',
+      onActivated: (set, routes) => got.add((set, routes.toList())),
+    );
+
+    await tester.tap(find.widgetWithText(ChoiceChip, txt.allRoutes));
+    await pumpUntil(tester, () => got.isNotEmpty);
+
+    expect(activated, [null]);
+    expect(got.single.$1, isNull);
+    expect(got.single.$2, [for (var i = 0; i < _mixed.routes.length; i++) i]);
+  });
+
+  testWidgets('all routes is chosen once every route is watched and no set', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      catalog: _mixed,
+      picked: {for (var i = 0; i < _mixed.routes.length; i++) i},
+    );
+
+    final chip = tester.widget<ChoiceChip>(
+      find.widgetWithText(ChoiceChip, txt.allRoutes),
+    );
+    expect(chip.selected, isTrue);
+  });
+
+  testWidgets('the list filters are toggles apart from the choice of the map', (
+    tester,
+  ) async {
+    await _pump(tester, catalog: _mixed);
+
+    expect(find.widgetWithText(FilterChip, txt.nearLines), findsOneWidget);
+    expect(find.widgetWithText(FilterChip, txt.onlyWatched), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, txt.nearLines), findsNothing);
+  });
+
   testWidgets('routes are grouped under their vehicle type', (tester) async {
     await _pump(tester, catalog: _mixed);
     expect(find.text(txt.kinds['bus']!), findsOneWidget);
@@ -198,7 +263,7 @@ void main() {
   testWidgets('watching lists only the routes watched', (tester) async {
     await _pump(tester, catalog: _mixed, picked: {1});
 
-    await tester.tap(find.text(txt.watchingLines(1)));
+    await tester.tap(find.text(txt.onlyWatched));
     await tester.pumpAndSettle();
 
     expect(_chip('t1'), findsOneWidget);
@@ -208,7 +273,7 @@ void main() {
   testWidgets('watching nothing says so', (tester) async {
     await _pump(tester, catalog: _mixed);
 
-    await tester.tap(find.text(txt.watchingLines(0)));
+    await tester.tap(find.text(txt.onlyWatched));
     await tester.pumpAndSettle();
 
     expect(find.text(txt.noneWatched), findsOneWidget);
@@ -306,6 +371,7 @@ void main() {
           1: [Arrival(route: 0, veh: 7, t: now + 5 * minute)],
         };
       var way = 0;
+      var folded = false;
       int? stop;
       final semantics = tester.ensureSemantics();
       await tester.pumpWidget(
@@ -326,6 +392,8 @@ void main() {
                 onWatch: () {},
                 onStop: (s) => stop = s,
                 onBack: () {},
+                folded: folded,
+                onFold: (f) => setState(() => folded = f),
               ),
             ),
           ),
@@ -357,6 +425,15 @@ void main() {
 
       await tester.tap(find.text('C'));
       expect(stop, 1);
+
+      await tester.tap(find.byTooltip(txt.hideStops));
+      await tester.pumpAndSettle();
+      expect(find.text('A'), findsNothing);
+      expect(find.text(txt.watchLine), findsNothing);
+      // The folded title opens it as the chevron does
+      await tester.tap(find.text('A to B'));
+      await tester.pumpAndSettle();
+      expect(find.text('A'), findsOneWidget);
       semantics.dispose();
     },
   );
@@ -406,6 +483,8 @@ void main() {
               onWatch: () {},
               onStop: (_) {},
               onBack: () {},
+              folded: false,
+              onFold: (_) {},
             ),
           ),
         ),
@@ -413,7 +492,95 @@ void main() {
       return tester.renderObject<RenderParagraph>(find.text('→ $end'));
     }
 
-    expect((await way('Pohulianka')).didExceedMaxLines, isFalse);
+    // Short enough to fit beside Watch and Only in the test's square glyphs
+    expect((await way('Sykhiv')).didExceedMaxLines, isFalse);
     expect((await way('Pohulianka' * 4)).didExceedMaxLines, isTrue);
+  });
+
+  testWidgets('Only says whether the line is all the map watches, and makes '
+      'it so', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+    final live = Live((await tester.runAsync(Api.open))!, onRenewed: () {});
+    var asked = 0;
+    Future<FilterChip> pump({required bool only}) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: LinePanel(
+              catalog: _mixed,
+              live: live,
+              route: 0,
+              ways: const [
+                (dir: 0, stops: [0, 1]),
+              ],
+              way: 0,
+              onWay: (_) {},
+              watching: only,
+              onWatch: () {},
+              onStop: (_) {},
+              onBack: () {},
+              folded: false,
+              onFold: (_) {},
+              only: only,
+              onOnly: () => asked++,
+            ),
+          ),
+        ),
+      );
+      return tester.widget<FilterChip>(
+        find.widgetWithText(FilterChip, txt.onlyLine),
+      );
+    }
+
+    expect((await pump(only: true)).selected, isTrue);
+    final chip = await pump(only: false);
+    expect(chip.selected, isFalse);
+    await tester.tap(find.widgetWithText(FilterChip, txt.onlyLine));
+    expect(asked, 1);
+  });
+
+  testWidgets('the open line says when it runs, from its first stop this way', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+    final live = Live((await tester.runAsync(Api.open))!, onRenewed: () {});
+    const gapS = 8 * 60;
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final dep = [for (var k = -2; k <= 2; k++) now + k * gapS];
+    final asked = <(int, int)>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LinePanel(
+            catalog: _mixed,
+            live: live,
+            route: 0,
+            ways: const [
+              (dir: 0, stops: [1, 0]),
+            ],
+            way: 0,
+            onWay: (_) {},
+            watching: false,
+            onWatch: () {},
+            onStop: (_) {},
+            onBack: () {},
+            folded: false,
+            onFold: (_) {},
+            departures: (route, stop) async {
+              asked.add((route, stop));
+              return dep;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(asked, [(0, 1)]);
+    expect(find.text(txt.firstDeparture(clockTime(dep.first))), findsOneWidget);
+    expect(find.text(txt.lastDeparture(clockTime(dep.last))), findsOneWidget);
+    expect(find.text(txt.everyMinutes(8)), findsOneWidget);
   });
 }

@@ -20,12 +20,10 @@ import 'sheets.dart' show askName;
 import 'strings.dart';
 import 'theme.dart';
 
-/// Which routes the grid lists.
-enum LinesFilter { all, watching, near }
-
-/// The routes and the saved sets of them. Sets live on the server; the current
-/// ticks are local until saved as one. Renaming and deleting a set is in the
-/// Mine tab.
+/// What the map watches - every route, a saved set, or the routes ticked by
+/// hand - kept apart from the list of routes below, which its own filters only
+/// narrow. Sets live on the server; the current ticks are local until saved as
+/// one. Renaming and deleting a set is in the Mine tab.
 class LinesTab extends StatefulWidget {
   const LinesTab({
     super.key,
@@ -51,7 +49,8 @@ class LinesTab extends StatefulWidget {
   final void Function(int route) onToggle;
   final VoidCallback onClear;
 
-  final void Function(RouteSet set, Iterable<int> routes) onActivated;
+  /// The set now watched, or null for every route, which is no saved set.
+  final void Function(RouteSet? set, Iterable<int> routes) onActivated;
 
   final void Function(Sets sets) onSets;
 
@@ -61,7 +60,7 @@ class LinesTab extends StatefulWidget {
   /// Route ids of the lines opened lately, latest first.
   final List<String> recent;
 
-  /// Asked for a fix only once "Near me" is picked.
+  /// Asked for a fix only once "Near me" is turned on.
   final Here here;
 
   @override
@@ -74,7 +73,8 @@ class _LinesTabState extends State<LinesTab> {
   static const _gap = 6.0;
 
   String _query = '';
-  LinesFilter _filter = LinesFilter.all;
+  bool _nearOnly = false;
+  bool _watchedOnly = false;
 
   /// Why the last change to the sets did not go through
   String? _failed;
@@ -122,9 +122,18 @@ class _LinesTabState extends State<LinesTab> {
     }
   }
 
-  void _pick(LinesFilter filter) {
-    setState(() => _filter = filter);
-    if (filter == LinesFilter.near) unawaited(widget.here.start());
+  Future<void> _pickAll() async {
+    await widget.api.activateSet(null);
+    if (mounted) {
+      widget.onActivated(null, [
+        for (var i = 0; i < widget.catalog.routes.length; i++) i,
+      ]);
+    }
+  }
+
+  void _toggleNear(bool on) {
+    setState(() => _nearOnly = on);
+    if (on) unawaited(widget.here.start());
   }
 
   @override
@@ -140,8 +149,18 @@ class _LinesTabState extends State<LinesTab> {
         floatingBottom(context),
       ),
       children: [
-        _filters(),
-        ..._setRows(context),
+        ..._watched(context),
+        _actions(),
+        if (_failed case final failed?)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              failed,
+              style: material.Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: material.Theme.of(context).colorScheme.error,
+              ),
+            ),
+          ),
         ..._recentRows(context),
         Text(
           txt.routes,
@@ -155,39 +174,31 @@ class _LinesTabState extends State<LinesTab> {
             hintText: txt.filterRoutes,
           ),
         ),
+        const SizedBox(height: 6),
+        _narrowing(),
         const SizedBox(height: 12),
         if (_why() case final why?) _Note(why),
         _grid(),
-        const SizedBox(height: 16),
-        _actions(),
-        if (_failed case final failed?)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              failed,
-              style: material.Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: material.Theme.of(context).colorScheme.error,
-              ),
-            ),
-          ),
       ],
     ),
   );
 
-  Widget _filters() => Wrap(
+  /// Filters on the list alone, each on or off: filter chips with a tick, so
+  /// they do not read as one of the choices of what the map watches.
+  Widget _narrowing() => Wrap(
     spacing: 6,
     children: [
-      for (final (f, label) in [
-        (LinesFilter.all, txt.allLines),
-        (LinesFilter.watching, txt.watchingLines(widget.picked.length)),
-        (LinesFilter.near, txt.nearLines),
-      ])
-        ChoiceChip(
-          label: Text(label),
-          showCheckmark: false,
-          selected: _filter == f,
-          onSelected: (_) => _pick(f),
-        ),
+      FilterChip(
+        avatar: _nearOnly ? null : const Icon(Icons.near_me_outlined),
+        label: Text(txt.nearLines),
+        selected: _nearOnly,
+        onSelected: _toggleNear,
+      ),
+      FilterChip(
+        label: Text(txt.onlyWatched),
+        selected: _watchedOnly,
+        onSelected: (on) => setState(() => _watchedOnly = on),
+      ),
     ],
   );
 
@@ -197,12 +208,12 @@ class _LinesTabState extends State<LinesTab> {
     null => null,
   };
 
-  /// What stands in for routes the filter leaves out, if anything does.
-  String? _why() => switch (_filter) {
-    LinesFilter.all => null,
-    LinesFilter.watching => widget.picked.isEmpty ? txt.noneWatched : null,
-    LinesFilter.near => _nearWhy(),
-  };
+  /// What stands in for routes the filters leave out, if anything does.
+  String? _why() => _nearOnly
+      ? _nearWhy()
+      : _watchedOnly && widget.picked.isEmpty
+      ? txt.noneWatched
+      : null;
 
   String? _nearWhy() {
     if (widget.here.state == Locating.denied) return txt.noLocation;
@@ -211,22 +222,44 @@ class _LinesTabState extends State<LinesTab> {
     return near.isEmpty ? txt.nothingNearLines(nearLinesM) : null;
   }
 
-  List<Widget> _setRows(BuildContext context) {
+  /// What the map watches: every route, one of the saved sets, or the routes
+  /// ticked below. A set is the selection at the moment it was saved.
+  List<Widget> _watched(BuildContext context) {
     final sets = widget.sets?.sets ?? const <RouteSet>[];
-    if (sets.isEmpty) return const [];
+    final active = widget.sets?.active;
+    final all =
+        widget.catalog.routes.isNotEmpty &&
+        widget.picked.length == widget.catalog.routes.length;
+    final style = material.Theme.of(context).textTheme;
     return [
-      const SizedBox(height: 12),
-      Text(txt.sets, style: material.Theme.of(context).textTheme.labelLarge),
+      Text.rich(
+        TextSpan(
+          text: txt.onMap,
+          children: [
+            TextSpan(
+              text: '  ${txt.routesOn(widget.picked.length)}',
+              style: style.bodySmall,
+            ),
+          ],
+        ),
+        style: style.labelLarge,
+      ),
       const SizedBox(height: 6),
       Wrap(
         spacing: 6,
         children: [
+          ChoiceChip(
+            label: Text(txt.allRoutes),
+            showCheckmark: false,
+            selected: all && sets.every((s) => s.id != active),
+            onSelected: (_) => _guard(_pickAll),
+          ),
           for (final s in sets)
             ChoiceChip(
               label: Text(s.name),
               // A checkmark widens the chip, shuffling the ones after it
               showCheckmark: false,
-              selected: s.id == widget.sets?.active,
+              selected: s.id == active,
               onSelected: (_) => _guard(() => _activate(s)),
             ),
         ],
@@ -264,13 +297,11 @@ class _LinesTabState extends State<LinesTab> {
   Map<String, List<int>> _groups() {
     final catalog = widget.catalog;
     final needle = _query.toLowerCase();
-    final near = _filter == LinesFilter.near ? (_near ?? const {}) : null;
+    final near = _nearOnly ? (_near ?? const {}) : null;
     final groups = <String, List<int>>{};
     for (var i = 0; i < catalog.routes.length; i++) {
       final r = catalog.routes[i];
-      if (_filter == LinesFilter.watching && !widget.picked.contains(i)) {
-        continue;
-      }
+      if (_watchedOnly && !widget.picked.contains(i)) continue;
       if (near != null && !near.contains(i)) continue;
       if (needle.isEmpty ||
           r.short.toLowerCase().contains(needle) ||
@@ -393,11 +424,30 @@ class LinePanel extends StatelessWidget {
     required this.onWatch,
     required this.onStop,
     required this.onBack,
+    required this.folded,
+    required this.onFold,
+    this.only = false,
+    this.onOnly = _none,
+    this.departures = _noDepartures,
   });
+
+  static void _none() {}
+  static Future<List<int>> _noDepartures(int route, int stop) async => [];
 
   final Catalog catalog;
   final Live live;
   final int route;
+
+  /// Whether it is the one route watched, and making it so.
+  final bool only;
+  final VoidCallback onOnly;
+
+  /// The route's timetabled departures from a stop today, for its hours.
+  final Future<List<int>> Function(int route, int stop) departures;
+
+  /// Down to its title alone, so the map shows the line.
+  final bool folded;
+  final ValueChanged<bool> onFold;
 
   /// Each way the line runs; empty until the shapes are in.
   final List<Direction> ways;
@@ -435,68 +485,116 @@ class LinePanel extends StatelessWidget {
                   onPressed: onBack,
                   icon: const Icon(Icons.arrow_back),
                 ),
-                RouteBadge(route: line),
-                const SizedBox(width: 10),
+                // Folded, the title opens it again, as a folded journey's
+                // strip does
                 Expanded(
-                  child: Text(
-                    line.long,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                // All the width Watch leaves, not the half a Flexible beside a
-                // Spacer gets; the chip itself is only as wide as its name
-                Expanded(
-                  child: Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: switch (shown?.stops.lastOrNull) {
-                      final last? => Tooltip(
-                        message: txt.otherWay,
-                        child: ActionChip(
-                          label: Text(
-                            '→ ${catalog.stops[last].name}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          onPressed: ways.length < 2
-                              ? null
-                              : () => onWay((way + 1) % ways.length),
-                        ),
+                  child: InkWell(
+                    onTap: folded ? () => onFold(false) : null,
+                    borderRadius: BorderRadius.circular(controlRadius),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        minHeight: kMinInteractiveDimension,
                       ),
-                      null => const SizedBox.shrink(),
-                    },
+                      child: Row(
+                        children: [
+                          RouteBadge(route: line),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              line.long,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                FilterChip(
-                  label: Text(txt.watchLine),
-                  selected: watching,
-                  onSelected: (_) => onWatch(),
+                // At the bottom, like the journey: down folds, up opens
+                IconButton(
+                  tooltip: folded ? txt.showStops : txt.hideStops,
+                  onPressed: () => onFold(!folded),
+                  icon: Icon(folded ? Icons.expand_less : Icons.expand_more),
                 ),
               ],
             ),
           ),
-          if (ways.isNotEmpty && (shown?.stops.isEmpty ?? true))
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(txt.noLineStops, style: theme.textTheme.bodySmall),
-            ),
-          if (shown != null)
-            Flexible(
-              child: AnimatedBuilder(
-                animation: live,
-                builder: (context, _) => _rows(shown.stops),
-              ),
-            ),
+          if (!folded) ..._body(context, shown),
         ],
       ),
     );
+  }
+
+  /// Below the title: when it runs, the way, Watch, and the stops in order.
+  List<Widget> _body(BuildContext context, Direction? shown) {
+    final theme = material.Theme.of(context);
+    final from = shown?.stops.firstOrNull;
+    return [
+      if (from != null)
+        LineHours(
+          key: ValueKey((route, from)),
+          load: () => departures(route, from),
+        ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: [
+            // All the width Watch leaves, not the half a Flexible beside a
+            // Spacer gets; the chip itself is only as wide as its name
+            Expanded(
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: switch (shown?.stops.lastOrNull) {
+                  final last? => Tooltip(
+                    message: txt.otherWay,
+                    child: ActionChip(
+                      label: Text(
+                        '→ ${catalog.stops[last].name}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onPressed: ways.length < 2
+                          ? null
+                          : () => onWay((way + 1) % ways.length),
+                    ),
+                  ),
+                  null => const SizedBox.shrink(),
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilterChip(
+              label: Text(txt.watchLine),
+              selected: watching,
+              onSelected: (_) => onWatch(),
+            ),
+            const SizedBox(width: 4),
+            // Watch adds it to what the map watches, Only makes it all of it
+            Tooltip(
+              message: txt.onlyLineHint,
+              child: FilterChip(
+                label: Text(txt.onlyLine),
+                selected: only,
+                showCheckmark: false,
+                onSelected: (_) => onOnly(),
+              ),
+            ),
+          ],
+        ),
+      ),
+      if (ways.isNotEmpty && (shown?.stops.isEmpty ?? true))
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Text(txt.noLineStops, style: theme.textTheme.bodySmall),
+        ),
+      if (shown != null)
+        Flexible(
+          child: AnimatedBuilder(
+            animation: live,
+            builder: (context, _) => _rows(shown.stops),
+          ),
+        ),
+    ];
   }
 
   Widget _rows(List<int> stops) {
@@ -536,6 +634,70 @@ class LinePanel extends StatelessWidget {
             onTap: () => onStop(stop),
           ),
       ],
+    );
+  }
+}
+
+/// When a line runs and how often, as plain chips: nothing to tap. Shows
+/// nothing until [load] answers, and nothing if it fails.
+class LineHours extends StatefulWidget {
+  const LineHours({super.key, required this.load});
+
+  final Future<List<int>> Function() load;
+
+  @override
+  State<LineHours> createState() => _LineHoursState();
+}
+
+class _LineHoursState extends State<LineHours> {
+  List<int> _dep = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_fetch());
+  }
+
+  Future<void> _fetch() async {
+    try {
+      final dep = await widget.load();
+      if (mounted) setState(() => _dep = dep);
+    } catch (_) {
+      // without them the line is shown as before, its hours left out
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final h = lineHours(_dep, now);
+    if (h == null) return const SizedBox.shrink();
+    final style = material.Theme.of(context).textTheme.bodySmall;
+    final chips = [
+      txt.firstDeparture(clockTime(h.first)),
+      txt.lastDeparture(clockTime(h.last)),
+      if (h.every case final every?) txt.everyMinutes(spanMinutes(every)),
+    ];
+    return Tooltip(
+      message: txt.lineHoursHint,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+        child: Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          children: [
+            for (final c in chips)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  border: Border.all(color: hair),
+                  borderRadius: BorderRadius.circular(controlRadius),
+                ),
+                child: Text(c, style: style),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

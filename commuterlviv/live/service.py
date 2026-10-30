@@ -222,7 +222,8 @@ class Service:
             self._seen[key] = v.timestamp
             p = v.position
             if self.live.fix(key, v.timestamp, p.latitude, p.longitude,
-                             p.speed, p.odometer, v.trip.trip_id or None):
+                             p.speed, p.odometer, v.trip.trip_id or None,
+                             v.vehicle.label, v.vehicle.license_plate):
                 n += 1
         if len(self._seen) > SEEN_MAX:
             self._seen.clear()

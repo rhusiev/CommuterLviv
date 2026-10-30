@@ -36,6 +36,9 @@ export class Live {
 
   readonly vehicles = new Map<number, Vehicle>();
   arrivals: Record<string, Arrival[]> = {};
+  /** On the `performance.now()` clock: until when a vehicle is still easing to
+   *  its last report, so whoever draws them knows to keep drawing */
+  easingUntil = 0;
   arrivalsAt = 0;
   connection: Connection = "connecting";
   /** Too few vehicles report for the trips the timetable has running - during
@@ -50,6 +53,7 @@ export class Live {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private closed = false;
   private listeners = new Set<() => void>();
+  private movers = new Set<() => void>();
   private snapshot = {
     connection: "connecting" as Connection,
     arrivalsAt: 0,
@@ -60,6 +64,12 @@ export class Live {
   subscribe = (fn: () => void) => {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
+  };
+
+  /** Called on every position frame, which React never hears of */
+  onMove = (fn: () => void) => {
+    this.movers.add(fn);
+    return () => this.movers.delete(fn);
   };
 
   /** A stable object per meaningful change: `useSyncExternalStore` tears if a
@@ -199,6 +209,8 @@ export class Live {
       }
     }
     if (f.kind === DELTA) for (const id of f.gone) this.vehicles.delete(id);
+    this.easingUntil = now + EASE;
+    for (const fn of this.movers) fn();
     if (f.kind === SNAPSHOT || f.gone.length) this.changed();
   }
 }

@@ -8,10 +8,10 @@ A unit belongs to one route's shape, so a street ten routes run down carries ten
 units, each with its own number and its own slightly different idea of where the
 kerb is. Drawing those as they are gives ten near-parallel lines crossing each
 other. They are pooled instead, by where they actually lie: shapes are laid down
-most-run first, and a 100 m cell of a later shape that runs on top of an
+most-run first, and a cell of a later shape that runs on top of an
 already drawn piece - within `MATCH` metres and heading the same way along most
 of its length - adds its unit to that piece rather than drawing its own. One
-line comes out per 100 m of street per direction of travel, coloured by the
+line comes out per cell of street per direction of travel, coloured by the
 weighted mean of every unit on it, and drawn along its shape's own vertices so
 it follows the street through a bend rather than cutting across it.
 
@@ -61,7 +61,7 @@ TRAM, ROAD = 0, 1
 
 
 def segments(net, model):
-    """One line per 100 m of street per direction, with the units it reads."""
+    """One line per cell of street per direction, with the units it reads."""
     kinds = _kinds(net)
     drop = _termini(net, model)
     runs = {}

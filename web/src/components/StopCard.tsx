@@ -1,6 +1,7 @@
 import { stopTitle } from "../lib/catalog";
 import { countdown, nextPerRoute } from "../lib/eta";
 import { RouteChip } from "./RouteChip";
+import { number } from "../lib/sprites";
 import type { Arrival, Catalog } from "../lib/types";
 import { t } from "../lib/i18n";
 import { Icon } from "./Icon";
@@ -19,6 +20,7 @@ export function StopCard({
   onToggle,
   onRoute,
   onClose,
+  lowFloor = false,
 }: {
   catalog: Catalog;
   stop: number;
@@ -31,6 +33,8 @@ export function StopCard({
   /** The line, from a chip's `›` */
   onRoute: (i: number) => void;
   onClose: () => void;
+  /** Mark the vehicles the feed calls low floor */
+  lowFloor?: boolean;
 }) {
   const s = catalog.stops[stop];
   if (!s) return null;
@@ -78,15 +82,14 @@ export function StopCard({
                   onWatch={() => onToggle(r.id)}
                   onLine={() => onRoute(a.route)}
                 >
-                  <span className={`text-xs text-slate-400 ${a.planned ? "italic" : ""}`}>
-                    {countdown(a.t)}
-                  </span>
+                  <Due arrival={a} lowFloor={lowFloor} />
                 </RouteChip>
               </li>
             );
           })}
         </ul>
       )}
+      <Doubts catalog={catalog} due={due} />
 
       <h4 className="mt-3 text-xs uppercase tracking-wide text-slate-500">{t.callsHere}</h4>
       <div className="mt-1 flex flex-wrap gap-1">
@@ -107,3 +110,33 @@ export function StopCard({
     </div>
   );
 }
+
+/** The countdown on a route's chip: amber when its vehicle is doubted, italic
+ *  on a trip yet to start, and marked when low floor and asked to */
+function Due({ arrival: a, lowFloor }: { arrival: Arrival; lowFloor: boolean }) {
+  const tone = a.doubt ? "text-amber-300" : "text-slate-400";
+  return (
+    <span className={`flex items-center gap-1 text-xs ${tone} ${a.planned ? "italic" : ""}`}>
+      {countdown(a.t)}
+      {lowFloor && a.low_floor && (
+        <span title={t.lowFloor} aria-label={t.lowFloor} className="text-accent">
+          <Icon name="wheelchair" className="size-3.5" />
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Why an amber time is amber, one line a route, only while one is */
+function Doubts({ catalog, due }: { catalog: Catalog; due: Arrival[] }) {
+  const doubted = due.filter((a) => a.doubt);
+  if (doubted.length === 0) return null;
+  return (
+    <div className="mt-1.5 space-y-0.5 text-xs text-amber-300">
+      {doubted.map((a) => (
+        <p key={a.route}>{t.doubt[a.doubt!](number(catalog.routes[a.route]!.short))}</p>
+      ))}
+    </div>
+  );
+}
+

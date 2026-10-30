@@ -71,6 +71,35 @@ the rule by 6.02 and the model by 5.14, and the share foretold over two
 minutes after the vehicle had actually gone was 50%, 17% and 17%. The
 turnarounds and the minutes of stands are kept with the model across restarts.
 
+## What the feed says of a vehicle, and doubted arrivals
+
+Besides where a vehicle is, the feed names it: `license_plate` carries a tram's
+or trolleybus's fleet number and a bus's plate, and `label` reads `low_floor` or
+`high_floor`. The service keeps both per vehicle (`Live.meta`). A vehicle the
+feed calls low floor carries the `LOW_FLOOR` bit (4) in its frame's flags, and
+its arrival rows `low_floor: true`. The word is taken only where it is said: on
+2026-10-29 it named 10 of 71 trams and 28 of 63 trolleybuses low floor but one
+bus in 484, so a vehicle without the bit is unknown, never high floor.
+`/api/vehicle` adds `fleet`, `low_floor` and `seen`, the Unix second of its
+last report.
+
+An arrival is doubted, `doubt` on its row, when its vehicle has stood still
+for over five minutes (`STUCK_S`) away from either end of its line (`ENDS_M`,
+150 m, where standing is laying over) - the `STUCK` bit (8) - or when it has not
+reported for `FRESH` (30 s), the `STALE` bit: `"stuck"` and `"silent"`. Both are
+judged on the positions last published, so a stop's board and the map agree.
+
+## When a line runs
+
+`GET /api/departures?route=R&stop=S` (catalog positions) answers `{t, dep}`:
+every timetabled departure of the route from that stop on the service day now
+falls in, as Unix seconds, soonest first (`Planner.departures`). Yesterday's
+trips still running past midnight count, tomorrow's do not, and a pattern that
+ends at the stop does not leave it. The clients read the open line's first and
+last departure and how often it leaves around now from it. It answers 400 for
+a route or stop the catalog lacks and 503 without a planner or while the city
+is renewed.
+
 ## Seconds to each stop, corrected
 
 The pace model reads Lviv as faster than it is - over 2026-09-14..10-08 it
@@ -416,7 +445,11 @@ by a preset - fastest, less walking, fewer changes, most backups - picked from
 a sort icon beside the search and remembered on the device; the whole walk goes last
 under the last two. Under those two, a tie is settled by arrival plus the
 minutes walked, so a ride from the door beats one a few minutes earlier behind
-a long walk. `&at=<unix seconds>` plans a trip that starts later instead of
+a long walk. `&avoid=tram,trolleybus` leaves vehicle types out (`bus`, `tram`,
+`trolleybus`, never all three): no option, backup or hurry option rides one,
+but a ride already on board stays, since you are on it. It is filtered where the
+search's hops are made (`hops._connections`), so it costs nothing to build.
+`&at=<unix seconds>` plans a trip that starts later instead of
 now, up to 30 days ahead (`PLAN_AHEAD_DAYS`); past that the city has usually
 changed its timetable. Each day is planned on the trips its services run
 (`calendar.txt`, with `calendar_dates.txt` exceptions winning), so a Sunday
@@ -450,7 +483,7 @@ changed since, it says so: stop and trip numbering may then no longer match.
 ## Traffic
 
 `GET /api/traffic/streets` and `GET /api/traffic` are the same numbers the
-model uses for its ETAs, drawn as a map: per 100 m of track, the ratio of how
+model uses for its ETAs, drawn as a map: per 50 m cell of track, the ratio of how
 long vehicles are actually taking to how long the timetable expects. A stretch
 too little has crossed lately comes back as `null` and is not drawn - the model
 would happily hand back the corridor's number there, which is a fair ETA and a
@@ -460,7 +493,7 @@ The numbers are pooled before they are drawn. A unit belongs to one route's
 shape, so a street ten routes run down carries ten units, each with its own
 number and its own idea of where the kerb is; drawn as they are, that is ten
 near-parallel lines crossing each other. They are pooled by where they lie:
-shapes are laid down most-run first, and a 100 m cell of a later shape that runs
+shapes are laid down most-run first, and a cell of a later shape that runs
 on top of an already drawn piece, within `MATCH` metres and heading the same
 way, adds its unit to that piece instead of drawing its own. Each piece is drawn
 along its shape's own vertices, so it follows the street through a bend rather
@@ -593,8 +626,17 @@ without a restart (`commuterlviv/live/refresh.py`):
    routes (`SHRINK`) is taken as broken.
 6. The new model takes over what the old one learned. The old model is copied
    under the lock (`snapshot.export`) and read into the new one
-   (`snapshot.restore`) for every shape the feed left alone - same id, same
-   number of cells, length within 1% - and every corridor both cities have.
+   (`snapshot.restore`) for every shape the feed left alone - same id,
+   length within 1% - and every corridor both cities have.
+   A shape cut into cells of another length (`network.Geometry.cell`, 100 m to
+   50 m on 2026-10-30) gives each new cell what the old cell its middle lies in
+   learned: the pace as it was, being a multiplier, and the hold in proportion
+   to the cell's length, so the shape's standing adds up as before. A
+   corridor's and the city's hold are per crossing of a cell too, so they are
+   scaled by the old cell count over the new across the shapes kept. Restoring
+   production's snapshot of 2026-10-30 this way timed each of its 177 shapes end
+   to end within 0.53% of the 100 m model at the median, 1.8% at the 90th
+   percentile and 8.3% at most; a cold model was 8.5% off at the median.
    It is then warmed on the recording since that copy, which is the last
    minute or so. A shape the feed changed starts from the timetable. The
    learned models are fitted again on the rows it took over, rather than
@@ -622,7 +664,12 @@ HTTP cache.
 
 Any step that fails leaves the old city serving, the new feed is put back to
 the one served (`gtfs.restore`) so a restart does not pick it up either, and the
-next night tries again. The cost of a swap is about 15 s of CPU in the background and, while it
+next night tries again. Only these nights, and a start, fetch the feed:
+reading it (`gtfs.table`) never does, so a failed night is not retried by
+whatever reads the feed next, and the feed is never swapped under the running
+city. A start fetches a held feed over a day old (`gtfs.MAX_AGE`), as the nights
+the service was down would have, and serves the held one if that fails.
+The cost of a swap is about 15 s of CPU in the background and, while it
 lasts, a second copy of the city in memory. The cost to a rider is one reconnect
 and, on the web, one reload.
 

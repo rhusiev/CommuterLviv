@@ -9,13 +9,14 @@ which is what the wire uses.
 """
 import asyncio
 import dataclasses
+import datetime
 import time
 from itertools import zip_longest
 
 import numpy as np
 import requests
 
-from .. import network, plan, replay, walk as footpaths
+from .. import localtime, network, plan, replay, walk as footpaths
 from ..logs import brief
 from . import geometry
 
@@ -51,12 +52,13 @@ class Planner:
         return cls(tt, walk, transfers, cat)
 
     def search(self, origin, dest, arrivals, now=None, speed=None,
-               hurry=None):
+               hurry=None, avoid=frozenset()):
         """Ranked journeys, on the wire, and as `plan` found them. Call it
         from a worker thread: a city-wide search is half a second of Python.
         `speed` is how fast the traveller walks on the level, in km/h,
         `walk.SPEED` by default, and `hurry` how fast they would rather walk
-        than miss a bus, `speed` by default.
+        than miss a bus, `speed` by default. No ride is on a vehicle type in
+        `avoid` ("bus", "tram", "trolleybus"), but a ride already on board.
 
         A `now` in the future still gets the vehicles being tracked: the search
         keeps only their arrivals that lie ahead of it, so a trip starting in
@@ -66,10 +68,34 @@ class Planner:
         """
         now = time.time() if now is None else now
         found = self.journeys(origin, dest, arrivals, now, speed,
-                              now <= time.time() + replay.HORIZON, hurry)
+                              now <= time.time() + replay.HORIZON, hurry, avoid)
         path, between = self._drawing(origin, dest, arrivals, speed, hurry)
         return {"t": now,
                 "options": [self.wire(j, path, between) for j in found]}, found
+
+    def departures(self, route, stop, now):
+        """The timetable's departures of `route` from `stop` (feed ids) on the
+        service day `now` falls in, with yesterday's still running past
+        midnight but none of tomorrow's: Unix seconds, soonest first. A
+        pattern that ends at `stop` arrives there, on the way the other way
+        round, so it does not count."""
+        tt = self.tt
+        i = tt.stop_i.get(stop)
+        if i is None:
+            return []
+        midnight = localtime.midnight(now)
+        today = datetime.datetime.fromtimestamp(midnight, localtime.TZ).date()
+        days = [(today - datetime.timedelta(days=1), -localtime.DAY_S),
+                (today, 0.0)]
+        runs = [(np.array([tt.calendar.runs(sv, d) for sv in tt.services],
+                          dtype=bool), shift) for d, shift in days]
+        out = set()
+        for pat in tt.by_route.get(route, ()):
+            for col in np.flatnonzero(pat.stops[:-1] == i):
+                for running, shift in runs:
+                    at = pat.times[running[pat.service], col] + shift
+                    out.update((at[at >= 0] + midnight).astype(int).tolist())
+        return sorted(out)
 
     def backup(self, origin, dest, arrivals, speed, hurry_kmh, j, leg, n):
         """Journey `j` taking the `n`-th backup of its `leg`-th leg as sent,
@@ -113,13 +139,14 @@ class Planner:
 
         return path, between
 
-    def journeys(self, origin, dest, arrivals, now, speed, assess, hurry=None):
+    def journeys(self, origin, dest, arrivals, now, speed, assess, hurry=None,
+                 avoid=frozenset()):
         """`plan.journeys` for somebody walking at `speed`, and at `hurry` to
         catch a bus."""
         walk, transfers = self._paced(speed)
         return plan.journeys(self.tt, walk, transfers, origin, dest, now,
                              arrivals=arrivals, catalog=self.cat, assess=assess,
-                             hurry=_hurry(speed, hurry))
+                             hurry=_hurry(speed, hurry), avoid=avoid)
 
     def _paced(self, speed):
         if speed is None:

@@ -1,5 +1,7 @@
 import type { ReactElement, ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
+import { t } from "../lib/i18n";
 import type { Arrival, Catalog } from "../lib/types";
 import { RouteChip } from "./RouteChip";
 import { StopCard } from "./StopCard";
@@ -54,4 +56,40 @@ describe("StopCard", () => {
     tram!.props.onLine!();
     expect(on.route).toHaveBeenCalledTimes(2);
   });
+
+  const html = (arrivals: Arrival[], lowFloor = false) =>
+    renderToStaticMarkup(
+      <StopCard
+        catalog={CATALOG}
+        stop={0}
+        arrivals={arrivals}
+        pinned={false}
+        onPin={() => {}}
+        watching={new Set()}
+        onToggle={() => {}}
+        onRoute={() => {}}
+        onClose={() => {}}
+        lowFloor={lowFloor}
+      />,
+    );
+  const soon = () => Date.now() / 1000 + DUE_S;
+
+  test("says why a doubted time is amber, once, and nothing while none is", () => {
+    const doubted = html([
+      { route: 0, veh: 7, t: soon(), doubt: "stuck" },
+      { route: 1, veh: 8, t: soon() },
+    ]);
+
+    expect(doubted.match(/text-amber-300/g)).toHaveLength(2); // the time and the note
+    expect(doubted).toContain(t.doubt.stuck("1"));
+    expect(html([{ route: 1, veh: 8, t: soon() }])).not.toContain("text-amber-300");
+  });
+
+  test("marks a low-floor vehicle only when asked to", () => {
+    const low = [{ route: 1, veh: 8, t: soon(), low_floor: true }];
+
+    expect(html(low, true)).toContain(`title="${t.lowFloor}"`);
+    expect(html(low)).not.toContain(`title="${t.lowFloor}"`);
+  });
 });
+

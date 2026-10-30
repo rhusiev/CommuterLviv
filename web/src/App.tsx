@@ -28,11 +28,15 @@ import { takeRenewed, useLive } from "./lib/useLive";
 import { useMapLayers } from "./lib/useMapLayers";
 import { usePlanner } from "./lib/usePlanner";
 import { useSession } from "./lib/useSession";
+import { walkingFrom } from "./lib/legs";
 import type { Catalog, Journey, Me, Place } from "./lib/types";
 import { t } from "./lib/i18n";
 
 const LINES_KEY = "commuterlviv.lines";
 const TRAFFIC_KEY = "commuterlviv.traffic";
+/** Set when the blur is turned off: blurring is the default */
+const NO_BLUR_KEY = "commuterlviv.noBlur";
+const LOW_FLOOR_KEY = "commuterlviv.lowFloor";
 const JOIN = /^\/join\/([\w-]+)\/?$/;
 /** A dot in the planner's A/B ring: a place, but neither end of a journey */
 const PLACE_MARK = "•";
@@ -115,7 +119,15 @@ export function App() {
   /** The quiet banner closed; it comes back the next time the vehicles go quiet */
   const [quietShut, setQuietShut] = useState(false);
   const [jams, setJams] = useState(() => loadFlag(TRAFFIC_KEY));
+  const [noBlur, setNoBlur] = useState(() => loadFlag(NO_BLUR_KEY));
+  const [lowFloor, setLowFloor] = useState(() => loadFlag(LOW_FLOOR_KEY));
+  /** The vehicle the map keeps in the middle, while its card is open */
+  const [tracked, setTracked] = useState<number | null>(null);
+  useEffect(() => {
+    document.documentElement.classList.toggle("no-blur", noBlur);
+  }, [noBlur]);
   const [layersOpen, setLayersOpen] = useState(false);
+  const [lineFolded, setLineFolded] = useState(false);
 
   const openTab = (next: UrlState["tab"]) => {
     setTab(next);
@@ -232,12 +244,20 @@ export function App() {
   }, [live, cat, watched]);
 
   // Here rather than in its card, which a change of tab unmounts
-  const { progress, caught } = useFollow(
+  const { progress, caught, here } = useFollow(
     following,
     live,
     cat ?? undefined,
     // where a journey followed before the page loaded had got to
     followed?.stage,
+  );
+  // The walk under way is drawn from where I am, not from where it was planned
+  const onMap = useMemo(
+    () =>
+      drawn !== null && drawn === following && here && progress !== null && progress !== "denied"
+        ? walkingFrom(drawn, progress, here)
+        : drawn,
+    [drawn, following, here, progress],
   );
 
   const follow = (next: Followed | null) => {
@@ -304,7 +324,10 @@ export function App() {
 
   const openRoute = (i: number) => {
     if (!cat) return;
-    if (i !== route) setWay(0);
+    if (i !== route) {
+      setWay(0);
+      setLineFolded(false);
+    }
     setRoute(i);
     const next = openedLately(recent, cat.routes[i]!.id);
     setRecent(next);
@@ -351,6 +374,10 @@ export function App() {
       <MapCanvas
         catalog={cat}
         live={live}
+        lowFloor={lowFloor}
+        // Only while its card is open: closing it, or picking another, lets go
+        tracked={tracked !== null && tracked === veh ? tracked : null}
+        onUntrack={() => setTracked(null)}
         stops={stops}
         faint={faint}
         selected={stop}
@@ -375,7 +402,7 @@ export function App() {
             ? [...planner.marks, { lat: place.lat, lon: place.lon, label: PLACE_MARK }]
             : planner.marks
         }
-        journey={drawn}
+        journey={onMap}
         locate={following !== null}
         pinned={pins}
         places={places}
@@ -465,6 +492,16 @@ export function App() {
             onTheme={(next) => {
               setTheme(next);
               saveTheme(next);
+            }}
+            lowFloor={lowFloor}
+            onLowFloor={(on) => {
+              setLowFloor(on);
+              saveFlag(LOW_FLOOR_KEY, on);
+            }}
+            blur={!noBlur}
+            onBlur={(on) => {
+              setNoBlur(!on);
+              saveFlag(NO_BLUR_KEY, !on);
             }}
           />
         </Menu>
@@ -571,13 +608,18 @@ export function App() {
       )}
 
       {tab === "lines" && (
-        <aside ref={panel} className="panel absolute left-3 top-19 bottom-20 z-20 w-80 max-w-[calc(100vw-1.5rem)] p-3">
+        <aside
+          ref={panel}
+          // A folded line is its title alone, so the map shows the line
+          className={`panel absolute left-3 top-19 z-20 w-80 max-w-[calc(100vw-1.5rem)] p-3 ${route !== null && lineFolded ? "" : "bottom-20"}`}
+        >
           {route === null ? (
             <LinesBrowse
               catalog={cat}
               picked={picked}
               onToggle={session.togglePicked}
               onClear={session.clearPicked}
+              onPickAll={() => session.routeSets.watchOnly(cat.routes.map((r) => r.id))}
               onOpen={openRoute}
               recent={recent}
               sets={session.routeSets.sets}
@@ -596,8 +638,12 @@ export function App() {
               arrivals={live.arrivals}
               watching={picked.has(cat.routes[route]!.id)}
               onWatch={() => session.togglePicked(cat.routes[route]!.id)}
+              only={picked.size === 1 && picked.has(cat.routes[route]!.id)}
+              onOnly={() => session.routeSets.watchOnly([cat.routes[route]!.id])}
               onStop={showStop}
               onBack={() => setRoute(null)}
+              folded={lineFolded}
+              onFold={setLineFolded}
             />
           )}
         </aside>
@@ -609,6 +655,7 @@ export function App() {
         >
           {stop !== null ? (
             <StopCard
+              lowFloor={lowFloor}
               catalog={cat}
               stop={stop}
               arrivals={live.arrivals[String(stop)]}
@@ -639,6 +686,9 @@ export function App() {
             <VehicleCard
               // Another vehicle is another card, not this one's calls kept
               key={veh}
+              lowFloor={lowFloor}
+              following={tracked === veh}
+              onFollow={(on) => setTracked(on ? veh : null)}
               catalog={cat}
               veh={veh}
               onStop={(i) => {
@@ -673,7 +723,9 @@ export function App() {
       {/* One font weight throughout, so choosing a tab does not resize its
           label and slide the others. Equal columns where they fit; a phone
           has room only for each label's own width */}
-      <nav className="bar absolute bottom-3 left-1/2 z-30 grid w-max -translate-x-1/2 grid-flow-col gap-0.5 p-1 text-sm sm:grid-cols-4 sm:gap-1">
+      {/* The bar's inset is each tab's own padding, so a tap anywhere on the
+          bar lands on a tab */}
+      <nav className="bar absolute bottom-3 left-1/2 z-30 grid w-max -translate-x-1/2 grid-flow-col text-sm sm:grid-cols-4">
         {TABS.map((v) => (
           <button
             key={v}
@@ -681,13 +733,17 @@ export function App() {
               openTab(v);
               setLayersOpen(false);
             }}
-            className={`rounded-full px-2 py-1.5 font-medium transition-colors sm:px-4 ${
-              tab === v
-                ? "bg-accent/15 text-accent"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
+            className="group rounded-full p-1 font-medium"
           >
-            {TAB_NAMES[v]}
+            <span
+              className={`block rounded-full px-2 py-1.5 transition-colors sm:px-4 ${
+                tab === v
+                  ? "bg-accent/15 text-accent"
+                  : "text-slate-400 group-hover:text-slate-200"
+              }`}
+            >
+              {TAB_NAMES[v]}
+            </span>
           </button>
         ))}
       </nav>

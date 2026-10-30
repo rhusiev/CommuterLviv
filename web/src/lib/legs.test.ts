@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { current, rows, WAIT_MIN_S } from "./legs";
+import { current, riddenBy, rows, WAIT_MIN_S, walkingFrom } from "./legs";
+import type { Progress } from "./follow";
 import type { Journey, Leg } from "./types";
 
 const T0 = 1_790_000_000;
@@ -94,3 +95,53 @@ describe("current", () => {
     expect(current(list, { kind: "arrived" })).toBe(-1);
   });
 });
+
+describe("riddenBy", () => {
+  test("is the vehicles the rides are planned on, and none for a ride on the timetable alone", () => {
+    const j = journey(0, 0);
+    j.legs[1] = { ...j.legs[1]!, veh: 412 };
+    j.legs[3] = { ...j.legs[3]!, veh: null };
+
+    expect([...riddenBy(j)]).toEqual([412]);
+  });
+
+  test("is no vehicle while no journey is drawn", () => {
+    expect(riddenBy(null).size).toBe(0);
+  });
+});
+
+describe("walkingFrom", () => {
+  /** A walk north along a meridian, a point every ~111 m */
+  const STEP = 0.001;
+  const walking = (): Journey => {
+    const j = journey(0, 0);
+    const pts: [number, number][] = [0, 1, 2, 3, 4].map((i) => [49.8 + i * STEP, 24.0]);
+    j.legs[0] = { ...j.legs[0]!, pts };
+    return j;
+  };
+  const progress = (stage: Progress["stage"], left: number, astray = false): Progress => ({
+    stage,
+    left,
+    astray,
+    passed: false,
+    soon: false,
+  });
+  const HERE = { lat: 49.8015, lon: 24.0002, t: T0 + MIN_S };
+
+  test("draws the walk under way from where I am, along what is left of its line", () => {
+    const j = walkingFrom(walking(), progress({ kind: "walk", leg: 0 }, 250), HERE);
+    const pts = j.legs[0]!.pts!;
+
+    expect(pts[0]).toEqual([HERE.lat, HERE.lon]);
+    expect(pts.slice(1)).toEqual([2, 3, 4].map((i) => [49.8 + i * STEP, 24.0]));
+    expect(j.legs[0]!.dep).toBe(HERE.t);
+  });
+
+  test("leaves the plan as it was off the walk, or astray from its line", () => {
+    const plan = walking();
+
+    expect(walkingFrom(plan, progress({ kind: "wait", leg: 1 }, 0), HERE)).toBe(plan);
+    expect(walkingFrom(plan, progress({ kind: "walk", leg: 0 }, 250, true), HERE)).toBe(plan);
+  });
+});
+

@@ -33,8 +33,10 @@ class Strings {
     required this.map,
     required this.mine,
     required this.lines,
-    required this.allLines,
-    required this.watchingLines,
+    required this.onMap,
+    required this.allRoutes,
+    required this.onlyWatched,
+    required this.routesOn,
     required this.nearLines,
     required this.nothingNearLines,
     required this.noneWatched,
@@ -87,6 +89,25 @@ class Strings {
     required this.nothingNear,
     required this.nothingFound,
     required this.traffic,
+    required this.hideStops,
+    required this.showStops,
+    required this.blur,
+    required this.lowFloorSetting,
+    required this.lowFloor,
+    required this.doubtStuck,
+    required this.doubtSilent,
+    required this.fleet,
+    required this.lastSeen,
+    required this.seconds,
+    required this.followVehicle,
+    required this.recentSearches,
+    required this.onlyLine,
+    required this.onlyLineHint,
+    required this.firstDeparture,
+    required this.lastDeparture,
+    required this.everyMinutes,
+    required this.lineHoursHint,
+    required this.leftOut,
     required this.departAt,
     required this.preferBy,
     required this.quietPart,
@@ -125,6 +146,7 @@ class Strings {
     required this.to,
     required this.tapMap,
     required this.useHere,
+    required this.hereAt,
     required this.swap,
     required this.findRoute,
     required this.searching,
@@ -200,6 +222,9 @@ class Strings {
     required this.metres,
     required this.km,
     required this.walkLeg,
+    required this.waitLeg,
+    required this.rideLeg,
+    required this.wait,
     required this.changeCount,
     required this.changeAt,
     required this.backupCount,
@@ -235,8 +260,10 @@ class Strings {
   /// The routes, and one line of them open; "Lines" so it does not read as the
   /// journey tab in Ukrainian, which spends "Маршрут" on a route
   final String lines;
-  final String allLines;
-  final String Function(int n) watchingLines;
+  final String onMap;
+  final String allRoutes;
+  final String onlyWatched;
+  final String Function(int n) routesOn;
   final String nearLines;
   final String Function(int metres) nothingNearLines;
   final String noneWatched;
@@ -310,6 +337,25 @@ class Strings {
   final String nothingNear;
   final String nothingFound;
   final String traffic;
+  final String hideStops;
+  final String showStops;
+  final String blur;
+  final String lowFloorSetting;
+  final String lowFloor;
+  final String Function(String route) doubtStuck;
+  final String Function(String route) doubtSilent;
+  final String Function(String number) fleet;
+  final String Function(String ago) lastSeen;
+  final String Function(int n) seconds;
+  final String followVehicle;
+  final String recentSearches;
+  final String onlyLine;
+  final String onlyLineHint;
+  final String Function(String at) firstDeparture;
+  final String Function(String at) lastDeparture;
+  final String Function(int n) everyMinutes;
+  final String lineHoursHint;
+  final String Function(String kinds) leftOut;
   final String departAt;
   final String preferBy;
 
@@ -359,6 +405,7 @@ class Strings {
   final String to;
   final String tapMap;
   final String useHere;
+  final String Function(String time) hereAt;
   final String swap;
   final String findRoute;
   final String searching;
@@ -447,6 +494,9 @@ class Strings {
   final String Function(int metres) metres;
   final String Function(double km) km;
   final String Function(int minutes) walkLeg;
+  final String Function(int minutes) waitLeg;
+  final String Function(int minutes) rideLeg;
+  final String wait;
   final String Function(int changes) changeCount;
   final String Function(String stops) changeAt;
   final String Function(int backups) backupCount;
@@ -478,8 +528,10 @@ const _en = Strings(
   map: 'Map',
   mine: 'Mine',
   lines: 'Lines',
-  allLines: 'All',
-  watchingLines: _enWatchingLines,
+  onMap: 'On the map',
+  allRoutes: 'All routes',
+  onlyWatched: 'Watched only',
+  routesOn: _enRoutesOn,
   nearLines: 'Near me',
   nothingNearLines: _enNothingNearLines,
   noneWatched: 'Nothing watched yet. Tap a route to watch it.',
@@ -541,6 +593,25 @@ const _en = Strings(
   nothingNear: 'No stop within 2 km of where you are',
   nothingFound: 'No stop or place by that name',
   traffic: 'Traffic',
+  hideStops: 'Hide the stops, keeping the line on the map',
+  showStops: 'Show the stops',
+  blur: 'Blur behind panels',
+  lowFloorSetting: 'Mark low-floor vehicles',
+  lowFloor: 'Low floor',
+  doubtStuck: _enDoubtStuck,
+  doubtSilent: _enDoubtSilent,
+  fleet: _fleet,
+  lastSeen: _enLastSeen,
+  seconds: _enSeconds,
+  followVehicle: 'Keep it in the middle of the map',
+  recentSearches: 'Recent',
+  onlyLine: 'Only',
+  onlyLineHint: 'Watch this line alone on the map',
+  firstDeparture: _enFirst,
+  lastDeparture: _enLast,
+  everyMinutes: _enEvery,
+  lineHoursHint: 'By the timetable, from the first stop this way',
+  leftOut: _enLeftOut,
   departAt: 'Leave at',
   preferBy: 'Order',
   quietPart: 'Nothing seen running',
@@ -575,6 +646,7 @@ const _en = Strings(
   to: 'To',
   tapMap: 'Tap the map',
   useHere: 'Where I am',
+  hereAt: _enHereAt,
   swap: 'Swap',
   findRoute: 'Find a way',
   searching: 'Looking for a way',
@@ -654,6 +726,9 @@ const _en = Strings(
   metres: _enMetres,
   km: _enKm,
   walkLeg: _enWalkLeg,
+  waitLeg: _enWaitLeg,
+  rideLeg: _enRideLeg,
+  wait: 'Wait',
   changeCount: _enChangeCount,
   changeAt: _enChangeAt,
   backupCount: _enBackupCount,
@@ -672,10 +747,20 @@ const _en = Strings(
 );
 
 String _enUpdateSet(String name) => 'Update “$name”';
-String _enWatchingLines(int n) => 'Watching $n';
+String _enRoutesOn(int n) => '$n on';
 String _enNothingNearLines(int metres) =>
     'No stop within $metres m of where you are';
 String _enWalkLeg(int m) => 'Walk $m min';
+String _enHereAt(String time) => 'Where I was at $time';
+String _enDoubtStuck(String route) => '$route has stood still for over 5 min';
+String _enDoubtSilent(String route) =>
+    '$route has stopped reporting where it is';
+String _fleet(String number) => '№ $number';
+String _enLastSeen(String ago) => 'Last seen $ago ago';
+String _enSeconds(int n) => '$n s';
+String _enLeftOut(String kinds) => 'Leaving out: $kinds';
+String _enWaitLeg(int m) => 'Wait $m min';
+String _enRideLeg(int m) => 'Ride $m min';
 String _enChangeCount(int n) => n == 1 ? '1 change' : '$n changes';
 String _enChangeAt(String stops) => 'Change at $stops';
 String _enBackupCount(int n) => n == 1 ? '1 backup' : '$n backups';
@@ -692,6 +777,9 @@ String _enPrefer(Prefer p) => switch (p) {
   Prefer.reliable => 'Most backups',
 };
 String _enMinutes(int m) => '$m min';
+String _enFirst(String at) => 'First $at';
+String _enLast(String at) => 'Last $at';
+String _enEvery(int m) => 'Every ≈$m min';
 String _enKmh(double v) => '${v.toStringAsFixed(1)} km/h';
 String _enPacesNow(double walk, double? hurry) =>
     '${_enKmh(walk)}, ${hurry == null ? 'not hurrying' : 'hurrying ${_enKmh(hurry)}'}';
@@ -737,8 +825,10 @@ const _uk = Strings(
   map: 'Мапа',
   mine: 'Моє',
   lines: 'Лінії',
-  allLines: 'Усі',
-  watchingLines: _ukWatchingLines,
+  onMap: 'На мапі',
+  allRoutes: 'Усі маршрути',
+  onlyWatched: 'Лише відстежувані',
+  routesOn: _ukRoutesOn,
   nearLines: 'Поруч',
   nothingNearLines: _ukNothingNearLines,
   noneWatched: 'Поки нічого не відстежується. Торкніться маршруту, щоб відстежувати його.',
@@ -800,6 +890,25 @@ const _uk = Strings(
   nothingNear: 'Немає зупинки ближче ніж за 2 км',
   nothingFound: 'Немає зупинки чи місця з такою назвою',
   traffic: 'Затори',
+  hideStops: 'Сховати зупинки, лишивши лінію на мапі',
+  showStops: 'Показати зупинки',
+  blur: 'Розмиття під панелями',
+  lowFloorSetting: 'Позначати низькопідлогові',
+  lowFloor: 'Низька підлога',
+  doubtStuck: _ukDoubtStuck,
+  doubtSilent: _ukDoubtSilent,
+  fleet: _fleet,
+  lastSeen: _ukLastSeen,
+  seconds: _ukSeconds,
+  followVehicle: 'Тримати його посередині мапи',
+  recentSearches: 'Нещодавні',
+  onlyLine: 'Лише цю',
+  onlyLineHint: 'Відстежувати на мапі лише цю лінію',
+  firstDeparture: _ukFirst,
+  lastDeparture: _ukLast,
+  everyMinutes: _ukEvery,
+  lineHoursHint: 'За розкладом, від першої зупинки в цей бік',
+  leftOut: _ukLeftOut,
   departAt: 'Виїзд о',
   preferBy: 'Порядок',
   quietPart: 'Рейсів не видно',
@@ -835,6 +944,7 @@ const _uk = Strings(
   to: 'Куди',
   tapMap: 'Торкніться мапи',
   useHere: 'Де я',
+  hereAt: _ukHereAt,
   swap: 'Поміняти',
   findRoute: 'Знайти шлях',
   searching: 'Шукаємо шлях',
@@ -913,6 +1023,9 @@ const _uk = Strings(
   metres: _ukMetres,
   km: _ukKm,
   walkLeg: _ukWalkLeg,
+  waitLeg: _ukWaitLeg,
+  rideLeg: _ukRideLeg,
+  wait: 'Чекати',
   changeCount: _ukChangeCount,
   changeAt: _ukChangeAt,
   backupCount: _ukBackupCount,
@@ -931,10 +1044,18 @@ const _uk = Strings(
 );
 
 String _ukUpdateSet(String name) => 'Оновити «$name»';
-String _ukWatchingLines(int n) => 'Відстежую $n';
+String _ukRoutesOn(int n) => 'Увімкнено $n';
 String _ukNothingNearLines(int metres) =>
     'Немає зупинки ближче ніж за $metres м';
 String _ukWalkLeg(int m) => 'Пішки $m хв';
+String _ukHereAt(String time) => 'Моє місце о $time';
+String _ukDoubtStuck(String route) => '$route стоїть понад 5 хв';
+String _ukDoubtSilent(String route) => '$route перестав повідомляти, де він';
+String _ukLastSeen(String ago) => 'Востаннє видно $ago тому';
+String _ukSeconds(int n) => '$n с';
+String _ukLeftOut(String kinds) => 'Без: $kinds';
+String _ukWaitLeg(int m) => 'Чекати $m хв';
+String _ukRideLeg(int m) => 'Їхати $m хв';
 String _ukChangeCount(int n) => n == 1 ? '1 пересадка' : 'Пересадок: $n';
 String _ukChangeAt(String stops) => 'Пересадка: $stops';
 String _ukBackupCount(int n) => n == 1 ? '1 запасний' : 'Запасних: $n';
@@ -951,6 +1072,9 @@ String _ukPrefer(Prefer p) => switch (p) {
   Prefer.reliable => 'Більше запасних',
 };
 String _ukMinutes(int m) => '$m хв';
+String _ukFirst(String at) => 'Перший $at';
+String _ukLast(String at) => 'Останній $at';
+String _ukEvery(int m) => 'Кожні ≈$m хв';
 String _ukKmh(double v) =>
     '${v.toStringAsFixed(1).replaceAll('.', ',')} км/год';
 String _ukPacesNow(double walk, double? hurry) =>

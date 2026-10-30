@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 
 import 'package:commuterlviv/src/follow.dart';
 import 'package:commuterlviv/src/legs.dart';
@@ -101,6 +102,93 @@ void main() {
 
     test('arrived is on no row', () {
       expect(current(list, const Stage(StageKind.arrived)), -1);
+    });
+  });
+
+  test('the vehicles ridden are those the rides are planned on', () {
+    final j = journey(0, 0);
+    final legs = [...j.legs];
+    final r = legs[1];
+    legs[1] = Leg(
+      kind: r.kind,
+      dep: r.dep,
+      arr: r.arr,
+      a: r.a,
+      b: r.b,
+      route: r.route,
+      veh: 412,
+    );
+    final planned = Journey(
+      dep: j.dep,
+      arr: j.arr,
+      rides: j.rides,
+      live: j.live,
+      confidence: j.confidence,
+      legs: legs,
+    );
+
+    expect(riddenBy(planned), {412});
+    expect(riddenBy(null), isEmpty);
+  });
+
+  group('walkingFrom', () {
+    // A walk north along a meridian, a point every ~111 m
+    const step = 0.001;
+    final pts = [for (var i = 0; i < 5; i++) LatLng(49.8 + i * step, 24.0)];
+    Journey walking() {
+      final j = journey(0, 0);
+      final w = j.legs[0];
+      return Journey(
+        dep: j.dep,
+        arr: j.arr,
+        rides: j.rides,
+        live: j.live,
+        confidence: j.confidence,
+        legs: [
+          Leg(kind: w.kind, dep: w.dep, arr: w.arr, a: w.a, b: w.b, pts: pts),
+          ...j.legs.skip(1),
+        ],
+      );
+    }
+
+    Progress at(Stage stage, double left, {bool astray = false}) => Progress(
+      stage: stage,
+      left: left,
+      astray: astray,
+      passed: false,
+      soon: false,
+    );
+    const here = LatLng(49.8015, 24.0002);
+    const now = t0 + minS;
+
+    test('draws the walk under way from where I am, along what is left', () {
+      final j = walkingFrom(
+        walking(),
+        at(const Stage(StageKind.walk, 0), 250),
+        here,
+        now,
+      );
+
+      expect(j.legs[0].pts, [here, ...pts.skip(2)]);
+      expect(j.legs[0].dep, now);
+    });
+
+    test('leaves the plan off the walk, or astray from its line', () {
+      final plan = walking();
+
+      expect(
+        walkingFrom(plan, at(const Stage(StageKind.wait, 1), 0), here, now),
+        same(plan),
+      );
+      expect(
+        walkingFrom(
+          plan,
+          at(const Stage(StageKind.walk, 0), 250, astray: true),
+          here,
+          now,
+        ),
+        same(plan),
+      );
     });
   });
 }

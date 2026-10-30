@@ -72,3 +72,10 @@ export const STALE_FLAG = 1;
 /** Bit 1: the vehicle is under way. Without it the heading is still the route's
  * direction there, but says where the vehicle will go, not where it is going. */
 export const MOVING_FLAG = 2;
+
+/** Bit 2: the feed calls the vehicle low floor. Without it, unknown - the feed
+ * names next to no bus either way. */
+export const LOW_FLOOR_FLAG = 4;
+
+/** Bit 3: standing still mid-route for over five minutes (`STUCK_S`). */
+export const STUCK_FLAG = 8;

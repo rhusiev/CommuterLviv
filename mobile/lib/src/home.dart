@@ -12,7 +12,10 @@ import 'package:latlong2/latlong.dart';
 import 'package:vector_map_tiles/vector_map_tiles.dart';
 
 import 'api.dart';
-import 'follow.dart' show Stage, StageKind;
+import 'eta.dart' show clockTime;
+import 'basemap_style.dart';
+import 'follow.dart' show Progress, Stage, StageKind;
+import 'legs.dart' show walkingFrom;
 import 'follow_card.dart';
 import 'followed.dart';
 import 'haptics.dart';
@@ -103,6 +106,17 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Route ids of the lines opened lately, latest first
   late List<String> _recent = widget.api.recentLines;
   late bool _allLines = widget.api.showLines;
+  late bool _blur = widget.api.blur;
+  late bool _lowFloor = widget.api.lowFloor;
+
+  /// The camera on a vehicle, from its card; a pan lets go.
+  late final _vehicleTracking = VehicleTracking(_map, () => _live);
+
+  /// The open line down to its title, so the map shows it.
+  bool _lineFolded = false;
+
+  /// The follower's last progress, and the journey it is of.
+  (Journey, Progress)? _walked;
   Shapes? _shapes;
   List<int> _drawn = const [];
 
@@ -187,6 +201,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _live?.dispose();
     _here.removeListener(_fixArrived);
     _tracking.stop();
+    _vehicleTracking.stop();
     _here.dispose();
     _map.dispose();
     super.dispose();
@@ -317,7 +332,21 @@ class _HomeScreenState extends State<HomeScreen> {
       ? null
       : _planning
       ? _journey
-      : _following;
+      : _walkedOn(_following);
+
+  /// The journey followed with the walk under way drawn from where I am.
+  Journey? _walkedOn(Journey? following) {
+    final walked = _walked;
+    final here = _here.fix;
+    if (following == null || walked == null || here == null) return following;
+    if (walked.$1 != following) return following;
+    return walkingFrom(
+      following,
+      walked.$2,
+      here.point,
+      here.t ~/ Duration.millisecondsPerSecond,
+    );
+  }
 
   List<int> get _lines {
     if (_lineOpen) return [_route!];
@@ -423,7 +452,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void _openRoute(int route) {
     final recent = opened(_recent, _catalog!.routes[route].id);
     setState(() {
-      if (route != _route) _way = 0;
+      if (route != _route) {
+        _way = 0;
+        _lineFolded = false;
+      }
       _route = route;
       _recent = recent;
       _tab = _linesTab;
@@ -585,11 +617,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final theme = _theme;
     try {
       final read = await StyleReader(uri: theme.styleUrl).read();
+      final themed = await readTheme(theme.styleUrl);
       // Every VersaTiles style parses with theme id `default`, and the renderer
       // caches tile images under that id, so each style needs a distinct one
       final style = Style(
         name: read.name,
-        theme: read.theme.copyWith(id: theme.id),
+        theme: themed.copyWith(id: theme.id),
         providers: read.providers,
         sprites: read.sprites,
         center: read.center,
@@ -706,6 +739,7 @@ class _HomeScreenState extends State<HomeScreen> {
         catalog: _catalog!,
         live: _live!,
         stop: stop,
+        lowFloor: _lowFloor,
         pinned: _pins.contains(stop),
         watching: _routes,
         onPin: () => _pin(stop),
@@ -782,6 +816,10 @@ class _HomeScreenState extends State<HomeScreen> {
         api: widget.api,
         catalog: _catalog!,
         veh: veh,
+        lowFloor: _lowFloor,
+        following: _vehicleTracking.veh == veh,
+        onFollow: (on) =>
+            on ? _vehicleTracking.start(veh) : _vehicleTracking.stop(),
         onStop: (stop) {
           Navigator.pop(context);
           _openStop(stop, fly: true);
@@ -834,9 +872,11 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  /// Named, so the field reads as where I was rather than as coordinates.
+  /// Named with the time of the fix rather than as coordinates: the end stays
+  /// where it was taken, and "where I am" read as if it moved along.
   void _atHere(End which, LatLng at) {
-    _named[at] = txt.useHere;
+    final t = _here.fix?.t ?? DateTime.now().millisecondsSinceEpoch;
+    _named[at] = txt.hereAt(clockTime(t ~/ Duration.millisecondsPerSecond));
     _at(which, at);
   }
 
@@ -911,7 +951,28 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Moves to [at], zooming in to [nearZoom] if further out, as the web does.
-  void _fly(LatLng at) => _map.move(at, math.max(_map.camera.zoom, nearZoom));
+  /// Exactly [routes] on the map: a saved [set], or none for every route or
+  /// one line alone.
+  void _watchOnly(RouteSet? set, Iterable<int> routes) {
+    setState(() {
+      _routes
+        ..clear()
+        ..addAll(routes);
+      _sets = Sets(
+        sets: _sets!.sets,
+        active: set?.id,
+        pins: _sets!.pins,
+        places: _sets!.places,
+      );
+    });
+    _push();
+  }
+
+  /// Somewhere else for the camera, which a vehicle followed lets go of.
+  void _fly(LatLng at) {
+    _vehicleTracking.stop();
+    _map.move(at, math.max(_map.camera.zoom, nearZoom));
+  }
 
   void _openLayers() => showFloatingSheet<void>(
     context,
@@ -929,6 +990,16 @@ class _HomeScreenState extends State<HomeScreen> {
       },
       theme: _theme,
       onTheme: _setTheme,
+      lowFloor: _lowFloor,
+      onLowFloor: (on) {
+        setState(() => _lowFloor = on);
+        unawaited(widget.api.setLowFloor(on));
+      },
+      blur: _blur,
+      onBlur: (on) {
+        setState(() => _blur = on);
+        unawaited(widget.api.setBlur(on));
+      },
     ),
     scrollControlled: true,
   );
@@ -1007,83 +1078,86 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     // No app bar or navigation bar: the chrome floats over a full-screen map,
     // so each piece is stacked with its own inset
-    return PopScope(
-      // Back from another tab returns to the map, as Android's tabs do, rather
-      // than leaving the app
-      canPop: _tab == _mapTab,
-      onPopInvokedWithResult: (didPop, _) {
-        // On the map, what held back was a panel folding itself
-        if (didPop || _tab == _mapTab) return;
-        // Back from a line is to the routes grid, as its own back button goes
-        _lineOpen ? _closeRoute() : _pickTab(_mapTab);
-      },
-      child: Scaffold(
-        body: Stack(
-          children: [
-            IndexedStack(
-              index: switch (_tab) {
-                _mineTab => 2,
-                _linesTab when !_lineOpen => 1,
-                _ => 0,
-              },
-              children: [
-                _mapPage(catalog, live),
-                _linesPage(catalog),
-                MineTab(
-                  catalog: catalog,
-                  live: live,
-                  pins: _pins,
-                  onPins: _savePins,
-                  onStop: (stop) {
-                    setState(_uncover);
-                    _openStop(stop, fly: true);
-                  },
-                  watching: _routes,
-                  onWatch: _toggleRoute,
-                  onLine: _openRoute,
-                  places: _sets?.places ?? const [],
-                  onPlaces: _places,
-                  onPlace: (place) => _openPlace(place.name, place.at),
-                  sets: _sets,
-                  onActivate: _activateSet,
-                  onRename: (set, name) => _changeSets(
-                    () => widget.api.updateSet(set.id, name, set.routes),
+    return Blurring(
+      on: _blur,
+      child: PopScope(
+        // Back from another tab returns to the map, as Android's tabs do, rather
+        // than leaving the app
+        canPop: _tab == _mapTab,
+        onPopInvokedWithResult: (didPop, _) {
+          // On the map, what held back was a panel folding itself
+          if (didPop || _tab == _mapTab) return;
+          // Back from a line is to the routes grid, as its own back button goes
+          _lineOpen ? _closeRoute() : _pickTab(_mapTab);
+        },
+        child: Scaffold(
+          body: Stack(
+            children: [
+              IndexedStack(
+                index: switch (_tab) {
+                  _mineTab => 2,
+                  _linesTab when !_lineOpen => 1,
+                  _ => 0,
+                },
+                children: [
+                  _mapPage(catalog, live),
+                  _linesPage(catalog),
+                  MineTab(
+                    catalog: catalog,
+                    live: live,
+                    pins: _pins,
+                    onPins: _savePins,
+                    onStop: (stop) {
+                      setState(_uncover);
+                      _openStop(stop, fly: true);
+                    },
+                    watching: _routes,
+                    onWatch: _toggleRoute,
+                    onLine: _openRoute,
+                    places: _sets?.places ?? const [],
+                    onPlaces: _places,
+                    onPlace: (place) => _openPlace(place.name, place.at),
+                    sets: _sets,
+                    onActivate: _activateSet,
+                    onRename: (set, name) => _changeSets(
+                      () => widget.api.updateSet(set.id, name, set.routes),
+                    ),
+                    onDelete: (set) =>
+                        _changeSets(() => widget.api.deleteSet(set.id)),
+                    username: widget.username,
+                    onAccount: _openAccount,
                   ),
-                  onDelete: (set) =>
-                      _changeSets(() => widget.api.deleteSet(set.id)),
-                  username: widget.username,
-                  onAccount: _openAccount,
+                ],
+              ),
+              if (_planning) _planner(catalog),
+              if (_lineOpen) _line(catalog, live),
+              Positioned(
+                left: floatingGap,
+                right: floatingGap,
+                top: MediaQuery.paddingOf(context).top + floatingGap,
+                child: _TopBar(
+                  onSearch: _search,
+                  onLayers: _openLayers,
+                  layered: _allLines || _traffic,
                 ),
-              ],
-            ),
-            if (_planning) _planner(catalog),
-            if (_lineOpen) _line(catalog, live),
-            Positioned(
-              left: floatingGap,
-              right: floatingGap,
-              top: MediaQuery.paddingOf(context).top + floatingGap,
-              child: _TopBar(
-                onSearch: _search,
-                onLayers: _openLayers,
-                layered: _allLines || _traffic,
               ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: MediaQuery.paddingOf(context).bottom + floatingGap,
-              child: Center(
-                child: _Tabs(selected: _tab, onPick: _pickTab),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: MediaQuery.paddingOf(context).bottom + floatingGap,
+                child: Center(
+                  child: _Tabs(selected: _tab, onPick: _pickTab),
+                ),
               ),
-            ),
-            Positioned(
-              left: floatingGap,
-              right: floatingGap,
-              top: floatingTop(context),
-              child: QuietBanner(live: live),
-            ),
-            _Status(live: live),
-          ],
+              Positioned(
+                left: floatingGap,
+                right: floatingGap,
+                top: floatingTop(context),
+                child: QuietBanner(live: live),
+              ),
+              _Status(live: live),
+            ],
+          ),
         ),
       ),
     );
@@ -1113,6 +1187,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (_place != null && !_planning) (at: _place!, label: _placeMark),
       ],
       journey: _onMap,
+      lowFloor: _lowFloor,
       pins: _pins,
       places: _sets?.places ?? const [],
       shapes: _shapes,
@@ -1141,6 +1216,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 stage: _followed!.stage,
                 away: _followAway,
                 onMoved: _moved,
+                onProgress: (progress) {
+                  final was = _walked?.$2.stage.kind;
+                  // Only a walk is drawn from the fix, so only a walk, or the
+                  // step off one, needs the map drawn again
+                  if (progress.stage.kind != StageKind.walk &&
+                      was != StageKind.walk) {
+                    return;
+                  }
+                  setState(() => _walked = (_following!, progress));
+                },
                 onSearch: _searchAgain,
                 onEnd: _endFollow,
               ),
@@ -1234,20 +1319,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(_routes.clear);
       _push();
     },
-    onActivated: (set, routes) {
-      setState(() {
-        _routes
-          ..clear()
-          ..addAll(routes);
-        _sets = Sets(
-          sets: _sets!.sets,
-          active: set.id,
-          pins: _sets!.pins,
-          places: _sets!.places,
-        );
-      });
-      _push();
-    },
+    onActivated: _watchOnly,
     onSets: (sets) => setState(() => _sets = sets),
     onOpen: _openRoute,
     recent: _recent,
@@ -1278,8 +1350,18 @@ class _HomeScreenState extends State<HomeScreen> {
           },
           watching: _routes.contains(_route),
           onWatch: () => _toggleRoute(_route!),
+          only: _routes.length == 1 && _routes.contains(_route),
+          departures: widget.api.departures,
+          onOnly: () {
+            // Best effort: the server keeps which set is active, and a line
+            // alone is none of them
+            unawaited(widget.api.activateSet(null).catchError((_) {}));
+            _watchOnly(null, [_route!]);
+          },
           onStop: (stop) => _openStop(stop, fly: true),
           onBack: _closeRoute,
+          folded: _lineFolded,
+          onFold: (folded) => setState(() => _lineFolded = folded),
         ),
       ),
     ),

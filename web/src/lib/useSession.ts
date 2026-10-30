@@ -83,6 +83,13 @@ export function useSession(linked: string[] | null) {
       setActive(s.id);
       void api.activateSet(s.id).catch(failed);
     },
+    /** Exactly the routes of `ids` - every route, or the one line open -
+     *  which no saved set is */
+    watchOnly: (ids: string[]) => {
+      setPicked(new Set(ids));
+      setActive(null);
+      void api.activateSet(null).catch(failed);
+    },
     create: async (name: string) => {
       await api.createSet(name, [...picked]);
       await refreshSets();

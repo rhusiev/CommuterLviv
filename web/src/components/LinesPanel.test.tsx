@@ -1,8 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
+import { clock } from "../lib/eta";
 import { t } from "../lib/i18n";
 import type { Catalog } from "../lib/types";
-import { LineView, LinesBrowse } from "./LinesPanel";
+import { LineHours, LineView, LinesBrowse } from "./LinesPanel";
 
 const CATALOG: Catalog = {
   routes: [
@@ -25,6 +26,7 @@ const browse = (over: Partial<Parameters<typeof LinesBrowse>[0]> = {}) =>
       picked={new Set(["r1"])}
       onToggle={() => {}}
       onClear={() => {}}
+      onPickAll={() => {}}
       onOpen={() => {}}
       recent={["r2", "gone"]}
       sets={[{ id: "a", name: "Commute", routes: ["r1"], ord: 0 }]}
@@ -52,19 +54,49 @@ const line = (over: Partial<Parameters<typeof LineView>[0]> = {}) =>
       onWatch={() => {}}
       onStop={() => {}}
       onBack={() => {}}
+      folded={false}
+      onFold={() => {}}
       {...over}
     />,
   );
 
 describe("LinesBrowse", () => {
-  test("offers the filters, the sets, the lines opened lately and the routes, in that order", () => {
+  test("offers what the map watches, the lines opened lately, then the routes and their filters, in that order", () => {
     const html = browse();
-    const at = [t.allLines, t.watchingLines(1), t.nearLines, "Commute", t.recentLines, "Левандівка", t.routes].map(
+    const at = [t.onMap, t.allRoutes, "Commute", t.recentLines, "Левандівка", t.routes, t.nearLines, t.onlyWatched].map(
       (s) => html.indexOf(s),
     );
 
     expect(at.every((i) => i >= 0)).toBe(true);
     expect(at).toEqual([...at].sort((a, b) => a - b));
+  });
+
+  /** The choice of what the map watches, by its label: whether it is checked */
+  const chosen = (html: string, label: string) =>
+    html.match(new RegExp(`role="radio" aria-checked="(true|false)"[^>]*>${label}<`))?.[1];
+
+  test("checks the set the map watches, and not every route", () => {
+    const html = browse();
+
+    expect(chosen(html, "Commute")).toBe("true");
+    expect(chosen(html, t.allRoutes)).toBe("false");
+  });
+
+  test("checks every route once each is watched and no set is", () => {
+    const html = browse({ picked: new Set(["r1", "r2"]), active: null });
+
+    expect(chosen(html, t.allRoutes)).toBe("true");
+    expect(chosen(html, "Commute")).toBe("false");
+  });
+
+  test("filters the list with toggles, which are no choice of what the map watches", () => {
+    const html = browse();
+    const toggle = (label: string) =>
+      new RegExp(`<button aria-pressed="false"[^>]*>(?:(?!</button>).)*${label}</button>`).test(html);
+
+    expect(toggle(t.nearLines)).toBe(true);
+    expect(toggle(t.onlyWatched)).toBe(true);
+    expect(html.match(/role="radio"/g)).toHaveLength(2);
   });
 
   test("leaves out the lines opened lately once none of them is in the catalog", () => {
@@ -75,7 +107,9 @@ describe("LinesBrowse", () => {
 describe("LineView", () => {
   test("lists the stops of the way shown, towards its last stop", () => {
     const html = line();
-    const at = ["Вокзал</span>", "Площа Ринок", "Сихів</span>"].map((s) => html.indexOf(s));
+    // The stop list alone: the line's title names both ends too
+    const list = html.slice(html.indexOf("<ol"));
+    const at = ["Вокзал</span>", "Площа Ринок", "Сихів</span>"].map((s) => list.indexOf(s));
 
     expect(html).toContain("→ Сихів");
     expect(at.every((i) => i >= 0)).toBe(true);
@@ -84,9 +118,10 @@ describe("LineView", () => {
 
   test("turns the other way round", () => {
     const html = line({ way: 1 });
+    const list = html.slice(html.indexOf("<ol"));
 
     expect(html).toContain("→ Вокзал");
-    expect(html.indexOf("Сихів</span>")).toBeLessThan(html.indexOf("Площа Ринок"));
+    expect(list.indexOf("Сихів</span>")).toBeLessThan(list.indexOf("Площа Ринок"));
   });
 
   test("puts the vehicle and the countdown at the stop it is heading for", () => {
@@ -98,7 +133,41 @@ describe("LineView", () => {
     expect(row).toContain(t.minutes(SOON_S / 60));
   });
 
+  test("folds down to its title, keeping the stops off the map's way", () => {
+    const html = line({ folded: true });
+
+    expect(html).toContain("Вокзал - Сихів");
+    expect(html).toContain(`title="${t.showStops}"`);
+    expect(html).not.toContain("Площа Ринок");
+    expect(html).not.toContain(t.watchLine);
+  });
+
+  test("says Only is on while the line is all the map watches", () => {
+    const only = (on: boolean) =>
+      line({ only: on }).match(new RegExp(`aria-pressed="(true|false)"[^>]*>${t.onlyLine}<`))?.[1];
+
+    expect(only(true)).toBe("true");
+    expect(only(false)).toBe("false");
+  });
+
   test("says when the shapes hold no stops for the line", () => {
     expect(line({ ways: [{ dir: 0, stops: [] }] })).toContain(t.noLineStops);
+  });
+});
+
+describe("LineHours", () => {
+  const MIN = 60;
+  const dep = [0, 8, 16, 24].map((m) => 1_000_000 + m * MIN);
+
+  test("says when the line runs and how often it leaves now", () => {
+    const html = renderToStaticMarkup(<LineHours dep={dep} now={dep[1]!} />);
+
+    expect(html).toContain(t.firstDeparture(clock(dep[0]!)));
+    expect(html).toContain(t.lastDeparture(clock(dep[3]!)));
+    expect(html).toContain(t.everyMinutes(8));
+  });
+
+  test("shows nothing before the departures are known", () => {
+    expect(renderToStaticMarkup(<LineHours dep={[]} now={0} />)).toBe("");
   });
 });

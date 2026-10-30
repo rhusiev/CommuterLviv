@@ -8,6 +8,7 @@ import 'package:commuterlviv/src/api.dart';
 import 'package:commuterlviv/src/here.dart';
 import 'package:commuterlviv/src/models.dart';
 import 'package:commuterlviv/src/route_badge.dart';
+import 'package:commuterlviv/src/searched.dart';
 import 'package:commuterlviv/src/stop_search.dart';
 import 'package:commuterlviv/src/strings.dart';
 
@@ -47,7 +48,7 @@ const _catalog = Catalog(
     ),
   ],
   index: {},
-  stopIndex: {},
+  stopIndex: {'s0': 0, 's1': 1, 's2': 2},
 );
 
 const _home = Place(name: 'Market home', at: LatLng(49.85, 24.04));
@@ -85,6 +86,9 @@ class _Here extends Here {
 
 /// A service whose place search finds nothing
 class _NoPlaces implements Api {
+  @override
+  List<Searched> get searched => const [];
+
   @override
   Future<List<Found>> find(String q) async => const [];
 
@@ -165,6 +169,25 @@ void main() {
     await tester.tap(find.text(_home.name));
     await tester.pumpAndSettle();
     expect(picked, isA<PlaceHit>().having((p) => p.at, 'at', _home.at));
+  });
+
+  testWidgets('a stop picked is offered again first before anything is typed', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+    final api = await Api.open();
+    await open(tester, (_) {}, service: api);
+    expect(find.text(txt.recentSearches), findsNothing);
+    await tester.enterText(find.byType(TextField), 'mark');
+    await tester.pump(_settled);
+    await tester.tap(find.text('Market'));
+    await tester.pumpAndSettle();
+
+    await open(tester, (_) {}, service: api);
+
+    expect(find.text(txt.recentSearches), findsOneWidget);
+    expect(find.text('Market'), findsOneWidget);
   });
 
   testWidgets('a stop found names its routes by their badges, not by the '

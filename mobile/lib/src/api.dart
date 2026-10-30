@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'map_theme.dart';
 import 'models.dart';
+import 'searched.dart';
 import 'strings.dart';
 
 /// Must be listed in the server's `COMMUTERLVIV_ORIGINS`.
@@ -234,13 +235,18 @@ class Api {
   Future<void> activateSet(String? id) =>
       _call('POST', '/api/sets/active', body: {'id': id});
 
-  Future<List<Call>> vehicle(int veh) async {
-    final answer =
-        await _call('GET', '/api/vehicle?veh=$veh') as Map<String, dynamic>;
-    return [
-      for (final c in answer['stops'] as List)
-        Call.fromJson(c as Map<String, dynamic>),
-    ];
+  Future<VehicleSaid> vehicle(int veh) async => VehicleSaid.fromJson(
+    await _call('GET', '/api/vehicle?veh=$veh') as Map<String, dynamic>,
+  );
+
+  /// The timetabled departures of [route] from [stop] today, unix seconds,
+  /// soonest first.
+  Future<List<int>> departures(int route, int stop) async {
+    final said = await _call(
+      'GET',
+      '/api/departures?route=$route&stop=$stop',
+    ) as Map<String, dynamic>;
+    return [for (final t in said['dep'] as List) t as int];
   }
 
   /// Door to door, ranked by arrival. Half a second on the server, so ask once
@@ -255,6 +261,7 @@ class Api {
     int? at,
     required double speed,
     double? hurry,
+    Set<String> avoid = const {},
   }) async {
     // On board, only the vehicle's id leaves the device
     final origin = aboard != null
@@ -265,7 +272,8 @@ class Api {
       '/api/plan?$origin'
           '&to=${to.latitude},${to.longitude}&speed=$speed'
           '${hurry == null ? '' : '&hurry=$hurry'}'
-          '${at == null ? '' : '&at=$at'}',
+          '${at == null ? '' : '&at=$at'}'
+          '${avoid.isEmpty ? '' : '&avoid=${avoid.join(',')}'}',
     ) as Map<String, dynamic>;
     return (
       options: [
@@ -385,6 +393,16 @@ class Api {
 
   bool get showLines => _setting('lines', false);
 
+  /// On unless turned off, for a phone that stutters under it
+  bool get blur => _setting('blur', true);
+
+  /// Off unless asked for: marks the vehicles the feed calls low floor
+  bool get lowFloor => _setting('lowFloor', false);
+
+  Future<void> setLowFloor(bool on) => _keep('lowFloor', on);
+
+  Future<void> setBlur(bool on) => _keep('blur', on);
+
   Future<void> setShowLines(bool on) => _keep('lines', on);
 
   /// Off unless asked for: it keeps location on with the app off the screen
@@ -406,6 +424,33 @@ class Api {
 
   Future<void> setRecentLines(List<String> ids) =>
       _prefs.setStringList('commuterlviv.recentLines', ids);
+
+  /// The last few things picked from a search, latest first
+  List<Searched> get searched => [
+    for (final raw in _prefs.getStringList('commuterlviv.searched') ?? const [])
+      ?Searched.fromJson(raw),
+  ];
+
+  /// Keeps [picked] first among [searched], as the list now stands
+  Future<List<Searched>> holdSearched(Searched picked) async {
+    final next = withPicked(searched, picked);
+    await _prefs.setStringList('commuterlviv.searched', [
+      for (final s in next) s.toJson(),
+    ]);
+    return next;
+  }
+
+  /// The vehicle types searches leave out; never all of them, which the
+  /// service would refuse
+  Set<String> get avoid {
+    final held = (_prefs.getStringList('commuterlviv.avoid') ?? const [])
+        .where(modes.contains)
+        .toSet();
+    return held.length < modes.length ? held : const {};
+  }
+
+  Future<void> setAvoid(Set<String> avoid) =>
+      _prefs.setStringList('commuterlviv.avoid', avoid.toList());
 
   String? get language => _setting<String?>('lang', null);
 

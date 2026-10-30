@@ -352,7 +352,8 @@ async def arrivals(request, session):
     cat = app.svc.live.cat
     ids = [i for i in map(_id, want.split(",")[:hub.MAX_STOPS])
            if i is not None and i < len(cat.stops)]
-    return JSONResponse(hub.due(app.svc.live.arrivals, ids))
+    live = app.svc.live
+    return JSONResponse(hub.due(live.arrivals, ids, live.positions))
 
 
 async def vehicle(request, session):
@@ -364,7 +365,8 @@ async def vehicle(request, session):
         return error("Veh must be a number")
     arr = app.svc.live.arrivals
     rows = arr.of(veh)
-    return JSONResponse({"t": arr.t, "veh": veh, "stops": [
+    return JSONResponse({"t": arr.t, "veh": veh,
+                         **(app.svc.live.vehicle(veh) or {}), "stops": [
         {"stop": int(r["stop"]), "route": int(r["route"]), "t": int(r["t"]),
          **({"planned": True} if r["planned"] else {})}
         for r in rows]})
@@ -416,6 +418,8 @@ def _departure(raw):
 WALK_KMH = (0.5, 8.0)   # walking speeds a search takes, on the level
 # hurrying speeds it takes: a brisk run at most. Chosen, not derived
 HURRY_KMH = (WALK_KMH[0], 12.0)
+# what `gtfs.vehicle_type` names every route; `avoid=` takes any but all of them
+VEHICLE_TYPES = frozenset({"bus", "tram", "trolleybus"})
 
 
 def _kmh(raw, name, bounds):
@@ -445,15 +449,20 @@ async def _planned(app, what, failed, work, *args):
         return None, error(failed, 500)
 
 
+def _no_planner(app):
+    """Why there is no journey planner to ask, as the refusal to send."""
+    if app.preparing:
+        return error("The journey planner is getting ready; try again in "
+                     "a few minutes", 503, preparing=True)
+    return error("This service has no journey planner", status=503)
+
+
 async def journey(request, session):
     """Door to door, ranked by arrival; each leg says whether it came from a
     tracked vehicle or from the timetable."""
     app = request.app.state
     if app.planner is None:
-        if app.preparing:
-            return error("The journey planner is getting ready; try again in "
-                         "a few minutes", 503, preparing=True)
-        return error("This service has no journey planner", status=503)
+        return _no_planner(app)
     origin = _origin(request.query_params)
     dest = _point(request.query_params.get("to"))
     if origin is None or dest is None:
@@ -470,6 +479,9 @@ async def journey(request, session):
     hurry, why = _kmh(request.query_params.get("hurry"), "hurry", HURRY_KMH)
     if why:
         return error(why)
+    avoid, why = _avoid(request.query_params.get("avoid"))
+    if why:
+        return error(why)
     # refused rather than queued when every worker is busy: a queue of
     # second-long searches is a denial of service with a longer fuse
     if app.planning.locked():
@@ -480,7 +492,7 @@ async def journey(request, session):
     arrivals, asked = live.arrivals, time.time()
     searched, failed = await _planned(app, "plan", "Could not plan that journey",
                                       planner.search, origin, dest, arrivals, at,
-                                      speed, hurry)
+                                      speed, hurry, avoid)
     if failed is not None:
         return failed
     found, ways = searched
@@ -489,6 +501,38 @@ async def journey(request, session):
         "speed": speed, "hurry": hurry, "arrivals": arrivals, "cat": live.cat,
         "answer": found, "journeys": ways})
     return JSONResponse({**found, "report": rid})
+
+
+def _avoid(raw):
+    """`avoid=tram,trolleybus`: the vehicle types no ride may be on, and why
+    the value was refused, if it was."""
+    asked = frozenset(t for t in (raw or "").split(",") if t)
+    unknown = asked - VEHICLE_TYPES
+    if unknown:
+        return None, f"Avoid takes {', '.join(sorted(VEHICLE_TYPES))}"
+    if asked == VEHICLE_TYPES:
+        return None, "Avoid leaves no vehicle to ride"
+    return asked, None
+
+
+async def departures(request, session):
+    """When a line leaves a stop today, by the timetable: the open line's
+    hours and how often it runs. `route` and `stop` are catalog positions."""
+    app = request.app.state
+    q = request.query_params
+    cat = app.svc.live.cat
+    route, stop = _id(q.get("route")), _id(q.get("stop"))
+    if route is None or stop is None or route >= len(cat.routes) \
+            or stop >= len(cat.stops):
+        return error("Route and stop must be catalog positions")
+    planner = app.planner
+    if planner is None:
+        return _no_planner(app)
+    if planner.cat is not cat:
+        return error("The timetable is being renewed; try again in a moment", 503)
+    now = time.time()
+    return JSONResponse({"t": round(now), "dep": planner.departures(
+        cat.routes[route], cat.stops[stop], now)})
 
 
 async def backup(request, session):
@@ -718,6 +762,7 @@ def routes():
         Route("/api/plan", protected(journey), methods=["GET"]),
         Route("/api/report", protected(report), methods=["POST"]),
         Route("/api/backup", protected(backup), methods=["GET"]),
+        Route("/api/departures", protected(departures), methods=["GET"]),
         Route("/api/pins", protected(pins), methods=["GET", "POST"]),
         Route("/api/places", protected(places), methods=["GET", "POST"]),
         Route("/api/search", protected(places_near, unsafe=False)),
@@ -743,6 +788,8 @@ def build(st=None, net=None):
         s.hasher = security.hasher(**st.argon2)
         s.pool = await db.connect(st.database_url)
         await db.migrate(s.pool, log)
+        if net is None:
+            refresh.feed_at_start(log)
         loaded = net if net is not None else network.load()
         s.source = network.source()
         s.svc = service.Service(st, loaded, log=log, persist=net is None)

@@ -571,13 +571,13 @@ def _plan_to_town_hall(page):
     page.get_by_role("button", name="Get here").click()
 
 
-def test_a_start_where_i_am_says_so_rather_than_its_coordinates(page):
+def test_a_start_where_i_am_says_when_it_was_taken_rather_than_its_coordinates(page):
     _register(page, "here")
     _plan_to_town_hall(page)
 
     panel = page.locator("aside")
     expect = playwright.expect
-    expect(panel.get_by_text("Where I am", exact=True)).to_be_visible()
+    expect(panel.get_by_text(re.compile(r"^Where I was at \d\d:\d\d$"))).to_be_visible()
     expect(panel.get_by_text(re.compile(r"^[\d.]+, [\d.]+$"))).to_have_count(0)
 
 
@@ -1103,4 +1103,4 @@ def test_an_old_line_link_opens_the_line_in_the_lines_tab(page):
     expect(page.get_by_title("The other way")).to_be_visible(timeout=SEE_MS)
 
     page.goto("/?tab=route")
-    expect(page.get_by_role("radio", name="All")).to_be_checked(timeout=SEE_MS)
+    expect(page.get_by_role("radio", name="All routes")).to_be_visible(timeout=SEE_MS)

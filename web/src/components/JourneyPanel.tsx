@@ -5,8 +5,12 @@ import { mins } from "../lib/eta";
 import { t } from "../lib/i18n";
 import { samePlace } from "../lib/places";
 import {
+  heldAvoid,
   heldPrefer,
+  holdAvoid,
   holdPrefer,
+  MODES,
+  type Mode,
   PREFERS,
   ranked,
   type Prefer,
@@ -119,6 +123,7 @@ export function JourneyPanel({
   /** Unix seconds, or null for now - which is what the service assumes */
   const [at, setAt] = useState<number | null>(null);
   const [prefer, setPrefer] = useState<Prefer>(heldPrefer);
+  const [avoid, setAvoid] = useState<Mode[]>(heldAvoid);
   /** km/h, starting at the one kept as the default */
   const [speed, setSpeed] = useState(heldSpeed);
   /** What the points picked by name were called, so they keep reading so */
@@ -131,7 +136,8 @@ export function JourneyPanel({
   const aboard = from && "veh" in from ? from : null;
   const start = from && !("veh" in from) ? from : null;
 
-  const search = async () => {
+  /** `leaving` out these types, the ones held unless just changed */
+  const search = async (leaving: Mode[] = avoid) => {
     if (!from || !to) return;
     setSearched({ from, to });
     setBusy(true);
@@ -147,6 +153,7 @@ export function JourneyPanel({
         aboard ? null : at,
         speed,
         heldHurry(),
+        leaving,
       );
       setFound(got.options);
       setReportable(got.report ?? null);
@@ -259,7 +266,11 @@ export function JourneyPanel({
         ) : (
           <span className="flex-1 font-medium">{t.plan}</span>
         )}
-        <Icon name="up" className="size-4 text-slate-400" />
+        {/* Folded up under the search bar: it opens downwards. Drawn as the
+            fold button it was, though the whole strip is the target */}
+        <span className="btn-quiet px-2">
+          <Icon name="down" className="size-4" />
+        </span>
       </button>
     );
 
@@ -294,7 +305,7 @@ export function JourneyPanel({
           title={t.hidePanel}
           className="btn-quiet px-2"
         >
-          <Icon name="down" className="size-4" />
+          <Icon name="up" className="size-4" />
         </button>
       </div>
       {field("from", start, aboard)}
@@ -320,6 +331,13 @@ export function JourneyPanel({
           onPrefer={(p) => {
             setPrefer(p);
             holdPrefer(p);
+          }}
+          avoid={avoid}
+          onAvoid={(next) => {
+            setAvoid(next);
+            holdAvoid(next);
+            // Shown options rode what is now left out: ask again
+            if (found !== null) void search(next);
           }}
         />
         <button
@@ -385,22 +403,32 @@ const END: Record<End, { label: string; icon: IconName }> = {
   to: { label: t.to, icon: "destination" },
 };
 
+/** How the options are ordered, and below a rule the vehicle types they may
+ *  ride: a type is rarely left out, so it lives here rather than in a row of
+ *  its own, and the button carries a dot while one is */
 function Order({
   prefer,
   onPrefer,
+  avoid,
+  onAvoid,
 }: {
   prefer: Prefer;
   onPrefer: (p: Prefer) => void;
+  avoid: Mode[];
+  onAvoid: (avoid: Mode[]) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const toggle = (m: Mode) =>
+    onAvoid(avoid.includes(m) ? avoid.filter((x) => x !== m) : [...avoid, m]);
   return (
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        title={`${t.preferBy}: ${t.prefer[prefer]}`}
-        className={`btn-quiet h-full px-2 ${open ? "text-accent" : ""}`}
+        title={`${t.preferBy}: ${t.prefer[prefer]}${avoid.length ? `. ${t.leftOut(avoid.map((m) => t.kinds[m]!).join(", "))}` : ""}`}
+        className={`btn-quiet relative h-full px-2 ${open ? "text-accent" : ""}`}
       >
         <Icon name="sort" />
+        {avoid.length > 0 && <span className="absolute top-1 right-1 size-1.5 rounded-full bg-amber-400" />}
       </button>
       {open && (
         <div className="panel absolute right-0 top-full z-30 mt-1 w-48 p-1 text-sm">
@@ -416,6 +444,25 @@ function Order({
               {t.prefer[p]}
             </button>
           ))}
+          <div className="my-1 border-t border-hair" />
+          {MODES.map((m) => {
+            const riding = !avoid.includes(m);
+            // The last type left cannot go: there would be nothing to ride
+            const last = riding && avoid.length === MODES.length - 1;
+            return (
+              <button
+                key={m}
+                role="menuitemcheckbox"
+                aria-checked={riding}
+                disabled={last}
+                onClick={() => toggle(m)}
+                className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-raised disabled:opacity-50 ${riding ? "" : "text-slate-500"}`}
+              >
+                <span className="w-4">{riding && <Icon name="check" className="size-4" />}</span>
+                {t.kinds[m]}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
