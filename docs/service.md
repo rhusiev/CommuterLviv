@@ -483,7 +483,7 @@ changed since, it says so: stop and trip numbering may then no longer match.
 ## Traffic
 
 `GET /api/traffic/streets` and `GET /api/traffic` are the same numbers the
-model uses for its ETAs, drawn as a map: per 100 m of track, the ratio of how
+model uses for its ETAs, drawn as a map: per 50 m cell of track, the ratio of how
 long vehicles are actually taking to how long the timetable expects. A stretch
 too little has crossed lately comes back as `null` and is not drawn - the model
 would happily hand back the corridor's number there, which is a fair ETA and a
@@ -493,7 +493,7 @@ The numbers are pooled before they are drawn. A unit belongs to one route's
 shape, so a street ten routes run down carries ten units, each with its own
 number and its own idea of where the kerb is; drawn as they are, that is ten
 near-parallel lines crossing each other. They are pooled by where they lie:
-shapes are laid down most-run first, and a 100 m cell of a later shape that runs
+shapes are laid down most-run first, and a cell of a later shape that runs
 on top of an already drawn piece, within `MATCH` metres and heading the same
 way, adds its unit to that piece instead of drawing its own. Each piece is drawn
 along its shape's own vertices, so it follows the street through a bend rather

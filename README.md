@@ -4,7 +4,7 @@ Live arrival times for Lviv's trams, trolleybuses and buses: when the next one
 actually arrives, not when the timetable says it should.
 
 The city publishes where its vehicles are. This project map-matches every fix
-onto its trip's shape, learns how long each 100 m of road is taking right now
+onto its trip's shape, learns how long each 50 m of road is taking right now
 and at this hour on the days before, and turns that into an arrival time for
 every stop ahead of every vehicle. It also plans door-to-door journeys on those
 live times, shows traffic on the streets the vehicles drive, and keeps an

@@ -8,7 +8,7 @@ apart and only recombined when an arrival time is wanted:
   hold  seconds standing per crossing; charged to the place, scales with nothing
 
 Time to cross a cell is length x pace + hold. Both are learned in three nested
-layers that back off downwards - cell (100 m of one shape), corridor (120 m
+layers that back off downwards - cell (50 m of one shape), corridor (120 m
 ground square plus heading, pooled across routes), global - each with a fast and
 a slow exponentially weighted mean.
 

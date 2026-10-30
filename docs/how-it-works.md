@@ -89,11 +89,21 @@ cache is keyed by `network.source()`, a digest of the feed and this file both.
 `check_overrides.py` on the `development-archive` branch builds from scratch and
 asserts every rule still lands where it says.
 
-Each shape is also cut into 100 m **cells**, and each cell is tagged with a
+Each shape is also cut into 50 m **cells**, and each cell is tagged with a
 **corridor** key: which 120 m ground square it sits in, and which of 8 compass
 octants it points along. Two routes driving the same street the same way land
 in the same corridor even though they are different shapes. That is how
 evidence gets pooled across routes.
+
+The cells were 100 m until 2026-10-30. Replaying the recording of 2026-09-13..19
+(a day of warm-up, then Monday to Friday scored, 22.4M predictions on the
+2026-09-23 feed) through the code of v0.20.0, 50 m cells gave arrivals 1.92 s
+closer (mean absolute error 174.7 s against 176.6 s, 95% interval 1.77-2.08 s),
+2.8 s at 15-45 min ahead, better on every day. The replay fits no ETA correction
+(`boost`), so the gain is the pace model's. The cost: twice the cells (52k), 12k
+traffic pieces instead of 6k (`/api/traffic/streets` 950 KB against 518 KB) and
+156 MB of model arrays against 117 MB. The archive's own sweep (development-archive)
+had found 100 m better, on that branch's older model.
 
 ## 3. The fix is folded into a filter, not used directly
 
@@ -160,7 +170,7 @@ little data:
 
 | layer | what it covers | how much data |
 |---|---|---|
-| cell | one 100 m slice of one shape | sparsest, most specific |
+| cell | one 50 m slice of one shape | sparsest, most specific |
 | corridor | a 120 m square plus heading, pooled across routes | middling |
 | global | one number for the network | always available |
 
