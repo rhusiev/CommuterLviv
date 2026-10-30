@@ -28,7 +28,7 @@ import { takeRenewed, useLive } from "./lib/useLive";
 import { useMapLayers } from "./lib/useMapLayers";
 import { usePlanner } from "./lib/usePlanner";
 import { useSession } from "./lib/useSession";
-import { walkingFrom } from "./lib/legs";
+import { underWay } from "./lib/legs";
 import type { Catalog, Journey, Me, Place } from "./lib/types";
 import { t } from "./lib/i18n";
 
@@ -251,11 +251,11 @@ export function App() {
     // where a journey followed before the page loaded had got to
     followed?.stage,
   );
-  // The walk under way is drawn from where I am, not from where it was planned
+  // What is left of the journey, a walk under way drawn from where I am
   const onMap = useMemo(
     () =>
       drawn !== null && drawn === following && here && progress !== null && progress !== "denied"
-        ? walkingFrom(drawn, progress, here)
+        ? underWay(drawn, progress, here)
         : drawn,
     [drawn, following, here, progress],
   );

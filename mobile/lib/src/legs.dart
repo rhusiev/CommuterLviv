@@ -113,22 +113,41 @@ Set<int> riddenBy(Journey? journey) => {
   for (final leg in journey?.legs ?? const <Leg>[]) ?leg.veh,
 };
 
-/// The journey as it is being walked: the walk under way drawn from [here],
-/// along the last `left` metres of its line, setting off at [now] (Unix
-/// seconds). Every other stage, and a walk strayed from, leaves it as planned.
-Journey walkingFrom(Journey j, Progress progress, LatLng here, int now) {
+/// The journey as it is under way, for the map: the legs already done left
+/// off, and a walk under way, unless strayed from, drawn from [here] at [now]
+/// (Unix seconds). Arrived, it is left whole.
+Journey underWay(Journey j, Progress progress, LatLng here, int now) {
   final stage = progress.stage;
-  if (stage.kind != StageKind.walk || progress.astray) return j;
-  final leg = j.legs[stage.leg];
+  if (stage.kind == StageKind.arrived) return j;
+  final legs = j.legs.sublist(stage.leg);
+  if (stage.kind == StageKind.walk && !progress.astray) {
+    legs[0] = _walkingFrom(legs[0], progress.left, here, now);
+  }
+  return Journey(
+    dep: j.dep,
+    arr: j.arr,
+    rides: j.rides,
+    live: j.live,
+    confidence: j.confidence,
+    legs: legs,
+    backup: j.backup,
+    aboard: j.aboard,
+    hurry: j.hurry,
+  );
+}
+
+/// A walk drawn from [here] along the last [left] metres of its line, setting
+/// off at [now].
+Leg _walkingFrom(Leg leg, double left, LatLng here, int now) {
   const distance = Distance();
   final rest = <LatLng>[];
   var gone = 0.0;
   for (var i = leg.pts.length - 1; i > 0; i--) {
     rest.insert(0, leg.pts[i]);
     gone += distance(leg.pts[i], leg.pts[i - 1]);
-    if (gone >= progress.left) break;
+    if (gone >= left) break;
   }
-  final walking = Leg(
+  return Leg(
     kind: leg.kind,
     dep: now < leg.arr ? now : leg.arr,
     arr: leg.arr,
@@ -141,16 +160,5 @@ Journey walkingFrom(Journey j, Progress progress, LatLng here, int now) {
     pts: [here, ...rest],
     stops: leg.stops,
     backups: leg.backups,
-  );
-  return Journey(
-    dep: j.dep,
-    arr: j.arr,
-    rides: j.rides,
-    live: j.live,
-    confidence: j.confidence,
-    legs: [for (final (i, l) in j.legs.indexed) i == stage.leg ? walking : l],
-    backup: j.backup,
-    aboard: j.aboard,
-    hurry: j.hurry,
   );
 }
