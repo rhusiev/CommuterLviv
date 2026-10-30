@@ -83,8 +83,8 @@ export function useSession(linked: string[] | null) {
       setActive(s.id);
       void api.activateSet(s.id).catch(failed);
     },
-    /** Exactly the routes of `ids` - every route, or the one line open -
-     *  which no saved set is */
+    /** Exactly the routes of `ids` - every route, or none - which no saved
+     *  set is */
     watchOnly: (ids: string[]) => {
       setPicked(new Set(ids));
       setActive(null);
@@ -113,7 +113,6 @@ export function useSession(linked: string[] | null) {
     setNotice,
     picked,
     togglePicked,
-    clearPicked: () => setPicked(new Set()),
     routeSets,
     pinIds,
     /** Only shown: for pins the server already has, or is being sent */

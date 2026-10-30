@@ -131,7 +131,7 @@ void main() {
     expect(riddenBy(null), isEmpty);
   });
 
-  group('walkingFrom', () {
+  group('underWay', () {
     // A walk north along a meridian, a point every ~111 m
     const step = 0.001;
     final pts = [for (var i = 0; i < 5; i++) LatLng(49.8 + i * step, 24.0)];
@@ -162,7 +162,7 @@ void main() {
     const now = t0 + minS;
 
     test('draws the walk under way from where I am, along what is left', () {
-      final j = walkingFrom(
+      final j = underWay(
         walking(),
         at(const Stage(StageKind.walk, 0), 250),
         here,
@@ -173,20 +173,35 @@ void main() {
       expect(j.legs[0].dep, now);
     });
 
-    test('leaves the plan off the walk, or astray from its line', () {
+    test('leaves a walk strayed from as planned', () {
+      final plan = walking();
+
+      final j = underWay(
+        plan,
+        at(const Stage(StageKind.walk, 0), 250, astray: true),
+        here,
+        now,
+      );
+
+      expect(j.legs, plan.legs);
+    });
+
+    test('leaves the legs already done off, once waiting or aboard', () {
+      final plan = walking();
+
+      for (final stage in const [
+        Stage(StageKind.wait, 1),
+        Stage(StageKind.ride, 1, 7),
+      ]) {
+        expect(underWay(plan, at(stage, 0), here, now).legs, plan.legs.skip(1));
+      }
+    });
+
+    test('leaves an arrived journey whole', () {
       final plan = walking();
 
       expect(
-        walkingFrom(plan, at(const Stage(StageKind.wait, 1), 0), here, now),
-        same(plan),
-      );
-      expect(
-        walkingFrom(
-          plan,
-          at(const Stage(StageKind.walk, 0), 250, astray: true),
-          here,
-          now,
-        ),
+        underWay(plan, at(const Stage(StageKind.arrived), 0), here, now),
         same(plan),
       );
     });

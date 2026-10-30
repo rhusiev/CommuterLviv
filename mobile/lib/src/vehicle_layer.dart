@@ -63,8 +63,7 @@ const _arrowZoom = 13.0;
 /// Half the gap between the two tracks of chevrons on a two-way stretch.
 const _twoWayOffset = 3.5;
 
-/// How faint a vehicle is when its position is stale or the drawn journey
-/// rides another.
+/// How faint a vehicle is when its position is stale.
 const _fadedAlpha = 0.55;
 
 /// Where a low-floor vehicle's mark sits on its badge's rim, as a share of the
@@ -112,7 +111,7 @@ class VehicleLayer extends StatefulWidget {
   final Catalog catalog;
   final Live live;
 
-  /// The vehicles the drawn journey rides: ringed, and every other faded.
+  /// The vehicles the drawn journey rides, ringed.
   final Set<int> ridden;
 
   /// Mark the vehicles the feed calls low floor.
@@ -548,13 +547,11 @@ class _Painter extends CustomPainter {
 
       final route = catalog.routes[v.route];
       final fill = Paint()..color = routeColour(route.short, route.type);
-      // Faded: nothing has confirmed this position for half a minute, or the
-      // drawn journey rides another
-      final dim = v.stale || (ridden.isNotEmpty && !ridden.contains(id));
-      if (dim) {
+      // Faded: nothing has confirmed this position for half a minute
+      if (v.stale) {
         fill.color = fill.color.withValues(alpha: _fadedAlpha);
       }
-      nub.color = standing.color = dim ? faded : ink.nub;
+      nub.color = standing.color = v.stale ? faded : ink.nub;
       canvas.drawCircle(p, badgeRadius - 1.5, fill);
       canvas.drawCircle(p, badgeRadius - 1.5, edge);
 

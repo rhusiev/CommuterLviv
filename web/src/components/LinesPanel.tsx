@@ -8,6 +8,7 @@ import { t } from "../lib/i18n";
 import { RouteBadge } from "./RouteBadge";
 import { RouteChip } from "./RouteChip";
 import { Icon, type IconName } from "./Icon";
+import { Menu } from "./Menu";
 
 /** The routes, to watch or to open one line of; and the one line open.
  *
@@ -25,9 +26,8 @@ type BrowseProps = {
   catalog: Catalog;
   picked: Set<string>;
   onToggle: (id: string) => void;
-  onClear: () => void;
-  /** Watches every route in the catalog, as no saved set */
-  onPickAll: () => void;
+  /** Watches every route in the catalog, or none, as no saved set */
+  onPick: (all: boolean) => void;
   /** The line, from a chip's `›` or a recently opened row */
   onOpen: (i: number) => void;
   /** Route ids, latest first */
@@ -39,9 +39,9 @@ type BrowseProps = {
   onUpdate: (set: RouteSet) => Promise<void>;
 };
 
-/** Two things, kept apart: what the map watches - every route, a saved set or
- *  the routes ticked by hand - and, below, the list of routes, which its own
- *  filters only narrow */
+/** Two things, kept apart: what the map watches, in one toolbar - a box that
+ *  watches every route or none, the saved sets, and saving the ticks as one -
+ *  and, below, the list of routes, which its own filters only narrow */
 export function LinesBrowse(p: BrowseProps) {
   const [onlyWatched, setOnlyWatched] = useState(false);
   const [near, setNear] = useState<Set<number> | null>(null);
@@ -76,48 +76,44 @@ export function LinesBrowse(p: BrowseProps) {
     .filter((i) => i >= 0);
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-hidden">
-      <Watched {...p} />
+    <div className="flex h-full flex-col gap-2 overflow-hidden">
+      <Toolbar {...p} />
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={t.filter}
+        className="field py-1.5"
+      />
+      <div className="flex flex-wrap gap-1">
+        <Narrow on={near !== null} onClick={toggleNear} icon="locate">
+          {t.nearLines}
+        </Narrow>
+        <Narrow on={onlyWatched} onClick={() => setOnlyWatched((on) => !on)} icon="check">
+          {t.onlyWatched}
+        </Narrow>
+      </div>
+      {why && <p className="text-xs text-slate-500">{why}</p>}
+      {onlyWatched && p.picked.size === 0 && <p className="text-xs text-slate-500">{t.noneWatched}</p>}
       {recent.length > 0 && (
         <section>
-          <h2 className="text-xs uppercase tracking-wide text-slate-500">{t.recentLines}</h2>
-          <ul className="mt-1 space-y-0.5">
-            {recent.map((i) => (
-              <li key={i}>
-                <button
-                  onClick={() => p.onOpen(i)}
-                  className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-raised/70"
-                >
-                  <RouteBadge route={p.catalog.routes[i]!} className="px-1.5 py-0.5 text-xs" />
-                  <span className="min-w-0 flex-1 truncate text-sm text-slate-300">
-                    {p.catalog.routes[i]!.long}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <h2 className="text-xs text-slate-500">{t.recentLines}</h2>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {recent.map((i) => {
+              const r = p.catalog.routes[i]!;
+              return (
+                <RouteChip
+                  key={r.id}
+                  route={r}
+                  watched={p.picked.has(r.id)}
+                  onWatch={() => p.onToggle(r.id)}
+                  onLine={() => p.onOpen(i)}
+                />
+              );
+            })}
+          </div>
         </section>
       )}
       <section className="flex min-h-0 flex-1 flex-col">
-        <h2 className="text-xs uppercase tracking-wide text-slate-500">{t.routes}</h2>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t.filter}
-          className="field mt-2 py-1.5"
-        />
-        <div className="mt-2 flex flex-wrap gap-1">
-          <Narrow on={near !== null} onClick={toggleNear} icon="locate">
-            {t.nearLines}
-          </Narrow>
-          <Narrow on={onlyWatched} onClick={() => setOnlyWatched((on) => !on)} icon="check">
-            {t.onlyWatched}
-          </Narrow>
-        </div>
-        {why && <p className="mt-2 text-xs text-slate-500">{why}</p>}
-        {onlyWatched && p.picked.size === 0 && (
-          <p className="mt-2 text-xs text-slate-500">{t.noneWatched}</p>
-        )}
         <RouteGrid groups={groups} picked={p.picked} onToggle={p.onToggle} onOpen={p.onOpen} />
       </section>
     </div>
@@ -161,13 +157,19 @@ function Narrow({
   );
 }
 
-/** What the map watches: every route, one of the saved sets, or the routes
- *  ticked below. A set is the selection at the moment it was saved */
-function Watched(p: BrowseProps) {
+/** What the map watches, in one row: a box that, as a mail client's select-all,
+ *  watches every route when none is and none otherwise, how many are watched,
+ *  the saved sets, and saving these as one */
+function Toolbar(p: BrowseProps) {
+  const [naming, setNaming] = useState(false);
+  const [menu, setMenu] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const total = p.catalog.routes.length;
+  const n = p.picked.size;
   const current = p.sets.find((s) => s.id === p.active);
-  const all = p.catalog.routes.length > 0 && p.catalog.routes.every((r) => p.picked.has(r.id));
+  const changed =
+    current !== undefined && (current.routes.length !== n || current.routes.some((id) => !p.picked.has(id)));
 
   const guard = (fn: () => Promise<void>) => async () => {
     setError("");
@@ -180,75 +182,95 @@ function Watched(p: BrowseProps) {
 
   return (
     <section>
-      <div className="flex min-h-5 items-center justify-between">
-        <h2 className="text-xs uppercase tracking-wide text-slate-500">
-          {t.onMap}
-          <span className="ml-2 normal-case text-slate-600">{t.on(p.picked.size)}</span>
-        </h2>
-        {p.picked.size > 0 && (
-          <button onClick={p.onClear} title={t.clear} className="-m-2 p-2 text-slate-500 hover:text-slate-300">
-            <Icon name="clear" className="size-4" />
-          </button>
-        )}
-      </div>
-      <div role="radiogroup" aria-label={t.onMap} className="mt-2 flex flex-wrap items-center gap-1">
-        <Choice on={all && current === undefined} onClick={p.onPickAll}>
-          {t.allRoutes}
-        </Choice>
-        {p.sets.map((s) => (
-          <Choice key={s.id} on={s.id === p.active} onClick={() => p.onActivate(s)}>
-            {s.name}
-          </Choice>
-        ))}
-        {current && (
-          <button
-            title={t.saveSet}
-            aria-label={t.saveSet}
-            onClick={guard(() => p.onUpdate(current))}
-            className="rounded-control px-2 py-1 text-slate-500 transition-colors hover:bg-raised/70 hover:text-slate-200"
-          >
-            <Icon name="check" className="size-4" />
-          </button>
-        )}
-      </div>
-      <form
-        className="mt-2 flex gap-1"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!name.trim()) return;
-          void guard(async () => {
-            await p.onCreate(name.trim());
-            setName("");
-          })();
-        }}
-      >
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder={t.newSet}
-          className="field min-w-0 flex-1 py-1.5"
-        />
-        <button className="btn-quiet px-2 py-0" title={t.add}>
-          <Icon name="plus" className="size-4" />
+      <div className="flex items-center gap-2">
+        <button
+          role="checkbox"
+          aria-checked={n === 0 ? false : n === total ? true : "mixed"}
+          title={n === 0 ? t.watchAll : t.watchNone}
+          onClick={() => p.onPick(n === 0)}
+          className={`flex size-5 shrink-0 items-center justify-center rounded border-2 ${
+            n === 0 ? "border-slate-500 hover:border-slate-300" : "border-accent bg-accent text-plate"
+          }`}
+        >
+          {n > 0 && <Icon name={n === total ? "check" : "minus"} className="size-3.5" />}
         </button>
-      </form>
+        <span className="min-w-0 flex-1 truncate text-sm text-slate-200">{t.onMapOf(n, total)}</span>
+        {p.sets.length > 0 && (
+          <select
+            value={current?.id ?? ""}
+            onChange={(e) => {
+              const s = p.sets.find((x) => x.id === e.target.value);
+              if (s) p.onActivate(s);
+            }}
+            aria-label={t.setsMenu}
+            className="field max-w-32 py-1 text-sm"
+          >
+            {current === undefined && (
+              <option value="" disabled>
+                {t.setsMenu}
+              </option>
+            )}
+            {p.sets.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <span className="relative">
+          <Menu icon="more" label={t.setActions} open={menu} quiet onToggle={setMenu}>
+            <button
+              disabled={n === 0}
+              onClick={() => {
+                setMenu(false);
+                setNaming(true);
+              }}
+              className="w-full rounded-md px-2 py-1.5 text-left text-sm enabled:hover:bg-raised disabled:text-slate-600"
+            >
+              {t.saveAsSet}
+            </button>
+            {changed && (
+              <button
+                onClick={() => {
+                  setMenu(false);
+                  void guard(() => p.onUpdate(current))();
+                }}
+                className="w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-raised"
+              >
+                {t.updateSet(current.name)}
+              </button>
+            )}
+          </Menu>
+        </span>
+      </div>
+      {naming && (
+        <form
+          className="mt-2 flex gap-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!name.trim()) return;
+            void guard(async () => {
+              await p.onCreate(name.trim());
+              setName("");
+              setNaming(false);
+            })();
+          }}
+        >
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setNaming(false)}
+            placeholder={t.nameSet}
+            className="field min-w-0 flex-1 py-1.5"
+          />
+          <button className="btn-quiet px-2 py-0" title={t.add}>
+            <Icon name="plus" className="size-4" />
+          </button>
+        </form>
+      )}
       {error && <p className="mt-1 text-xs text-rose-400">{error}</p>}
     </section>
-  );
-}
-
-function Choice({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      role="radio"
-      aria-checked={on}
-      onClick={onClick}
-      className={`rounded-full px-3 py-1 text-sm ${
-        on ? "bg-accent/15 text-accent" : "bg-raised/70 text-slate-300 hover:bg-raised"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -294,11 +316,6 @@ type LineProps = {
   way: number;
   onWay: (way: number) => void;
   arrivals: Record<string, Arrival[]>;
-  watching: boolean;
-  onWatch: () => void;
-  /** Whether it is the one route watched, and making it so */
-  only?: boolean;
-  onOnly?: () => void;
   onStop: (i: number) => void;
   onBack: () => void;
   /** Down to its title alone, so the map shows the line */
@@ -392,7 +409,7 @@ export function LineHours({ dep, now }: { dep: number[]; now: number }) {
   );
 }
 
-/** Below the line's title: when it runs, its way, Watch, and its stops in order */
+/** Below the line's title: when it runs, its way, and its stops in order */
 function LineBody(
   p: LineProps & { rows: ReturnType<typeof lineRows>; last: number | undefined; now: number; dep: number[] },
 ) {
@@ -411,29 +428,6 @@ function LineBody(
             → {p.catalog.stops[last]!.name}
           </button>
         )}
-        {/* A split button, as the route chip: Watch adds it to what the map
-            watches, Only makes it all the map watches */}
-        <span className="ml-auto flex gap-0.5 text-sm">
-          <button
-            onClick={p.onWatch}
-            aria-pressed={p.watching}
-            className={`rounded-l-full rounded-r-sm px-3 py-1 ${
-              p.watching ? "bg-accent/15 text-accent" : "bg-raised/70 text-slate-300 hover:bg-raised"
-            }`}
-          >
-            {t.watchLine}
-          </button>
-          <button
-            onClick={p.onOnly}
-            aria-pressed={p.only ?? false}
-            title={t.onlyLineHint}
-            className={`rounded-l-sm rounded-r-full px-3 py-1 ${
-              p.only ? "bg-accent/15 text-accent" : "bg-raised/70 text-slate-300 hover:bg-raised"
-            }`}
-          >
-            {t.onlyLine}
-          </button>
-        </span>
       </div>
       {p.ways.length > 0 && rows.length === 0 && <p className="text-xs text-slate-500">{t.noLineStops}</p>}
       <ol className="min-h-0 flex-1 overflow-y-auto">

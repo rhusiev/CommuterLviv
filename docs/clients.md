@@ -83,7 +83,7 @@ under them, with nothing to tap for it. The app does the same
 (`mobile/README.md`). Drawing an option also frames the map on it - its
 walks, its rides and the stops they meet - and rings the vehicles its rides are
 planned on (`riddenBy`, from each ride's `veh`) in the colour of the location
-dot, fading the other vehicles of its routes. The framing, and a line's from the
+dot. The framing, and a line's from the
 Lines tab, keeps clear of the panel open over the map. The app keeps it above
 its bottom panel. The web uses the widest strip the panel leaves free, measured as
 the fit is made, or the whole map when no strip is 120 px wide past its
@@ -94,9 +94,10 @@ where you are and puts a card at the bottom that says what to do now: walk to
 the stop, wait there, with when the vehicle is due, get off at the next, or that
 you went past it or off the way. The map keeps the dot in the middle with each
 fix, through a zoom too. A pan by hand lets go of it, so the way ahead can be
-looked at, and the locate button takes it back. While you walk, the walk under
-way is drawn from the dot along what is left of its line (`walkingFrom` in
-`lib/legs`), so the start moves with you; the plan itself is not searched again
+looked at, and the locate button takes it back. The map draws only what is
+left (`underWay` in `lib/legs`): the legs already done are dropped once you
+wait or ride, and while you walk, the walk under way is drawn from the dot
+along what is left of its line, so the start moves with you; the plan itself is not searched again
 until a ride is missed or you are off the way, which the card says. `Follower` in `web/src/lib/follow.ts`, ported
 line for line to `mobile/lib/src/follow.dart`, works it out from the device's
 own fixes and the vehicles as the map draws them, on the device: where you are
@@ -236,19 +237,21 @@ That is `LayersSheet` and `AccountSheet` in `mobile/lib/src/sheets.dart` and
 
 The four tabs are Map, Lines, Journey and Mine - in Ukrainian Мапа, Лінії,
 Поїздка and Моє, since "Маршрут" for a journey read as one of the "Маршрути", the
-routes. Lines keeps apart what the map watches and the list of routes. On the
-map is one choice - All routes, one of the saved sets, or nothing chosen while
-the ticks are your own - with the count watched, a clear button and the form
-that saves the ticks as a set. All routes is no saved set: it ticks every route
-and leaves no set active. Below are the last five lines opened (kept on the
-device), then the routes: a filter field and two toggles that narrow only the
-list - Near me (the routes of the stops within 500 m of the device's fix, asked
-for only when turned on; 500 m is chosen, not derived) and Watched only - and
-the grid of route chips, whose body ticks a route and whose `›` opens its
-line. Renaming and deleting a set is in Mine. An open line
-uncovers the map and draws only that route, over a followed or planned journey,
-beside a panel with a back button, a toggle between its two ways named by the
-last stop, Watch, Only (which makes the line all the map watches), and its stops
+routes. Lines keeps apart what the map watches and the list of routes. What
+the map watches is one toolbar row: a box that, as a mail client's select-all,
+watches every route when none is and none when any is (empty, part-ticked or
+ticked as the routes watched), the count watched out of the catalog's, a picker
+of the saved sets once there are any, and a ⋮ menu that saves the ticks as a
+new set or, once they differ from the set watched, into it. Either end of the
+box leaves no set active. Below are the filter field and two filters that
+narrow only the list, each keeping its icon whether on or off - Near me (the
+routes of the stops within 500 m of the device's fix, asked for only when
+turned on; 500 m is chosen, not derived) and Watched only - then the last five
+lines opened (kept on the device) as a row of the same route chips, then the
+grid of route chips, whose body ticks a route and whose `›` opens its line.
+Renaming and deleting a set is in Mine. An open line uncovers the map and draws
+only that route, over a followed or planned journey, beside a panel with a back
+button, a toggle between its two ways named by the last stop, and its stops
 in order. Above the way, three plain chips say when the line runs and how often:
 its first and last departure today from the way's first stop and, around now,
 the typical gap between departures (`lineHours`: the median gap of those within

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { current, riddenBy, rows, WAIT_MIN_S, walkingFrom } from "./legs";
+import { current, riddenBy, rows, underWay, WAIT_MIN_S } from "./legs";
 import type { Progress } from "./follow";
 import type { Journey, Leg } from "./types";
 
@@ -110,7 +110,7 @@ describe("riddenBy", () => {
   });
 });
 
-describe("walkingFrom", () => {
+describe("underWay", () => {
   /** A walk north along a meridian, a point every ~111 m */
   const STEP = 0.001;
   const walking = (): Journey => {
@@ -129,7 +129,7 @@ describe("walkingFrom", () => {
   const HERE = { lat: 49.8015, lon: 24.0002, t: T0 + MIN_S };
 
   test("draws the walk under way from where I am, along what is left of its line", () => {
-    const j = walkingFrom(walking(), progress({ kind: "walk", leg: 0 }, 250), HERE);
+    const j = underWay(walking(), progress({ kind: "walk", leg: 0 }, 250), HERE);
     const pts = j.legs[0]!.pts!;
 
     expect(pts[0]).toEqual([HERE.lat, HERE.lon]);
@@ -137,11 +137,23 @@ describe("walkingFrom", () => {
     expect(j.legs[0]!.dep).toBe(HERE.t);
   });
 
-  test("leaves the plan as it was off the walk, or astray from its line", () => {
+  test("leaves a walk strayed from as planned", () => {
     const plan = walking();
 
-    expect(walkingFrom(plan, progress({ kind: "wait", leg: 1 }, 0), HERE)).toBe(plan);
-    expect(walkingFrom(plan, progress({ kind: "walk", leg: 0 }, 250, true), HERE)).toBe(plan);
+    expect(underWay(plan, progress({ kind: "walk", leg: 0 }, 250, true), HERE).legs).toEqual(plan.legs);
+  });
+
+  test("leaves the legs already done off, once waiting or aboard", () => {
+    const plan = walking();
+
+    expect(underWay(plan, progress({ kind: "wait", leg: 1 }, 0), HERE).legs).toEqual(plan.legs.slice(1));
+    expect(underWay(plan, progress({ kind: "ride", leg: 1, veh: 7 }, 0), HERE).legs).toEqual(plan.legs.slice(1));
+  });
+
+  test("leaves an arrived journey whole", () => {
+    const plan = walking();
+
+    expect(underWay(plan, progress({ kind: "arrived" }, 0), HERE)).toBe(plan);
   });
 });
 

@@ -1,6 +1,6 @@
 import type { Progress, Stage } from "./follow";
 import { metres } from "./geo";
-import type { Journey } from "./types";
+import type { Journey, Leg } from "./types";
 
 /** One line of a journey's plan: a leg, or the wait at a stop before a ride.
  *  `leg` is the journey leg it belongs to, the ride waited for on a wait */
@@ -54,17 +54,22 @@ export function riddenBy(journey: Journey | null): Set<number> {
   return ids;
 }
 
-/** The journey as it is being walked: the walk under way drawn from where the
- *  device is, along the last `left` metres of its line, and setting off now.
- *  Every other stage leaves it as planned. */
-export function walkingFrom(
-  j: Journey,
-  progress: Progress,
-  here: { lat: number; lon: number; t: number },
-): Journey {
-  const { stage, left } = progress;
-  if (stage.kind !== "walk" || progress.astray) return j;
-  const leg = j.legs[stage.leg]!;
+type Here = { lat: number; lon: number; t: number };
+
+/** The journey as it is under way, for the map: the legs already done left
+ *  off, and a walk under way, unless strayed from, drawn from where the device
+ *  is. Arrived, it is left whole. */
+export function underWay(j: Journey, progress: Progress, here: Here): Journey {
+  const { stage } = progress;
+  if (stage.kind === "arrived") return j;
+  const legs = j.legs.slice(stage.leg);
+  if (stage.kind === "walk" && !progress.astray) legs[0] = walkingFrom(legs[0]!, progress.left, here);
+  return { ...j, legs };
+}
+
+/** A walk drawn from `here` along the last `left` metres of its line, setting
+ *  off now */
+function walkingFrom(leg: Leg, left: number, here: Here): Leg {
   const pts = leg.pts ?? [];
   const rest: [number, number][] = [];
   let gone = 0;
@@ -75,7 +80,6 @@ export function walkingFrom(
     gone += metres({ lat, lon }, { lat: lat0, lon: lon0 });
     if (gone >= left) break;
   }
-  const walking = { ...leg, dep: Math.min(here.t, leg.arr), pts: [[here.lat, here.lon] as [number, number], ...rest] };
-  return { ...j, legs: j.legs.map((l, i) => (i === stage.leg ? walking : l)) };
+  return { ...leg, dep: Math.min(here.t, leg.arr), pts: [[here.lat, here.lon] as [number, number], ...rest] };
 }
 

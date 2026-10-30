@@ -27,6 +27,7 @@ const PATHS = {
   trash: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13",
   plus: "M12 5v14M5 12h14",
   minus: "M5 12h14",
+  more: "M12 5h.01M12 12h.01M12 19h.01",
   check: "M5 12l5 5 9-10",
   clear: "M6 6l12 12M18 6 6 18",
   search: "M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 1 0 0-13M15.5 15.5 20 20",

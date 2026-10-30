@@ -15,7 +15,7 @@ import 'api.dart';
 import 'eta.dart' show clockTime;
 import 'basemap_style.dart';
 import 'follow.dart' show Progress, Stage, StageKind;
-import 'legs.dart' show walkingFrom;
+import 'legs.dart' show underWay;
 import 'follow_card.dart';
 import 'followed.dart';
 import 'haptics.dart';
@@ -116,7 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _lineFolded = false;
 
   /// The follower's last progress, and the journey it is of.
-  (Journey, Progress)? _walked;
+  (Journey, Progress)? _reached;
   Shapes? _shapes;
   List<int> _drawn = const [];
 
@@ -332,17 +332,18 @@ class _HomeScreenState extends State<HomeScreen> {
       ? null
       : _planning
       ? _journey
-      : _walkedOn(_following);
+      : _underWay(_following);
 
-  /// The journey followed with the walk under way drawn from where I am.
-  Journey? _walkedOn(Journey? following) {
-    final walked = _walked;
+  /// What is left of the journey followed, a walk under way drawn from where
+  /// I am.
+  Journey? _underWay(Journey? following) {
+    final reached = _reached;
     final here = _here.fix;
-    if (following == null || walked == null || here == null) return following;
-    if (walked.$1 != following) return following;
-    return walkingFrom(
+    if (following == null || reached == null || here == null) return following;
+    if (reached.$1 != following) return following;
+    return underWay(
       following,
-      walked.$2,
+      reached.$2,
       here.point,
       here.t ~/ Duration.millisecondsPerSecond,
     );
@@ -1217,14 +1218,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 away: _followAway,
                 onMoved: _moved,
                 onProgress: (progress) {
-                  final was = _walked?.$2.stage.kind;
-                  // Only a walk is drawn from the fix, so only a walk, or the
-                  // step off one, needs the map drawn again
-                  if (progress.stage.kind != StageKind.walk &&
-                      was != StageKind.walk) {
+                  final was = _reached?.$1 == _following
+                      ? _reached?.$2.stage
+                      : null;
+                  final stage = progress.stage;
+                  // A walk is drawn from the fix, so again on every one; any
+                  // other stage only once it is reached
+                  if (stage.kind != StageKind.walk &&
+                      was?.kind == stage.kind &&
+                      was?.leg == stage.leg) {
                     return;
                   }
-                  setState(() => _walked = (_following!, progress));
+                  setState(() => _reached = (_following!, progress));
                 },
                 onSearch: _searchAgain,
                 onEnd: _endFollow,
@@ -1315,10 +1320,6 @@ class _HomeScreenState extends State<HomeScreen> {
     sets: _sets,
     picked: _routes,
     onToggle: _toggleRoute,
-    onClear: () {
-      setState(_routes.clear);
-      _push();
-    },
     onActivated: _watchOnly,
     onSets: (sets) => setState(() => _sets = sets),
     onOpen: _openRoute,
@@ -1348,16 +1349,7 @@ class _HomeScreenState extends State<HomeScreen> {
             setState(() => _way = way);
             _watch();
           },
-          watching: _routes.contains(_route),
-          onWatch: () => _toggleRoute(_route!),
-          only: _routes.length == 1 && _routes.contains(_route),
           departures: widget.api.departures,
-          onOnly: () {
-            // Best effort: the server keeps which set is active, and a line
-            // alone is none of them
-            unawaited(widget.api.activateSet(null).catchError((_) {}));
-            _watchOnly(null, [_route!]);
-          },
           onStop: (stop) => _openStop(stop, fly: true),
           onBack: _closeRoute,
           folded: _lineFolded,
