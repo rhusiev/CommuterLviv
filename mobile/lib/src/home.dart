@@ -1320,10 +1320,6 @@ class _HomeScreenState extends State<HomeScreen> {
     sets: _sets,
     picked: _routes,
     onToggle: _toggleRoute,
-    onClear: () {
-      setState(_routes.clear);
-      _push();
-    },
     onActivated: _watchOnly,
     onSets: (sets) => setState(() => _sets = sets),
     onOpen: _openRoute,
@@ -1353,16 +1349,7 @@ class _HomeScreenState extends State<HomeScreen> {
             setState(() => _way = way);
             _watch();
           },
-          watching: _routes.contains(_route),
-          onWatch: () => _toggleRoute(_route!),
-          only: _routes.length == 1 && _routes.contains(_route),
           departures: widget.api.departures,
-          onOnly: () {
-            // Best effort: the server keeps which set is active, and a line
-            // alone is none of them
-            unawaited(widget.api.activateSet(null).catchError((_) {}));
-            _watchOnly(null, [_route!]);
-          },
           onStop: (stop) => _openStop(stop, fly: true),
           onBack: _closeRoute,
           folded: _lineFolded,

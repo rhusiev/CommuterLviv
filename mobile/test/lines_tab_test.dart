@@ -104,7 +104,6 @@ Future<void> _pump(
             sets: held,
             picked: picked,
             onToggle: (_) {},
-            onClear: () {},
             onActivated: onActivated ?? (_, _) {},
             onSets: (sets) => setState(() => held = sets),
             onOpen: onOpen ?? (_) {},
@@ -172,7 +171,10 @@ Future<HttpServer> _accepting(List<Object?> activated) async {
 }
 
 void main() {
-  testWidgets('all routes watches every route as no saved set', (tester) async {
+  Future<List<(RouteSet?, List<int>)>> boxTapped(
+    WidgetTester tester, {
+    required Set<int> picked,
+  }) async {
     allowRealHttp();
     final activated = <Object?>[];
     final server = (await tester.runAsync(() => _accepting(activated)))!;
@@ -181,41 +183,67 @@ void main() {
     await _pump(
       tester,
       catalog: _mixed,
+      picked: picked,
       server: 'http://${server.address.host}:${server.port}',
       onActivated: (set, routes) => got.add((set, routes.toList())),
     );
 
-    await tester.tap(find.widgetWithText(ChoiceChip, txt.allRoutes));
+    await tester.tap(find.byType(Checkbox));
     await pumpUntil(tester, () => got.isNotEmpty);
-
     expect(activated, [null]);
+    return got;
+  }
+
+  testWidgets('the box watches every route as no saved set when none is', (
+    tester,
+  ) async {
+    final got = await boxTapped(tester, picked: const {});
+
     expect(got.single.$1, isNull);
     expect(got.single.$2, [for (var i = 0; i < _mixed.routes.length; i++) i]);
   });
 
-  testWidgets('all routes is chosen once every route is watched and no set', (
+  testWidgets('the box watches none when some are, as a mail select-all', (
     tester,
   ) async {
-    await _pump(
-      tester,
-      catalog: _mixed,
-      picked: {for (var i = 0; i < _mixed.routes.length; i++) i},
-    );
+    final got = await boxTapped(tester, picked: const {1});
 
-    final chip = tester.widget<ChoiceChip>(
-      find.widgetWithText(ChoiceChip, txt.allRoutes),
-    );
-    expect(chip.selected, isTrue);
+    expect(got.single.$1, isNull);
+    expect(got.single.$2, isEmpty);
   });
 
-  testWidgets('the list filters are toggles apart from the choice of the map', (
+  testWidgets('the box is empty, part-ticked or ticked as the routes watched', (
     tester,
   ) async {
-    await _pump(tester, catalog: _mixed);
+    Future<bool?> box(Set<int> picked) async {
+      await _pump(tester, catalog: _mixed, picked: picked);
+      return tester.widget<Checkbox>(find.byType(Checkbox)).value;
+    }
 
-    expect(find.widgetWithText(FilterChip, txt.nearLines), findsOneWidget);
-    expect(find.widgetWithText(FilterChip, txt.onlyWatched), findsOneWidget);
-    expect(find.widgetWithText(ChoiceChip, txt.nearLines), findsNothing);
+    expect(await box(const {}), isFalse);
+    expect(await box(const {1}), isNull);
+    expect(
+      await box({for (var i = 0; i < _mixed.routes.length; i++) i}),
+      isTrue,
+    );
+  });
+
+  testWidgets('each list filter keeps its icon, on or off', (tester) async {
+    await _pump(tester, catalog: _mixed);
+    FilterChip chip() => tester.widget<FilterChip>(
+      find.widgetWithText(FilterChip, txt.onlyWatched),
+    );
+
+    expect(chip().avatar, isNotNull);
+    await tester.tap(find.text(txt.onlyWatched));
+    await tester.pumpAndSettle();
+    expect(chip().selected, isTrue);
+    expect(chip().avatar, isNotNull);
+    final near = tester.widget<FilterChip>(
+      find.widgetWithText(FilterChip, txt.nearLines),
+    );
+    expect(near.avatar, isNotNull);
+    expect(find.byType(ChoiceChip), findsNothing);
   });
 
   testWidgets('routes are grouped under their vehicle type', (tester) async {
@@ -306,7 +334,11 @@ void main() {
       onOpen: (i) => opened = i,
     );
 
-    await tester.tap(find.widgetWithText(ListTile, 'C to D'));
+    // The recent row of chips comes first: the grid's first chip is b1, 0
+    final first = find.byType(RouteChip).first;
+    await tester.tap(
+      find.descendant(of: first, matching: find.byIcon(Icons.chevron_right)),
+    );
     expect(opened, 1);
   });
 
@@ -324,7 +356,9 @@ void main() {
       ),
     );
 
-    await tester.tap(find.widgetWithText(ChoiceChip, 'home'));
+    await tester.tap(find.text(txt.setsMenu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('home'));
     await tester.runAsync(() => Future<void>.delayed(Duration.zero));
     await tester.pumpAndSettle();
 
@@ -343,6 +377,8 @@ void main() {
       server: 'http://${server.address.host}:${server.port}',
     );
 
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
     await tester.tap(find.text(txt.saveAsSet));
     await tester.pumpAndSettle();
     final dialog = find.byType(Dialog);
@@ -355,7 +391,9 @@ void main() {
     );
     await pumpUntil(tester, () => tester.any(find.text('down')));
 
-    expect(find.widgetWithText(ChoiceChip, 'home'), findsOneWidget);
+    await tester.tap(find.text(txt.setsMenu));
+    await tester.pumpAndSettle();
+    expect(find.text('home'), findsOneWidget);
   });
 
   testWidgets(
@@ -388,8 +426,6 @@ void main() {
                 ],
                 way: way,
                 onWay: (w) => setState(() => way = w),
-                watching: false,
-                onWatch: () {},
                 onStop: (s) => stop = s,
                 onBack: () {},
                 folded: folded,
@@ -429,7 +465,7 @@ void main() {
       await tester.tap(find.byTooltip(txt.hideStops));
       await tester.pumpAndSettle();
       expect(find.text('A'), findsNothing);
-      expect(find.text(txt.watchLine), findsNothing);
+      expect(find.textContaining('→'), findsNothing);
       // The folded title opens it as the chevron does
       await tester.tap(find.text('A to B'));
       await tester.pumpAndSettle();
@@ -438,13 +474,9 @@ void main() {
     },
   );
 
-  testWidgets('the way takes the width beside Watch, and only then shortens', (
+  testWidgets('the way takes the width of the panel, and only then shortens', (
     tester,
   ) async {
-    // The test font's square glyphs make the Ukrainian Watch label take most
-    // of the row, leaving too little room to tell the two layouts apart
-    useLang(Lang.en);
-    addTearDown(() => useLang(Lang.uk));
     tester.view.physicalSize = _phone;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -479,8 +511,6 @@ void main() {
               ],
               way: 0,
               onWay: (_) {},
-              watching: false,
-              onWatch: () {},
               onStop: (_) {},
               onBack: () {},
               folded: false,
@@ -492,52 +522,9 @@ void main() {
       return tester.renderObject<RenderParagraph>(find.text('→ $end'));
     }
 
-    // Short enough to fit beside Watch and Only in the test's square glyphs
+    // Short enough to fit the panel in the test's square glyphs
     expect((await way('Sykhiv')).didExceedMaxLines, isFalse);
     expect((await way('Pohulianka' * 4)).didExceedMaxLines, isTrue);
-  });
-
-  testWidgets('Only says whether the line is all the map watches, and makes '
-      'it so', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    FlutterSecureStorage.setMockInitialValues({});
-    final live = Live((await tester.runAsync(Api.open))!, onRenewed: () {});
-    var asked = 0;
-    Future<FilterChip> pump({required bool only}) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: LinePanel(
-              catalog: _mixed,
-              live: live,
-              route: 0,
-              ways: const [
-                (dir: 0, stops: [0, 1]),
-              ],
-              way: 0,
-              onWay: (_) {},
-              watching: only,
-              onWatch: () {},
-              onStop: (_) {},
-              onBack: () {},
-              folded: false,
-              onFold: (_) {},
-              only: only,
-              onOnly: () => asked++,
-            ),
-          ),
-        ),
-      );
-      return tester.widget<FilterChip>(
-        find.widgetWithText(FilterChip, txt.onlyLine),
-      );
-    }
-
-    expect((await pump(only: true)).selected, isTrue);
-    final chip = await pump(only: false);
-    expect(chip.selected, isFalse);
-    await tester.tap(find.widgetWithText(FilterChip, txt.onlyLine));
-    expect(asked, 1);
   });
 
   testWidgets('the open line says when it runs, from its first stop this way', (
@@ -562,8 +549,6 @@ void main() {
             ],
             way: 0,
             onWay: (_) {},
-            watching: false,
-            onWatch: () {},
             onStop: (_) {},
             onBack: () {},
             folded: false,

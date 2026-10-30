@@ -33,16 +33,16 @@ class Strings {
     required this.map,
     required this.mine,
     required this.lines,
-    required this.onMap,
-    required this.allRoutes,
     required this.onlyWatched,
-    required this.routesOn,
+    required this.onMapOf,
+    required this.watchAll,
+    required this.watchNone,
+    required this.setsMenu,
     required this.nearLines,
     required this.nothingNearLines,
     required this.noneWatched,
     required this.recentLines,
     required this.otherWay,
-    required this.watchLine,
     required this.noLineStops,
     required this.vehicleHere,
     required this.mapStyle,
@@ -101,8 +101,6 @@ class Strings {
     required this.seconds,
     required this.followVehicle,
     required this.recentSearches,
-    required this.onlyLine,
-    required this.onlyLineHint,
     required this.firstDeparture,
     required this.lastDeparture,
     required this.everyMinutes,
@@ -260,16 +258,16 @@ class Strings {
   /// The routes, and one line of them open; "Lines" so it does not read as the
   /// journey tab in Ukrainian, which spends "Маршрут" on a route
   final String lines;
-  final String onMap;
-  final String allRoutes;
   final String onlyWatched;
-  final String Function(int n) routesOn;
+  final String Function(int n, int of) onMapOf;
+  final String watchAll;
+  final String watchNone;
+  final String setsMenu;
   final String nearLines;
   final String Function(int metres) nothingNearLines;
   final String noneWatched;
   final String recentLines;
   final String otherWay;
-  final String watchLine;
   final String noLineStops;
   final String vehicleHere;
   final String mapStyle;
@@ -349,8 +347,6 @@ class Strings {
   final String Function(int n) seconds;
   final String followVehicle;
   final String recentSearches;
-  final String onlyLine;
-  final String onlyLineHint;
   final String Function(String at) firstDeparture;
   final String Function(String at) lastDeparture;
   final String Function(int n) everyMinutes;
@@ -528,16 +524,16 @@ const _en = Strings(
   map: 'Map',
   mine: 'Mine',
   lines: 'Lines',
-  onMap: 'On the map',
-  allRoutes: 'All routes',
   onlyWatched: 'Watched only',
-  routesOn: _enRoutesOn,
+  onMapOf: _enOnMapOf,
+  watchAll: 'Watch every route',
+  watchNone: 'Watch none',
+  setsMenu: 'Sets',
   nearLines: 'Near me',
   nothingNearLines: _enNothingNearLines,
   noneWatched: 'Nothing watched yet. Tap a route to watch it.',
   recentLines: 'Opened lately',
   otherWay: 'The other way',
-  watchLine: 'Watch',
   noLineStops: 'The stops of this line are not known',
   vehicleHere: 'A vehicle heading here',
   mapStyle: 'Map style',
@@ -605,8 +601,6 @@ const _en = Strings(
   seconds: _enSeconds,
   followVehicle: 'Keep it in the middle of the map',
   recentSearches: 'Recent',
-  onlyLine: 'Only',
-  onlyLineHint: 'Watch this line alone on the map',
   firstDeparture: _enFirst,
   lastDeparture: _enLast,
   everyMinutes: _enEvery,
@@ -747,7 +741,6 @@ const _en = Strings(
 );
 
 String _enUpdateSet(String name) => 'Update “$name”';
-String _enRoutesOn(int n) => '$n on';
 String _enNothingNearLines(int metres) =>
     'No stop within $metres m of where you are';
 String _enWalkLeg(int m) => 'Walk $m min';
@@ -777,6 +770,7 @@ String _enPrefer(Prefer p) => switch (p) {
   Prefer.reliable => 'Most backups',
 };
 String _enMinutes(int m) => '$m min';
+String _enOnMapOf(int n, int of) => '$n of $of on the map';
 String _enFirst(String at) => 'First $at';
 String _enLast(String at) => 'Last $at';
 String _enEvery(int m) => 'Every ≈$m min';
@@ -825,16 +819,16 @@ const _uk = Strings(
   map: 'Мапа',
   mine: 'Моє',
   lines: 'Лінії',
-  onMap: 'На мапі',
-  allRoutes: 'Усі маршрути',
   onlyWatched: 'Лише відстежувані',
-  routesOn: _ukRoutesOn,
+  onMapOf: _ukOnMapOf,
+  watchAll: 'Відстежувати всі маршрути',
+  watchNone: 'Не відстежувати жодного',
+  setsMenu: 'Набори',
   nearLines: 'Поруч',
   nothingNearLines: _ukNothingNearLines,
   noneWatched: 'Поки нічого не відстежується. Торкніться маршруту, щоб відстежувати його.',
   recentLines: 'Нещодавно відкриті',
   otherWay: 'Інший напрямок',
-  watchLine: 'Відстежувати',
   noLineStops: 'Зупинки цієї лінії невідомі',
   vehicleHere: 'Транспорт прямує сюди',
   mapStyle: 'Вигляд мапи',
@@ -902,8 +896,6 @@ const _uk = Strings(
   seconds: _ukSeconds,
   followVehicle: 'Тримати його посередині мапи',
   recentSearches: 'Нещодавні',
-  onlyLine: 'Лише цю',
-  onlyLineHint: 'Відстежувати на мапі лише цю лінію',
   firstDeparture: _ukFirst,
   lastDeparture: _ukLast,
   everyMinutes: _ukEvery,
@@ -1044,7 +1036,6 @@ const _uk = Strings(
 );
 
 String _ukUpdateSet(String name) => 'Оновити «$name»';
-String _ukRoutesOn(int n) => 'Увімкнено $n';
 String _ukNothingNearLines(int metres) =>
     'Немає зупинки ближче ніж за $metres м';
 String _ukWalkLeg(int m) => 'Пішки $m хв';
@@ -1072,6 +1063,7 @@ String _ukPrefer(Prefer p) => switch (p) {
   Prefer.reliable => 'Більше запасних',
 };
 String _ukMinutes(int m) => '$m хв';
+String _ukOnMapOf(int n, int of) => '$n з $of на мапі';
 String _ukFirst(String at) => 'Перший $at';
 String _ukLast(String at) => 'Останній $at';
 String _ukEvery(int m) => 'Кожні ≈$m хв';
