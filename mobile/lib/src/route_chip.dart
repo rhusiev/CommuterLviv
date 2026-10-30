@@ -92,6 +92,8 @@ class RouteChip extends StatelessWidget {
           height: _height,
           child: Row(
             mainAxisSize: width == null ? MainAxisSize.min : MainAxisSize.max,
+            // Both halves the chip's full height, the badge padded inside
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (width == null)
                 _Segment(shape: _bodyShape, child: body)

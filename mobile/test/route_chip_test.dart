@@ -49,6 +49,22 @@ void main() {
     expect(taps, ['watch', 'line']);
   });
 
+  testWidgets(
+    'both halves are the full height of the chip, padded round the badge',
+    (tester) async {
+      await _pump(tester, watched: true);
+
+      final halves = [
+        for (final e in find.byType(InkWell).evaluate())
+          tester.getSize(find.byWidget(e.widget)).height,
+      ];
+      final badge = tester.getSize(find.byType(RouteBadge)).height;
+      expect(halves, hasLength(2));
+      expect(halves.first, halves.last);
+      expect(halves.first, greaterThan(badge));
+    },
+  );
+
   testWidgets('a long press is a tap, not a way to the line', (tester) async {
     final (:taps) = await _pump(tester);
 
