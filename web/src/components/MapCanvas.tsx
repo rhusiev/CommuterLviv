@@ -45,8 +45,6 @@ const PIN_R = 6;
 /** How far a planned ride's ring stands off its badge, and how thick it is */
 const RIDE_RING_GAP = 4;
 const RIDE_RING_W = 3;
-/** How faint a vehicle the drawn journey does not ride is */
-const NOT_RIDDEN_ALPHA = 0.5;
 const STALE_ALPHA = 0.45;
 const PLACE_R = 5;
 
@@ -436,9 +434,7 @@ export function MapCanvas(props: Props) {
         if (x < -R || y < -R || x > w + R || y > h + R) continue;
 
         // Direction wedge on the rim: solid when under way, outlined when standing
-        g.globalAlpha =
-          (veh.flags & STALE_FLAG ? STALE_ALPHA : 1) *
-          (ridden.size > 0 && !ridden.has(id) ? NOT_RIDDEN_ALPHA : 1);
+        g.globalAlpha = veh.flags & STALE_FLAG ? STALE_ALPHA : 1;
         const a = ((heading - 90) * Math.PI) / 180;
         const cos = Math.cos(a);
         const sin = Math.sin(a);
