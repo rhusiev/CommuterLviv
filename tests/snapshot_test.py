@@ -75,8 +75,9 @@ def test_cells_of_another_length_are_restored_into_the_new_ones(net, cfg,
 def test_finer_cells_share_the_standing_their_old_cell_learned(net, cfg):
     coarse = network.regrid(net, network.Geometry(cell=2 * network.DEFAULT.cell))
     old = replay.build(coarse, cfg)
-    old.hold.cf.mean[:] = HOLD_S
-    old.hold.cf.w[:] = 1.0
+    for part in ("cf", "rf", "g"):
+        getattr(old.hold, part).mean[:] = HOLD_S
+        getattr(old.hold, part).w[:] = 1.0
     fresh = replay.build(net, cfg)
 
     snapshot.restore(fresh, snapshot.export(old))
@@ -84,6 +85,10 @@ def test_finer_cells_share_the_standing_their_old_cell_learned(net, cfg):
     for sid, base in fresh.shape_base.items():
         new = fresh.hold.cf.mean[base:base + net.shapes[sid].cells]
         assert new.sum() == pytest.approx(HOLD_S * coarse.shapes[sid].cells)
+    # a corridor's and the city's hold were per crossing of a coarse cell too
+    ratio = old.ncell / fresh.ncell
+    assert fresh.hold.rf.mean == pytest.approx(HOLD_S * ratio)
+    assert fresh.hold.g.mean == pytest.approx(HOLD_S * ratio)
 
 
 def test_another_variants_snapshot_is_not_restored(net, learned):

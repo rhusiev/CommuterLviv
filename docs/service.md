@@ -631,7 +631,12 @@ without a restart (`commuterlviv/live/refresh.py`):
    A shape cut into cells of another length (`network.Geometry.cell`, 100 m to
    50 m on 2026-10-30) gives each new cell what the old cell its middle lies in
    learned: the pace as it was, being a multiplier, and the hold in proportion
-   to the cell's length, so the shape's standing adds up as before.
+   to the cell's length, so the shape's standing adds up as before. A
+   corridor's and the city's hold are per crossing of a cell too, so they are
+   scaled by the old cell count over the new across the shapes kept. Restoring
+   production's snapshot of 2026-10-30 this way timed each of its 177 shapes end
+   to end within 0.53% of the 100 m model at the median, 1.8% at the 90th
+   percentile and 8.3% at most; a cold model was 8.5% off at the median.
    It is then warmed on the recording since that copy, which is the last
    minute or so. A shape the feed changed starts from the timetable. The
    learned models are fitted again on the rows it took over, rather than
