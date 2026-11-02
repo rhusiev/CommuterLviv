@@ -7,6 +7,9 @@ import math
 # reaches the door at most this much after it is an option too, though the
 # other beats it - whichever comes first. Chosen, not derived
 NEAR_TIE = 300.0
+# s: with close options asked for, a journey beaten by one at most this much
+# sooner at the door, riding no fewer times, is offered too. Chosen, not derived
+CLOSE_S = 300.0
 
 
 def _score(j):
@@ -35,9 +38,15 @@ def _near(o, boards, arr):
     return o.boards - NEAR_TIE <= boards < o.boards and arr <= o.arr + NEAR_TIE
 
 
-def _rank(found, keep, walked=None):
+def _close(o, j):
+    """Whether journey `j`, beaten by `o`, is beaten only narrowly: at the
+    door at most CLOSE_S after it, with no more rides."""
+    return j.arr <= o.arr + CLOSE_S and j.rides <= o.rides
+
+
+def _rank(found, keep, walked=None, close=False):
     """Soonest first, keeping every journey no other one beats outright,
-    except as a near tie of it (`_near`).
+    except as a near tie of it (`_near`) or, with `close`, narrowly (`_close`).
 
     Beaten means another is at least as good on arrival, on changes, on
     seconds spent walking and on backups: a slower journey every ride of
@@ -58,7 +67,8 @@ def _rank(found, keep, walked=None):
         if j.rides and j.arr - j.dep >= ceiling:
             continue
         if any(all(a <= b for a, b in zip(_score(o), _score(j))) and
-               not (j.rides and o.rides and _near(o, j.boards, j.arr))
+               not (j.rides and o.rides and (_near(o, j.boards, j.arr) or
+                                             close and _close(o, j)))
                for o in out):
             continue
         out.append(j)

@@ -482,6 +482,7 @@ async def journey(request, session):
     avoid, why = _avoid(request.query_params.get("avoid"))
     if why:
         return error(why)
+    close = request.query_params.get("close") == "1"
     # refused rather than queued when every worker is busy: a queue of
     # second-long searches is a denial of service with a longer fuse
     if app.planning.locked():
@@ -492,13 +493,14 @@ async def journey(request, session):
     arrivals, asked = live.arrivals, time.time()
     searched, failed = await _planned(app, "plan", "Could not plan that journey",
                                       planner.search, origin, dest, arrivals, at,
-                                      speed, hurry, avoid)
+                                      speed, hurry, avoid, close)
     if failed is not None:
         return failed
     found, ways = searched
     rid = app.recent.hold(session["user_id"], {
         "from": origin, "to": dest, "t": found["t"], "asked": asked,
-        "speed": speed, "hurry": hurry, "arrivals": arrivals, "cat": live.cat,
+        "speed": speed, "hurry": hurry, "avoid": avoid, "close": close,
+        "arrivals": arrivals, "cat": live.cat,
         "answer": found, "journeys": ways})
     return JSONResponse({**found, "report": rid})
 

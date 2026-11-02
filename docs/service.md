@@ -425,6 +425,16 @@ be late, and it is not a bus waited for with rides added, as for backups. А10
 at 13:55 to the door at 14:13 is listed beside Тр38 at 13:56 to the door at
 14:11 this way.
 
+With `&close=1` a way another beats only narrowly is an option too: at the door
+at most 5 minutes after the one beating it (`CLOSE_S`, chosen, not derived),
+with no more rides (`ranking._close`). The usual scan cannot find most of them,
+as it keeps per slot only the soonest way from any stop in reach, so each stop
+the origin walks to adds its own soonest ways (`_Profile.close`), soonest first,
+each riding no vehicle a way found or kept before it rides. On the report of
+2026-11-02 that added А16 from a 549 m walk, at the door at 18:02, beside А27
+from a 377 m one at 18:01, which beats it on every count; the search took 250 ms
+against 237 (median of 5, on the dev server).
+
 A bus that leaves the first stop just before somebody walking there arrives is
 an option too, flagged `hurry: true` (`_Profile.hurrying`): one caught at the
 `hurry` pace, or a tracked vehicle missed by at most 10 s (`GRACE`, chosen,
@@ -470,14 +480,17 @@ taps "Something looks wrong? Report it" under the options, which sends
 `POST /api/report` with `{"id", "note"}` - the note is optional, up to 1000
 characters. That writes one compressed file to `data/reports/`: the request,
 those arrivals, the catalog's stop and route ids they are indexed by, the answer
-as sent, the version, the account's id and the note. An id is good for one
+as sent, the version, the account's id and the note. The request holds the
+vehicle types left out and whether close options were asked for since
+2026-11-02. An id is good for one
 report, and only the account that searched can use it, for the report and for
 `/api/backup`; one that has expired is a 404. Past 200 files (`reports.FILES`)
 new reports are a 507 until some are read and deleted.
 
 `python -m commuterlviv report FILE` prints the answer as it was sent and then
 the one the code and timetable at hand give for the same request and arrivals,
-so a fix can be checked against the case that prompted it. When the feed has
+so a fix can be checked against the case that prompted it. `--close` asks the
+second for close options as well, whatever the search asked. When the feed has
 changed since, it says so: stop and trip numbering may then no longer match.
 
 ## Traffic
