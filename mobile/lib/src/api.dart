@@ -252,8 +252,9 @@ class Api {
   /// Door to door, ranked by arrival. Half a second on the server, so ask once
   /// per search. [at] is unix seconds, up to 30 days ahead; null is now.
   /// [speed] is how fast you walk on the level, in km/h, and [hurry] how fast
-  /// you would to catch a bus, null for not at all. [report] is the id
-  /// to [reportPlan] this search by, while the server still holds it.
+  /// you would to catch a bus, null for not at all. [close] also offers ways
+  /// another beats only narrowly. [report] is the id to [reportPlan] this
+  /// search by, while the server still holds it.
   Future<({List<Journey> options, String? report})> plan(
     LatLng? from,
     LatLng to, {
@@ -262,6 +263,7 @@ class Api {
     required double speed,
     double? hurry,
     Set<String> avoid = const {},
+    bool close = false,
   }) async {
     // On board, only the vehicle's id leaves the device
     final origin = aboard != null
@@ -273,7 +275,8 @@ class Api {
           '&to=${to.latitude},${to.longitude}&speed=$speed'
           '${hurry == null ? '' : '&hurry=$hurry'}'
           '${at == null ? '' : '&at=$at'}'
-          '${avoid.isEmpty ? '' : '&avoid=${avoid.join(',')}'}',
+          '${avoid.isEmpty ? '' : '&avoid=${avoid.join(',')}'}'
+          '${close ? '&close=1' : ''}',
     ) as Map<String, dynamic>;
     return (
       options: [
@@ -398,6 +401,11 @@ class Api {
 
   /// Off unless asked for: marks the vehicles the feed calls low floor
   bool get lowFloor => _setting('lowFloor', false);
+
+  /// Whether a search also offers ways another beats only narrowly.
+  bool get closeOptions => _setting('close', false);
+
+  Future<void> setCloseOptions(bool on) => _keep('close', on);
 
   Future<void> setLowFloor(bool on) => _keep('lowFloor', on);
 

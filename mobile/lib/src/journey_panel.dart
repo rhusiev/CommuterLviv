@@ -258,6 +258,7 @@ class _JourneyPanelState extends State<JourneyPanel> {
         speed: _speed,
         hurry: widget.api.hurrySpeed,
         avoid: _avoid,
+        close: widget.api.closeOptions,
       );
       if (!mounted) return;
       setState(() {

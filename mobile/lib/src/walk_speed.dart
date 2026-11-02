@@ -68,6 +68,7 @@ class WalkSpeedSheet extends StatefulWidget {
 class _WalkSpeedSheetState extends State<WalkSpeedSheet> {
   late double _kmh = widget.api.walkSpeed;
   late double? _hurry = widget.api.hurrySpeed;
+  late bool _close = widget.api.closeOptions;
 
   void _keepHurry(double? kmh) {
     setState(() => _hurry = kmh);
@@ -106,6 +107,19 @@ class _WalkSpeedSheetState extends State<WalkSpeedSheet> {
             SpeedStepper(kmh: hurry, max: hurryKmh.max, onChanged: _keepHurry),
           Text(
             txt.hurrySpeedHint,
+            textAlign: TextAlign.center,
+            style: material.Theme.of(context).textTheme.bodySmall,
+          ),
+          SwitchListTile(
+            title: Text(txt.closeOptions),
+            value: _close,
+            onChanged: (on) {
+              setState(() => _close = on);
+              unawaited(widget.api.setCloseOptions(on));
+            },
+          ),
+          Text(
+            txt.closeOptionsHint,
             textAlign: TextAlign.center,
             style: material.Theme.of(context).textTheme.bodySmall,
           ),

@@ -210,6 +210,9 @@ const en = {
   hurrySpeed: "Hurrying speed",
   hurrySpeedHint:
     "How fast you would walk to catch a bus. Off, only a bus you would miss by seconds is offered as one to hurry for",
+  closeOptions: "Show close options",
+  closeOptionsHint:
+    "Also offer a way another beats only narrowly - a few minutes later at the door, from another stop or on another route",
   hurryOn: "Turn on",
   hurryOff: "Turn off",
   hurry: "Hurry",
@@ -470,6 +473,9 @@ const uk: Strings = {
   hurrySpeed: "Швидкість, коли поспішаєте",
   hurrySpeedHint:
     "Як швидко ви йшли б, щоб встигнути на автобус. Вимкнено - пропонуємо поспішити лише на той, що ви пропустили б на секунди",
+  closeOptions: "Показувати близькі варіанти",
+  closeOptionsHint:
+    "Пропонувати також шлях, який лише трохи гірший за інший - на кілька хвилин пізніше, з іншої зупинки чи іншим маршрутом",
   hurryOn: "Увімкнути",
   hurryOff: "Вимкнути",
   hurry: "Поспішіть",

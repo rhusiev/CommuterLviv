@@ -1,3 +1,4 @@
+import { loadFlag, saveFlag } from "./theme";
 import type { Backup, Journey } from "./types";
 
 export const PREFERS = ["fastest", "walk", "changes", "reliable"] as const;
@@ -13,6 +14,12 @@ export function heldPrefer(): Prefer {
 export function holdPrefer(p: Prefer) {
   localStorage.setItem(key, p);
 }
+
+const closeKey = "commuterlviv.close";
+
+/** Whether a search also offers ways another beats only narrowly */
+export const heldClose = () => loadFlag(closeKey);
+export const holdClose = (on: boolean) => saveFlag(closeKey, on);
 
 /** The vehicle types a search can leave out, as the service names them */
 export const MODES = ["bus", "tram", "trolleybus"] as const;

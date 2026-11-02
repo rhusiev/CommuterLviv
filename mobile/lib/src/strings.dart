@@ -167,6 +167,8 @@ class Strings {
     required this.walkSpeedHint,
     required this.hurrySpeed,
     required this.hurrySpeedHint,
+    required this.closeOptions,
+    required this.closeOptionsHint,
     required this.hurry,
     required this.hurryHint,
     required this.hurryAt,
@@ -426,6 +428,8 @@ class Strings {
   final String walkSpeedHint;
   final String hurrySpeed;
   final String hurrySpeedHint;
+  final String closeOptions;
+  final String closeOptionsHint;
   final String hurry;
   final String hurryHint;
 
@@ -665,6 +669,8 @@ const _en = Strings(
   walkSpeedHint: 'On flat ground - hills are taken into account',
   hurrySpeed: 'Hurrying speed',
   hurrySpeedHint: 'How fast you would walk to catch a bus. Off, only a bus you would miss by seconds is offered as one to hurry for',
+  closeOptions: 'Show close options',
+  closeOptionsHint: 'Also offer a way another beats only narrowly - a few minutes later at the door, from another stop or on another route',
   hurry: 'Hurry',
   hurryHint: 'Only hurrying to the first stop catches this bus',
   hurryAt: _enHurryAt,
@@ -961,6 +967,8 @@ const _uk = Strings(
   walkSpeedHint: 'По рівному - схили враховано',
   hurrySpeed: 'Швидкість, коли поспішаєте',
   hurrySpeedHint: 'Як швидко ви йшли б, щоб встигнути на автобус. Вимкнено - пропонуємо поспішити лише на той, що ви пропустили б на секунди',
+  closeOptions: 'Показувати близькі варіанти',
+  closeOptionsHint: 'Пропонувати також шлях, який лише трохи гірший за інший - на кілька хвилин пізніше, з іншої зупинки чи іншим маршрутом',
   hurry: 'Поспішіть',
   hurryHint: 'На цей автобус встигнете, лише якщо поспішите до першої зупинки',
   hurryAt: _ukHurryAt,

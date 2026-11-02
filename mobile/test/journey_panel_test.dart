@@ -345,6 +345,31 @@ void main() {
     expect(asked.last.queryParameters['avoid'], 'tram');
   });
 
+  testWidgets('close options are asked for only once turned on', (
+    tester,
+  ) async {
+    allowRealHttp();
+    Future<Uri> searched({required bool close}) async {
+      final asked = <Uri>[];
+      final server = (await tester.runAsync(() => _serve(asked)))!;
+      addTearDown(() => server.close(force: true));
+      await pump(
+        tester,
+        prefs: {'commuterlviv.close': close},
+        server: 'http://${server.address.host}:${server.port}',
+        catalog: _twoLines,
+        from: const LatLng(49.84, 24.03),
+        to: const LatLng(49.81, 24.05),
+      );
+      await tester.tap(find.text(txt.findRoute));
+      await pumpUntil(tester, () => asked.isNotEmpty);
+      return asked.single;
+    }
+
+    expect((await searched(close: false)).queryParameters['close'], isNull);
+    expect((await searched(close: true)).queryParameters['close'], '1');
+  });
+
   testWidgets('an end chosen outside the panel reads by its name there', (
     tester,
   ) async {
