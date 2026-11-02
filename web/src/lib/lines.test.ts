@@ -1,5 +1,5 @@
-import { describe, expect, test } from "vitest";
-import { directions, HOW_OFTEN_AROUND_S, lineHours, lineRows, opened, RECENT_LINES, routesNear } from "./lines";
+import { beforeEach, describe, expect, test } from "vitest";
+import { directions, HOW_OFTEN_AROUND_S, lineHours, lineRows, loadWatched, opened, RECENT_LINES, routesNear, saveWatched } from "./lines";
 import type { Catalog } from "./types";
 
 describe("directions", () => {
@@ -98,5 +98,21 @@ describe("lineHours", () => {
 
   test("says nothing of a day without departures", () => {
     expect(lineHours([], 0)).toBeNull();
+  });
+});
+
+describe("the routes watched, kept on the device", () => {
+  beforeEach(() => localStorage.removeItem("commuterlviv.watched"));
+
+  test("are none kept until some are, which tells the active set to decide", () => {
+    expect(loadWatched()).toBeNull();
+  });
+
+  test("come back as kept, and an empty choice is kept as one", () => {
+    saveWatched(["r1", "r2"]);
+    expect(loadWatched()).toEqual(["r1", "r2"]);
+
+    saveWatched([]);
+    expect(loadWatched()).toEqual([]);
   });
 });

@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "./api";
 import { t } from "./i18n";
+import { loadWatched, saveWatched } from "./lines";
 import type { Me, Place, RouteSet } from "./types";
 
 /** The account signed in and what it keeps on the server - route sets, pins
  * and places - with the routes picked and the line that says what failed.
  * `linked` are the routes the address named when the page opened: they win
- * over the account's active set. */
+ * over the routes watched when the page was last left, kept on the device,
+ * and those over the account's active set, which decides only before anything
+ * was kept. */
 export function useSession(linked: string[] | null) {
   /** Undefined while asking, null when signed out */
   const [me, setMe] = useState<Me | null | undefined>(undefined);
-  const [picked, setPicked] = useState<Set<string>>(new Set(linked ?? []));
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(linked ?? loadWatched() ?? []));
   const [sets, setSets] = useState<RouteSet[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [pinIds, setPinIds] = useState<string[]>([]);
@@ -31,9 +34,10 @@ export function useSession(linked: string[] | null) {
         setMe(who);
         setSets(who.sets.sets);
         setActive(who.sets.active);
-        // The account's active set only decides when the link names no routes
+        // The account's active set only decides when neither the link nor
+        // the device names routes
         const set = who.sets.sets.find((s) => s.id === who.sets.active);
-        if (set && linked === null) setPicked(new Set(set.routes));
+        if (set && linked === null && loadWatched() === null) setPicked(new Set(set.routes));
         setPinIds(who.sets.pins);
         setPlaces(who.sets.places);
         setNotice(null);
@@ -44,6 +48,12 @@ export function useSession(linked: string[] | null) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Kept once signed in, so the empty start before the account is known is
+  // never kept over what the active set would give
+  useEffect(() => {
+    if (me) saveWatched([...picked].sort());
+  }, [me, picked]);
 
   const signOut = async () => {
     // Signed out whether or not the request landed

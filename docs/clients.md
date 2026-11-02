@@ -246,7 +246,11 @@ watches every route when none is and none when any is (empty, part-ticked or
 ticked as the routes watched), the count watched out of the catalog's, a picker
 of the saved sets once there are any, and a ⋮ menu that saves the ticks as a
 new set or, once they differ from the set watched, into it. Either end of the
-box leaves no set active. Below are the filter field and two filters that
+box leaves no set active. What the map watches is kept on the device
+(`commuterlviv.watched`) on every change and is what it watches at the next
+start, a set or not; the account's active set decides only on a device that
+has kept nothing yet, and on the web a link's `?routes=` wins over both. Below
+are the filter field and two filters that
 narrow only the list, each keeping its icon whether on or off - Near me (the
 routes of the stops within 500 m of the device's fix, asked for only when
 turned on; 500 m is chosen, not derived) and Watched only - then the last five
