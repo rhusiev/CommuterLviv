@@ -171,7 +171,10 @@ off until turned on, to go on with the screen off: on Android a foreground
 service keeps the location updates running behind an ongoing notification that
 repeats the card, on iOS the location updates run in the background, and both
 sound an alert once when it is time to get off, when the stop is passed, when
-the next ride is caught only by hurrying or will be missed, and on arrival. Neither asks for background location: the updates were started while
+the next ride is caught only by hurrying or will be missed, and on arrival. On
+Android that alert is a notification of its own, which the next update takes
+out of the shade again: the ongoing one says the same and keeps it current, so
+the copy would only go stale beside it. Neither asks for background location: the updates were started while
 the app was open, which the while-in-use grant covers. A browser cannot locate
 with the page hidden, so the web card offers only to keep the screen on
 (the Screen Wake Lock API) for as long as the journey is followed. The web

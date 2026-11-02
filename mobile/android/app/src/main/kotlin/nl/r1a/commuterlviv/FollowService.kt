@@ -77,7 +77,8 @@ object Notices {
             .setContentIntent(open(context))
             .build()
 
-    /** Says [title] and [text], and with [alert] sounds for it as well */
+    /** Says [title] and [text], and with [alert] sounds for it as well, in a
+     *  notification of its own until the next thing said replaces it */
     fun say(context: Context, title: String, text: String, alert: Boolean) {
         this.title = title
         this.text = text
@@ -98,6 +99,10 @@ object Notices {
                         .setContentIntent(open(context))
                         .build(),
                 )
+            } else {
+                // Sounded already, and what it said the ongoing notice now says
+                // and keeps current: left in the shade it would only go stale
+                manager.cancel(ALERT)
             }
         } catch (_: SecurityException) {
             // Notifications were refused after the check above
