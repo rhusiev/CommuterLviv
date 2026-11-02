@@ -425,6 +425,13 @@ class Api {
   Future<void> setRecentLines(List<String> ids) =>
       _prefs.setStringList('commuterlviv.recentLines', ids);
 
+  /// The route ids the map watched when last left, kept on this device; null
+  /// before anything was kept.
+  List<String>? get watched => _prefs.getStringList('commuterlviv.watched');
+
+  Future<void> setWatched(List<String> ids) =>
+      _prefs.setStringList('commuterlviv.watched', ids);
+
   /// The last few things picked from a search, latest first
   List<Searched> get searched => [
     for (final raw in _prefs.getStringList('commuterlviv.searched') ?? const [])

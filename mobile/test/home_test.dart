@@ -116,6 +116,7 @@ Future<void> _pumpHome(
   Map<String, Object?> shapes = _noShapes,
   Map<String, Object?>? plan,
   bool hasBasemap = true,
+  Map<String, Object> prefs = const {},
 }) async {
   tester.view.physicalSize = _phone;
   tester.view.devicePixelRatio = 1;
@@ -135,7 +136,7 @@ Future<void> _pumpHome(
   final origin = 'http://${server.address.host}:${server.port}';
   setTileOrigin(origin);
   addTearDown(() => setTileOrigin(null));
-  SharedPreferences.setMockInitialValues({});
+  SharedPreferences.setMockInitialValues(prefs);
   FlutterSecureStorage.setMockInitialValues({});
   final api = await Api.open();
   await api.setBase(origin);
@@ -297,6 +298,44 @@ void main() {
     // The map's tile workers fail what they still hold when the map goes
     await pumpQuiet(tester);
     semantics.dispose();
+    await _done(tester, reported);
+  });
+
+  testWidgets('the routes watched when the app was left are watched again, '
+      'though no set is active', (tester) async {
+    final reported = FlutterError.onError!;
+    await _pumpHome(
+      tester,
+      catalog: _lineCatalog,
+      shapes: _lineShapes,
+      prefs: {
+        'commuterlviv.watched': ['r1'],
+      },
+    );
+
+    await tester.tap(find.byTooltip(txt.lines));
+    await tester.pump(_open);
+
+    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
+    await pumpQuiet(tester);
+    await _done(tester, reported);
+  });
+
+  testWidgets('a route ticked is kept on the device for the next start', (
+    tester,
+  ) async {
+    final reported = FlutterError.onError!;
+    await _pumpHome(tester, catalog: _lineCatalog, shapes: _lineShapes);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getStringList('commuterlviv.watched'), isEmpty);
+
+    await tester.tap(find.byTooltip(txt.lines));
+    await tester.pump(_open);
+    await tester.tap(find.text('1').last);
+    await tester.pump();
+
+    expect(prefs.getStringList('commuterlviv.watched'), ['r1']);
+    await pumpQuiet(tester);
     await _done(tester, reported);
   });
 

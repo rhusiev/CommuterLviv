@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart' hide Theme;
 import 'package:flutter/material.dart' as material show Theme;
 import 'package:flutter_map/flutter_map.dart';
@@ -95,6 +96,10 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _error;
 
   final Set<int> _routes = {};
+
+  /// The route ids last kept on the device, so an unchanged set is not
+  /// written again.
+  List<String>? _kept;
 
   /// The line open in the Lines tab. It outlives the tab, so leaving and
   /// coming back keeps it.
@@ -224,9 +229,13 @@ class _HomeScreenState extends State<HomeScreen> {
         _passwordChange = me.passwordChange;
         _live = live;
         _pins = catalog.stopsAt(sets.pins);
+        // What was watched when the app was left, ticked or not a set;
+        // the active set only before anything was kept
         _routes
           ..clear()
-          ..addAll(catalog.routesAt(active?.routes ?? const []));
+          ..addAll(
+            catalog.routesAt(widget.api.watched ?? active?.routes ?? const []),
+          );
       });
       _push();
       _resume();
@@ -300,10 +309,20 @@ class _HomeScreenState extends State<HomeScreen> {
     await widget.api.forgetOldPins(widget.username);
   }
 
+  /// Keeps the routes watched on the device, so the next start shows them;
+  /// written only when they changed.
+  void _keepWatched(Catalog catalog) {
+    final ids = [for (final i in _routes) catalog.routes[i].id]..sort();
+    if (listEquals(ids, _kept)) return;
+    _kept = ids;
+    unawaited(widget.api.setWatched(ids));
+  }
+
   void _push() {
     final catalog = _catalog;
     final live = _live;
     if (catalog == null || live == null) return;
+    _keepWatched(catalog);
     final shown = _shown;
     live.setRoutes(shown.toList()..sort());
     final (:stops, :faint) = catalog.splitStops(shown);

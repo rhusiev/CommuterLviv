@@ -71,6 +71,17 @@ export function loadRecent(): string[] {
 
 export const saveRecent = (recent: string[]) => writeJson(RECENT_KEY, recent);
 
+const WATCHED_KEY = "commuterlviv.watched";
+
+/** The route ids the map watched when last left, on this device only; null
+ *  before anything was kept */
+export function loadWatched(): string[] | null {
+  const held = readJson<unknown>(WATCHED_KEY);
+  return Array.isArray(held) ? held.filter((r): r is string => typeof r === "string") : null;
+}
+
+export const saveWatched = (ids: string[]) => writeJson(WATCHED_KEY, ids);
+
 /** Around now means within this of it, either way. Chosen, not derived */
 export const HOW_OFTEN_AROUND_S = 30 * 60;
 

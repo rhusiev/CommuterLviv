@@ -796,6 +796,21 @@ def test_picking_the_route_puts_its_bus_on_the_map(page):
     expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
 
 
+def test_a_route_picked_by_hand_is_still_watched_when_the_site_is_opened_again(page):
+    _register(page, "keeper")
+    expect = playwright.expect
+    expect(page.get_by_text("0 vehicles")).to_be_visible()
+    _pick_route(page)
+    expect(page.get_by_text("1 of 1 on the map")).to_be_visible()
+
+    # opened afresh, not reloaded: a reload keeps the routes the address names
+    page.goto("/")
+
+    expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
+    page.get_by_role("button", name="Lines", exact=True).click()
+    expect(page.get_by_text("1 of 1 on the map")).to_be_visible()
+
+
 def _on_page(lat, lon, view=None, size=VIEWPORT):
     """Where on a page of `size` the map draws `lat`, `lon`: web Mercator about
     `view`, by default the one the page starts at, which is centred."""
