@@ -85,6 +85,8 @@ def write(search, note, user, folder=DIR):
             "stops": cat.stops, "routes": cat.routes,
             **{k: search[k] for k in ("to", "t", "asked", "speed", "hurry",
                                     "answer")},
+            "avoid": sorted(search.get("avoid", ())),
+            "close": search.get("close", False),
             "from": _sent(search["from"])}
     stamp = datetime.datetime.now(localtime.TZ).strftime("%Y%m%d-%H%M%S")
     path = folder / f"{stamp}-{uuid.uuid4().hex[:6]}.npz"
@@ -115,33 +117,44 @@ def read(path):
 
 
 def main(argv):
-    """`python -m commuterlviv report FILE`: the answer as it was sent, then
-    the one the code and timetable here give."""
-    if len(argv) != 1:
-        print("usage: report FILE")
+    """`python -m commuterlviv report FILE [--close]`: the answer as it was
+    sent, then the one the code and timetable here give - with close options,
+    if the search asked for them or `--close` does."""
+    if not argv or argv[1:] not in ([], ["--close"]):
+        print("usage: report FILE [--close]")
         return
     r = read(argv[0])
+    # reports from before these were kept hold none
+    avoid, close = frozenset(r.get("avoid", ())), r.get("close", False) or \
+        argv[1:] == ["--close"]
     net = network.load()
     tt, walk, transfers = plan.load(net)
     planner = journeys.Planner(tt, walk, transfers, r["cat"])
     print(f"reported {_stamp(r['reported'])} by user {r['user']} on "
           f"v{r['version']}, here v{__version__}")
-    # reports from before hurrying was asked about hold no `hurry`
-    hurry = r.get("hurry")
-    print(f"from {r['from']} to {r['to']}, leaving {_stamp(r['t'])}, "
-          f"walking {r['speed'] or 'at the usual'} km/h"
-          + (f", hurrying {hurry} km/h" if hurry else ""))
+    _asked(r, avoid, close)
     if r["note"]:
         print(f"note: {r['note']}")
     if r["catalog"] != Catalog(net).tag:
         print("the feed has changed since: stops and trips may differ")
     found = planner.journeys(r["from"], r["to"], r["arrivals"], r["t"],
                              r["speed"], r["t"] <= r["asked"] + replay.HORIZON,
-                             hurry)
+                             r.get("hurry"), avoid, close)
     for title, options in (("served", r["answer"]["options"]),
                            ("here", [planner.wire(j) for j in found])):
         print(f"\n== {title}: {len(options)} options")
         _show(options, r["cat"], net)
+
+
+def _asked(r, avoid, close):
+    """The search's ends and how it was asked for, on one line."""
+    # reports from before hurrying was asked about hold no `hurry`
+    hurry = r.get("hurry")
+    print(f"from {r['from']} to {r['to']}, leaving {_stamp(r['t'])}, "
+          f"walking {r['speed'] or 'at the usual'} km/h"
+          + (f", hurrying {hurry} km/h" if hurry else "")
+          + (f", leaving out {', '.join(sorted(avoid))}" if avoid else "")
+          + (", with close options" if close else ""))
 
 
 def _show(options, cat, net):

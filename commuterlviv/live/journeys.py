@@ -52,13 +52,14 @@ class Planner:
         return cls(tt, walk, transfers, cat)
 
     def search(self, origin, dest, arrivals, now=None, speed=None,
-               hurry=None, avoid=frozenset()):
+               hurry=None, avoid=frozenset(), close=False):
         """Ranked journeys, on the wire, and as `plan` found them. Call it
         from a worker thread: a city-wide search is half a second of Python.
         `speed` is how fast the traveller walks on the level, in km/h,
         `walk.SPEED` by default, and `hurry` how fast they would rather walk
         than miss a bus, `speed` by default. No ride is on a vehicle type in
         `avoid` ("bus", "tram", "trolleybus"), but a ride already on board.
+        With `close`, ways beaten only narrowly are offered too.
 
         A `now` in the future still gets the vehicles being tracked: the search
         keeps only their arrivals that lie ahead of it, so a trip starting in
@@ -68,7 +69,8 @@ class Planner:
         """
         now = time.time() if now is None else now
         found = self.journeys(origin, dest, arrivals, now, speed,
-                              now <= time.time() + replay.HORIZON, hurry, avoid)
+                              now <= time.time() + replay.HORIZON, hurry, avoid,
+                              close)
         path, between = self._drawing(origin, dest, arrivals, speed, hurry)
         return {"t": now,
                 "options": [self.wire(j, path, between) for j in found]}, found
@@ -140,13 +142,14 @@ class Planner:
         return path, between
 
     def journeys(self, origin, dest, arrivals, now, speed, assess, hurry=None,
-                 avoid=frozenset()):
+                 avoid=frozenset(), close=False):
         """`plan.journeys` for somebody walking at `speed`, and at `hurry` to
         catch a bus."""
         walk, transfers = self._paced(speed)
         return plan.journeys(self.tt, walk, transfers, origin, dest, now,
                              arrivals=arrivals, catalog=self.cat, assess=assess,
-                             hurry=_hurry(speed, hurry), avoid=avoid)
+                             hurry=_hurry(speed, hurry), avoid=avoid,
+                             close=close)
 
     def _paced(self, speed):
         if speed is None:

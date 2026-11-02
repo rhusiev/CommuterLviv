@@ -230,7 +230,10 @@ a long press - a pinned stop is only unpinned, as it wears the stop's name; the
 web gives each row its own buttons. The tab keeps the list it was left on.
 Beside the switch, a button named with the username opens the account itself -
 the language, the walking speeds, the server, the password, signing out - with
-signing out below a rule so it is never the tap next to anything else. In the
+signing out below a rule so it is never the tap next to anything else. Under the
+speeds, "Show close options", off until turned on and kept on the device, asks
+every search for ways another beats only narrowly as well (`&close=1`,
+docs/service.md); they are listed among the others, by arrival. In the
 app that is a sheet; on the web it takes the lists' place until it is pressed
 again. A pinned stop is listed there once, with its arrivals.
 Nothing that is a toggle and nothing that signs you out sits loose on the map.

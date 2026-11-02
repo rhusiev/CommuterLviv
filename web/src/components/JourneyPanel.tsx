@@ -6,6 +6,7 @@ import { t } from "../lib/i18n";
 import { samePlace } from "../lib/places";
 import {
   heldAvoid,
+  heldClose,
   heldPrefer,
   holdAvoid,
   holdPrefer,
@@ -154,6 +155,7 @@ export function JourneyPanel({
         speed,
         heldHurry(),
         leaving,
+        heldClose(),
       );
       setFound(got.options);
       setReportable(got.report ?? null);
