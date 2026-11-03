@@ -76,7 +76,9 @@ class Floating extends StatelessWidget {
       // The blur reaches as far as the clip, so a surface left unclipped would
       // blur the whole screen behind it
       clipBehavior: clipBehavior == Clip.none ? Clip.antiAlias : clipBehavior,
-      child: BackdropFilter(
+      // Grouped: every surface shares the one backdrop read the home screen's
+      // `BackdropGroup` makes, rather than each reading the map again
+      child: BackdropFilter.grouped(
         filter: ImageFilter.blur(
           sigmaX: floatingBlurSigma,
           sigmaY: floatingBlurSigma,

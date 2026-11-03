@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderBackdropFilter;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:commuterlviv/src/map_theme.dart';
@@ -83,5 +84,30 @@ void main() {
     expect(find.byType(BackdropFilter), findsOneWidget);
     await floating(false);
     expect(find.byType(BackdropFilter), findsNothing);
+  });
+
+  testWidgets('floating surfaces share the one backdrop their group reads', (
+    tester,
+  ) async {
+    final key = BackdropKey();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BackdropGroup(
+          backdropKey: key,
+          child: const Column(
+            children: [
+              Floating(child: SizedBox.square(dimension: 40)),
+              Floating(child: SizedBox.square(dimension: 40)),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final keys = [
+      for (final e in find.byType(BackdropFilter).evaluate())
+        (e.renderObject! as RenderBackdropFilter).backdropKey,
+    ];
+    expect(keys, [key, key]);
   });
 }
