@@ -1,6 +1,5 @@
 import { readJson, writeJson } from "./storage";
 import type {
-  Call,
   Catalog,
   Found,
   Journey,
@@ -12,6 +11,7 @@ import type {
   Shapes,
   Streets,
   Traffic,
+  VehicleStops,
 } from "./types";
 
 /** Same origin by default: Vite proxies `/api` and `/ws` in development, so the
@@ -105,25 +105,33 @@ export const api = {
   deleteSet: (id: string) => call<void>(`/api/sets/${id}`, { method: "DELETE" }),
   activateSet: (id: string | null) => post<void>("/api/sets/active", { id }),
 
-  vehicle: (veh: number): Promise<{ t: number; veh: number; stops: Call[] }> =>
+  vehicle: (veh: number): Promise<VehicleStops> =>
     call(`/api/vehicle?veh=${veh}`),
+  /** The timetabled departures of a route from a stop today, unix seconds */
+  departures: (route: number, stop: number): Promise<{ t: number; dep: number[] }> =>
+    call(`/api/departures?route=${route}&stop=${stop}`),
   /** `at` in unix seconds leaves at that time instead of now; a future one has
    * no vehicles to see, so every leg comes back on the timetable. `speed` is
    * how fast you walk on the level, in km/h, and `hurry` how fast you would
    * to catch a bus, null for not at all. From `{ veh }` the journey
-   * starts on board that vehicle, and only its id leaves the device */
+   * starts on board that vehicle, and only its id leaves the device. `close`
+   * also offers ways another beats only narrowly */
   plan: (
     from: [number, number] | { veh: number },
     to: [number, number],
     at: number | null,
     speed: number,
     hurry: number | null,
+    avoid: readonly string[] = [],
+    close = false,
   ): Promise<Plan> =>
     call(
       `/api/plan?${"veh" in from ? `veh=${from.veh}` : `from=${from[0]},${from[1]}`}` +
         `&to=${to[0]},${to[1]}&speed=${speed}` +
         (hurry ? `&hurry=${hurry}` : "") +
-        (at ? `&at=${Math.round(at)}` : ""),
+        (at ? `&at=${Math.round(at)}` : "") +
+        (avoid.length ? `&avoid=${avoid.join(",")}` : "") +
+        (close ? "&close=1" : ""),
     ),
   /** Keeps the search `id` names, with what it ran on, for a look at why it
    * answered as it did */

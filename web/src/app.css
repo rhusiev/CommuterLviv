@@ -134,3 +134,13 @@ body {
 .maplibregl-map .maplibregl-ctrl-attrib:has(.maplibregl-ctrl-attrib-button:focus-visible) {
   @apply ring-2 ring-accent/70;
 }
+
+/* Blur off, for phones that stutter under it (the layers panel): nothing
+   blurs, and what showed the map through a blur is drawn solid instead, as
+   the map read through an 80% panel without one is noise behind the text */
+.no-blur * {
+  backdrop-filter: none !important;
+}
+.no-blur :is(.panel, .bar, .fab, .field-bar, .maplibregl-ctrl-group, .maplibregl-ctrl-attrib) {
+  background-color: var(--color-panel) !important;
+}

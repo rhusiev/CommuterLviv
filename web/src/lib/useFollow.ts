@@ -20,7 +20,11 @@ type Said = {
   catalog: Catalog | undefined;
   progress: Progress | "denied" | null;
   caught: Catch;
+  /** The last fix, for drawing the walk under way from it */
+  here: Here | null;
 };
+
+type Here = { lat: number; lon: number; t: number };
 
 /** Follows `journey` from the device's own fixes until it is null: null until
  * the first fix, "denied" once the browser refuses them - a fix it could not
@@ -33,11 +37,11 @@ export function useFollow(
   live: Live,
   catalog: Catalog | undefined,
   stage?: Stage,
-): { progress: Progress | "denied" | null; caught: Catch } {
-  const [said, setSaid] = useState<Said>({ journey, catalog, progress: null, caught: OK });
+): { progress: Progress | "denied" | null; caught: Catch; here: Here | null } {
+  const [said, setSaid] = useState<Said>({ journey, catalog, progress: null, caught: OK, here: null });
   useEffect(() => {
     if (!journey) return;
-    const fresh: Said = { journey, catalog, progress: null, caught: OK };
+    const fresh: Said = { journey, catalog, progress: null, caught: OK, here: null };
     const say = (next: Partial<Said>) =>
       setSaid((was) => ({
         ...(was.journey === journey && was.catalog === catalog ? was : fresh),
@@ -72,7 +76,7 @@ export function useFollow(
           { lat: latitude, lon: longitude, accuracy, t: pos.timestamp },
           seen,
         );
-        setProgress(got);
+        say({ progress: got, here: { lat: latitude, lon: longitude, t: pos.timestamp / MS_PER_S } });
         if (got.stage !== at) holdStage((at = got.stage));
         judge();
       },
@@ -91,5 +95,7 @@ export function useFollow(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [journey, live, catalog]);
   const current = said.journey === journey && said.catalog === catalog;
-  return current ? { progress: said.progress, caught: said.caught } : { progress: null, caught: OK };
+  return current
+    ? { progress: said.progress, caught: said.caught, here: said.here }
+    : { progress: null, caught: OK, here: null };
 }

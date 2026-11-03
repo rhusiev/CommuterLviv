@@ -4,7 +4,7 @@ Live arrival times for Lviv's trams, trolleybuses and buses: when the next one
 actually arrives, not when the timetable says it should.
 
 The city publishes where its vehicles are. This project map-matches every fix
-onto its trip's shape, learns how long each 100 m of road is taking right now
+onto its trip's shape, learns how long each 50 m of road is taking right now
 and at this hour on the days before, and turns that into an arrival time for
 every stop ahead of every vehicle. It also plans door-to-door journeys on those
 live times, shows traffic on the streets the vehicles drive, and keeps an
@@ -48,7 +48,9 @@ python3 -m commuterlviv admin     # invite links and accounts
 
 `serve` needs a Postgres URL in `COMMUTERLVIV_DATABASE_URL` and the allowed
 origins in `COMMUTERLVIV_ORIGINS`. Everything it downloads or learns lives in
-`data/`. The web app is `cd web && npm install && npm run dev`, the phone app
+`data/`. Only `serve` fetches a newer static feed; the other commands read
+the held `data/static.zip` as it is, and fetch one only when there is none.
+The web app is `cd web && npm install && npm run dev`, the phone app
 `cd mobile && flutter run`.
 
 ## Using it
@@ -57,14 +59,15 @@ origins in `COMMUTERLVIV_ORIGINS`. Everything it downloads or learns lives in
   updates, with its route number and heading. Pick routes to see their stops,
   or zoom in close to see every stop; tap a stop for the next arrival of every route through it, tap a vehicle for
   every stop it will reach and when.
-- **Lines.** Every route, to pick the ones the map shows with their stops -
-  all of them, the ones watched, or the ones calling near you - with the saved
-  sets of them and the lines opened lately. Open one line and the map shows only
+- **Lines.** What the map shows - every route, a saved set, or the routes
+  you tick - above the list of routes to tick from, which you can narrow to the
+  ones calling near you or the ones watched, and the lines opened lately. Open one line and the map shows only
   it, beside its stops one way or the other, each with when the route is next
   due there and where its vehicles are.
 - **Journey.** Tap where you are and where you are going. You get ways there ranked
   by arrival, each ride marked live, timetabled or on a vehicle's next trip,
-  with the backups behind each ride should you miss it. Sort by fastest, less
+  with the minutes you wait for it apart from the minutes you ride it, and the
+  backups behind each ride should you miss it. Sort by fastest, less
   walking, fewer changes or most backups, set your walking speed, or plan for
   later. A bus you would just miss is offered as one to hurry for, with how
   fast to walk to make it, and you can set how fast you would hurry. An

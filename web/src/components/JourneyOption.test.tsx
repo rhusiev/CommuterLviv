@@ -54,10 +54,10 @@ const JOURNEY: Journey = {
 /** The info glyph an explain chip carried */
 const INFO_GLYPH = "M12 11v5";
 
-const card = (shown: boolean) =>
+const card = (shown: boolean, journey = JOURNEY) =>
   renderToStaticMarkup(
     <JourneyOption
-      journey={JOURNEY}
+      journey={journey}
       shown={shown}
       onShow={() => {}}
       onFollow={() => {}}
@@ -111,5 +111,24 @@ describe("JourneyOption", () => {
     expect(all).toHaveLength(6);
     expect(html).toContain("Work stop");
     expect(html).toContain("Home stop");
+  });
+
+  test("tells the minute waited at the stop apart from the 19 ridden, closed and open", () => {
+    const closed = card(false);
+    const open = card(true);
+
+    expect(closed).toContain(`title="${t.waitLeg(1)}"`);
+    expect(closed).toContain(`title="${t.rideLeg(19)}"`);
+    expect(open).toContain(`>${t.wait}<`);
+    expect(open).toContain(t.minutes(1));
+    expect(open).toContain(t.rideLeg(19));
+  });
+
+  test("says no wait for a ride boarded as the walk reaches the stop", () => {
+    const ride = { ...JOURNEY.legs[1]!, dep: JOURNEY.legs[0]!.arr };
+    const html = card(true, { ...JOURNEY, legs: [JOURNEY.legs[0]!, ride, JOURNEY.legs[2]!] });
+
+    expect(html).not.toContain(t.waitLeg(1));
+    expect(html).not.toContain(`>${t.wait}<`);
   });
 });

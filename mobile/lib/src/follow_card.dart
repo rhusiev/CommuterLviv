@@ -54,6 +54,7 @@ class FollowCard extends StatefulWidget {
     required this.hurrySpeed,
     required this.away,
     required this.onMoved,
+    this.onProgress,
     required this.onSearch,
     required this.onEnd,
     this.stage,
@@ -76,6 +77,9 @@ class FollowCard extends StatefulWidget {
 
   /// The follower moved on to another stage
   final void Function(Stage) onMoved;
+
+  /// Each fix's progress, for drawing the walk under way from it.
+  final ValueChanged<Progress>? onProgress;
 
   /// Another way is asked for, from where the follower is
   final void Function(Stage) onSearch;
@@ -249,6 +253,7 @@ class _FollowCardState extends State<FollowCard> {
       );
       _judge();
     });
+    widget.onProgress?.call(_follower.progress);
     final stage = _follower.progress.stage;
     if (stage != at) widget.onMoved(stage);
     _notice();

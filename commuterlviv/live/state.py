@@ -33,7 +33,12 @@ HEAD_SPAN = 25.0         # m either side of the vehicle the arrow averages over
 SURE = 1.0               # sigmas the speed must clear "stopped" by to be motion
 DAMP = 0.7               # of the dead reckoned distance the map draws
 
-STALE, MOVING = 1, 2     # the flag bits, mirrored in `web/src/lib/wire.ts`
+# The flag bits, mirrored in `web/src/lib/wire.ts` and `mobile/lib/src/wire.dart`.
+# LOW_FLOOR is the feed's own word for the vehicle, said only where it says so:
+# it marks next to no bus, so its absence means unknown, not high floor
+STALE, MOVING, LOW_FLOOR, STUCK = 1, 2, 4, 8
+STUCK_S = 300.0          # s standing still mid-route before an arrival is doubted
+ENDS_M = 150.0           # m from either end of its line a vehicle stands at will
 
 
 def etag(body):
@@ -137,6 +142,8 @@ class Live:
         self.epoch_s = epoch
         self.tracks, self.runs, self.closed = {}, {}, []
         self.wire, self.free, self.next_wire = {}, collections.deque(), 0
+        # by feed id: (low floor, fleet number or plate); since when it stood
+        self.meta, self.still = {}, {}
         self.next_epoch = None
         self.epochs = 0
         self.reporting = 0       # vehicles `replay.fresh` at the last epoch
@@ -148,9 +155,13 @@ class Live:
     def variant(self):
         return self.model.cfg.name
 
-    def fix(self, veh, ts, lat, lon, speed, odometer, trip):
+    def fix(self, veh, ts, lat, lon, speed, odometer, trip, label=None,
+            plate=None):
         """One vehicle position report, folded in as the replay folds a recorded
-        one. Returns False if it was of no use."""
+        one. Returns False if it was of no use. `label` and `plate` are the
+        feed's word on the vehicle itself, kept for the map and its card."""
+        if label is not None or plate is not None:
+            self.meta[veh] = (label == "low_floor", (plate or "").strip())
         if trip not in self.net.trip_stops:
             return False
         tr = self.tracks.get(veh)
@@ -178,9 +189,13 @@ class Live:
             if ri is None:
                 continue
             moving = self._moving(tr)
+            if moving:
+                self.still.pop(veh, None)
+            else:
+                self.still.setdefault(veh, now)
             s = self._believed(tr, now, moving)
             rows[n] = (self._wire(veh), ri, *self._latlon(tr, s),
-                       self._heading(tr, s), self._flags(tr, now, moving))
+                       self._heading(tr, s), self._flags(veh, tr, now, s))
             n += 1
         self.positions = Positions(now, rows[:n])
         return self.positions
@@ -192,6 +207,8 @@ class Live:
         fc = replay.step(self.model, self.tracks, self.runs, self.closed, now)
         for veh in [v for v in self.wire if v not in self.tracks]:
             self.free.append(self.wire.pop(veh))
+            self.meta.pop(veh, None)
+            self.still.pop(veh, None)
         self.epochs += 1
         self.reporting = sum(replay.fresh(tr, now) for tr in self.tracks.values())
         self.arrivals = self._arrivals(fc, now)
@@ -304,8 +321,25 @@ class Live:
             return 0
         return int(round(math.degrees(math.atan2(dx, dy)))) % 360
 
-    def _flags(self, tr, now, moving):
-        return (STALE if now - tr.ts > FRESH else 0) | (MOVING if moving else 0)
+    def _flags(self, veh, tr, now, s):
+        moving = veh not in self.still
+        low = self.meta.get(veh, (False, ""))[0]
+        # A vehicle standing at either end of its line is laying over
+        stuck = (not moving and now - self.still[veh] > STUCK_S
+                 and ENDS_M < s < tr.shape.length - ENDS_M)
+        return ((STALE if now - tr.ts > FRESH else 0) | (MOVING if moving else 0)
+                | (LOW_FLOOR if low else 0) | (STUCK if stuck else 0))
+
+    def vehicle(self, wire_id):
+        """What the feed says of the vehicle sent as `wire_id`: its fleet number
+        or plate, whether it is low floor, and when it last reported; None for
+        an id no longer sent."""
+        veh = next((v for v, w in self.wire.items() if w == wire_id), None)
+        tr = self.tracks.get(veh)
+        if tr is None:
+            return None
+        low, fleet = self.meta.get(veh, (False, ""))
+        return {"fleet": fleet or None, "low_floor": low, "seen": round(tr.ts)}
 
     def health(self):
         return {"variant": self.variant, "epochs": self.epochs,

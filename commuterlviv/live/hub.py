@@ -11,7 +11,7 @@ import time
 
 import numpy as np
 
-from . import wire
+from . import state, wire
 
 MAX_STOPS = 64          # stops one client may have open at once
 IDLE_PING = 30.0        # s of quiet before the server says something
@@ -26,16 +26,27 @@ MAX_PER_USER = 8        # sockets one account may hold open at once
 RENEWED = 1012          # "service restart": the city changed under the socket
 
 
-def due(arrivals, stops):
-    """What is coming to these stops; shared with `/api/arrivals`."""
+def due(arrivals, stops, positions=None):
+    """What is coming to these stops; shared with `/api/arrivals`. An arrival
+    on a vehicle that has stood still mid-route for long, or stopped reporting,
+    says so (`doubt`), from the `positions` last published."""
+    flags = ({} if positions is None else
+             dict(zip(positions.veh["id"].tolist(), positions.veh["flags"].tolist())))
     return {"t": arrivals.t, "stops": {
-        str(i): [_row(r) for r in arrivals.at(i)] for i in stops}}
+        str(i): [_row(r, flags) for r in arrivals.at(i)] for i in stops}}
 
 
-def _row(r):
+def _row(r, flags):
     out = {"route": int(r["route"]), "veh": int(r["veh"]), "t": int(r["t"])}
     if r["planned"]:
         out["planned"] = True
+    f = flags.get(int(r["veh"]), 0)
+    if f & state.LOW_FLOOR:
+        out["low_floor"] = True
+    if f & state.STUCK:
+        out["doubt"] = "stuck"
+    elif f & state.STALE:
+        out["doubt"] = "silent"
     return out
 
 
@@ -221,7 +232,8 @@ class Hub:
     async def _send_arrivals(self, client):
         arr = client.live.arrivals
         await client.ws.send_text(json.dumps(
-            {"type": "arrivals", **due(arr, client.stops)}))
+            {"type": "arrivals",
+             **due(arr, client.stops, client.live.positions)}))
 
     def stats(self):
         return {"quiet": self.quiet,

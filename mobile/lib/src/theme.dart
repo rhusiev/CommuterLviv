@@ -4,6 +4,8 @@
 /// and [floatingBottom] are how anything works out what it has to clear.
 library;
 
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
@@ -30,9 +32,14 @@ double floatingBottom(BuildContext context) =>
 const stadium = StadiumBorder(side: BorderSide(color: hair));
 const circle = CircleBorder(side: BorderSide(color: hair));
 
-/// The look every control floating over the map shares. The surface tint is
-/// off because it pulls a surface towards the seed colour, which over a map
-/// reads as a second map.
+/// How see-through a floating surface is, and how much it blurs the map behind
+/// it: the web's `bg-panel/80` and `backdrop-blur-xl`, a 24 px blur.
+const floatingAlpha = 0.8;
+const floatingBlurSigma = 12.0;
+
+/// The look every control floating over the map shares: the map shows through
+/// it blurred. The surface tint is off because it pulls a surface towards the
+/// seed colour, which over a map reads as a second map.
 class Floating extends StatelessWidget {
   const Floating({
     super.key,
@@ -48,14 +55,50 @@ class Floating extends StatelessWidget {
   final Clip clipBehavior;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: panel.withValues(alpha: 0.9),
-    surfaceTintColor: Colors.transparent,
-    shape: shape,
-    elevation: elevation,
-    clipBehavior: clipBehavior,
-    child: child,
-  );
+  Widget build(BuildContext context) {
+    // Without the blur the map behind an 80% panel is noise under the text,
+    // so the surface is solid instead
+    if (!Blurring.of(context)) {
+      return Material(
+        color: panel,
+        surfaceTintColor: Colors.transparent,
+        shape: shape,
+        elevation: elevation,
+        clipBehavior: clipBehavior,
+        child: child,
+      );
+    }
+    return Material(
+      color: panel.withValues(alpha: floatingAlpha),
+      surfaceTintColor: Colors.transparent,
+      shape: shape,
+      elevation: elevation,
+      // The blur reaches as far as the clip, so a surface left unclipped would
+      // blur the whole screen behind it
+      clipBehavior: clipBehavior == Clip.none ? Clip.antiAlias : clipBehavior,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: floatingBlurSigma,
+          sigmaY: floatingBlurSigma,
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
+/// Whether what floats over the map blurs it, as the layers sheet sets it. On
+/// where nothing says otherwise.
+class Blurring extends InheritedWidget {
+  const Blurring({super.key, required this.on, required super.child});
+
+  final bool on;
+
+  static bool of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<Blurring>()?.on ?? true;
+
+  @override
+  bool updateShouldNotify(Blurring old) => on != old.on;
 }
 
 /// One round button floating over the map.

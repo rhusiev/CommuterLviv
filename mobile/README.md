@@ -182,7 +182,7 @@ refused and the map stays empty while everything else works.
 | `lib/src/vehicle_layer.dart` | one `CustomPaint` for the whole city                                    |
 | `lib/src/home.dart`          | the state the tabs share, and nothing that draws                        |
 | `lib/src/map_tab.dart`       | the basemap, the vehicles and the attribution                           |
-| `lib/src/lines_tab.dart`     | every route, by filter and set, and one line's stops over the map       |
+| `lib/src/lines_tab.dart`     | what the map watches, every route to tick, and one line's stops       |
 | `lib/src/lines.dart`         | a line's ways and stop rows, the routes near you, the lines opened      |
 | `lib/src/mine_tab.dart`      | pinned stops with what is due, places, sets, and the account row        |
 | `lib/src/stop_card.dart`     | one stop, from the bottom of the map                                    |
@@ -216,7 +216,9 @@ form is never dismissed the way a native one is, so without that call the
 manager is never asked whether to save.
 
 **Nothing on the map is a widget.** Four hundred vehicles are four hundred
-circles in one painter, repainted from a `Ticker` at the display's rate. The
+circles in one painter, repainted from a `Ticker` at the display's rate while
+a vehicle eases to its last report, and not between: a repaint there would
+change nothing and re-blur whatever floats over the map. The
 socket delivers a position every five seconds and `sample()` eases between the
 last two, so movement is smooth without the network being fast. Widgets listen
 to `Live` only for what changes rarely: the connection, the arrival times, and
@@ -318,8 +320,8 @@ The Journey tab opens `journey_panel.dart` over the map.
 Tapping either end opens the same search as the top bar (`stop_search.dart`):
 typing finds stops, addresses and shops, and before anything is typed it offers
 where I am, choosing on the map, and the saved places. The locate button beside
-each field is where I am in one tap, and the field then says so rather than
-giving the coordinates. A point nothing names, in its field and at the top of
+each field is where I am in one tap, and the field then says where I was and
+when ("Where I was at 08:31") rather than giving the coordinates. A point nothing names, in its field and at the top of
 the long-press sheet, is called by the stop nearest it within 300 m ("Near
 Rynok"), and only past that by its coordinates, as on the web; Mine says where
 a saved place is the same way, under its name. While an end is being picked on the map
@@ -344,7 +346,8 @@ vehicle says nothing more; one resting on the timetable says so, and one on a
 line nothing has been seen running on says that in the error colour. An option
 not yet drawn is one tap target (`journey_option.dart`): a tap anywhere on it
 draws it and opens it, and nothing on it opens anything else. Folded, it says
-the hurry pill, its weakest ride's note and its backup count in words; its
+the hurry pill, its weakest ride's note and its backup count in words, and
+its strip tells the minutes waited for a ride from the minutes ridden; its
 summary row folds it again and never turns into anything else. Opened, every
 control is drawn as one and as tall as `kMinInteractiveDimension`: a stop's row
 has a chevron and opens its card, a route's badge sits in a ring with a map and

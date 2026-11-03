@@ -30,7 +30,8 @@ FIRST_WALK = 300.0
 
 
 def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
-             catalog=None, rounds=ROUNDS, keep=8, assess=True, hurry=1.0):
+             catalog=None, rounds=ROUNDS, keep=8, assess=True, hurry=1.0,
+             avoid=frozenset(), close=False):
     """Ranked journeys from `origin` to `dest` (both (lat, lon)) leaving at
     `now`, which may be in the future: the vehicles being tracked are still
     used, for as far ahead as their predictions reach.
@@ -43,12 +44,16 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
     `walk` and `transfers` paced to them. `hurry` is the share of that walk's
     time the walk to the first stop takes when they hurry, 1 for not at all;
     the departures only hurrying catches are options of their own
-    (`_Profile.hurrying`).
+    (`_Profile.hurrying`). Nothing of a vehicle type in `avoid` is ridden -
+    no option, backup or hurry - except a ride `origin` is already on.
 
     An `Aboard` origin is searched as getting off at the vehicle's next stop
     when it gets there, with the stops in reach of that one, and each journey
     found is then ridden there on it (`_on`). One the planner no longer sees
     running gets none.
+
+    With `close`, a way beaten only narrowly is offered too (`ranking._close`),
+    from any stop the origin walks to (`_Profile.close`).
     """
     sod, midnight = _seconds_since_midnight(now)
     tt = tt.on(midnight)
@@ -83,7 +88,8 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
     hi = now + (walked if walked is not None else LONGEST_WALK) + BACKUP_WINDOW
     soonest = access if trip else _quickest(access, hurry)
     for quiet in (False, True):
-        hops, trips = _connections(tt, live, trust, now, midnight, hi, quiet)
+        hops, trips = _connections(tt, live, trust, now, midnight, hi, quiet,
+                                   avoid)
         hops = _corridor(hops, transfers, egress, caps[0],
                          [(u, start + t) for u, t in soonest.items()], hi)
         scan = _Profile(hops, trips, trust, transfers, egress, caps, rounds,
@@ -92,13 +98,15 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
         more = scan.near(access, start, found)
         if trip is None:
             more += scan.hurrying(access, hurry, start, found)
+            if close:
+                more += scan.close(access, start, found + more)
         found = scan.backed(found + more)
         if trip is None:
             found += _only_walking(walked, now)
         else:
             found = _on(tt, trip, found + _off_first(trip, egress), now)
         # a ride slower than walking is still worth it when already on it
-        found = _rank(found, keep, walked if trip is None else None)
+        found = _rank(found, keep, walked if trip is None else None, close)
         if quiet or any(j.rides for j in found) or \
                 "quiet" not in trust.values():
             return _listed(found)

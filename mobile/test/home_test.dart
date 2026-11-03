@@ -10,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:commuterlviv/src/api.dart';
+import 'package:commuterlviv/src/eta.dart' show clockTime;
 import 'package:commuterlviv/src/home.dart';
 import 'package:commuterlviv/src/journey_panel.dart' show JourneyPanel;
 import 'package:commuterlviv/src/lines_tab.dart' show LinePanel;
@@ -115,6 +116,7 @@ Future<void> _pumpHome(
   Map<String, Object?> shapes = _noShapes,
   Map<String, Object?>? plan,
   bool hasBasemap = true,
+  Map<String, Object> prefs = const {},
 }) async {
   tester.view.physicalSize = _phone;
   tester.view.devicePixelRatio = 1;
@@ -134,7 +136,7 @@ Future<void> _pumpHome(
   final origin = 'http://${server.address.host}:${server.port}';
   setTileOrigin(origin);
   addTearDown(() => setTileOrigin(null));
-  SharedPreferences.setMockInitialValues({});
+  SharedPreferences.setMockInitialValues(prefs);
   FlutterSecureStorage.setMockInitialValues({});
   final api = await Api.open();
   await api.setBase(origin);
@@ -223,7 +225,11 @@ void main() {
     // Not settled: the dot where I am pulses for as long as it is drawn
     await tester.pump();
 
-    expect(find.widgetWithText(OutlinedButton, txt.useHere), findsOneWidget);
+    // Named by when the fix was taken, which stays where it was
+    expect(
+      find.widgetWithText(OutlinedButton, txt.hereAt(clockTime(0))),
+      findsOneWidget,
+    );
     expect(find.textContaining('49.8419'), findsNothing);
     await tester.pump(_firstTrim);
     FlutterError.onError = reported;
@@ -292,6 +298,44 @@ void main() {
     // The map's tile workers fail what they still hold when the map goes
     await pumpQuiet(tester);
     semantics.dispose();
+    await _done(tester, reported);
+  });
+
+  testWidgets('the routes watched when the app was left are watched again, '
+      'though no set is active', (tester) async {
+    final reported = FlutterError.onError!;
+    await _pumpHome(
+      tester,
+      catalog: _lineCatalog,
+      shapes: _lineShapes,
+      prefs: {
+        'commuterlviv.watched': ['r1'],
+      },
+    );
+
+    await tester.tap(find.byTooltip(txt.lines));
+    await tester.pump(_open);
+
+    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
+    await pumpQuiet(tester);
+    await _done(tester, reported);
+  });
+
+  testWidgets('a route ticked is kept on the device for the next start', (
+    tester,
+  ) async {
+    final reported = FlutterError.onError!;
+    await _pumpHome(tester, catalog: _lineCatalog, shapes: _lineShapes);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getStringList('commuterlviv.watched'), isEmpty);
+
+    await tester.tap(find.byTooltip(txt.lines));
+    await tester.pump(_open);
+    await tester.tap(find.text('1').last);
+    await tester.pump();
+
+    expect(prefs.getStringList('commuterlviv.watched'), ['r1']);
+    await pumpQuiet(tester);
     await _done(tester, reported);
   });
 
@@ -396,6 +440,7 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, txt.replace));
     await pumpUntil(tester, () => sent.isNotEmpty);
     expect(sent.single, [Place(name: 'Home', at: lviv).toJson()]);
+    await pumpQuiet(tester);
     await _done(tester, reported);
   });
 

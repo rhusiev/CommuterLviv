@@ -10,6 +10,7 @@ import 'backups_dialog.dart';
 import 'eta.dart';
 import 'follow.dart' show followable, plannedKmh;
 import 'hurry_pill.dart';
+import 'legs.dart' show waitBefore, waitMinS;
 import 'models.dart';
 import 'route_badge.dart';
 import 'strings.dart';
@@ -33,6 +34,12 @@ const _gap = 8.0;
 const _smallIconSize = 16.0;
 const _cornerRadius = 12.0;
 const _shownBorderWidth = 2.0;
+
+/// The height of a row nothing on it is tapped in
+const _quietRow = 32.0;
+
+/// The backups count, the same open or closed, so it is seen before opening
+const _backupColour = Colors.greenAccent;
 
 /// An option caught only by hurrying: what its pill says, with the pace that
 /// catches it, and why
@@ -182,8 +189,9 @@ class _Summary extends StatelessWidget {
   }
 }
 
-/// The legs in a line: a walk by its minutes, a ride by its line's badge, with
-/// a dot where a ride rests on more than a tracked vehicle
+/// The legs in a line: a walk by its minutes, a ride by the minutes waited for
+/// it, its line's badge and the minutes ridden, with a dot where a ride rests
+/// on more than a tracked vehicle
 class _Strip extends StatelessWidget {
   const _Strip({required this.journey, required this.catalog});
 
@@ -221,8 +229,12 @@ class _Strip extends StatelessWidget {
                 Text('${spanMinutes(leg.arr - leg.dep)}', style: small),
               ],
             )
-          else if (catalog.routeAt(leg.route) case final route?)
-            RouteBadge(route: route, fontSize: 11),
+          else
+            _StripRide(
+              leg: leg,
+              wait: waitBefore(journey, i),
+              catalog: catalog,
+            ),
           if (_noteOn(leg) != null)
             Container(
               width: _dotSize,
@@ -233,6 +245,49 @@ class _Strip extends StatelessWidget {
               ),
             ),
         ],
+      ],
+    );
+  }
+}
+
+/// A ride in the strip: the minutes waited for it, by a clock, then its line's
+/// badge and the minutes ridden
+class _StripRide extends StatelessWidget {
+  const _StripRide({
+    required this.leg,
+    required this.wait,
+    required this.catalog,
+  });
+
+  final Leg leg;
+  final int wait;
+  final Catalog catalog;
+
+  @override
+  Widget build(BuildContext context) {
+    final small = Theme.of(context).textTheme.bodySmall;
+    final ride = spanMinutes(leg.arr - leg.dep);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 4,
+      children: [
+        if (wait >= waitMinS)
+          Tooltip(
+            message: txt.waitLeg(spanMinutes(wait)),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.schedule, size: _smallIconSize, color: small?.color),
+                Text('${spanMinutes(wait)}', style: small),
+              ],
+            ),
+          ),
+        if (catalog.routeAt(leg.route) case final route?)
+          RouteBadge(route: route, fontSize: 11),
+        Tooltip(
+          message: txt.rideLeg(ride),
+          child: Text('$ride', style: small),
+        ),
       ],
     );
   }
@@ -282,7 +337,11 @@ class _Flags extends StatelessWidget {
                 color: _noteColour(theme, loudest.confidence),
               ),
             ),
-          if (backups) Text(txt.backupCount(journey.backup), style: small),
+          if (backups)
+            Text(
+              txt.backupCount(journey.backup),
+              style: small?.copyWith(color: _backupColour),
+            ),
         ],
       ),
     );
@@ -312,7 +371,7 @@ class _Opened extends StatelessWidget {
     final small = Theme.of(context).textTheme.bodySmall;
     final legs = journey.legs;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 0, 6, _gap),
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -331,7 +390,8 @@ class _Opened extends StatelessWidget {
                 ),
               ),
             },
-          for (final (i, leg) in legs.indexed)
+          for (final (i, leg) in legs.indexed) ...[
+            if (!leg.walking) _Wait(seconds: waitBefore(journey, i)),
             leg.walking
                 ? _Walk(
                     leg: leg,
@@ -347,6 +407,7 @@ class _Opened extends StatelessWidget {
                     onStop: onStop,
                     onLine: onLine,
                   ),
+          ],
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Row(
@@ -355,7 +416,7 @@ class _Opened extends StatelessWidget {
                   TextButton(
                     onPressed: onBackups,
                     style: TextButton.styleFrom(
-                      foregroundColor: Colors.greenAccent,
+                      foregroundColor: _backupColour,
                       minimumSize: const Size.square(kMinInteractiveDimension),
                     ),
                     child: Row(
@@ -404,15 +465,69 @@ class _Walk extends StatelessWidget {
   Widget build(BuildContext context) {
     final small = Theme.of(context).textTheme.bodySmall;
     final minutes = spanMinutes(leg.arr - leg.dep);
-    final lead = Tooltip(
-      message: txt.walkLeg(minutes),
+    final lead = _MinutesLead(
+      icon: Icons.directions_walk,
+      minutes: minutes,
+      said: txt.walkLeg(minutes),
+    );
+    if (leg.b < 0) {
+      return _Row(
+        lead: lead,
+        minHeight: _quietRow,
+        child: Text(txt.toDoor, style: small),
+      );
+    }
+    final name = catalog.stopName(leg.b);
+    return _StopRow(
+      lead: lead,
+      name: change ? txt.changeAt(name) : name,
+      onTap: () => onStop(leg.b),
+    );
+  }
+}
+
+/// The minutes stood at the stop before a ride, once there are any
+class _Wait extends StatelessWidget {
+  const _Wait({required this.seconds});
+
+  final int seconds;
+
+  @override
+  Widget build(BuildContext context) {
+    if (seconds < waitMinS) return const SizedBox.shrink();
+    final minutes = spanMinutes(seconds);
+    return _Row(
+      minHeight: _quietRow,
+      lead: _MinutesLead(
+        icon: Icons.schedule,
+        minutes: minutes,
+        said: txt.waitLeg(minutes),
+      ),
+      child: Text(txt.wait, style: Theme.of(context).textTheme.bodySmall),
+    );
+  }
+}
+
+/// A row's lead: minutes after an icon, said in full by its tooltip
+class _MinutesLead extends StatelessWidget {
+  const _MinutesLead({
+    required this.icon,
+    required this.minutes,
+    required this.said,
+  });
+
+  final IconData icon;
+  final int minutes;
+  final String said;
+
+  @override
+  Widget build(BuildContext context) {
+    final small = Theme.of(context).textTheme.bodySmall;
+    return Tooltip(
+      message: said,
       child: Row(
         children: [
-          Icon(
-            Icons.directions_walk,
-            size: _smallIconSize,
-            color: small?.color,
-          ),
+          Icon(icon, size: _smallIconSize, color: small?.color),
           Flexible(
             child: Text(
               txt.minutes(minutes),
@@ -423,18 +538,6 @@ class _Walk extends StatelessWidget {
           ),
         ],
       ),
-    );
-    if (leg.b < 0) {
-      return _Row(
-        lead: lead,
-        child: Text(txt.toDoor, style: small),
-      );
-    }
-    final name = catalog.stopName(leg.b);
-    return _StopRow(
-      lead: lead,
-      name: change ? txt.changeAt(name) : name,
-      onTap: () => onStop(leg.b),
     );
   }
 }
@@ -472,6 +575,7 @@ class _Ride extends StatelessWidget {
               children: [
                 if (catalog.routeAt(leg.route) case final route?)
                   _LineButton(route: route, onTap: () => onLine(leg.route!)),
+                Text(txt.rideLeg(spanMinutes(leg.arr - leg.dep)), style: small),
                 const Spacer(),
                 if (note case (final part, _))
                   Text(
@@ -582,14 +686,21 @@ class _StopRow extends StatelessWidget {
 
 /// A leg's row, as tall as a finger needs: what leads it, then what it names
 class _Row extends StatelessWidget {
-  const _Row({required this.lead, required this.child});
+  const _Row({
+    required this.lead,
+    required this.child,
+    this.minHeight = kMinInteractiveDimension,
+  });
 
   final Widget lead;
   final Widget child;
 
+  /// A target's row is as tall as a finger needs; one only read, [_quietRow]
+  final double minHeight;
+
   @override
   Widget build(BuildContext context) => ConstrainedBox(
-    constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+    constraints: BoxConstraints(minHeight: minHeight),
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: _gap),
       child: Row(

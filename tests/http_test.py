@@ -209,6 +209,19 @@ def test_an_id_of_other_digits_is_refused_rather_than_failing(client):
     assert r.status_code == 400, r.text
 
 
+@pytest.mark.parametrize(("ask", "status"), [
+    ("route=0&stop=999", 400),
+    ("route=0", 400),
+    ("route=0&stop=0", 503),
+], ids=["no such stop", "no stop", "no planner"])
+def test_departures_are_refused_without_a_line_stop_or_planner(client, ask, status):
+    _signed_in(client, "departures")
+
+    r = client.get(f"/api/departures?{ask}")
+
+    assert r.status_code == status and r.json()["error"], r.text
+
+
 def test_traffic_gives_a_number_or_none_per_street_piece(client):
     _signed_in(client, "traffic")
     pieces = client.get("/api/traffic/streets").json()["lines"]

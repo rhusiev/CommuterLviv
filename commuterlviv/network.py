@@ -34,7 +34,7 @@ CANDIDATES = 10         # places kept per point, closest first
 class Geometry:
     """How fine the model's picture of the road is; only `Shape` reads it."""
 
-    cell: float = 100.0     # speed-field cell length along a shape, metres
+    cell: float = 50.0      # speed-field cell length along a shape, metres
     grid: float = 120.0     # size of the shared spatial cell used to pool routes
     octants: int = 8        # heading classes a corridor cell is split into
 
@@ -112,7 +112,7 @@ class Shape:
 class Net:
     # bump when a field is added or its meaning changes: the cache is keyed by
     # the feed alone, so an older one would otherwise load with fields missing
-    VERSION = 4
+    VERSION = 5
 
     def __init__(self):
         self.version = self.VERSION
@@ -287,7 +287,7 @@ def load(rebuild=False, geom=DEFAULT):
 
 
 def _load(rebuild):
-    gtfs.static_zip()   # so a feed that changed overnight invalidates the cache
+    gtfs.static_zip()   # fetched first when there is none, so `source` hashes it
     src = source()
     if not rebuild and os.path.exists(CACHE):
         with open(CACHE, "rb") as f:

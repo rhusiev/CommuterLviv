@@ -245,7 +245,7 @@ def test_a_route_that_calls_at_a_stop_is_watched_from_its_card(page):
     page.get_by_role("button", name="Line А1").last.click()
     expect(page.get_by_text("Stop 0 - Stop 4")).to_be_visible()
     page.get_by_role("button", name="Back").click()
-    expect(page.get_by_text("0 on")).to_be_visible()
+    expect(page.get_by_text("0 of 1 on the map")).to_be_visible()
 
 
 def test_a_route_due_at_a_stop_is_watched_from_its_countdown(page):
@@ -571,13 +571,13 @@ def _plan_to_town_hall(page):
     page.get_by_role("button", name="Get here").click()
 
 
-def test_a_start_where_i_am_says_so_rather_than_its_coordinates(page):
+def test_a_start_where_i_am_says_when_it_was_taken_rather_than_its_coordinates(page):
     _register(page, "here")
     _plan_to_town_hall(page)
 
     panel = page.locator("aside")
     expect = playwright.expect
-    expect(panel.get_by_text("Where I am", exact=True)).to_be_visible()
+    expect(panel.get_by_text(re.compile(r"^Where I was at \d\d:\d\d$"))).to_be_visible()
     expect(panel.get_by_text(re.compile(r"^[\d.]+, [\d.]+$"))).to_have_count(0)
 
 
@@ -792,8 +792,23 @@ def test_picking_the_route_puts_its_bus_on_the_map(page):
 
     _pick_route(page)
 
-    expect(page.get_by_text("1 on")).to_be_visible()
+    expect(page.get_by_text("1 of 1 on the map")).to_be_visible()
     expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
+
+
+def test_a_route_picked_by_hand_is_still_watched_when_the_site_is_opened_again(page):
+    _register(page, "keeper")
+    expect = playwright.expect
+    expect(page.get_by_text("0 vehicles")).to_be_visible()
+    _pick_route(page)
+    expect(page.get_by_text("1 of 1 on the map")).to_be_visible()
+
+    # opened afresh, not reloaded: a reload keeps the routes the address names
+    page.goto("/")
+
+    expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
+    page.get_by_role("button", name="Lines", exact=True).click()
+    expect(page.get_by_text("1 of 1 on the map")).to_be_visible()
 
 
 def _on_page(lat, lon, view=None, size=VIEWPORT):
@@ -1103,4 +1118,5 @@ def test_an_old_line_link_opens_the_line_in_the_lines_tab(page):
     expect(page.get_by_title("The other way")).to_be_visible(timeout=SEE_MS)
 
     page.goto("/?tab=route")
-    expect(page.get_by_role("radio", name="All")).to_be_checked(timeout=SEE_MS)
+    box = page.get_by_role("checkbox", name=re.compile("^Watch (every route|none)$"))
+    expect(box).to_be_visible(timeout=SEE_MS)

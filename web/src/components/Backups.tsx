@@ -93,7 +93,7 @@ export function Backups({
         e.stopPropagation();
         onClose();
       }}
-      className="fixed inset-0 z-40 flex cursor-default items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-40 flex cursor-default items-center justify-center bg-black/50 backdrop-blur-sm p-4"
     >
       <div onClick={(e) => e.stopPropagation()} className="panel max-h-full w-96 max-w-full overflow-y-auto p-4 text-sm">
         <h2 className="font-medium">{t.backups}</h2>

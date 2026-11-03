@@ -1,7 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 import type { Origin, Point } from "../components/JourneyPanel";
+import { clock } from "./eta";
 import { t } from "./i18n";
 import { hereOnce, ONE_FIX, type NoFix } from "./position";
+
+const MS_PER_S = 1000;
 
 /** The journey planner's two ends and how they are being set. Kept above the
  * planner's panel, which a change of tab unmounts. `shown` is whether the
@@ -21,8 +24,10 @@ export function usePlanner(shown: boolean, onNoFix: (why: NoFix) => void) {
     const asked = boarded.current;
     if (!navigator.geolocation) return;
     hereOnce(ONE_FIX).then((pos) => {
-      // Named, so the field reads as where I was rather than as coordinates
-      const at = { lat: pos.coords.latitude, lon: pos.coords.longitude, name: t.useHere };
+      // Named with the time of the fix: the end stays where it was taken, and
+      // "where I am" read as if it moved along
+      const name = t.hereAt(clock(pos.timestamp / MS_PER_S));
+      const at = { lat: pos.coords.latitude, lon: pos.coords.longitude, name };
       // A fix asked for before getting on board is no longer the start
       if (which === "to") setTo(at);
       else if (asked === boarded.current) setFrom(at);

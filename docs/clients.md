@@ -51,7 +51,9 @@ horizon, read off the same predictions the stop card shows - so the two cannot
 disagree. The Journey tab plans a journey: tap where you are and where you are
 going, and it answers with ways to get there, ranked by arrival - walk to a
 stop, ride, maybe change, walk to the door. An end put where you are reads
-"Where I am" in its field rather than its coordinates. A point nothing named,
+"Where I was at 08:31" in its field rather than its coordinates: it is where
+the fix was taken and does not follow you, which "Where I am" made it sound
+like. A point nothing named,
 in its field and at the top of the map's menu, is called by the stop within
 300 m nearest to it ("Near Stop 4"), and only past that by its coordinates; the
 app does the same, and also under Mine. Already on a vehicle, "I'm on it"
@@ -66,7 +68,12 @@ return `index.html`, or `/join/<code>` is a 404 and the invite link is dead.
 An option the planner lists is one click target until it is drawn on the map: a
 click anywhere on it draws it and opens it, and nothing on it opens anything
 else. Folded, it says in words what is worth knowing - the hurry pill, its
-weakest ride's note on how sure its time is, and how many backups it has. Its
+weakest ride's note on how sure its time is, and how many backups it has, in
+the green of the backups button it opens into. Its strip of legs gives a walk
+its minutes and a ride the minutes waited for it, by a clock, then its badge and
+the minutes ridden; opened, a wait of a minute or more (`WAIT_MIN_S`, the
+follow card's) is a row of its own before the ride, and the ride says "Ride N
+min". Its
 summary row stays the one target that folds it again and never turns into
 anything else. Opened, every control below it is drawn as one and is at least
 44 px tall: a stop's row has a chevron and opens the stop's card, a route's
@@ -74,7 +81,9 @@ badge sits in a ring with a map and opens its line, "N backups ›" lists the
 backups, and Follow follows it. A note and the hurry pill say why in place,
 under them, with nothing to tap for it. The app does the same
 (`mobile/README.md`). Drawing an option also frames the map on it - its
-walks, its rides and the stops they meet. The framing, and a line's from the
+walks, its rides and the stops they meet - and rings the vehicles its rides are
+planned on (`riddenBy`, from each ride's `veh`) in the colour of the location
+dot. The framing, and a line's from the
 Lines tab, keeps clear of the panel open over the map. The app keeps it above
 its bottom panel. The web uses the widest strip the panel leaves free, measured as
 the fit is made, or the whole map when no strip is 120 px wide past its
@@ -85,7 +94,11 @@ where you are and puts a card at the bottom that says what to do now: walk to
 the stop, wait there, with when the vehicle is due, get off at the next, or that
 you went past it or off the way. The map keeps the dot in the middle with each
 fix, through a zoom too. A pan by hand lets go of it, so the way ahead can be
-looked at, and the locate button takes it back. `Follower` in `web/src/lib/follow.ts`, ported
+looked at, and the locate button takes it back. The map draws only what is
+left (`underWay` in `lib/legs`): the legs already done are dropped once you
+wait or ride, and while you walk, the walk under way is drawn from the dot
+along what is left of its line, so the start moves with you; the plan itself is not searched again
+until a ride is missed or you are off the way, which the card says. `Follower` in `web/src/lib/follow.ts`, ported
 line for line to `mobile/lib/src/follow.dart`, works it out from the device's
 own fixes and the vehicles as the map draws them, on the device: where you are
 is never sent anywhere. Boarding is told from the fixes, not from a vehicle
@@ -158,7 +171,10 @@ off until turned on, to go on with the screen off: on Android a foreground
 service keeps the location updates running behind an ongoing notification that
 repeats the card, on iOS the location updates run in the background, and both
 sound an alert once when it is time to get off, when the stop is passed, when
-the next ride is caught only by hurrying or will be missed, and on arrival. Neither asks for background location: the updates were started while
+the next ride is caught only by hurrying or will be missed, and on arrival. On
+Android that alert is a notification of its own, which the next update takes
+out of the shade again: the ongoing one says the same and keeps it current, so
+the copy would only go stale beside it. Neither asks for background location: the updates were started while
 the app was open, which the while-in-use grant covers. A browser cannot locate
 with the page hidden, so the web card offers only to keep the screen on
 (the Screen Wake Lock API) for as long as the journey is followed. The web
@@ -174,8 +190,22 @@ are the two colours in `web/public/icon.svg`, so both apps are the colour of
 their own icon. Above that sit the utilities everything is built from - `panel`,
 `bar`, `fab`, `inset-panel`, `btn`, `btn-quiet`, `field`, `field-bar` - and each
 is translucent, blurred, a hairline ring and a soft shadow rather than a border,
-because the map underneath is the context. Nothing outside `app.css` names a
-`slate-*` shade for a surface.
+because the map underneath is the context. The app's `Floating` is the same 80%
+panel over a blur of the map behind it. A dialog dims the page and, on the web,
+blurs it. "Blur behind panels" in the layers panel turns all of it off, for a
+phone that stutters under it, and the surfaces that blurred are then solid
+(`no-blur` on the web's `<html>`, `Blurring` in the app). Nothing outside `app.css` names a `slate-*` shade for a surface.
+Whatever looks like one control is one target to its edge: a bar's inset is its
+buttons' own padding, with the highlight on a span inside (the tab bar), and a
+bare icon gets padding taken back by a negative margin (`-m-2 p-2`) rather than
+a hit area the size of its glyph. Everything that folds says so the same way:
+its chevron points where the content will go. A card opens downwards, so it
+shows ▼ closed and ▲ open. The panels fold away from the map - up under the
+search bar on the web, down above the tabs in the app - so an open panel shows
+▲ on the web and ▼ in the app, and a folded one the other. A folded panel opens
+from its title as well as from its chevron. A pill holding two targets, the route chip,
+is a split button - two shapes a hair apart - since one pill with a divider lit
+only the half pressed and read as a pill that does not all respond.
 
 Nothing is docked to an edge. The map is the whole window in both clients and
 every piece of chrome floats over it: a search bar and a menu at the top, the
@@ -200,7 +230,10 @@ a long press - a pinned stop is only unpinned, as it wears the stop's name; the
 web gives each row its own buttons. The tab keeps the list it was left on.
 Beside the switch, a button named with the username opens the account itself -
 the language, the walking speeds, the server, the password, signing out - with
-signing out below a rule so it is never the tap next to anything else. In the
+signing out below a rule so it is never the tap next to anything else. Under the
+speeds, "Show close options", off until turned on and kept on the device, asks
+every search for ways another beats only narrowly as well (`&close=1`,
+docs/service.md); they are listed among the others, by arrival. In the
 app that is a sheet; on the web it takes the lists' place until it is pressed
 again. A pinned stop is listed there once, with its arrivals.
 Nothing that is a toggle and nothing that signs you out sits loose on the map.
@@ -210,15 +243,32 @@ That is `LayersSheet` and `AccountSheet` in `mobile/lib/src/sheets.dart` and
 
 The four tabs are Map, Lines, Journey and Mine - in Ukrainian Мапа, Лінії,
 Поїздка and Моє, since "Маршрут" for a journey read as one of the "Маршрути", the
-routes. Lines browses every route: All, Watching (the ticked ones) or Near me
-(the routes of the stops within 500 m of the device's fix, asked for only when
-picked; 500 m is chosen, not derived), the route sets to make one the watched
-selection or save the ticks as one, the last five lines opened (kept on the
-device), and the grid of route chips, whose body ticks a route and whose `›`
-opens its line. Renaming and deleting a set is in Mine. An open line
-uncovers the map and draws only that route, over a followed or planned journey,
-beside a panel with a back button, a toggle between its two ways named by the
-last stop, Watch, and its stops in order. Each stop shows when this route is
+routes. Lines keeps apart what the map watches and the list of routes. What
+the map watches is one toolbar row: a box that, as a mail client's select-all,
+watches every route when none is and none when any is (empty, part-ticked or
+ticked as the routes watched), the count watched out of the catalog's, a picker
+of the saved sets once there are any, and a ⋮ menu that saves the ticks as a
+new set or, once they differ from the set watched, into it. Either end of the
+box leaves no set active. What the map watches is kept on the device
+(`commuterlviv.watched`) on every change and is what it watches at the next
+start, a set or not; the account's active set decides only on a device that
+has kept nothing yet, and on the web a link's `?routes=` wins over both. Below
+are the filter field and two filters that
+narrow only the list, each keeping its icon whether on or off - Near me (the
+routes of the stops within 500 m of the device's fix, asked for only when
+turned on; 500 m is chosen, not derived) and Watched only - then the last five
+lines opened (kept on the device) as a row of the same route chips, then the
+grid of route chips, whose body ticks a route and whose `›` opens its line.
+Renaming and deleting a set is in Mine. An open line uncovers the map and draws
+only that route, over a followed or planned journey, beside a panel with a back
+button, a toggle between its two ways named by the last stop, and its stops
+in order. Above the way, three plain chips say when the line runs and how often:
+its first and last departure today from the way's first stop and, around now,
+the typical gap between departures (`lineHours`: the median gap of those within
+30 min either side, chosen, not derived), from `/api/departures`
+(docs/service.md). A gap is left out where fewer than two leave in that window,
+and all three before the departures are known. Its chevron folds it to its title,
+leaving the map to the line, and a line opened next starts unfolded. Each stop shows when this route is
 next due there, greyed while the vehicle is still finishing its previous trip,
 and a vehicle is marked at the stop it reaches soonest. The order is the
 server's: each shape line carries the stops of the longest trip on it
@@ -285,7 +335,13 @@ connection, the arrivals and the vehicle count. Route badges are rendered once
 into offscreen canvases, so drawing four hundred vehicles is four hundred blits
 rather than four hundred text layouts. The overlay draws inside MapLibre's own
 render pass and projects points with the same Web Mercator formula the basemap
-uses, so panning moves the city and the vehicles in the same frame.
+uses, so panning moves the city and the vehicles in the same frame. It asks
+MapLibre for the next frame only while a vehicle still eases to its last report
+(`Live.easingUntil`, 1.2 s after each five-second frame); otherwise a camera
+move, a new report, a fix or a change of what is shown asks. Asking every frame
+kept the whole map rendering at the display's rate with nothing moving: idle on
+the map, headless Chromium's main thread went from always busy to idle, and
+with every route watched to busy 30% of the time (2026-10-28).
 
 ## The phone app
 
@@ -315,6 +371,25 @@ it by its star, and plans the way there: the place becomes the destination under
 its name, the start stays whatever it was or becomes where you are, and the
 search runs as soon as both ends are set.
 
+A time on a stop card, or under a pinned stop in the app, turns amber when the
+server doubts it (`doubt`, docs/service.md), and one line under the times names
+the route and why: stood still for over 5 min, or stopped reporting. "Mark
+low-floor vehicles" in the layers panel, off by default and kept on the device,
+puts a ♿ on the map marker and after the time of each vehicle the feed calls
+low floor. Nothing is marked "not low floor", since the feed says it of almost
+no bus. A vehicle's card shows its fleet number (a bus's plate) under the title,
+the ♿ when asked for, and, from 30 s after its last report (the age at which
+the map fades it), an amber "Last seen N ago". Its follow button keeps the
+vehicle in the middle of the map until the map is panned, the card is closed or
+another vehicle is picked.
+
+The search offers the last three picks (`SEARCHED_KEPT`, `searched.ts` on the
+web and `searched.dart` in the app), kept on the device only, under "Recent"
+before anything is typed. The journey's order menu also lists Buses, Trams and
+Trolleybuses, ticked by default. Unticking one asks the planner again with
+`avoid=` (docs/service.md) and is kept on the device. The last type ticked
+cannot be unticked, and a dot on the menu's button says while a type is out.
+
 ```sh
 cd mobile && flutter pub get
 flutter test     # the wire decoder, against bytes commuterlviv/live/wire.py made
@@ -328,7 +403,8 @@ be the real server. The sign-in screen takes any other address and remembers it.
 
 The shape of the code is the shape of the web app's, for the same reason. Every
 vehicle and every stop is one `CustomPaint` repainted from a `Ticker`, not four
-hundred widgets; positions are eased between the five-second frames; and the
+hundred widgets, and the ticker runs only while a vehicle eases (`Live.moves`
+starts it, `Live.easingUntil` stops it); positions are eased between the five-second frames; and the
 route badge for each route is laid out once into a `ui.Paragraph` and drawn
 thereafter, which is what the offscreen badge canvases do in the browser. The
 two maps count zoom differently - flutter_map's tiles are 256 px, MapLibre's
@@ -340,6 +416,10 @@ It is built to be publishable on F-Droid, which is why it is Flutter and not
 Expo: F-Droid builds from source and takes no proprietary SDK, so there is no
 Play Services, no Firebase and no keyed map SDK anywhere in the tree. The
 basemap is the same VersaTiles OpenStreetMap tiles, rendered on the device.
+Its renderer (`vector_tile_renderer`) cannot read the styles' filters of the
+form `["in", x, ["literal", [...]]]` and would leave out every layer that uses
+one - all land use, parks and forests and most roads - so the app reads the
+style through `basemap_style.dart`, which writes them as the equivalent `match`.
 The one cost of that rule is paid by the locate-me button, which is a
 hand-written channel - AOSP's `LocationManager` on Android, `CoreLocation` on
 iOS - rather than the usual package, which brings Play Services with it; see

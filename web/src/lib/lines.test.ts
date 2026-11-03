@@ -1,5 +1,5 @@
-import { describe, expect, test } from "vitest";
-import { directions, lineRows, opened, RECENT_LINES, routesNear } from "./lines";
+import { beforeEach, describe, expect, test } from "vitest";
+import { directions, HOW_OFTEN_AROUND_S, lineHours, lineRows, loadWatched, opened, RECENT_LINES, routesNear, saveWatched } from "./lines";
 import type { Catalog } from "./types";
 
 describe("directions", () => {
@@ -81,5 +81,38 @@ describe("opened", () => {
     const many = Array.from({ length: RECENT_LINES }, (_, i) => `r${i}`);
 
     expect(opened(many, "new")).toEqual(["new", ...many.slice(0, RECENT_LINES - 1)]);
+  });
+});
+
+describe("lineHours", () => {
+  const MIN = 60;
+  const dep = [0, 8, 16, 24, 32, 60, 120].map((m) => 1_000_000 + m * MIN);
+
+  test("gives the day's first and last departure and the typical gap around now", () => {
+    expect(lineHours(dep, dep[2]!)).toEqual({ first: dep[0], last: dep[6], every: 8 * MIN });
+  });
+
+  test("says no gap where too few leave around now", () => {
+    expect(lineHours(dep, dep[6]! + HOW_OFTEN_AROUND_S)?.every).toBeNull();
+  });
+
+  test("says nothing of a day without departures", () => {
+    expect(lineHours([], 0)).toBeNull();
+  });
+});
+
+describe("the routes watched, kept on the device", () => {
+  beforeEach(() => localStorage.removeItem("commuterlviv.watched"));
+
+  test("are none kept until some are, which tells the active set to decide", () => {
+    expect(loadWatched()).toBeNull();
+  });
+
+  test("come back as kept, and an empty choice is kept as one", () => {
+    saveWatched(["r1", "r2"]);
+    expect(loadWatched()).toEqual(["r1", "r2"]);
+
+    saveWatched([]);
+    expect(loadWatched()).toEqual([]);
   });
 });

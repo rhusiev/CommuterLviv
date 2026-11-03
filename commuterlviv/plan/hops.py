@@ -46,16 +46,20 @@ def _corridor(hops, transfers, egress, cap, starts, hi):
     return [[col[c] for c in keep] for col in hops]
 
 
-def _connections(tt, live, trust, now, midnight, hi, quiet):
+def _connections(tt, live, trust, now, midnight, hi, quiet, avoid=frozenset()):
     """Every hop between consecutive stops leaving at `now` or later and
     arriving by `hi`, latest first, as lists of (from, to, departure, arrival,
     trip), with each trip's (route, vehicle, `LiveTrip.turns`) - the
     timetable's have no vehicle.
-    Routes nothing has been seen on only with `quiet`. Ties keep a trip's
-    later hop first, which a hop of no running time needs."""
+    Routes nothing has been seen on only with `quiet`, and none of a vehicle
+    type in `avoid`. Ties keep a trip's later hop first, which a hop of no
+    running time needs."""
+    def avoided(route):
+        return tt.net.routes.get(route, {}).get("type") in avoid
+
     parts, trips = [], []
     for pat in tt.patterns:
-        if not quiet and trust.get(pat.route) == "quiet":
+        if not quiet and trust.get(pat.route) == "quiet" or avoided(pat.route):
             continue
         times = pat.times + midnight
         rows = np.flatnonzero((times[:, 0] <= hi) & (times[:, -1] >= now))
@@ -63,6 +67,8 @@ def _connections(tt, live, trust, now, midnight, hi, quiet):
             parts.append(_hops(pat.stops, times[rows], len(trips)))
             trips += [(pat.route, None, math.inf)] * len(rows)
     for trip in live:
+        if avoided(trip.route):
+            continue
         parts.append(_hops(trip.stops, trip.times[None], len(trips)))
         trips.append((trip.route, trip.veh, trip.turns))
     if not parts:

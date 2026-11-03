@@ -4,7 +4,8 @@ import { Close } from "./Cross";
 import { countdown } from "../lib/eta";
 import { t } from "../lib/i18n";
 import { RouteChip } from "./RouteChip";
-import type { Aboard, Call, Catalog } from "../lib/types";
+import type { Aboard, Catalog, VehicleStops } from "../lib/types";
+import { Icon } from "./Icon";
 
 export function VehicleCard({
   catalog,
@@ -15,6 +16,9 @@ export function VehicleCard({
   onRoute,
   onAboard,
   onClose,
+  following = false,
+  onFollow = () => {},
+  lowFloor = false,
 }: {
   catalog: Catalog;
   veh: number;
@@ -27,9 +31,17 @@ export function VehicleCard({
   /** Plans a journey from on board it */
   onAboard: (from: Aboard) => void;
   onClose: () => void;
+  /** The map keeps it in the middle */
+  following?: boolean;
+  onFollow?: (on: boolean) => void;
+  /** Mark it if the feed calls it low floor */
+  lowFloor?: boolean;
 }) {
   // Keyed by `veh` where it is used, so these start afresh for each vehicle
-  const [calls, setCalls] = useState<Call[] | null>(null);
+  const [said, setSaid] = useState<VehicleStops | null>(null);
+  /** Seconds since its last report, as of the answer */
+  const [ago, setAgo] = useState<number | null>(null);
+  const calls = said?.stops ?? null;
   const [gone, setGone] = useState(false);
 
   useEffect(() => {
@@ -38,7 +50,8 @@ export function VehicleCard({
       try {
         const answer = await api.vehicle(veh);
         if (dropped) return;
-        setCalls(answer.stops);
+        setSaid(answer);
+        setAgo(answer.seen === undefined ? null : Date.now() / 1000 - answer.seen);
         setGone(answer.stops.length === 0);
       } catch {
         if (!dropped) setGone(true);
@@ -72,9 +85,28 @@ export function VehicleCard({
             {t.stopsAhead}
           </h3>
           {route && (
-            <p className="truncate text-xs text-slate-500">{route.long}</p>
+            <p className="flex items-center gap-1 text-xs text-slate-500">
+              <span className="truncate">{route.long}</span>
+              {said?.fleet && <span className="shrink-0">· {t.fleet(said.fleet)}</span>}
+              {lowFloor && said?.low_floor && (
+                <span title={t.lowFloor} aria-label={t.lowFloor} className="shrink-0 text-accent">
+                  <Icon name="wheelchair" className="size-3.5" />
+                </span>
+              )}
+            </p>
           )}
+          <LastSeen ago={ago} />
         </div>
+        <button
+          onClick={() => onFollow(!following)}
+          title={t.followVehicle}
+          aria-pressed={following}
+          className={`rounded-control p-1.5 transition-colors ${
+            following ? "bg-accent/15 text-accent" : "bg-raised/70 text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <Icon name="follow" />
+        </button>
         <Close onClick={onClose} />
       </div>
 
@@ -116,3 +148,16 @@ export function VehicleCard({
     </div>
   );
 }
+
+/** A report older than this and the card says when it was: the map fades the
+ *  vehicle from the same age (`FRESH` in `live/state.py`) */
+const STALE_S = 30;
+const MINUTE_S = 60;
+
+/** When the vehicle last reported, said only once that is worth knowing */
+function LastSeen({ ago }: { ago: number | null }) {
+  if (ago === null || ago < STALE_S) return null;
+  const said = ago < MINUTE_S ? t.seconds(Math.round(ago)) : t.minutes(Math.round(ago / MINUTE_S));
+  return <p className="text-xs text-amber-300">{t.lastSeen(said)}</p>;
+}
+

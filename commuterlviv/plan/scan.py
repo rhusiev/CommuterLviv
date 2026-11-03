@@ -223,6 +223,22 @@ class _Profile:
                 taken.update(trip_of[c] for c, *_ in out[-1][1])
         return out
 
+    def close(self, access, now, found):
+        """Per stop the origin walks to, its own soonest ways, as `options`
+        gives them, soonest first, each kept where it rides no vehicle one of
+        `found` or one kept before it rides: from a stop `options` passed over,
+        on another vehicle, they are what `_rank` keeps when beaten narrowly."""
+        trip_of = self.hops[4]
+        taken = {trip_of[c] for _, way in found for c, *_ in way}
+        ways = [x for u, t in access.items() for x in self.options({u: t}, now)]
+        out = []
+        for j, way in sorted(ways, key=lambda x: _score(x[0])):
+            trips = {trip_of[c] for c, *_ in way}
+            if trips and not trips & taken:
+                out.append((j, way))
+                taken |= trips
+        return out
+
     def _earlier(self, access, now, firsts):
         """Every way from a stop the origin walks to that is a near tie of one
         of `firsts`, but for those `_waits` says waited for a bus with rides

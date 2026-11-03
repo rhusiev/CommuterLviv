@@ -42,13 +42,32 @@ export type Me = { username: string; sets: Sets; password_change?: boolean };
 
 /** `planned`: the vehicle is still finishing its previous trip, so `t` is its
  * timetabled departure or its turnaround, whichever is later */
-export type Arrival = { route: number; veh: number; t: number; planned?: boolean };
+/** `doubt`: its vehicle has stood still mid-route for long, or gone quiet */
+export type Arrival = {
+  route: number;
+  veh: number;
+  t: number;
+  planned?: boolean;
+  low_floor?: boolean;
+  doubt?: Doubt;
+};
+
+export type Doubt = "stuck" | "silent";
 
 export type Arrivals = { t: number; stops: Record<string, Arrival[]> };
 
 export type Call = { stop: number; route: number; t: number };
 
-export type VehicleStops = { t: number; veh: number; stops: Call[] };
+/** `fleet`: a tram's or trolleybus's fleet number, a bus's plate; `seen`: Unix
+ *  seconds of its last report. Absent from an older service. */
+export type VehicleStops = {
+  t: number;
+  veh: number;
+  stops: Call[];
+  fleet?: string | null;
+  low_floor?: boolean;
+  seen?: number;
+};
 
 /** What a ride rests on: a tracked vehicle, a tracked vehicle on a trip it is
  * yet to set off on, the timetable, or the timetable on a line nothing has been
