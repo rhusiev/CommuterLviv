@@ -9,6 +9,13 @@
 /// itself draws in, and gathered into one path per colour. A frame is then a
 /// couple of dozen `drawPath` calls under one transform, and panning or zooming
 /// re-projects nothing at all.
+///
+/// The plane is kept relative to a point of the city ([TrafficPlane.anchor]).
+/// At zoom 18 Lviv lies some 38 million pixels from the plane's origin, where
+/// the 32-bit floats a path and a canvas transform hold step by 4 px: the lines
+/// jumped that far beside a basemap that slides. Near the anchor they step by
+/// well under a pixel, and the anchor's own distance from the camera is
+/// worked out in 64 bits before the canvas sees it.
 library;
 
 import 'dart:async';
@@ -67,15 +74,29 @@ Color? trafficColour(double? ratio) {
 
 const _crs = Epsg3857();
 
-/// Held across openings of the view, and across a rebuild of the layer: where
-/// the stretches land in the map's own plane. The server and the catalog they
-/// came from are kept with them, since another city has other stretches.
-({(String, String?) city, List<List<Offset>> lines})? _held;
+/// Where the stretches land in the map's own plane at [_zoom], as offsets
+/// from [anchor], a point of the city in that plane.
+typedef TrafficPlane = ({Offset anchor, List<List<Offset>> lines});
 
-List<List<Offset>> _project(Streets streets) => [
-  for (final line in streets.lines)
-    _right([for (final p in line) _crs.latLngToOffset(p, _zoom)]),
-];
+/// Held across openings of the view, and across a rebuild of the layer. The
+/// server and the catalog they came from are kept with them, since another
+/// city has other stretches.
+({(String, String?) city, TrafficPlane plane})? _held;
+
+/// The stretches of [streets] in the map's plane, about their first point.
+TrafficPlane projectStreets(Streets streets) {
+  final first = streets.lines.where((l) => l.isNotEmpty).firstOrNull?.first;
+  final anchor = first == null
+      ? Offset.zero
+      : _crs.latLngToOffset(first, _zoom);
+  return (
+    anchor: anchor,
+    lines: [
+      for (final line in streets.lines)
+        _right([for (final p in line) _crs.latLngToOffset(p, _zoom) - anchor]),
+    ],
+  );
+}
 
 /// The same line, shifted [_aside] to the right of the way it is travelled.
 /// Screen y runs down, so the right of a step is its normal turned that way.
@@ -133,7 +154,7 @@ class TrafficLayer extends StatefulWidget {
 }
 
 class _TrafficLayerState extends State<TrafficLayer> {
-  List<_Band>? _drawn;
+  ({Offset anchor, List<_Band> bands})? _drawn;
   Timer? _timer;
 
   @override
@@ -153,7 +174,7 @@ class _TrafficLayerState extends State<TrafficLayer> {
     try {
       final city = (widget.api.base, widget.api.catalogTag);
       if (_held?.city != city) {
-        _held = (city: city, lines: _project(await widget.api.streets()));
+        _held = (city: city, plane: projectStreets(await widget.api.streets()));
       }
     } on Exception {
       // Nothing to colour, so the view is simply the map it sits on
@@ -165,7 +186,11 @@ class _TrafficLayerState extends State<TrafficLayer> {
   Future<void> _ask() async {
     try {
       // Built here rather than in `build`, which runs on every pan and frame
-      final drawn = _bandsOf(_held!.lines, await widget.api.traffic());
+      final plane = _held!.plane;
+      final drawn = (
+        anchor: plane.anchor,
+        bands: _bandsOf(plane.lines, await widget.api.traffic()),
+      );
       if (mounted) setState(() => _drawn = drawn);
     } on Exception {
       // The last numbers stay up rather than the view emptying for a minute
@@ -179,16 +204,25 @@ class _TrafficLayerState extends State<TrafficLayer> {
     return RepaintBoundary(
       child: CustomPaint(
         size: Size.infinite,
-        painter: _Painter(camera: MapCamera.of(context), bands: drawn),
+        painter: _Painter(
+          camera: MapCamera.of(context),
+          anchor: drawn.anchor,
+          bands: drawn.bands,
+        ),
       ),
     );
   }
 }
 
 class _Painter extends CustomPainter {
-  const _Painter({required this.camera, required this.bands});
+  const _Painter({
+    required this.camera,
+    required this.anchor,
+    required this.bands,
+  });
 
   final MapCamera camera;
+  final Offset anchor;
   final List<_Band> bands;
 
   @override
@@ -196,12 +230,12 @@ class _Painter extends CustomPainter {
     // The whole overlay under one transform - the same one the map applies to a
     // projected point - so nothing is rebuilt when the camera moves
     final scale = math.pow(2.0, camera.zoom - _zoom).toDouble();
-    final origin = _crs.latLngToOffset(camera.center, _zoom);
+    final shift = anchor - _crs.latLngToOffset(camera.center, _zoom);
     canvas.save();
     canvas.translate(size.width / 2, size.height / 2);
     canvas.rotate(camera.rotationRad);
     canvas.scale(scale);
-    canvas.translate(-origin.dx, -origin.dy);
+    canvas.translate(shift.dx, shift.dy);
     final paint = Paint()
       ..style = PaintingStyle.stroke
       // Scaled back out, so a stretch is the same width at every zoom
@@ -217,6 +251,7 @@ class _Painter extends CustomPainter {
   @override
   bool shouldRepaint(_Painter old) =>
       old.bands != bands ||
+      old.anchor != anchor ||
       old.camera.zoom != camera.zoom ||
       old.camera.center != camera.center ||
       old.camera.rotation != camera.rotation;

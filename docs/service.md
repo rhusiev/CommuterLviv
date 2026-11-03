@@ -528,8 +528,12 @@ past another's terminus still pools its own view of the street.
 
 Neither client draws the stretches one at a time. The phone projects them once,
 at zoom 18, and gathers them into one path per colour, so a frame is a couple of
-dozen `drawPath` calls under a single transform and panning re-projects nothing;
-the browser hands maplibre one GeoJSON source and replaces its data only when
+dozen `drawPath` calls under a single transform and panning re-projects nothing.
+It keeps them as offsets from a point of the city (`projectStreets`): at zoom 18
+Lviv lies some 38 million pixels from the plane's origin, where the 32-bit floats
+of a path and a canvas transform step by 4 px, and the lines visibly jumped
+beside the basemap when zoomed in and panned. The anchor's distance from the
+camera is worked out in 64 bits before the canvas sees it. The browser hands maplibre one GeoJSON source and replaces its data only when
 new numbers arrive. Both push each line to the right of its own travel, so the
 two directions of a street sit side by side rather than one hiding the other.
 
