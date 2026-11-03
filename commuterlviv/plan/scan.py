@@ -22,9 +22,11 @@ CHANGE_SLACK = (60.0, 90.0, 150.0, 180.0, 210.0, 270.0, 300.0)
 _SLACK_BY_S = np.interp(np.arange(int(CHANGE_AHEAD[-1]) + 1), CHANGE_AHEAD,
                         CHANGE_SLACK).tolist()
 
-# s after the journey's arrival within which another way to the door still
-# counts as a backup: missing the bus stings less when the next way is soon
-BACKUP_WINDOW = 1800.0
+# s after a ride's departure within which another way leaving its stop counts
+# as a backup: missing the bus stings less when the next way is soon. Counted
+# from the departure, not from the journey's arrival, so every option boarding
+# at one stop at one time lists the same ways. Chosen, not derived
+BACKUP_WINDOW = 2700.0
 
 # s a tracked vehicle may leave before somebody walking to it gets there and
 # still be caught, waving to its driver. Caught only by hurrying, all the
@@ -267,8 +269,8 @@ class _Profile:
 
     def backed(self, found):
         """Each journey with, per leg, the other ways to the door from where the
-        leg boards: leaving after the chosen departure, reaching the door within
-        BACKUP_WINDOW of the journey's arrival, and searched as the journey was.
+        leg boards: leaving after the chosen departure, by at most
+        BACKUP_WINDOW, and searched as the journey was.
         So a route parting from the chosen one short of the door counts, and so
         does one needing a change; the chosen route's next run counts, the
         chosen departure itself not, so a last bus of the day has none. Walks
@@ -335,8 +337,8 @@ class _Profile:
         for leg in j.legs:
             runs = {}
             for back, (d, arr, walked) in ways.get(leg.a, {}).items():
-                if leg.kind == "ride" and leg.dep < d and \
-                        arr <= j.arr + BACKUP_WINDOW:
+                if leg.kind == "ride" and \
+                        leg.dep < d <= leg.dep + BACKUP_WINDOW:
                     routes = tuple(self.trips[trip_of[c]][0] for c, *_ in back)
                     runs.setdefault(routes, []).append((d, arr, walked, back))
             scored = []
