@@ -97,6 +97,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final Set<int> _routes = {};
 
+  /// The blurred surfaces' shared backdrop, kept so a rebuild does not
+  /// make them all rebuild for a new one.
+  final _backdrop = BackdropKey();
+
   /// The route ids last kept on the device, so an unchanged set is not
   /// written again.
   List<String>? _kept;
@@ -1100,83 +1104,87 @@ class _HomeScreenState extends State<HomeScreen> {
     // so each piece is stacked with its own inset
     return Blurring(
       on: _blur,
-      child: PopScope(
-        // Back from another tab returns to the map, as Android's tabs do, rather
-        // than leaving the app
-        canPop: _tab == _mapTab,
-        onPopInvokedWithResult: (didPop, _) {
-          // On the map, what held back was a panel folding itself
-          if (didPop || _tab == _mapTab) return;
-          // Back from a line is to the routes grid, as its own back button goes
-          _lineOpen ? _closeRoute() : _pickTab(_mapTab);
-        },
-        child: Scaffold(
-          body: Stack(
-            children: [
-              IndexedStack(
-                index: switch (_tab) {
-                  _mineTab => 2,
-                  _linesTab when !_lineOpen => 1,
-                  _ => 0,
-                },
-                children: [
-                  _mapPage(catalog, live),
-                  _linesPage(catalog),
-                  MineTab(
-                    catalog: catalog,
-                    live: live,
-                    pins: _pins,
-                    onPins: _savePins,
-                    onStop: (stop) {
-                      setState(_uncover);
-                      _openStop(stop, fly: true);
-                    },
-                    watching: _routes,
-                    onWatch: _toggleRoute,
-                    onLine: _openRoute,
-                    places: _sets?.places ?? const [],
-                    onPlaces: _places,
-                    onPlace: (place) => _openPlace(place.name, place.at),
-                    sets: _sets,
-                    onActivate: _activateSet,
-                    onRename: (set, name) => _changeSets(
-                      () => widget.api.updateSet(set.id, name, set.routes),
+      // One backdrop read shared by every blurred surface, not one each
+      child: BackdropGroup(
+        backdropKey: _backdrop,
+        child: PopScope(
+          // Back from another tab returns to the map, as Android's tabs do, rather
+          // than leaving the app
+          canPop: _tab == _mapTab,
+          onPopInvokedWithResult: (didPop, _) {
+            // On the map, what held back was a panel folding itself
+            if (didPop || _tab == _mapTab) return;
+            // Back from a line is to the routes grid, as its own back button goes
+            _lineOpen ? _closeRoute() : _pickTab(_mapTab);
+          },
+          child: Scaffold(
+            body: Stack(
+              children: [
+                IndexedStack(
+                  index: switch (_tab) {
+                    _mineTab => 2,
+                    _linesTab when !_lineOpen => 1,
+                    _ => 0,
+                  },
+                  children: [
+                    _mapPage(catalog, live),
+                    _linesPage(catalog),
+                    MineTab(
+                      catalog: catalog,
+                      live: live,
+                      pins: _pins,
+                      onPins: _savePins,
+                      onStop: (stop) {
+                        setState(_uncover);
+                        _openStop(stop, fly: true);
+                      },
+                      watching: _routes,
+                      onWatch: _toggleRoute,
+                      onLine: _openRoute,
+                      places: _sets?.places ?? const [],
+                      onPlaces: _places,
+                      onPlace: (place) => _openPlace(place.name, place.at),
+                      sets: _sets,
+                      onActivate: _activateSet,
+                      onRename: (set, name) => _changeSets(
+                        () => widget.api.updateSet(set.id, name, set.routes),
+                      ),
+                      onDelete: (set) =>
+                          _changeSets(() => widget.api.deleteSet(set.id)),
+                      username: widget.username,
+                      onAccount: _openAccount,
                     ),
-                    onDelete: (set) =>
-                        _changeSets(() => widget.api.deleteSet(set.id)),
-                    username: widget.username,
-                    onAccount: _openAccount,
+                  ],
+                ),
+                if (_planning) _planner(catalog),
+                if (_lineOpen) _line(catalog, live),
+                Positioned(
+                  left: floatingGap,
+                  right: floatingGap,
+                  top: MediaQuery.paddingOf(context).top + floatingGap,
+                  child: _TopBar(
+                    onSearch: _search,
+                    onLayers: _openLayers,
+                    layered: _allLines || _traffic,
                   ),
-                ],
-              ),
-              if (_planning) _planner(catalog),
-              if (_lineOpen) _line(catalog, live),
-              Positioned(
-                left: floatingGap,
-                right: floatingGap,
-                top: MediaQuery.paddingOf(context).top + floatingGap,
-                child: _TopBar(
-                  onSearch: _search,
-                  onLayers: _openLayers,
-                  layered: _allLines || _traffic,
                 ),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: MediaQuery.paddingOf(context).bottom + floatingGap,
-                child: Center(
-                  child: _Tabs(selected: _tab, onPick: _pickTab),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: MediaQuery.paddingOf(context).bottom + floatingGap,
+                  child: Center(
+                    child: _Tabs(selected: _tab, onPick: _pickTab),
+                  ),
                 ),
-              ),
-              Positioned(
-                left: floatingGap,
-                right: floatingGap,
-                top: floatingTop(context),
-                child: QuietBanner(live: live),
-              ),
-              _Status(live: live),
-            ],
+                Positioned(
+                  left: floatingGap,
+                  right: floatingGap,
+                  top: floatingTop(context),
+                  child: QuietBanner(live: live),
+                ),
+                _Status(live: live),
+              ],
+            ),
           ),
         ),
       ),
