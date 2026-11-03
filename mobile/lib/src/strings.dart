@@ -687,8 +687,8 @@ const _en = Strings(
   today: 'Today',
   tomorrow: 'Tomorrow',
   backups: 'Backups',
-  backupsWhy: 'Later ways from the same stop if you miss a ride, arriving within half an hour of the plan. Outlined: a vehicle already in your plan.',
-  noBackup: 'None within half an hour',
+  backupsWhy: 'Later ways from the same stop if you miss a ride, leaving within 45 minutes of it. Outlined: a vehicle already in your plan.',
+  noBackup: 'None within 45 minutes',
   moreBackups: _enMoreBackups,
   scheduleWhy:
       'No vehicle tracked for this ride yet - the time is from the timetable',
@@ -985,8 +985,8 @@ const _uk = Strings(
   today: 'Сьогодні',
   tomorrow: 'Завтра',
   backups: 'Запасні',
-  backupsWhy: 'Пізніші способи з тієї ж зупинки, якщо ви пропустили рейс, з прибуттям щонайбільше на пів години пізніше. У рамці - транспорт, який уже є у вашому плані.',
-  noBackup: 'Жодного за пів години',
+  backupsWhy: 'Пізніші способи з тієї ж зупинки, якщо ви пропустили рейс, що вирушають протягом 45 хвилин після нього. У рамці - транспорт, який уже є у вашому плані.',
+  noBackup: 'Жодного за 45 хвилин',
   moreBackups: _ukMoreBackups,
   scheduleWhy:
       'Для цієї поїздки ще не відстежується транспорт - час із розкладу',
