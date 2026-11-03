@@ -1,0 +1,9 @@
+- Lines tab reworked around a select-all box, sets in a picker
+- The lines you watch survive a restart
+- Optional low-floor marks; doubtful arrivals in amber
+- An open line shows its first and last departure and how often it runs
+- Vehicle card: fleet number, last seen, follow it on the map
+- Recent searches; leave buses, trams or trolleybuses out of a journey
+- Optional close options when planning
+- Following: done legs leave the map, no stale alerts
+- Traffic lines stay put when zoomed in
