@@ -233,12 +233,18 @@ def _split_number(query_words: list[str]) -> tuple[list[str], str, list[str]]:
     """A house number at the end of the query, the street words before it, and
     the number as it was typed.
 
-    A number is the run of words at the end that start with a digit: "15",
-    "15а", and "15/2", which the word split leaves as "15" and "2". The whole
-    query being such a run is not a street and a number - "15" and "154 км"
-    are names - and neither is a number with no street to put it on.
+    A number is the run of words at the end that start with a digit, "15",
+    "15а", and "15/2", which the word split leaves as "15" and "2", together
+    with a single letter typed apart from it: the address is written "1-А",
+    and the split cuts that into "1" and "а". The whole query being such a run
+    is not a street and a number - "15" and "154 км" are names - and neither
+    is a number with no street to put it on.
     """
     cut = len(query_words)
+    if (cut >= 2 and len(query_words[cut - 1]) == 1
+            and not query_words[cut - 1].isdigit()
+            and query_words[cut - 2][:1].isdigit()):
+        cut -= 1
     while cut and query_words[cut - 1][:1].isdigit():
         cut -= 1
     if cut == 0 or cut == len(query_words):
@@ -300,8 +306,9 @@ def _address_hits(db: sqlite3.Connection, street_words: list[str], number: str,
     hits = [{
         "score": scores[street_id],
         # Every typed word matched exactly enough to find the house, so this
-        # is not a prefix-only guess and belongs in a client's main list.
-        "exact_count": len(street_words) + 1,
+        # is not a prefix-only guess and belongs in a client's main list. A
+        # number split into two words, "15/2", counts as both.
+        "exact_count": len(street_words) + len(number_words),
         "is_area": False,
         # A house is nobody's POI: show it as the address it is.
         "category": "",
