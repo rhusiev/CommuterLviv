@@ -305,8 +305,12 @@ stored journeys and an older service have no `stops`.
 
 Every ride also carries its `backups`, `[{rides: [{route, dep, arr, a, b,
 live, planned}, ...], arr, walk}, ...]`: the other ways to the door from the
-stop it is boarded at, leaving after the chosen departure and reaching the door
-at most half an hour after the journey arrives (`BACKUP_WINDOW`). `rides` is how
+stop it is boarded at, leaving after the chosen departure by at most 45 minutes
+(`BACKUP_WINDOW`, chosen, not derived). It is counted from the departure, not
+from the journey's arrival, so every option boarding at one stop at one time
+lists the same ways: until 2026-11-03 a window of half an hour after each
+option's own arrival listed А27 at 20:02 under an option at the door at 19:55
+and not under one at 19:43, both boarding А16 at 19:24 at the same stop. `rides` is how
 a way gets there, the first leaving from the stop, `arr` is when it reaches the
 door and `walk` the seconds it spends on foot. A ride `planned` is on a vehicle
 the journey itself rides further along: such a way catches the plan up after a
@@ -332,8 +336,11 @@ never a way the search itself would not take: up to `ROUNDS` rides, the slack
 every change needs (`change_slack`), and every walk - to the door and between stops
 - under the same caps (`WALK_CAPS`, below). The scan runs backwards from the
 door over every hop of every trip between now and the latest arrival that
-counts: the whole walk, or `LONGEST_WALK` (4 h) when there is none, plus
-`BACKUP_WINDOW`. Each hop learns the earliest door arrival from riding it in at
+counts: a backup leaving `BACKUP_WINDOW` after a ride the whole walk bounds,
+and riding no slower than that walk, so twice the whole walk plus the window -
+or `LONGEST_WALK` (4 h) plus the window when there is no walk. That made two
+reported searches of 2026-11-02 5-8% slower (650 against 618 ms and 842
+against 777, median of 5 on the dev server). Each hop learns the earliest door arrival from riding it in at
 most 1, 2 and 3 rides under each walking cap, and each stop keeps the
 departures worth boarding there. The options are read at the stops the origin
 walks to, at the time the walk gets there; the backups at the stop each ride
@@ -544,9 +551,12 @@ cannot. It asks two sources. The first is a local index, `data/lviv-search.sqlit
 built by osm-mapidx (https://github.com/rhusiev/osm-mapidx) with
 `python -m mapidx.cli build ukraine-latest.osm.pbf --region lviv`; its search
 code is vendored as `commuterlviv/mapidx/`. It forgives typos and Latin
-transliteration, and holds each street once, but no house numbers. The second is
-Photon over OpenStreetMap, biased to the city, which has both. A query with a
-digit is a house address, so Photon leads it. Otherwise the index's places with
+transliteration, holds each street once, and reads a house number off the street
+that number is tagged on. The second is Photon over OpenStreetMap, biased to the
+city, which knows addresses too. A query with a digit is a house address, so
+Photon's houses lead it and the index's follow; a house from the index is named
+for its street and number and placed by its settlement, which is what tells one
+village's "Садова 15" from another's. Otherwise the index's places with
 the query in their own name lead, streets first, then Photon's, then the index's
 places only on or near something of that name: "проспект Шевченка" is the avenue
 before the cafés on it, and "зелена" is Зелена вулиця before Зелена Сливка.

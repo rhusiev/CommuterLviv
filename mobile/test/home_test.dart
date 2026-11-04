@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderBackdropFilter;
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -335,6 +336,23 @@ void main() {
     await tester.pump();
 
     expect(prefs.getStringList('commuterlviv.watched'), ['r1']);
+    await pumpQuiet(tester);
+    await _done(tester, reported);
+  });
+
+  testWidgets('every surface blurring the map shares one backdrop', (
+    tester,
+  ) async {
+    final reported = FlutterError.onError!;
+    await _pumpHome(tester);
+
+    final keys = {
+      for (final e in find.byType(BackdropFilter).evaluate())
+        (e.renderObject! as RenderBackdropFilter).backdropKey,
+    };
+    expect(find.byType(BackdropFilter), findsAtLeastNWidgets(2));
+    expect(keys, hasLength(1));
+    expect(keys.single, isNotNull);
     await pumpQuiet(tester);
     await _done(tester, reported);
   });

@@ -7,6 +7,7 @@ Latin-script Ukrainian in a search box, which often disagrees with the standard
 (г as g rather than h, ц as c rather than ts).
 """
 
+import re
 import unicodedata
 
 _KMU_BASE = {
@@ -75,6 +76,11 @@ def romanisations(text: str) -> list[tuple[str, str]]:
     return [(scheme, value) for value, scheme in seen.items()]
 
 
+# Latin letters NFKD leaves whole, as their bar is no combining mark: without
+# this "zloczow" never meets the stored "złoczow" of Золочів's name:pl
+_UNDECOMPOSED = str.maketrans({"ł": "l"})
+
+
 def normalise(text: str) -> str:
     """Fold case and drop accents so Cyrillic compares like ASCII does.
 
@@ -85,12 +91,35 @@ def normalise(text: str) -> str:
 
     Python's NFKD decomposition handles Cyrillic from Unicode 15 onwards (й
     decomposes to U+0438 and U+0306, the breve), so the only step after that
-    is dropping the combining mark. The Dart side has to do the same folding
+    is dropping the combining mark, and then folding the few letters that do
+    not decompose at all (`_UNDECOMPOSED`). The Dart side has to do the same folding
     by hand because there is no NFKD in Dart's stdlib - the `_folded` map in
     `app/lib/src/text.dart` mirrors this NFKD result.
     """
     decomposed = unicodedata.normalize("NFKD", text.casefold())
-    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    bare = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    return bare.translate(_UNDECOMPOSED)
+
+
+# Letters that exist in both alphabets as the same glyph: a house number is
+# written "1-А", "1а" or "1a" for the same house, depending on who mapped it
+# and which layout the person searching for it has.
+_HOUSE_LETTERS = str.maketrans({
+    "а": "a", "е": "e", "і": "i", "о": "o",
+    "р": "p", "с": "c", "у": "y", "х": "x",
+})
+_NOT_IN_A_NUMBER = re.compile(r"[^0-9a-zа-яіїєґ]")
+
+
+def number_key(value: str) -> str:
+    """A house number reduced to what makes two spellings of it the same house.
+
+    The separators go and the letters shared by both alphabets fold to Latin,
+    so "15-А", "15а" and "15A" all key as "15a". Both sides of the comparison -
+    the tag being indexed and the query - are put through this.
+    """
+    folded = normalise(value).translate(_HOUSE_LETTERS)
+    return _NOT_IN_A_NUMBER.sub("", folded)
 
 
 def romanise_context(text: str) -> list[str]:

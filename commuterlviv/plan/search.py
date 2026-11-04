@@ -85,7 +85,10 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
              if assess and arrivals is not None else {})
     paced = [c * walk.pace for c in WALK_CAPS]
     caps = (limit, *(c for c in paced if c < limit))
-    hi = now + (walked if walked is not None else LONGEST_WALK) + BACKUP_WINDOW
+    # The latest arrival that counts: a backup leaves at most BACKUP_WINDOW
+    # after a ride the whole walk bounds, and rides no slower than that walk
+    hi = now + BACKUP_WINDOW + \
+        (2 * walked if walked is not None else LONGEST_WALK)
     soonest = access if trip else _quickest(access, hurry)
     for quiet in (False, True):
         hops, trips = _connections(tt, live, trust, now, midnight, hi, quiet,

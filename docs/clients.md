@@ -191,7 +191,11 @@ their own icon. Above that sit the utilities everything is built from - `panel`,
 `bar`, `fab`, `inset-panel`, `btn`, `btn-quiet`, `field`, `field-bar` - and each
 is translucent, blurred, a hairline ring and a soft shadow rather than a border,
 because the map underneath is the context. The app's `Floating` is the same 80%
-panel over a blur of the map behind it. A dialog dims the page and, on the web,
+panel over a blur of the map behind it. Its blurs are grouped
+(`BackdropFilter.grouped` under the home screen's `BackdropGroup`), so on
+Impeller every surface shares one read of the map behind it instead of each
+taking its own on every frame; on Skia, and outside the home screen, each still
+blurs on its own. A dialog dims the page and, on the web,
 blurs it. "Blur behind panels" in the layers panel turns all of it off, for a
 phone that stutters under it, and the surfaces that blurred are then solid
 (`no-blur` on the web's `<html>`, `Blurring` in the app). Nothing outside `app.css` names a `slate-*` shade for a surface.

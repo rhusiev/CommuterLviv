@@ -498,8 +498,8 @@ class Journey {
   /// The weakest ground any ride in it stands on.
   final Confidence confidence;
 
-  /// Distinct routes repeating the weakest ride within half an hour of
-  /// boarding it; 0 on a pure walk, or against an older service.
+  /// Distinct routes repeating the weakest ride, leaving within 45 minutes of
+  /// it; 0 on a pure walk, or against an older service.
   final int backup;
   final List<Leg> legs;
 
