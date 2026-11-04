@@ -4,7 +4,7 @@ import pytest
 from commuterlviv import walk
 from commuterlviv.live import geocode, wire
 
-from .places_index import Place, write
+from .places_index import House, Place, write
 
 # how far a test point stands from an edge, well inside walk.MARGIN
 STEP = walk.MARGIN / 2
@@ -133,6 +133,16 @@ def test_the_index_s_places_named_only_by_a_house_number_are_left_out(tmp_path):
     _, found = geocode.Geocoder("", index=index)._local("шевченка")
 
     assert {h["name"] for h in found} == {"36,6", "№120", "22 Гектари"}
+
+
+def test_the_index_finds_a_house_by_its_street_and_number(tmp_path):
+    house = House("вулиця Стрийська", "15", "Львів", *geocode.CENTRE)
+    index = write(tmp_path / "search.sqlite", [], houses=[house])
+
+    named, nearby = geocode.Geocoder("", index=index)._local("стрийська 15")
+
+    assert [(h["name"], h["where"]) for h in named] == [("вулиця Стрийська 15", "Львів")]
+    assert nearby == []
 
 
 def test_the_index_tells_a_place_named_so_from_one_on_a_street_named_so(tmp_path):

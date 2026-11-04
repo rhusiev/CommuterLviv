@@ -5,13 +5,13 @@ The local index is osm-mapidx's (`data/lviv-search.sqlite`).
 publishes it, and `renew_index` downloads it at that pace. It survives typos
 and knows each place's surroundings, so "аптека сихів" and "форум львв" both
 find what was meant, and it answers without leaving the machine. It has the
-streets, one place each, but no house numbers.
+streets, one place each, and their house numbers.
 
-Photon (https://photon.komoot.io) fills that in. It is used rather than
-Nominatim because it indexes every named object in OSM and answers a prefix,
-which is what a search box needs: "vul. Ho" finds the street. The public
-instance asks that anyone leaning on it run their own, which is one setting
-away: point COMMUTERLVIV_PHOTON_URL at it.
+Photon (https://photon.komoot.io) fills in what the index does not know. It is
+used rather than Nominatim because it indexes every named object in OSM and
+answers a prefix, which is what a search box needs: "vul. Ho" finds the street.
+The public instance asks that anyone leaning on it run their own, which is one
+setting away: point COMMUTERLVIV_PHOTON_URL at it.
 
 Either source alone is enough to search; with neither the endpoint answers 503.
 """
@@ -113,9 +113,9 @@ class Geocoder:
 
     def _merge(self, q):
         """Both sources, one list, the city's own places first. Among those
-        and among the rest, a digit means a house address, which only Photon
-        knows, so it leads; otherwise the index's places named so do, streets
-        first, then Photon's, then the index's places only on or near
+        and among the rest, a digit means a house address, so Photon's houses
+        lead and the index's follow; otherwise the index's places named so do,
+        streets first, then Photon's, then the index's places only on or near
         something named so. Photon's street is left out where the index found
         a street of its name: the index has a street once, Photon once per
         district it runs through. Photon failing is fatal only when it was
@@ -149,8 +149,14 @@ class Geocoder:
                                within=BOX):
             key, _, value = h["category"].partition("=")
             if not HOUSE_NUMBER.fullmatch(h["name"]):
+                # A house is nobody's POI and carries no category: the
+                # settlement it stands in is the whole of its context.
+                if h["category"]:
+                    where = h["address"][NEAR:NEAR + 2]
+                else:
+                    where = h["address"][:1]
                 (named if h["named"] else nearby).append({
-                    "name": h["name"], "where": ", ".join(h["address"][NEAR:NEAR + 2]),
+                    "name": h["name"], "where": ", ".join(where),
                     "lat": h["lat"], "lon": h["lon"], "kind": value,
                     STREET: key == "highway"})
         named.sort(key=lambda h: not h[STREET])
