@@ -30,7 +30,7 @@ import math
 import sqlite3
 from difflib import SequenceMatcher
 
-from .translit import normalise
+from .translit import normalise, number_key
 from .vocab import NAME_BIT, WORD_RE, decode
 
 MIN_WORD_SCORE = 0.6
@@ -55,8 +55,18 @@ MIN_PROBE = 3
 # context: everyone types the name, the context only narrows it.
 CONTEXT_PENALTY = 0.01
 EARTH_RADIUS_M = 6_371_000
+
 # SQLite's default cap on a statement's parameters, since 3.32
 MAX_VARIABLES = 32_766
+
+# "Садова 15" exists in a dozen villages and each is the right answer to
+# someone standing near one of them, so the houses are a shortlist, not one
+# hit: everything behind them is what the query without the number finds.
+MAX_ADDRESS_HITS = 5
+# A query names a street, not a street type. "вулиця 15" matches every street
+# called "вулиця" in the oblast, and asking the database about all of them at
+# once is neither answerable nor an answer.
+MAX_ADDRESS_STREETS = 200
 
 # The end of the Unicode range, so `word < prefix + LAST_CHAR` is every
 # extension of the prefix and nothing else.
@@ -219,22 +229,109 @@ def _within(db: sqlite3.Connection, ranked: list[tuple[int, list[float]]],
     return [hit for hit in ranked if hit[0] in inside]
 
 
-def search(db_path: str, query: str, limit: int = 20,
-           threshold: float = MIN_WORD_SCORE,
-           origin: tuple[float, float] | None = None,
-           within: tuple[float, float, float, float] | None = None) -> list[dict]:
-    """Ranked hits, each a dict of score, name, address, matched, named, category,
-    lon, lat, metres.
+def _split_number(query_words: list[str]) -> tuple[list[str], str, list[str]]:
+    """A house number at the end of the query, the street words before it, and
+    the number as it was typed.
 
-    `within`, `(south, west, north, east)`, keeps only the places inside it, and
-    before the cut to a few times `limit`: an index of a whole region holds more
-    places of one name than that, and a box drawn round its hits afterwards can
-    be left with none of them."""
-    query_words = WORD_RE.findall(normalise(query))
-    if not query_words:
-        return []
+    A number is the run of words at the end that start with a digit, "15",
+    "15а", and "15/2", which the word split leaves as "15" and "2", together
+    with a single letter typed apart from it: the address is written "1-А",
+    and the split cuts that into "1" and "а". The whole query being such a run
+    is not a street and a number - "15" and "154 км" are names - and neither
+    is a number with no street to put it on.
+    """
+    cut = len(query_words)
+    if (cut >= 2 and len(query_words[cut - 1]) == 1
+            and not query_words[cut - 1].isdigit()
+            and query_words[cut - 2][:1].isdigit()):
+        cut -= 1
+    while cut and query_words[cut - 1][:1].isdigit():
+        cut -= 1
+    if cut == 0 or cut == len(query_words):
+        return query_words, "", []
+    typed = query_words[cut:]
+    return query_words[:cut], number_key("".join(typed)), typed
 
-    db = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+
+def _has_addresses(db: sqlite3.Connection) -> bool:
+    """An index built before house numbers were collected has no such table."""
+    return db.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                      "AND name = 'addresses'").fetchone() is not None
+
+
+def _address_hits(db: sqlite3.Connection, street_words: list[str], number: str,
+                  number_words: list[str],
+                  origin: tuple[float, float] | None,
+                  within: tuple[float, float, float, float] | None
+                  ) -> tuple[list[dict], bool]:
+    """The houses a street-and-number query asks for, and whether the street
+    is one of the indexed ones at all.
+
+    Each street is scored word by word the way a place is, so "стрийська",
+    "вул. стрийська" and "stryiska" all reach "вулиця Стрийська". Among the
+    streets that agree with every typed word, the ones that have the number
+    are the answer; a street that has no such number is still the street the
+    query named, and the caller shows the places on it.
+    """
+    scores: dict[int, float] = {}
+    names: dict[int, str] = {}
+    for street_id, name, text in db.execute("SELECT rowid, name, words FROM streets"):
+        here = text.split(" ")
+        score = min((_word_score(word, here) for word in street_words), default=0.0)
+        if score >= MIN_WORD_SCORE:
+            scores[street_id] = score
+            names[street_id] = name
+    if not scores:
+        return [], False
+    # An exact street word match is the street the query names. "Стрийська"
+    # also scores 0.7 against "Староміська", and a house on the street that
+    # merely looks like it is not the house asked for.
+    if max(scores.values()) == 1.0:
+        scores = {street: score for street, score in scores.items() if score == 1.0}
+        names = {street: names[street] for street in scores}
+    if len(scores) > MAX_ADDRESS_STREETS:
+        closest = sorted(scores, key=lambda street: -scores[street])
+        scores = {street: scores[street] for street in closest[:MAX_ADDRESS_STREETS]}
+        names = {street: names[street] for street in scores}
+
+    marks = ",".join("?" * len(scores))
+    rows = db.execute(
+        f"SELECT street_id, number, place, lon, lat FROM addresses "
+        f"WHERE number_key = ? AND street_id IN ({marks})",
+        [number, *scores]).fetchall()
+    if within is not None:
+        south, west, north, east = within
+        rows = [row for row in rows
+                if south <= row[4] <= north and west <= row[3] <= east]
+    hits = [{
+        "score": scores[street_id],
+        # Every typed word matched exactly enough to find the house, so this
+        # is not a prefix-only guess and belongs in a client's main list. A
+        # number split into two words, "15/2", counts as both.
+        "exact_count": len(street_words) + len(number_words),
+        "is_area": False,
+        # A house is nobody's POI: show it as the address it is.
+        "category": "",
+        "name": f"{names[street_id]} {number_text}",
+        "address": [place] if place else [],
+        "matched": [(word, scores[street_id]) for word in street_words]
+                   + [(word, 1.0) for word in number_words],
+        # The street is matched by its own name, and the number is the house
+        # on it, so a client may list this without the context-only penalty.
+        "named": True,
+        "lon": lon,
+        "lat": lat,
+        "metres": _distance_m(origin[0], origin[1], lat, lon) if origin else None,
+    } for street_id, number_text, place, lon, lat in rows]
+    hits.sort(key=lambda hit: (-hit["score"], hit["metres"] or 0,
+                               hit["address"], hit["name"]))
+    return hits[:MAX_ADDRESS_HITS], True
+
+
+def _ranked(db: sqlite3.Connection, query_words: list[str], limit: int,
+            threshold: float, origin: tuple[float, float] | None,
+            within: tuple[float, float, float, float] | None) -> list[dict]:
+    """The places the vocabulary and the full reads agree on, best first."""
     scores_by_place, exact_by_place, in_name_by_place = _tally(db, query_words)
     ranked = [(place, scores_by_place[place]) for place in scores_by_place
               if min(scores_by_place[place]) >= threshold]
@@ -249,7 +346,6 @@ def search(db_path: str, query: str, limit: int = 20,
     if within is not None:
         ranked = _within(db, ranked, within)
     if not ranked:
-        db.close()
         return []
 
     scored = {place: sum(scores) / len(scores) for place, scores in ranked}
@@ -261,7 +357,6 @@ def search(db_path: str, query: str, limit: int = 20,
         f"SELECT rowid, display_name, lon, lat, category FROM places "
         f"WHERE rowid IN ({marks})",
         best).fetchall()
-    db.close()
 
     ranked_dict = dict(ranked)
     hits = [{
@@ -289,6 +384,43 @@ def search(db_path: str, query: str, limit: int = 20,
     } for place, display, lon, lat, category in rows]
     hits.sort(key=lambda hit: (-hit["exact_count"], -hit["is_area"],
                                -hit["score"], hit["metres"] or 0, hit["name"]))
+    return hits[:limit]
+
+
+def search(db_path: str, query: str, limit: int = 20,
+           threshold: float = MIN_WORD_SCORE,
+           origin: tuple[float, float] | None = None,
+           within: tuple[float, float, float, float] | None = None) -> list[dict]:
+    """Ranked hits, each a dict of score, name, address, matched, named, category,
+    lon, lat, metres.
+
+    `within`, `(south, west, north, east)`, keeps only the places inside it, and
+    before the cut to a few times `limit`: an index of a whole region holds more
+    places of one name than that, and a box drawn round its hits afterwards can
+    be left with none of them. Houses are kept inside it the same way.
+
+    A trailing house number is read off the street it belongs to before the
+    words are searched, so "стрийська 15" is a house, not a place called "15".
+    """
+    query_words = WORD_RE.findall(normalise(query))
+    if not query_words:
+        return []
+
+    street_words, number, number_words = _split_number(query_words)
+    db = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    hits: list[dict] = []
+    on_street = False
+    if number and _has_addresses(db):
+        hits, on_street = _address_hits(db, street_words, number, number_words,
+                                        origin, within)
+    if on_street:
+        # The number was a house on a street the index knows, so the places
+        # that merely have it in their name - a railway switch called "15" -
+        # are not what the query meant, and the street is searched instead.
+        query_words = street_words
+    if len(hits) < limit:
+        hits += _ranked(db, query_words, limit - len(hits), threshold, origin, within)
+    db.close()
     return hits[:limit]
 
 

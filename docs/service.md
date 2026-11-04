@@ -551,9 +551,12 @@ cannot. It asks two sources. The first is a local index, `data/lviv-search.sqlit
 built by osm-mapidx (https://github.com/rhusiev/osm-mapidx) with
 `python -m mapidx.cli build ukraine-latest.osm.pbf --region lviv`; its search
 code is vendored as `commuterlviv/mapidx/`. It forgives typos and Latin
-transliteration, and holds each street once, but no house numbers. The second is
-Photon over OpenStreetMap, biased to the city, which has both. A query with a
-digit is a house address, so Photon leads it. Otherwise the index's places with
+transliteration, holds each street once, and reads a house number off the street
+that number is tagged on. The second is Photon over OpenStreetMap, biased to the
+city, which knows addresses too. A query with a digit is a house address, so
+Photon's houses lead it and the index's follow; a house from the index is named
+for its street and number and placed by its settlement, which is what tells one
+village's "Садова 15" from another's. Otherwise the index's places with
 the query in their own name lead, streets first, then Photon's, then the index's
 places only on or near something of that name: "проспект Шевченка" is the avenue
 before the cafés on it, and "зелена" is Зелена вулиця before Зелена Сливка.
