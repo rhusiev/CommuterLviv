@@ -8,7 +8,8 @@ from .. import walk as footpaths
 from .hops import _connections, _corridor
 from .journey import Aboard, Journey, Leg
 from .ranking import _listed, _rank
-from .scan import BACKUP_WINDOW, _Profile, _quickest, change_slack
+from .scan import (BACKUP_WINDOW, HURRY_WALK_M, _Profile, _quickest,
+                   change_slack)
 from .timetable import _seconds_since_midnight
 from .tracked import live_trips, route_confidence
 from .transfers import TRANSFER_CAP, _at_stops, _reach
@@ -44,8 +45,10 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
     `walk` and `transfers` paced to them. `hurry` is the share of that walk's
     time the walk to the first stop takes when they hurry, 1 for not at all;
     the departures only hurrying catches are options of their own
-    (`_Profile.hurrying`). Nothing of a vehicle type in `avoid` is ridden -
-    no option, backup or hurry - except a ride `origin` is already on.
+    (`_Profile.hurrying`), and only where the stop is within `HURRY_WALK_M`
+    and the journey would still beat walking the door to door unhurried.
+    Nothing of a vehicle type in `avoid` is ridden - no option, backup or
+    hurry - except a ride `origin` is already on.
 
     An `Aboard` origin is searched as getting off at the vehicle's next stop
     when it gets there, with the stops in reach of that one, and each journey
@@ -100,7 +103,11 @@ def journeys(tt, walk, transfers, origin, dest, now, arrivals=None,
         found = scan.options(access, start)
         more = scan.near(access, start, found)
         if trip is None:
-            more += scan.hurrying(access, hurry, start, found)
+            # a hurry option may ask for a dash, not a run: HURRY_WALK_M is in
+            # metres, the walk's own seconds are paced
+            cap = HURRY_WALK_M / footpaths.SPEED * walk.pace
+            more += scan.hurrying(access, hurry, start, found, cap,
+                                  math.inf if walked is None else walked)
             if close:
                 more += scan.close(access, start, found + more)
         found = scan.backed(found + more)
