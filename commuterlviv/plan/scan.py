@@ -33,6 +33,26 @@ BACKUP_WINDOW = 2700.0
 # same: better to hurry than to count on the driver. Chosen, not derived
 GRACE = 10.0
 
+# m the first stop may be away for an option only hurrying catches: a dash to
+# a bus, not a run across the district. Past this the unhurried journey would
+# not be offered at all, so catching it by running would send somebody on a
+# route they would never take with time to spare. Chosen, not derived
+HURRY_WALK_M = 800.0
+
+
+def _worth_hurrying(walk_s, cap_s, hurry, duration, ceiling):
+    """Whether a journey only hurrying catches is offered.
+
+    `walk_s` is the walk to the first stop at the usual pace and `cap_s` the
+    longest such walk a hurry option may ask for (`HURRY_WALK_M`, in seconds at
+    that pace): past it, the dash is a commute. `duration` is how long the
+    journey takes hurrying and `hurry` the share of the walk that takes, so
+    left unhurried it would start `walk_s * (1 - hurry)` earlier and take that
+    much longer; it must still beat `ceiling`, the time walking the whole way,
+    or nobody would take it with time to spare.
+    """
+    return walk_s <= cap_s and duration + walk_s * (1 - hurry) < ceiling
+
 
 def change_slack(ahead):
     """Seconds of slack a change `ahead` s from now needs (`CHANGE_SLACK`)."""
@@ -186,21 +206,32 @@ class _Profile:
                 found[(u, way)] = self._journey(u, t, now, way), way
         return list(found.values())
 
-    def hurrying(self, access, hurry, now, found):
+    def hurrying(self, access, hurry, now, found, cap, ceiling):
         """The options only hurrying to the first stop catches, as `options`
         gives them: read at the stops reached at `hurry` times the walk of
         `access`, and GRACE sooner, then kept where the first ride leaves
         before the usual walk gets there. One that only GRACE catches must
         ride a tracked vehicle, the only kind known to the second. Each walks
         to its stop at the hurried pace, so a little after the ride leaves for
-        one GRACE catches."""
+        one GRACE catches.
+
+        A candidate is kept only when the dash is within `cap` seconds at the
+        usual pace and the journey would still beat walking the whole way
+        (`ceiling`) unhurried (`_worth_hurrying`). A ride only GRACE catches
+        is the same walk ten seconds short, so neither rules it out.
+        """
         taken = {way for _, way in found}
         out = []
         for j, way in self.options(_quickest(access, hurry), now):
             walk, ride, *rest = j.legs
             quick = now + access[walk.b] * hurry
-            if way in taken or ride.dep >= now + access[walk.b] or \
-                    ride.dep < quick and ride.confidence != "live":
+            if way in taken or ride.dep >= now + access[walk.b]:
+                continue
+            if ride.dep < quick:
+                if ride.confidence != "live":
+                    continue
+            elif not _worth_hurrying(access[walk.b], cap, hurry,
+                                     j.arr - j.dep, ceiling):
                 continue
             walk = dataclasses.replace(walk, arr=quick)
             out.append((dataclasses.replace(j, legs=(walk, ride, *rest),
