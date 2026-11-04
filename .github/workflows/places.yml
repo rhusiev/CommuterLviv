@@ -23,7 +23,7 @@ permissions:
   contents: write
 
 env:
-  MAPIDX_COMMIT: b577f4e45d9ba91c2b5b2b0dac58e69715fea251
+  MAPIDX_COMMIT: 8fad8cfd2512deca1748e4b24d4fe2899c49d074
 
 jobs:
   build:
