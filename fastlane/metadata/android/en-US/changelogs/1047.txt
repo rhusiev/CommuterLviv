@@ -1,0 +1,2 @@
+- Floating panels blur from one read of the map behind them
+- A ride's backups say they leave within 45 minutes of boarding
