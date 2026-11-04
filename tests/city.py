@@ -22,6 +22,10 @@ from commuterlviv import collect, gtfs, localtime, network, overrides
 from commuterlviv.live.state import ETA, Arrivals
 
 DAY = datetime.datetime(2026, 10, 5, tzinfo=localtime.TZ)   # a Monday
+# The test city runs on every weekday of every year. A window that ends is a
+# suite that stops working on the day it ends, and one did: 20261231.
+CALENDAR_START = "20200101"
+CALENDAR_END = "20991231"
 STOPS = 5
 GAP_M = 500.0              # m between stops
 LEG_S = 100.0              # s the timetable gives a leg, so 5 m/s
@@ -98,8 +102,9 @@ def feed():
         "stop_times.txt": times,
         "calendar.txt": [{"service_id": "all", "monday": 1, "tuesday": 1,
                           "wednesday": 1, "thursday": 1, "friday": 1,
-                          "saturday": 1, "sunday": 1, "start_date": "20260101",
-                          "end_date": "20261231"}],
+                          "saturday": 1, "sunday": 1,
+                          "start_date": CALENDAR_START,
+                          "end_date": CALENDAR_END}],
     }
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w") as z:
