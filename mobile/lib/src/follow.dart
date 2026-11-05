@@ -291,6 +291,36 @@ class _Sample {
 /// Every leg must carry its line; an older service sends none
 bool followable(Journey j) => j.legs.every((l) => l.pts.isNotEmpty);
 
+/// The option of [options] to follow in place of [journey] after a fix off the
+/// walked line put the device somewhere else: the one still catching the route
+/// [journey] was going to ride from [leg] on, so the way to that bus is rebuilt
+/// while the bus itself is kept. A journey with no ride left is replaced by one
+/// that rides nothing. Null when none does - another bus is the rider's choice,
+/// not a repair.
+Journey? replacing(Journey journey, int leg, List<Journey> options) {
+  final route = _ridingNext(journey.legs, leg);
+  for (final option in options) {
+    final first = _firstRide(option.legs);
+    if (route == null ? first == null : first?.route == route) return option;
+  }
+  return null;
+}
+
+/// The route the first ride from [leg] on runs, or null walking all the way
+int? _ridingNext(List<Leg> legs, int leg) {
+  for (final l in legs.skip(leg)) {
+    if (l.kind == 'ride') return l.route;
+  }
+  return null;
+}
+
+Leg? _firstRide(List<Leg> legs) {
+  for (final l in legs) {
+    if (l.kind == 'ride') return l;
+  }
+  return null;
+}
+
 /// A journey begun on board starts on its ride, the rest walking or waiting
 Stage start(Journey j) {
   final first = j.legs.firstOrNull;

@@ -19,6 +19,7 @@ export function FollowCard({
   progress,
   caught,
   onSearch,
+  onRebuild,
   onEnd,
 }: {
   catalog: Catalog;
@@ -29,6 +30,9 @@ export function FollowCard({
   caught: Catch;
   /** Plans the rest of the way again; the journey is followed until another is */
   onSearch: () => void;
+  /** Off the walked line, the way to the next stop is searched again from
+   *  here; asked for by a tap, as every search is */
+  onRebuild: () => void;
   onEnd: () => void;
 }) {
   const done = progress !== null && progress !== "denied" && progress.stage.kind === "arrived";
@@ -92,6 +96,11 @@ export function FollowCard({
           </button>
         </div>
       </div>
+      {!done && progress !== null && progress !== "denied" && progress.astray && (
+        <button onClick={onRebuild} className="btn-quiet mt-1">
+          {t.rebuildWay}
+        </button>
+      )}
       {caught.kind !== "ok" && !done && (
         <CatchLine catalog={catalog} journey={journey} caught={caught} onSearch={onSearch} />
       )}

@@ -208,6 +208,7 @@ class Strings {
     required this.toGo,
     required this.passedStop,
     required this.offTheWay,
+    required this.rebuildWay,
     required this.hurryNow,
     required this.hurryAhead,
     required this.noLonger,
@@ -473,6 +474,7 @@ class Strings {
   final String Function(String distance) toGo;
   final String passedStop;
   final String offTheWay;
+  final String rebuildWay;
 
   /// What the watch on the next connection says: hurry while walking to it,
   /// a change ahead that needs hurrying, or a ride that will be missed
@@ -712,6 +714,7 @@ const _en = Strings(
   toGo: _enToGo,
   passedStop: 'You have passed your stop',
   offTheWay: 'You are off the planned way',
+  rebuildWay: 'Rebuild the way',
   hurryNow: _enHurryNow,
   hurryAhead: _enHurryAhead,
   noLonger: 'This journey no longer works',
@@ -1009,6 +1012,7 @@ const _uk = Strings(
   toGo: _ukToGo,
   passedStop: 'Ви проїхали свою зупинку',
   offTheWay: 'Ви зійшли з запланованого шляху',
+  rebuildWay: 'Прокласти шлях знову',
   hurryNow: _ukHurryNow,
   hurryAhead: _ukHurryAhead,
   noLonger: 'Цей шлях більше не працює',

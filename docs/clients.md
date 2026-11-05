@@ -97,12 +97,16 @@ fix, through a zoom too. A pan by hand lets go of it, so the way ahead can be
 looked at, and the locate button takes it back. The map draws only what is
 left (`underWay` in `lib/legs`): the legs already done are dropped once you
 wait or ride, and while you walk, the walk under way is drawn from the dot
-along what is left of its line, so the start moves with you; the plan itself is not searched again
-until a ride is missed or you are off the way, which the card says. `Follower` in `web/src/lib/follow.ts`, ported
-line for line to `mobile/lib/src/follow.dart`, works it out from the device's
-own fixes and the vehicles as the map draws them, on the device: where you are
-is never sent anywhere. Boarding is told from the fixes, not from a vehicle
-coming near. You must have gone `BOARD_M` (100 m) along the ride's line, away
+along what is left of its line, so the start moves with you; off the line
+the walk is left as planned, which the card says, and the plan itself is not
+searched again until a ride is missed or you ask. Off the way, the card offers
+Rebuild the way: one tap searches from where you are and follows the result
+when it still catches the same route, and opens the planner when it does not.
+`Follower` in `web/src/lib/follow.ts`, ported line for line to
+`mobile/lib/src/follow.dart`, works it out from the device's own fixes and the
+vehicles as the map draws them, on the device: it sends nothing, and where you
+are leaves the device only when a search is asked for. Boarding is told from
+the fixes, not from a vehicle coming near. You must have gone `BOARD_M` (100 m) along the ride's line, away
 from the stop, faster than `WALK_MAX_MPS` (2.5 m/s), over at least
 `BOARD_FIXES` (3) fixes. Only then is the vehicle you are on picked, as one of
 the route's that kept pace with you - seen beside you for half the fixes and

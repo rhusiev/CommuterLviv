@@ -474,6 +474,32 @@ export function plannedKmh(j: Journey): number | null {
   return needKmh(along(walk.pts ?? []), walk.dep, ride.dep);
 }
 
+/** The option of `options` to follow in place of `journey` after a fix off the
+ *  walked line put the device somewhere else: the one still catching the route
+ *  `journey` was going to ride from `leg` on, so the way to that bus is rebuilt
+ *  while the bus itself is kept. A journey with no ride left is replaced by one
+ *  that rides nothing. Null when none does - another bus is the rider's choice,
+ *  not a repair. `mobile/lib/src/follow.dart` is the same. */
+export function replacing(journey: Journey, leg: number, options: Journey[]): Journey | null {
+  const route = ridingNext(journey.legs, leg);
+  for (const option of options) {
+    const first = firstRide(option.legs);
+    if (route === null ? first === null : first?.route === route) return option;
+  }
+  return null;
+}
+
+/** The route the first ride from `leg` on runs, or null walking all the way */
+function ridingNext(legs: Leg[], leg: number): number | null {
+  for (const l of legs.slice(leg)) if (l.kind === "ride") return l.route ?? null;
+  return null;
+}
+
+function firstRide(legs: Leg[]): Leg | null {
+  for (const l of legs) if (l.kind === "ride") return l;
+  return null;
+}
+
 /** Caught at the usual pace; else at the hurrying one, or for a tracked vehicle
  * within `GRACE_S` of it; else missed */
 export function judge(r: Reach): "ok" | "hurry" | "missed" {
