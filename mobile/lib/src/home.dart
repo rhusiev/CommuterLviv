@@ -15,7 +15,7 @@ import 'package:vector_map_tiles/vector_map_tiles.dart';
 import 'api.dart';
 import 'eta.dart' show clockTime;
 import 'basemap_style.dart';
-import 'follow.dart' show Progress, Stage, StageKind;
+import 'follow.dart' show Progress, Stage, StageKind, replacing;
 import 'legs.dart' show underWay;
 import 'follow_card.dart';
 import 'followed.dart';
@@ -54,6 +54,10 @@ const _panelShare = 0.6;
 
 /// The margin a framed line or option keeps from each edge of the map
 const _framePad = 40.0;
+
+/// s between searching again from a fix that is off the walked line, so a fix
+/// every second does not search every second. Chosen, not derived
+const _repathEveryS = 20;
 
 /// A dot in the planner's A/B ring: a place, but neither end of a journey
 const _placeMark = '•';
@@ -104,6 +108,10 @@ class _HomeScreenState extends State<HomeScreen> {
   /// The route ids last kept on the device, so an unchanged set is not
   /// written again.
   List<String>? _kept;
+
+  /// When the walked way was last searched again from a stray fix, unix
+  /// seconds (`_repathEveryS`).
+  var _repathedAt = 0;
 
   /// The line open in the Lines tab. It outlives the tab, so leaving and
   /// coming back keeps it.
@@ -588,6 +596,36 @@ class _HomeScreenState extends State<HomeScreen> {
     _push();
     unawaited(_here.start());
     _tracking.start();
+  }
+
+  /// Off the walked line, the journey is searched again from where the device
+  /// is, so the walk to the bus is drawn from here rather than from where it
+  /// began. Asked for by a tap, as every search is: the fix goes to the
+  /// service only when the rider asks. A search that no longer catches the
+  /// same route is not forced on them.
+  Future<void> _repath(int leg) async {
+    final followed = _followed;
+    final here = _here.fix?.point;
+    if (followed == null || here == null) return;
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    if (now - _repathedAt < _repathEveryS) return;
+    _repathedAt = now;
+    final ({List<Journey> options, String? report}) answer;
+    try {
+      answer = await widget.api.plan(
+        here,
+        followed.to,
+        speed: widget.api.walkSpeed,
+        hurry: widget.api.hurrySpeed,
+      );
+    } on Exception {
+      return;
+    }
+    if (!mounted || !identical(_followed?.journey, followed.journey)) return;
+    final next = replacing(followed.journey, leg, answer.options);
+    if (next == null) return;
+    _to = followed.to;
+    _follow(next);
   }
 
   void _endFollow() {
@@ -1259,6 +1297,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   setState(() => _reached = (_following!, progress));
                 },
                 onSearch: _searchAgain,
+                onRebuild: (stage) => unawaited(_repath(stage.leg)),
                 onEnd: _endFollow,
               ),
             ),

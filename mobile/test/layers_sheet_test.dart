@@ -110,4 +110,30 @@ void main() {
     ];
     expect(keys, [key, key]);
   });
+
+  testWidgets('a floating surface tints over its blur, not under it', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: const Blurring(
+          on: true,
+          child: Floating(child: SizedBox.square(dimension: 40)),
+        ),
+      ),
+    );
+
+    // A tint under the grouped read is covered by the blurred map, which
+    // leaves the surface clear glass: the panel colour has to be the filter's
+    // child, and the material itself transparent
+    final tint = find.descendant(
+      of: find.byType(BackdropFilter),
+      matching: find.byWidgetPredicate(
+        (w) => w is ColoredBox && w.color == panel.withValues(alpha: floatingAlpha),
+      ),
+    );
+    expect(tint, findsOneWidget);
+    final material = tester.widget<Material>(find.byType(Material).last);
+    expect(material.color, Colors.transparent);
+  });
 }

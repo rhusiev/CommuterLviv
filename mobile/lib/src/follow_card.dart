@@ -56,6 +56,7 @@ class FollowCard extends StatefulWidget {
     required this.onMoved,
     this.onProgress,
     required this.onSearch,
+    required this.onRebuild,
     required this.onEnd,
     this.stage,
   });
@@ -83,6 +84,10 @@ class FollowCard extends StatefulWidget {
 
   /// Another way is asked for, from where the follower is
   final void Function(Stage) onSearch;
+
+  /// The way to the next stop is searched again from where the device is,
+  /// having strayed from the one walked
+  final void Function(Stage) onRebuild;
   final VoidCallback onEnd;
 
   @override
@@ -328,6 +333,14 @@ class _FollowCardState extends State<FollowCard> {
                         ),
                 ],
               ),
+              if (!done && (progress?.astray ?? false))
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () => widget.onRebuild(progress!.stage),
+                    child: Text(txt.rebuildWay),
+                  ),
+                ),
               if (!done && _caught.kind != CatchKind.ok)
                 _CatchRow(
                   said: _catchSaid(widget.catalog, widget.journey, _caught)!,
