@@ -69,7 +69,10 @@ class Floating extends StatelessWidget {
       );
     }
     return Material(
-      color: panel.withValues(alpha: floatingAlpha),
+      // The tint sits inside the filter, not here: a grouped read is the map
+      // alone, so a colour painted before it is painted over by the blurred
+      // map and the surface reads as clear glass
+      color: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       shape: shape,
       elevation: elevation,
@@ -83,7 +86,10 @@ class Floating extends StatelessWidget {
           sigmaX: floatingBlurSigma,
           sigmaY: floatingBlurSigma,
         ),
-        child: child,
+        child: ColoredBox(
+          color: panel.withValues(alpha: floatingAlpha),
+          child: child,
+        ),
       ),
     );
   }
