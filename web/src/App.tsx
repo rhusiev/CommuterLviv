@@ -29,6 +29,8 @@ import { useMapLayers } from "./lib/useMapLayers";
 import { usePlanner } from "./lib/usePlanner";
 import { useSession } from "./lib/useSession";
 import { underWay } from "./lib/legs";
+import { replacing as replacingJourney } from "./lib/follow";
+import { heldHurry, heldSpeed } from "./lib/walking";
 import type { Catalog, Journey, Me, Place } from "./lib/types";
 import { t } from "./lib/i18n";
 
@@ -263,6 +265,29 @@ export function App() {
   const follow = (next: Followed | null) => {
     holdFollowed(next);
     setFollowed(next);
+  };
+
+  /** Off the walked line, the way to the next stop is searched again from
+   *  where the device is and followed when it still catches the same route.
+   *  Asked for by a tap, as every search is: the fix leaves the device only
+   *  then. Another route is the rider's to choose, so it opens the planner. */
+  const rebuildWay = async () => {
+    if (!followed || !here || progress === null || progress === "denied") return;
+    const stage = progress.stage;
+    try {
+      const got = await api.plan(
+        [here.lat, here.lon],
+        [followed.to.lat, followed.to.lon],
+        null,
+        heldSpeed(),
+        heldHurry(),
+      );
+      const next = replacingJourney(followed.journey, stage.kind === "walk" ? stage.leg : 0, got.options);
+      if (next) follow({ journey: next, to: followed.to, tag: followed.tag });
+      else searchAgain();
+    } catch {
+      // Keep what is followed: the card still says it is off the way
+    }
   };
 
   /** Plans the rest of the way: from on board the vehicle ridden, else from
@@ -709,6 +734,7 @@ export function App() {
               progress={progress}
               caught={caught}
               onSearch={searchAgain}
+              onRebuild={() => void rebuildWay()}
               onEnd={() => follow(null)}
             />
           )}

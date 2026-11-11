@@ -1,0 +1,2 @@
+- Floating panels are frosted again, with no map showing through the text
+- Off the planned way, the follow card offers Rebuild the way

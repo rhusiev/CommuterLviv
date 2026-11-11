@@ -86,3 +86,48 @@ def test_fixes_that_froze_and_came_back_far_ahead_start_over_there(net):
     assert sorted(passed) == [i for i in range(1, city.STOPS) if i not in UNSEEN]
     for i, t in passed.items():
         assert t == pytest.approx(start + i * city.LEG_S, abs=PASS_TOL_S)
+
+
+def test_the_odometer_is_read_in_metres_where_the_speed_is_sane(net):
+    """GTFS-RT counts the odometer in metres; the feed counted kilometres
+    until 2026-11-11. `city.drive` still writes kilometres."""
+    start = city.at(city.DEPARTS["t1"])
+    km = city.drive("t1", start)
+    metres = [dataclasses.replace(f, odometer=f.odometer * 1000.0) for f in km]
+
+    a, _ = _observe(net, km, "t1")
+    b, _ = _observe(net, metres, "t1")
+
+    assert b.s == pytest.approx(a.s, abs=1.0)
+    assert b.v == pytest.approx(a.v, abs=0.1)
+
+
+def test_a_change_of_odometer_unit_mid_track_is_no_jump(net):
+    """The feed switched to metres at noon on 2026-11-11. Read as a thousand
+    times its size it put buses at the end of their line between polls."""
+    start = city.at(city.DEPARTS["t1"])
+    fixes = city.drive("t1", start)
+    half = len(fixes) // 2
+    switched = fixes[:half] + [
+        dataclasses.replace(f, odometer=f.odometer * 1000.0) for f in fixes[half:]
+    ]
+
+    metres = [dataclasses.replace(f, odometer=f.odometer * 1000.0) for f in fixes]
+    tr, _ = _observe(net, switched, "t1")
+    ref, _ = _observe(net, metres, "t1")
+
+    assert tr.v <= track.MAX_ODO_MPS
+    assert tr.s == pytest.approx(ref.s, abs=50.0)
+
+
+def test_an_odometer_jump_no_bus_could_make_is_no_increment(net):
+    start = city.at(city.DEPARTS["t1"])
+    fixes = city.drive("t1", start)
+    tr, _ = _observe(net, fixes[:5], "t1")
+    jumped = dataclasses.replace(fixes[5], odometer=fixes[5].odometer + 500.0)
+
+    track.observe(tr, net, jumped.ts, jumped.lat, jumped.lon, jumped.speed,
+                  jumped.odometer, "t1")
+
+    assert tr.v <= track.MAX_ODO_MPS
+    assert tr.s < tr.shape.length - 100.0

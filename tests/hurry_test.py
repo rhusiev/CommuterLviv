@@ -1,10 +1,13 @@
 """Journeys caught only by hurrying to the first stop, on the made-up city:
 from the door up the side street to the middle stop, then out along the road
 to the end of the line."""
+import math
+
 import numpy as np
 import pytest
 
 from commuterlviv import plan
+from commuterlviv.plan import scan
 from commuterlviv.live import app
 from commuterlviv.live.state import Arrivals
 
@@ -76,6 +79,21 @@ def test_a_bus_missed_by_more_than_the_grace_needs_a_hurry_pace(planner):
     assert caught and all(o.get("hurry") for o in caught)
     walk, ride = caught[0]["legs"][:2]
     assert walk["arr"] <= ride["dep"]
+
+
+def test_a_journey_that_loses_to_walking_unhurried_is_not_offered_at_all():
+    # five minutes of running to catch a ride reaching the door in 34 minutes,
+    # where walking takes 35: unhurried the journey takes 39 and nobody takes
+    # it. The same journey arriving in 25 does not lose to the walk
+    assert not scan._worth_hurrying(walk_s=600.0, cap_s=640.0, hurry=0.5,
+                                    duration=2040.0, ceiling=2100.0)
+    assert scan._worth_hurrying(walk_s=600.0, cap_s=640.0, hurry=0.5,
+                                duration=1500.0, ceiling=2100.0)
+
+
+def test_a_walk_past_the_dash_is_not_hurried_whatever_it_catches():
+    assert not scan._worth_hurrying(walk_s=900.0, cap_s=640.0, hurry=0.5,
+                                    duration=1000.0, ceiling=math.inf)
 
 
 def test_a_scheduled_bus_is_not_caught_by_waving(planner):

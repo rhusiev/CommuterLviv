@@ -9,6 +9,7 @@ import {
   margin,
   needKmh,
   plannedKmh,
+  replacing,
   type Due,
   type Progress,
   type Reach,
@@ -557,5 +558,48 @@ describe("the pace hurrying needs", () => {
 
     expect(hurry).toMatchObject({ kind: "hurry", kmh: needKmh(300, NEXT_DEP - 120, NEXT_DEP) });
     expect(missed).toMatchObject({ kind: "missed", kmh: null });
+  });
+
+  describe("off the walked line, the way to the bus is rebuilt", () => {
+    const riding = (route: number): Journey =>
+      ({
+        dep: 0,
+        arr: 0,
+        rides: 1,
+        live: true,
+        confidence: "live",
+        legs: [
+          { kind: "walk", dep: 0, arr: 0, a: -1, b: 1, pts: [at(0, 0), at(0, 200)] },
+          { kind: "ride", dep: 0, arr: 0, a: 1, b: 2, route, veh: PLANNED, pts: [at(0, 200), at(2000, 200)] },
+        ],
+      }) as unknown as Journey;
+
+    const walking = (): Journey =>
+      ({
+        dep: 0,
+        arr: 0,
+        rides: 0,
+        live: false,
+        confidence: "schedule",
+        legs: [{ kind: "walk", dep: 0, arr: 0, a: -1, b: -1, pts: [at(0, 0), at(500, 0)] }],
+      }) as unknown as Journey;
+
+    test("a search still catching the same route rebuilds the walk to it", () => {
+      const other = riding(9);
+      const same = riding(ROUTE);
+
+      expect(replacing(journey(), 0, [other, same])).toBe(same);
+    });
+
+    test("one catching only another route changes nothing", () => {
+      expect(replacing(journey(), 0, [riding(9)])).toBeNull();
+    });
+
+    test("walking all the way is replaced by a walk, not by a bus", () => {
+      const alsoWalk = walking();
+
+      expect(replacing(walking(), 0, [riding(ROUTE)])).toBeNull();
+      expect(replacing(walking(), 0, [riding(ROUTE), alsoWalk])).toBe(alsoWalk);
+    });
   });
 });

@@ -162,6 +162,7 @@ Future<FakeHere> pump(
   Journey? following,
   double? hurrySpeed,
   void Function(Stage)? onSearch,
+  void Function(Stage)? onRebuild,
 }) async {
   SharedPreferences.setMockInitialValues({});
   FlutterSecureStorage.setMockInitialValues({});
@@ -180,6 +181,7 @@ Future<FakeHere> pump(
           away: away,
           onMoved: (_) {},
           onSearch: onSearch ?? (_) {},
+          onRebuild: onRebuild ?? (_) {},
           onEnd: () {},
         ),
       ),
@@ -239,6 +241,22 @@ void main() {
     );
     await tester.tap(find.text(txt.planAgain));
     expect(searched.single.kind, StageKind.walk);
+  });
+
+  testWidgets('off the walked line, the way to it can be rebuilt', (
+    tester,
+  ) async {
+    final rebuilt = <Stage>[];
+    final here = await pump(tester, away: false, onRebuild: rebuilt.add);
+    here.move(0, 40);
+    await tester.pump();
+    // 150 m off the line, past the 100 m a fix's error explains
+    here.move(150, 40);
+    await tester.pump();
+
+    expect(find.text(txt.offTheWay), findsOneWidget);
+    await tester.tap(find.text(txt.rebuildWay));
+    expect(rebuilt.single.kind, StageKind.walk);
   });
 
   testWidgets('a ride caught only by hurrying says the pace it needs', (

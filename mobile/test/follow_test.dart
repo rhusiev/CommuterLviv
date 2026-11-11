@@ -680,4 +680,57 @@ void main() {
       expect((missed.kind, missed.kmh), (CatchKind.missed, null));
     });
   });
+
+  group('off the walked line, the way to the bus is rebuilt', () {
+    Journey riding(int of) => Journey(
+      dep: 0,
+      arr: 0,
+      rides: 1,
+      live: true,
+      confidence: Confidence.live,
+      legs: [
+        Leg(kind: 'walk', dep: 0, arr: 0, a: -1, b: 1, pts: [at(0, 0), at(0, 200)]),
+        Leg(
+          kind: 'ride',
+          dep: 0,
+          arr: 0,
+          a: 1,
+          b: 2,
+          route: of,
+          veh: planned,
+          pts: [at(0, 200), at(2000, 200)],
+        ),
+      ],
+    );
+
+    Journey walking() => Journey(
+      dep: 0,
+      arr: 0,
+      rides: 0,
+      live: false,
+      confidence: Confidence.schedule,
+      legs: [
+        Leg(kind: 'walk', dep: 0, arr: 0, a: -1, b: -1, pts: [at(0, 0), at(500, 0)]),
+      ],
+    );
+
+    test('a search still catching the same route rebuilds the walk to it', () {
+      final other = riding(9);
+      final same = riding(route);
+
+      expect(replacing(journey(), 0, [other, same]), same);
+    });
+
+    test('one catching only another route changes nothing', () {
+      expect(replacing(journey(), 0, [riding(9)]), isNull);
+    });
+
+    test('walking all the way is replaced by a walk, not by a bus', () {
+      final walk = walking();
+      final alsoWalk = walking();
+
+      expect(replacing(walk, 0, [riding(route)]), isNull);
+      expect(replacing(walk, 0, [riding(route), alsoWalk]), alsoWalk);
+    });
+  });
 }

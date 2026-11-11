@@ -192,6 +192,7 @@ const en = {
   toGo: (d: string) => `${d} to go`,
   passedStop: "You have passed your stop",
   offTheWay: "You are off the planned way",
+  rebuildWay: "Rebuild the way",
   hurryNow: (route: string, left: string) => `Hurry: ${route} leaves in ${left}`,
   hurryAhead: (route: string, stop: string) => `${route} at ${stop} is caught only by hurrying`,
   noLonger: "This journey no longer works",
@@ -454,6 +455,7 @@ const uk: Strings = {
   toGo: (d: string) => `Ще ${d}`,
   passedStop: "Ви проїхали свою зупинку",
   offTheWay: "Ви зійшли з запланованого шляху",
+  rebuildWay: "Прокласти шлях заново",
   hurryNow: (route: string, left: string) => `Поспішіть: ${route} відходить через ${left}`,
   hurryAhead: (route: string, stop: string) =>
     `На ${route} на зупинці ${stop} встигнете, лише якщо поспішите`,

@@ -453,7 +453,13 @@ time hurrying takes. Hurrying is the last criterion of the front, so a hurry
 option never pushes out a calm one, and only the walk to the first stop is
 hurried. That walk is sent at the hurried pace, ending as the bus leaves when
 only waving catches it. A backup of a hurry option's first ride walks at the
-usual pace. From [49.8187, 24.0310] at 20:09 at 5.5 km/h, westbound А16 left
+usual pace. Two things are asked of the route before it is offered at all: the
+walk to that stop is at most 800 m (`HURRY_WALK_M`, chosen, not derived), and
+the journey would still beat walking the whole way had the walk taken its usual
+time (`scan._worth_hurrying`). Otherwise it is a route nobody would plan with
+time to spare, and running should not put it under somebody's nose. A ride only
+waving catches is the same walk ten seconds short, so neither applies to it.
+From [49.8187, 24.0310] at 20:09 at 5.5 km/h, westbound А16 left
 Енергетична 7 s before the walk got there and reached the door at 20:33; the
 calm option, А16 the other way and a change to А41, at 20:43.
 
