@@ -13,7 +13,8 @@ moment its prediction is scored. Every step names the file it happens in.
 
 - `https://track.ua-gis.com/gtfs/lviv/vehicle_position` every 5 s - a protobuf
   with, for each vehicle, its id, timestamp, latitude, longitude, speed,
-  odometer reading in km, and the trip it is running
+  odometer reading (metres; kilometres until 2026-11-11), and the trip it is
+  running
 - `.../trip_updates` every 15 s - the city's own predicted arrival time for
   every upcoming stop of every trip. This is the thing being competed with
 - `https://api.lad.lviv.ua/stops/<code>` every 60 s for 40 stops - the public
@@ -113,7 +114,12 @@ had found 100 m better, on that branch's older model.
 The prediction step does *not* difference two map-matched positions. It uses the
 vehicle's own odometer increment, because the odometer is an integrated path
 length good to about 2 m, while map-matching error is correlated between
-neighbouring fixes and would bias the increment systematically. GPS still
+neighbouring fixes and would bias the increment systematically. The unit of
+that reading is learned once the vehicle moves: an increment that implies a
+hundredth of the speed it reports is kilometres, as the feed sent it until
+2026-11-11, and anything else is metres as GTFS-RT says. An increment over 30
+m/s is no movement of a bus. It is a reset or a change of unit, so the filter
+predicts by speed for that step and the unit is learned again. GPS still
 enters, but only as a correction of absolute position, with 12 m assumed
 along-track snap error and 1.5 m/s assumed speed error. A snap more than 60 m
 off the line is refused; 300 s without a fix, or 150 m of backwards motion,
