@@ -36,6 +36,16 @@ SEARCH_GAP = 120.0       # s
 SEARCH_BACK = 0.5
 EDGE = 1e-6              # m, how close to a cell's start counts as at it
 
+# GTFS-RT counts the odometer in metres. The city's feed counted kilometres
+# until 2026-11-11, so an increment under this share of the reported speed is
+# read as kilometres and scaled. Below MIN_ODO_SPEED the two cannot be told
+# apart, and standing adds nothing either way.
+ODO_KM_BELOW = 0.01
+MIN_ODO_SPEED = 1.0      # m/s
+# m/s past which an increment is no movement of a bus but a reset, a repair or
+# a change of unit in the feed
+MAX_ODO_MPS = 30.0
+
 
 class Cell:
     """One crossing of one cell, and how much of it has been reported.
@@ -69,7 +79,7 @@ class Cell:
 
 class Track:
     __slots__ = ("veh", "trip", "shape_id", "shape", "stops", "sdist", "sched", "clen",
-                 "s", "v", "P", "ts", "odo", "next_stop", "run", "cell")
+                 "s", "v", "P", "ts", "odo", "odo_ratio", "next_stop", "run", "cell")
 
     def __init__(self, veh, run=0):
         self.veh = veh
@@ -89,6 +99,7 @@ class Track:
         self.P = np.diag([SIG_START ** 2, SIG_START_SPEED ** 2])
         self.ts = ts
         self.odo = None
+        self.odo_ratio = None
         self.next_stop = 0
         self.cell = None
 
@@ -100,6 +111,32 @@ class Track:
         reach = SEARCH + SEARCH_SPEED * min(gap, SEARCH_GAP)
         return project(self.shape.xy, self.shape.cum, xy,
                        self.s - SEARCH_BACK * reach, self.s + reach)
+
+
+def _increment(tr, gap, odo, speed):
+    """Metres covered since the last fix, by the odometer, or None.
+
+    The reading's unit is learned once the vehicle is moving: an increment that
+    implies a hundredth of the speed it reports is kilometres, as the city's
+    feed sent it until 2026-11-11, and anything else is metres as GTFS-RT says.
+    A step backwards, or one no bus could make, is no movement at all - the
+    filter then predicts by speed - and it also clears the learned unit, since
+    such a step is how a change of unit in the feed arrives.
+    """
+    before, tr.odo = tr.odo, odo
+    if before is None or gap <= 0:
+        return None
+    d = odo - before
+    if d <= 0:
+        return None
+    if d / gap > MAX_ODO_MPS:
+        tr.odo_ratio = None
+        return None
+    if tr.odo_ratio is None:
+        if speed < MIN_ODO_SPEED:
+            return None
+        tr.odo_ratio = 1000.0 if d / gap < speed * ODO_KM_BELOW else 1.0
+    return d * tr.odo_ratio
 
 
 def observe(tr, net, ts, lat, lon, speed, odometer, trip):
@@ -114,9 +151,7 @@ def observe(tr, net, ts, lat, lon, speed, odometer, trip):
         tr.reset(trip, net, ts)
     gap = max(ts - tr.ts, 0.0)
     z_s, lat_err = _locate(tr, net, ts, lat, lon, gap)
-    odo_m = odometer * 1000.0
-    u = None if (tr.odo is None or odo_m < tr.odo) else odo_m - tr.odo
-    tr.odo = odo_m
+    u = _increment(tr, gap, odometer, speed)
 
     if tr.s is None or (lat_err > MAX_LATERAL and u is None):
         tr.s, tr.v, tr.ts = z_s, speed, ts
