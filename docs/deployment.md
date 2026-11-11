@@ -142,7 +142,12 @@ not from a public server. The `tiles` container (`deploy/tiles.sh` on the
    eight styles, with their URLs rewritten to `$COMMUTERLVIV_WEB_BASE/tiles` -
    or the first of `COMMUTERLVIV_ORIGINS` - because a style names its sprite,
    glyph and tile URLs absolutely and the phone's style reader does not resolve
-   relative ones.
+   relative ones. `deploy/style.sh` also puts the basemap's generation on every
+   tile and glyph URL as `?v=`. That generation is the time of the last swap of
+   the extract, the sprites or the styles. A client that refetches a style then
+   asks for URLs it has never cached. The sprite URL carries none: MapLibre
+   appends `.json` to its path, but the phone's tile reader appends to the
+   whole string.
 2. It serves them on port 8080 of the internal network. Caddy passes `/tiles/*`
    to it and marks the answers cacheable for a week.
 3. Every hour it checks the files' age. Anything older than 30 days
@@ -152,7 +157,10 @@ not from a public server. The `tiles` container (`deploy/tiles.sh` on the
 
 So the public servers see one machine once a month, whatever the number of
 users. The phone keeps tiles on disk for 90 days; the browser keeps them in its
-HTTP cache for the week Caddy allows.
+HTTP cache for the week Caddy allows. Neither cache can hold a tile past a new
+generation, because the URL it was stored under is never asked for again. The
+web app fetches a style with `cache: "no-cache"` so it sees the new URLs; the
+phone reads the style on every map start.
 
 Neither app is built knowing any of it. The service reports
 `COMMUTERLVIV_SELF_TILES` on `/api/health`, and the web app and the phone app
