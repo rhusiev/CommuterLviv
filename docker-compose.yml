@@ -115,6 +115,7 @@ services:
       COMMUTERLVIV_WEB_BASE: ${COMMUTERLVIV_WEB_BASE:-}
     volumes:
       - ./deploy/tiles.sh:/setup/tiles.sh:ro
+      - ./deploy/style.sh:/setup/style.sh:ro
       - ${COMMUTERLVIV_TILES:-tiles_data}:/tiles
     networks:
       - internal_backend
