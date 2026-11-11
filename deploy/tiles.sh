@@ -10,9 +10,10 @@
 #                       only the bbox crosses the wire, about 20 MB
 #   frontend.br.tar.gz  sprites and glyphs, from the versatiles-frontend release
 #   static/assets/styles/<id>/style.json
-#                       the styles, from the public server with its origin
-#                       rewritten to this deployment's, because a style names
-#                       its sprite, glyph and tile URLs absolutely
+#                       the styles, from the public server, rewritten by
+#                       style.sh: its tile, glyph and sprite URLs name this
+#                       deployment, and the tiles and glyphs carry the
+#                       basemap's generation so a client cannot keep an old one
 #
 # A failed fetch keeps what is already there and is retried within the hour
 set -u
@@ -29,10 +30,17 @@ styles="colorful colorful-dark natural natural-dark muted muted-dark gray gray-d
 every=$(( ${REFRESH_DAYS:-30} * 86400 ))
 
 cd /tiles || exit 1
+mkdir -p static
 
 stale() {
   [ ! -s "$1" ] || [ $(( $(date +%s) - $(stat -c %Y "$1") )) -ge "$every" ]
 }
+
+# The basemap's generation, which moves whenever the tiles, the frontend or the
+# styles are replaced. The styles name it on every tile and glyph URL, so a
+# client that fetches a style asks for URLs it has never cached.
+version() { cat static/version 2>/dev/null || echo 0; }
+bump() { date +%s > static/version; }
 
 # Sets `changed` when the server has to be restarted to see a new file
 refresh() {
@@ -41,25 +49,35 @@ refresh() {
     rm -f lviv.tmp.versatiles
     versatiles convert --bbox "$bbox" \
       https://download.versatiles.org/osm.versatiles lviv.tmp.versatiles \
-      && mv lviv.tmp.versatiles lviv.versatiles && changed=1
+      && mv lviv.tmp.versatiles lviv.versatiles && changed=1 && bump
   fi
   if stale frontend.br.tar.gz; then
     wget -qO frontend.tmp \
       https://github.com/versatiles-org/versatiles-frontend/releases/latest/download/frontend.br.tar.gz \
-      && mv frontend.tmp frontend.br.tar.gz && changed=1
+      && mv frontend.tmp frontend.br.tar.gz && changed=1 && bump
   fi
   # Styles are served from disk as they are, so they are swapped in whole and
-  # need no restart. Also redone on a new site address, which they carry
-  if stale static/assets/styles/colorful/style.json || [ "$(cat static/site 2>/dev/null)" != "$site" ]; then
+  # need no restart. Also redone on a new site address, which they carry, and
+  # whenever the generation moved, since they name it
+  style_stale=
+  stale static/assets/styles/colorful/style.json && style_stale=1
+  [ "$(cat static/site 2>/dev/null)" != "$site" ] && style_stale=1
+  [ "$(version)" != "$(cat static/styles_version 2>/dev/null)" ] && style_stale=1
+  if [ -n "$style_stale" ]; then
+    bump
+    stamp=$(version)
     rm -rf static.new
     for id in $styles; do
       mkdir -p "static.new/assets/styles/$id"
       wget -qO- "$public/assets/styles/$id/style.json" \
-        | sed "s#$public#$site/tiles#g" > "static.new/assets/styles/$id/style.json" \
+        | sh /setup/style.sh "$site/tiles" "$stamp" \
+        > "static.new/assets/styles/$id/style.json" \
         && [ -s "static.new/assets/styles/$id/style.json" ] || { rm -rf static.new; break; }
     done
     if [ -d static.new ]; then
       echo "$site" > static.new/site
+      echo "$stamp" > static.new/styles_version
+      echo "$stamp" > static.new/version
       rm -rf static.old
       [ -d static ] && mv static static.old
       mv static.new static && rm -rf static.old

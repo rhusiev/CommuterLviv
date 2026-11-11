@@ -1,3 +1,5 @@
+import type { StyleSpecification } from "maplibre-gl";
+
 /** The basemap's look. VersaTiles serves every style at one URL shape over the
  * same tiles, so switching is a `setStyle` and no reload. `dark` drives the
  * overlay's own colours, which are drawn on a canvas above the map. */
@@ -48,6 +50,21 @@ export const setSelfTiles = (self: boolean) => {
 };
 
 export const styleUrl = (t: Theme) => `${tiles}/assets/styles/${t.id}/style.json`;
+
+/** The style of this theme, revalidated rather than served from a cache that
+ *  may hold it for a week: its tile and glyph URLs name the basemap's
+ *  generation, so a new cut of the tiles reaches a client as new URLs. A
+ *  failure falls back to the URL, which MapLibre fetches as before. */
+export async function loadStyle(t: Theme): Promise<StyleSpecification | string> {
+  const url = styleUrl(t);
+  try {
+    const res = await fetch(url, { cache: "no-cache" });
+    if (!res.ok) return url;
+    return (await res.json()) as StyleSpecification;
+  } catch {
+    return url;
+  }
+}
 
 export const loadTheme = (): Theme => {
   try {

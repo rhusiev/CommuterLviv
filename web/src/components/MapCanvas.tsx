@@ -24,7 +24,7 @@ import { t } from "../lib/i18n";
 import { fitPadding } from "../lib/padding";
 import { riddenBy } from "../lib/legs";
 import { journeyTags, onPlace } from "../lib/tags";
-import { ink, styleUrl, type Theme } from "../lib/theme";
+import { ink, loadStyle, styleUrl, type Theme } from "../lib/theme";
 import type { Catalog, Journey, Place, Shapes } from "../lib/types";
 import { LOW_FLOOR_FLAG, MOVING_FLAG, STALE_FLAG } from "../lib/wire";
 import type { Held } from "./HoldMenu";
@@ -482,7 +482,9 @@ export function MapCanvas(props: Props) {
       if (now < live.easingUntil) m.triggerRepaint();
     };
 
-    void Promise.all([import("maplibre-gl"), import("maplibre-gl/dist/maplibre-gl.css")]).then(([{ Map, NavigationControl, setWorkerUrl }]) => {
+    void Promise.all([import("maplibre-gl"), import("maplibre-gl/dist/maplibre-gl.css")]).then(async ([{ Map, NavigationControl, setWorkerUrl }]) => {
+      if (gone) return;
+      const style = await loadStyle(latest.current.theme);
       if (gone) return;
       // Left alone maplibre looks for `maplibre-gl-worker.mjs` beside its own
       // module, which neither the dev optimiser nor the build serves: no tile
@@ -491,7 +493,7 @@ export function MapCanvas(props: Props) {
       const v = loadView();
       map = new Map({
         container: under.current!,
-        style: style.current,
+        style,
         center: [v.lon, v.lat],
         zoom: v.zoom,
         minZoom: MIN_ZOOM,
@@ -602,12 +604,16 @@ export function MapCanvas(props: Props) {
     if (ready && held.current) sync(held.current, { shapes, directed, traffic, dark: theme.dark });
   }, [ready, shapes, directed, traffic, theme]);
 
-  // `setStyle` keeps the camera, the gestures and the overlay
+  // `setStyle` keeps the camera, the gestures and the overlay. The style is
+  // fetched rather than given as a URL, so it is revalidated and not held in
+  // the browser's cache for a week
   useEffect(() => {
     const url = styleUrl(theme);
     if (url === style.current) return;
     style.current = url;
-    held.current?.setStyle(url);
+    void loadStyle(theme).then((spec) => {
+      if (style.current === url) held.current?.setStyle(spec);
+    });
   }, [theme]);
 
   // The map is created a dynamic import late, so the first fit or focus can
