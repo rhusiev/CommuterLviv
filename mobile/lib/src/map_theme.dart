@@ -22,6 +22,15 @@ const _public = 'https://tiles.versatiles.org';
 
 void setTileOrigin(String? origin) => _tiles = origin ?? _public;
 
+/// The basemap's generation, which moves whenever its tiles change. The tile
+/// cache is kept per generation, so a new cut of the map is read from a new
+/// cache instead of the ninety-day-old one. Empty where there is none.
+String _generation = '';
+
+void setTileGeneration(String? generation) => _generation = generation ?? '';
+
+String get tileGeneration => _generation;
+
 const mapThemes = [
   MapTheme('colorful-dark', dark: true),
   MapTheme('natural-dark', dark: true),
