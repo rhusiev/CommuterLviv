@@ -199,11 +199,32 @@ class Api {
   );
 
   /// Registration mode: `open`, `code` or `closed`. Also settles the tile
-  /// origin, so it must run before the map builds.
+  /// origin and the basemap's generation, so it must run before the map
+  /// builds: the tile cache is kept per generation.
   Future<String> health() async {
     final h = await _call('GET', '/api/health') as Map<String, dynamic>;
-    setTileOrigin(h['tiles'] == true ? '$_base/tiles' : null);
+    final origin = h['tiles'] == true ? '$_base/tiles' : null;
+    setTileOrigin(origin);
+    setTileGeneration(origin == null ? null : await _generation(origin));
     return h['registration'] as String? ?? 'code';
+  }
+
+  /// The basemap's generation where the deployment keeps its own tiles, which
+  /// it moves whenever the tiles change. Null where it does not say: the cache
+  /// then keeps its unversioned name.
+  Future<String?> _generation(String origin) async {
+    final client = HttpClient();
+    try {
+      final request = await client.getUrl(Uri.parse('$origin/version'));
+      final response = await request.close();
+      if (response.statusCode != 200) return null;
+      final said = (await response.transform(utf8.decoder).join()).trim();
+      return int.tryParse(said) == null ? null : said;
+    } on Exception {
+      return null;
+    } finally {
+      client.close();
+    }
   }
 
   Future<void> logout() => _call('POST', '/api/logout');
