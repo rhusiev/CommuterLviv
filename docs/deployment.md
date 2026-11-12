@@ -138,7 +138,10 @@ not from a public server. The `tiles` container (`deploy/tiles.sh` on the
 
 1. On its first start it cuts a Lviv extract out of the VersaTiles planet over
    HTTP range requests, so only the bbox crosses the wire - about 10-20 MB at
-   maxzoom 14. It fetches the sprites and glyphs (`frontend.br.tar.gz`) and the
+   maxzoom 14. It cuts the landcover layer the same way, about 0.6 MB, and
+   serves it at `/tiles/landcover-vectors/`; every style draws nine layers from
+   it under the streets. It fetches the sprites and glyphs
+   (`frontend.br.tar.gz`) and the
    eight styles, with their URLs rewritten to `$COMMUTERLVIV_WEB_BASE/tiles` -
    or the first of `COMMUTERLVIV_ORIGINS` - because a style names its sprite,
    glyph and tile URLs absolutely and the phone's style reader does not resolve

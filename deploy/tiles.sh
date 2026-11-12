@@ -8,6 +8,10 @@
 #
 #   lviv.versatiles     the extract, cut from the planet over range requests -
 #                       only the bbox crosses the wire, about 20 MB
+#   landcover-vectors.versatiles
+#                       the landcover layer the styles draw under everything
+#                       else, cut the same way; its file name is the path it is
+#                       served at, /tiles/landcover-vectors/
 #   frontend.br.tar.gz  sprites and glyphs, from the versatiles-frontend release
 #   static/assets/styles/<id>/style.json
 #                       the styles, from the public server, rewritten by
@@ -50,6 +54,13 @@ refresh() {
     versatiles convert --bbox "$bbox" \
       https://download.versatiles.org/osm.versatiles lviv.tmp.versatiles \
       && mv lviv.tmp.versatiles lviv.versatiles && changed=1 && bump
+  fi
+  if stale landcover-vectors.versatiles; then
+    rm -f landcover.tmp.versatiles
+    versatiles convert --bbox "$bbox" \
+      https://download.versatiles.org/landcover-vector/landcover-vector.versatiles \
+      landcover.tmp.versatiles \
+      && mv landcover.tmp.versatiles landcover-vectors.versatiles && changed=1 && bump
   fi
   if stale frontend.br.tar.gz; then
     wget -qO frontend.tmp \
@@ -98,7 +109,11 @@ until [ -s lviv.versatiles ] && [ -s frontend.br.tar.gz ]; do
 done
 
 while :; do
-  versatiles serve -s /tiles/static -s /tiles/frontend.br.tar.gz "[osm]/tiles/lviv.versatiles" &
+  set -- -s /tiles/static -s /tiles/frontend.br.tar.gz "[osm]/tiles/lviv.versatiles"
+  # Optional: the map is whole without it, so its absence must not stop the
+  # server, and its arrival restarts it
+  [ -s landcover-vectors.versatiles ] && set -- "$@" landcover-vectors.versatiles
+  versatiles serve "$@" &
   pid=$!
   changed=
   while [ -z "$changed" ] && kill -0 "$pid" 2>/dev/null; do
