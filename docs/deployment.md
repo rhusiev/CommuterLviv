@@ -159,9 +159,12 @@ not from a public server. The `tiles` container (`deploy/tiles.sh` on the
    fetch keeps what is there and is tried again the next hour.
 
 So the public servers see one machine once a month, whatever the number of
-users. The phone keeps tiles on disk for 90 days; the browser keeps them in its
+users. The phone keeps the tiles of the basemap's current generation on disk, and
+drops the older ones when the generation moves; the browser keeps them in its
 HTTP cache for the week Caddy allows. Neither cache can hold a tile past a new
-generation, because the URL it was stored under is never asked for again. The
+generation: the URL it was stored under is never asked for again, and the
+phone's cache folder is named for the generation as well, because the phone's
+tile reader keys its disk cache by tile and source rather than by URL. The
 web app fetches a style with `cache: "no-cache"` so it sees the new URLs; the
 phone reads the style on every map start.
 
