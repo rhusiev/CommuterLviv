@@ -689,7 +689,14 @@ void main() {
       live: true,
       confidence: Confidence.live,
       legs: [
-        Leg(kind: 'walk', dep: 0, arr: 0, a: -1, b: 1, pts: [at(0, 0), at(0, 200)]),
+        Leg(
+          kind: 'walk',
+          dep: 0,
+          arr: 0,
+          a: -1,
+          b: 1,
+          pts: [at(0, 0), at(0, 200)],
+        ),
         Leg(
           kind: 'ride',
           dep: 0,
@@ -710,7 +717,14 @@ void main() {
       live: false,
       confidence: Confidence.schedule,
       legs: [
-        Leg(kind: 'walk', dep: 0, arr: 0, a: -1, b: -1, pts: [at(0, 0), at(500, 0)]),
+        Leg(
+          kind: 'walk',
+          dep: 0,
+          arr: 0,
+          a: -1,
+          b: -1,
+          pts: [at(0, 0), at(500, 0)],
+        ),
       ],
     );
 
@@ -732,5 +746,16 @@ void main() {
       expect(replacing(walk, 0, [riding(route)]), isNull);
       expect(replacing(walk, 0, [riding(route), alsoWalk]), alsoWalk);
     });
+  });
+
+  test('two ride stages differ when the vehicle does', () {
+    expect(
+      const Stage(StageKind.ride, 1, 7),
+      const Stage(StageKind.ride, 1, 7),
+    );
+    expect(
+      const Stage(StageKind.ride, 1, 7),
+      isNot(const Stage(StageKind.ride, 1, 8)),
+    );
   });
 }

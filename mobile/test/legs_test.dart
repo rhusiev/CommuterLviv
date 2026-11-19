@@ -303,6 +303,76 @@ void main() {
       expect(got.last.arr, t0 + 39 * minS);
     });
 
+    test('a waited ride takes the bus that leaves first, not its next lap', () {
+      final j = journey(3 * minS, 0);
+      j.legs[1] = Leg(
+        kind: 'ride',
+        dep: j.legs[1].dep,
+        arr: j.legs[1].arr,
+        a: 1,
+        b: 2,
+        route: 7,
+        veh: 42,
+      );
+      final got = liveRows(
+        j,
+        LivePlan(
+          now: t0 + 10 * minS,
+          stage: const Stage(StageKind.wait, 1),
+          left: 0,
+          arrivals: {
+            1: [
+              Arrival(route: 7, veh: 42, t: t0 + 15 * minS, planned: true),
+              arrival(7, 8, t0 + 12 * minS),
+            ],
+            2: [arrival(7, 42, t0 + 14 * minS), arrival(7, 8, t0 + 22 * minS)],
+          },
+        ),
+      );
+
+      final rideRow = got.firstWhere(
+        (r) => r.kind == PlanRowKind.ride && r.leg == 1,
+      );
+      expect((rideRow.dep, rideRow.arr), (t0 + 12 * minS, t0 + 22 * minS));
+    });
+
+    test(
+      "the alight arrival is the chosen trip's, not the vehicle's earlier",
+      () {
+        final j = journey(0, 0);
+        j.legs[1] = Leg(
+          kind: 'ride',
+          dep: j.legs[1].dep,
+          arr: j.legs[1].arr,
+          a: 1,
+          b: 2,
+          route: 7,
+          veh: 42,
+        );
+        final got = liveRows(
+          j,
+          LivePlan(
+            now: t0 + 4 * minS,
+            stage: const Stage(StageKind.walk, 0),
+            left: 0,
+            arrivals: {
+              1: [arrival(7, 42, t0 + 5 * minS)],
+              2: [
+                arrival(7, 42, t0 + 6 * minS),
+                arrival(7, 42, t0 + 20 * minS),
+                arrival(7, 8, t0 + 14 * minS),
+              ],
+            },
+          ),
+        );
+
+        final rideRow = got.firstWhere(
+          (r) => r.kind == PlanRowKind.ride && r.leg == 1,
+        );
+        expect((rideRow.dep, rideRow.arr), (t0 + 5 * minS, t0 + 6 * minS));
+      },
+    );
+
     test(
       "a vehicle five seconds before the walk ends is shown at the walk's end",
       () {

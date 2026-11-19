@@ -162,6 +162,53 @@ describe("liveRows", () => {
     expect(got[got.length - 1]!.arr).toBe(T0 + 39 * MIN_S);
   });
 
+  test("a waited ride takes the bus that leaves first, not its planned vehicle's next lap", () => {
+    const j = journey(3 * MIN_S, 0);
+    j.legs[1] = { ...j.legs[1]!, veh: 42 };
+    const got = liveRows(j, {
+      now: T0 + 10 * MIN_S,
+      stage: { kind: "wait", leg: 1 },
+      left: 0,
+      arrivals: {
+        // The planned vehicle is between the stops: its next lap is all that
+        // is left at the boarding stop, while it reaches the alight stop now
+        1: [
+          { ...arrival(7, 42, T0 + 15 * MIN_S), planned: true },
+          arrival(7, 8, T0 + 12 * MIN_S),
+        ],
+        2: [arrival(7, 42, T0 + 14 * MIN_S), arrival(7, 8, T0 + 22 * MIN_S)],
+      },
+    });
+
+    expect(got.find((r) => r.kind === "ride" && r.leg === 1)).toMatchObject({
+      dep: T0 + 12 * MIN_S,
+      arr: T0 + 22 * MIN_S,
+    });
+  });
+
+  test("the alight arrival is the chosen trip's, not the vehicle's earlier one", () => {
+    const j = journey(0, 0);
+    j.legs[1] = { ...j.legs[1]!, veh: 42 };
+    const got = liveRows(j, {
+      now: T0 + 4 * MIN_S,
+      stage: { kind: "walk", leg: 0 },
+      left: 0,
+      arrivals: {
+        1: [arrival(7, 42, T0 + 5 * MIN_S)],
+        2: [
+          arrival(7, 42, T0 + 6 * MIN_S),
+          arrival(7, 42, T0 + 20 * MIN_S),
+          arrival(7, 8, T0 + 14 * MIN_S),
+        ],
+      },
+    });
+
+    expect(got.find((r) => r.kind === "ride" && r.leg === 1)).toMatchObject({
+      dep: T0 + 5 * MIN_S,
+      arr: T0 + 6 * MIN_S,
+    });
+  });
+
   test("a vehicle five seconds before the walk ends is shown at the walk's end", () => {
     const j = journey(0, 0);
     j.legs[1] = { ...j.legs[1]!, veh: 42 };

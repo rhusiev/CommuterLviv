@@ -905,8 +905,9 @@ def test_a_missed_bus_is_searched_again_from_the_last_fix(page):
 
     again = page.get_by_role("button", name="Search again")
     expect(again).to_be_visible(timeout=SEE_MS)
-    # Off, the setting searches nothing of itself
-    page.wait_for_timeout(1500)
+    # Off, the setting searches nothing of itself. Long enough for the first
+    # fix, which the refresh needs before it would ask
+    page.wait_for_timeout(5000)
     assert plans_seen == []
     # keeping the screen on is a setting, offered as a switch
     awake = page.get_by_role("switch", name="Keep screen on")
@@ -973,17 +974,18 @@ def test_the_followed_way_is_searched_again_with_the_setting_on(page):
     page.evaluate("localStorage.setItem('commuterlviv.refresh', '1')")
     page.context.set_geolocation(
         {"latitude": streets.DOOR[0], "longitude": streets.DOOR[1]})
+    # The tick starts with the following, so the wait is measured from the load
+    started = time.monotonic()
     page.reload()
     expect(page.get_by_text("Walk to the door")).to_be_visible(timeout=SEE_MS)
 
     # No ride is missed, so only the 30 s tick can ask
-    started = time.monotonic()
     with page.expect_request(lambda r: "/api/plan?from=" in r.url,
                              timeout=40_000):
         pass
     waited = time.monotonic() - started
 
-    assert 15 <= waited < 40
+    assert 25 <= waited < 45
 
 
 def test_the_step_followed_on_a_phone_is_not_cut_short_by_its_buttons(page):
