@@ -108,8 +108,8 @@ boarded and left at and from the metres left on the walk under way (`liveRows`
 in `lib/legs.ts`, ported to `mobile/lib/src/legs.dart`): a walk under way ends
 when its remaining metres take it at the pace it was planned at, a ride keeps
 its boarding time and takes its arrival from the vehicle's prediction, and the
-walk and the arrival after it move with it. A step therefore never claims to
-end at a time already gone by.
+walk and the arrival after it move with it. With a prediction for its stop, a
+step therefore never claims to end at a time already gone by.
 
 The plan itself is searched again when you ask, and, with "Keep the route
 updated" on under the account, at once when a ride is missed and every 30 s as
