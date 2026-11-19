@@ -181,11 +181,12 @@ List<Leg> liveLegs(Journey j, LivePlan plan) {
       // Waiting at the stop: the ride is picked from the predictions where the
       // device is now, not from where the walk was to get in
       if (stage.kind == StageKind.wait) {
-        final waiting = _leavingAt(at(leg.a), leg.route, leg.veh, plan.now);
+        final waiting = leavingAt(at(leg.a), leg.route, leg.veh, plan.now);
         final dep = waiting == null ? leg.dep : math.max(waiting.t, plan.now);
         final arr = waiting == null
             ? leg.arr
-            : (_arrivalAt(at(leg.b), waiting.veh, dep) ?? dep + _planned(leg));
+            : (arrivalOf(at(leg.b), waiting.veh, dep)?.t ??
+                  dep + _planned(leg));
         out.add(leg.copyWith(dep: dep, arr: arr));
         inAt = arr;
         continue;
@@ -194,18 +195,18 @@ List<Leg> liveLegs(Journey j, LivePlan plan) {
       final veh = stage.kind == StageKind.ride ? stage.veh : null;
       final arr = veh == null
           ? leg.arr
-          : (_arrivalAt(at(leg.b), veh, leg.dep) ?? leg.arr);
+          : (arrivalOf(at(leg.b), veh, leg.dep)?.t ?? leg.arr);
       out.add(leg.copyWith(arr: arr));
       inAt = arr;
       continue;
     }
-    final leaving = _leavingAt(at(leg.a), leg.route, leg.veh, inAt);
+    final leaving = leavingAt(at(leg.a), leg.route, leg.veh, inAt);
     final dep = leaving == null
         ? math.max(leg.dep, inAt)
         : math.max(leaving.t, inAt);
     final arr = leaving == null
         ? dep + _planned(leg)
-        : (_arrivalAt(at(leg.b), leaving.veh, dep) ?? dep + _planned(leg));
+        : (arrivalOf(at(leg.b), leaving.veh, dep)?.t ?? dep + _planned(leg));
     out.add(leg.copyWith(dep: dep, arr: arr));
     inAt = arr;
   }
@@ -226,14 +227,14 @@ double walkRest(Leg leg, double left) {
 
 int _planned(Leg leg) => math.max(0, leg.arr - leg.dep);
 
-int? _arrivalAt(List<Arrival> list, int veh, int from) => list
-    .where((a) => a.veh == veh && a.t >= from)
-    .firstOrNull
-    ?.t;
+/// The row of [veh] at or after [from]: the trip it is on then, not an
+/// earlier one it already ran
+Arrival? arrivalOf(List<Arrival> list, int veh, int from) =>
+    list.where((a) => a.veh == veh && a.t >= from).firstOrNull;
 
 /// The arrival of [route] to leave at or after [from], preferring the planned
 /// vehicle [veh] whenever it is still catchable
-Arrival? _leavingAt(List<Arrival> list, int? route, int? veh, int from) {
+Arrival? leavingAt(List<Arrival> list, int? route, int? veh, int from) {
   if (route == null) return null;
   final ofRoute = list.where((a) => a.route == route).toList()
     ..sort((a, b) => a.t.compareTo(b.t));

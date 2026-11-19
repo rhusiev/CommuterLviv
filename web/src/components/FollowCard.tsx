@@ -4,7 +4,7 @@ import { stopName } from "../lib/catalog";
 import { clock, countdown, nowS } from "../lib/eta";
 import type { Catch, Progress } from "../lib/follow";
 import { t } from "../lib/i18n";
-import { current, liveRows, walkRest, type Row } from "../lib/legs";
+import { arrivalOf, current, leavingAt, liveRows, walkRest, type Row } from "../lib/legs";
 import { UPDATED_SAID_MS } from "../lib/refresh";
 import type { Live } from "../lib/live";
 import type { Arrival, Catalog, Journey } from "../lib/types";
@@ -253,8 +253,6 @@ function Step({
   const leg = journey.legs[stage.leg]!;
   const route = leg.route === undefined ? undefined : catalog.routes[leg.route];
   const name = (i: number) => stopName(catalog, i);
-  const due = (stop: number) =>
-    live.arrivals[String(stop)]?.filter((a) => a.route === leg.route) ?? [];
   let head: string;
   let when: Arrival | undefined;
   let walkArr: number | undefined;
@@ -263,15 +261,17 @@ function Step({
     // When the metres left get there, at the pace the walk was planned at
     walkArr = nowS() + walkRest(leg, progress.left);
   } else if (stage.kind === "wait") {
-    // The planned vehicle, or the route's next one when it is not coming
-    const at = due(leg.a);
+    // The planned vehicle on its current trip, or the route's next one
     head = t.waitAt(name(leg.a));
-    when = at.find((a) => a.veh === leg.veh) ?? at[0];
+    when = leavingAt(live.arrivals[String(leg.a)] ?? [], leg.route, leg.veh ?? null, nowS());
   } else {
     // Only the vehicle ridden says when it gets there; another of its route
     // could be the one ahead
     head = progress.soon ? t.offSoon(name(leg.b)) : t.offAt(name(leg.b));
-    when = stage.veh === null ? undefined : due(leg.b).find((a) => a.veh === stage.veh);
+    when =
+      stage.veh === null
+        ? undefined
+        : arrivalOf(live.arrivals[String(leg.b)] ?? [], stage.veh, leg.dep);
   }
   return (
     <>

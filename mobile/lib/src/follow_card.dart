@@ -479,32 +479,35 @@ _Said _say(Catalog catalog, Journey journey, Live live, Progress progress) {
   if (stage.kind == StageKind.arrived) return _Said(txt.arrived, null, null);
   final leg = journey.legs[stage.leg];
   String name(int stop) => catalog.stopName(stop);
-  List<Arrival> due(int stop) => [
-    for (final a in live.arrivals[stop] ?? const <Arrival>[])
-      if (a.route == leg.route) a,
-  ];
   final String head;
   Arrival? when;
   int? walkArr;
+  final now = clock.now().millisecondsSinceEpoch ~/ 1000;
   switch (stage.kind) {
     case StageKind.walk:
       head = leg.b < 0 ? txt.walkHome : txt.walkTo(name(leg.b));
       // When the metres left get there, at the pace the walk was planned at
-      walkArr =
-          clock.now().millisecondsSinceEpoch ~/ 1000 +
-          walkRest(leg, progress.left).round();
+      walkArr = now + walkRest(leg, progress.left).round();
     case StageKind.wait:
-      // The planned vehicle, or the route's next one when it is not coming
-      final at = due(leg.a);
+      // The planned vehicle on its current trip, or the route's next one
       head = txt.waitAt(name(leg.a));
-      when = at.where((a) => a.veh == leg.veh).firstOrNull ?? at.firstOrNull;
+      when = leavingAt(
+        live.arrivals[leg.a] ?? const <Arrival>[],
+        leg.route,
+        leg.veh,
+        now,
+      );
     default:
       // Only the vehicle ridden says when it gets there; another of its
       // route could be the one ahead
       head = progress.soon ? txt.offSoon(name(leg.b)) : txt.offAt(name(leg.b));
       when = stage.veh == null
           ? null
-          : due(leg.b).where((a) => a.veh == stage.veh).firstOrNull;
+          : arrivalOf(
+              live.arrivals[leg.b] ?? const <Arrival>[],
+              stage.veh!,
+              leg.dep,
+            );
   }
   final sub = stage.kind == StageKind.wait
       ? (when == null ? null : txt.dueIn(countdown(when.t)))

@@ -108,7 +108,7 @@ export function liveLegs(j: Journey, plan: LivePlan): Leg[] {
         const dep = waiting === undefined ? leg.dep : Math.max(waiting.t, plan.now);
         const arr = waiting === undefined
           ? leg.arr
-          : (arrivalTime(at(leg.b), waiting.veh, dep) ?? dep + rideTime(leg));
+          : (arrivalOf(at(leg.b), waiting.veh, dep)?.t ?? dep + rideTime(leg));
         out.push({ ...leg, dep, arr });
         inAt = arr;
         return;
@@ -117,7 +117,7 @@ export function liveLegs(j: Journey, plan: LivePlan): Leg[] {
       const veh = stage.kind === "ride" ? stage.veh : null;
       const arr = veh === null
         ? leg.arr
-        : (arrivalTime(at(leg.b), veh, leg.dep) ?? leg.arr);
+        : (arrivalOf(at(leg.b), veh, leg.dep)?.t ?? leg.arr);
       out.push({ ...leg, arr });
       inAt = arr;
       return;
@@ -128,7 +128,7 @@ export function liveLegs(j: Journey, plan: LivePlan): Leg[] {
       : Math.max(leaving.t, inAt);
     const arr = leaving === undefined
       ? dep + rideTime(leg)
-      : (arrivalTime(at(leg.b), leaving.veh, dep) ?? dep + rideTime(leg));
+      : (arrivalOf(at(leg.b), leaving.veh, dep)?.t ?? dep + rideTime(leg));
     out.push({ ...leg, dep, arr });
     inAt = arr;
   });
@@ -153,12 +153,14 @@ const FLAT_MPS = 1.25;
 const walkTime = (leg: Leg) => Math.max(0, leg.arr - leg.dep);
 const rideTime = walkTime;
 
-const arrivalTime = (list: Arrival[], veh: number, from: number) =>
-  list.find((a) => a.veh === veh && a.t >= from)?.t;
+/** The row of `veh` at or after `from`: the trip it is on then, not an earlier
+ *  one it already ran */
+export const arrivalOf = (list: Arrival[], veh: number, from: number) =>
+  list.find((a) => a.veh === veh && a.t >= from);
 
 /** The arrival of `route` to leave at or after `from`, preferring the planned
- *  vehicle `veh` whenever it is still catchable */
-function leavingAt(
+ *  vehicle `veh` on its current trip whenever it is still catchable */
+export function leavingAt(
   list: Arrival[],
   route: number | undefined,
   veh: number | null,
