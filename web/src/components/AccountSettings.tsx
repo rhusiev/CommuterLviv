@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { lang, setLang, t } from "../lib/i18n";
 import { heldClose, holdClose } from "../lib/prefer";
+import { heldRefresh, holdRefresh } from "../lib/refresh";
 import { HURRY_KMH, heldHurry, heldSpeed, holdHurry, holdSpeed } from "../lib/walking";
 import { PasswordForm } from "./PasswordForm";
 import { Speed } from "./Speed";
@@ -18,6 +19,7 @@ export function AccountSettings(p: Props) {
   const [speed, setSpeed] = useState(heldSpeed);
   const [hurry, setHurry] = useState(heldHurry);
   const [close, setClose] = useState(heldClose);
+  const [refresh, setRefresh] = useState(heldRefresh);
   const keepHurry = (v: number | null) => {
     setHurry(v);
     holdHurry(v);
@@ -78,6 +80,15 @@ export function AccountSettings(p: Props) {
         }}
       />
       <p className="px-2 text-xs text-slate-500">{t.closeOptionsHint}</p>
+      <Toggle
+        label={t.routeRefresh}
+        on={refresh}
+        onChange={(on) => {
+          setRefresh(on);
+          holdRefresh(on);
+        }}
+      />
+      <p className="px-2 text-xs text-slate-500">{t.routeRefreshHint}</p>
       {p.passwordChange && <PasswordForm />}
       <hr className="my-1 border-hair" />
       <button

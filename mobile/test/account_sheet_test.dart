@@ -10,6 +10,8 @@ Widget _sheet({
   VoidCallback? onPassword,
   VoidCallback? onOut,
   bool canChangePassword = true,
+  bool routeRefresh = false,
+  ValueChanged<bool>? onRouteRefresh,
 }) => MaterialApp(
   home: Scaffold(
     body: AccountSheet(
@@ -18,6 +20,8 @@ Widget _sheet({
       hurry: hurry,
       followAway: false,
       onFollowAway: (_) {},
+      routeRefresh: routeRefresh,
+      onRouteRefresh: onRouteRefresh ?? (_) {},
       onLanguage: () {},
       onSpeed: onSpeed ?? () {},
       onServer: () {},
@@ -46,6 +50,16 @@ void main() {
 
     expect(find.text(txt.pacesNow(4.5, null)), findsOneWidget);
     expect(txt.pacesNow(4.5, null), isNot(txt.pacesNow(4.5, 4.5)));
+  });
+
+  testWidgets('the route refresh switch is off until asked', (tester) async {
+    var on = false;
+    await tester.pumpWidget(_sheet(hurry: null, onRouteRefresh: (v) => on = v));
+
+    expect(find.text(txt.routeRefresh), findsOneWidget);
+    await tester.tap(find.text(txt.routeRefresh));
+
+    expect(on, isTrue);
   });
 
   testWidgets('the password row opens the change', (tester) async {

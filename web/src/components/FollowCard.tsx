@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { canKeepAwake, heldAwake, holdAwake, useAwake } from "../lib/awake";
 import { stopName } from "../lib/catalog";
-import { clock, countdown } from "../lib/eta";
-import type { Catch, Progress, Stage } from "../lib/follow";
+import { clock, countdown, nowS } from "../lib/eta";
+import type { Catch, Progress } from "../lib/follow";
 import { t } from "../lib/i18n";
-import { current, rows, type Row } from "../lib/legs";
+import { arrivalOf, current, leavingAt, liveRows, walkRest, type Row } from "../lib/legs";
+import { UPDATED_SAID_MS } from "../lib/refresh";
 import type { Live } from "../lib/live";
 import type { Arrival, Catalog, Journey } from "../lib/types";
 import { HurryPill } from "./HurryPill";
@@ -18,6 +19,7 @@ export function FollowCard({
   live,
   progress,
   caught,
+  updatedAt,
   onSearch,
   onRebuild,
   onEnd,
@@ -28,6 +30,8 @@ export function FollowCard({
   progress: Progress | "denied" | null;
   /** Whether the next ride to board is still caught */
   caught: Catch;
+  /** When the route was last searched again and changed, Unix ms */
+  updatedAt: number | null;
   /** Plans the rest of the way again; the journey is followed until another is */
   onSearch: () => void;
   /** Off the walked line, the way to the next stop is searched again from
@@ -101,6 +105,9 @@ export function FollowCard({
           {t.rebuildWay}
         </button>
       )}
+      {!done && updatedAt !== null && nowS() * 1000 - updatedAt < UPDATED_SAID_MS && (
+        <p className="mt-1 text-xs text-emerald-300">{t.routeUpdated}</p>
+      )}
       {caught.kind !== "ok" && !done && (
         <CatchLine catalog={catalog} journey={journey} caught={caught} onSearch={onSearch} />
       )}
@@ -108,7 +115,8 @@ export function FollowCard({
         <Steps
           catalog={catalog}
           journey={journey}
-          stage={progress !== null && progress !== "denied" ? progress.stage : null}
+          live={live}
+          progress={progress !== null && progress !== "denied" ? progress : null}
         />
       )}
     </div>
@@ -165,14 +173,24 @@ function CatchLine({
 function Steps({
   catalog,
   journey,
-  stage,
+  live,
+  progress,
 }: {
   catalog: Catalog;
   journey: Journey;
+  live: Live;
   /** Where the journey is, or null while that is not known */
-  stage: Stage | null;
+  progress: Progress | null;
 }) {
-  const list = rows(journey);
+  const stage = progress?.stage ?? null;
+  // Every time still to come is worked out from the predictions and how far
+  // along the device is, so a step never claims to end at a time gone by
+  const list = liveRows(journey, {
+    now: nowS(),
+    stage,
+    left: progress?.left ?? 0,
+    arrivals: live.arrivals,
+  });
   const now = stage === null ? -1 : current(list, stage);
   return (
     <ol className="mt-2 max-h-64 space-y-0.5 overflow-y-auto border-t border-raised pt-2">
@@ -235,22 +253,25 @@ function Step({
   const leg = journey.legs[stage.leg]!;
   const route = leg.route === undefined ? undefined : catalog.routes[leg.route];
   const name = (i: number) => stopName(catalog, i);
-  const due = (stop: number) =>
-    live.arrivals[String(stop)]?.filter((a) => a.route === leg.route) ?? [];
   let head: string;
   let when: Arrival | undefined;
+  let walkArr: number | undefined;
   if (stage.kind === "walk") {
     head = leg.b < 0 ? t.walkHome : t.walkTo(name(leg.b));
+    // When the metres left get there, at the pace the walk was planned at
+    walkArr = nowS() + walkRest(leg, progress.left);
   } else if (stage.kind === "wait") {
-    // The planned vehicle, or the route's next one when it is not coming
-    const at = due(leg.a);
+    // The planned vehicle on its current trip, or the route's next one
     head = t.waitAt(name(leg.a));
-    when = at.find((a) => a.veh === leg.veh) ?? at[0];
+    when = leavingAt(live.arrivals[String(leg.a)] ?? [], leg.route, leg.veh ?? null, nowS());
   } else {
     // Only the vehicle ridden says when it gets there; another of its route
     // could be the one ahead
     head = progress.soon ? t.offSoon(name(leg.b)) : t.offAt(name(leg.b));
-    when = stage.veh === null ? undefined : due(leg.b).find((a) => a.veh === stage.veh);
+    when =
+      stage.veh === null
+        ? undefined
+        : arrivalOf(live.arrivals[String(leg.b)] ?? [], stage.veh, leg.dep);
   }
   return (
     <>
@@ -262,6 +283,7 @@ function Step({
       </p>
       <p className="mt-0.5 text-xs text-slate-400">
         {stage.kind === "wait" ? (when ? t.dueIn(countdown(when.t)) : "") : t.toGo(distance(progress.left))}
+        {stage.kind === "walk" && walkArr !== undefined && ` · ${clock(walkArr)}`}
         {stage.kind === "ride" && when && ` · ${countdown(when.t)}`}
       </p>
       {progress.passed && <p className="mt-1 text-xs text-rose-300">{t.passedStop}</p>}

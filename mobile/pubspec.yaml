@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.21.6+49
+version: 0.22.0+50
 
 environment:
   sdk: ^3.13.2
@@ -66,6 +66,8 @@ dev_dependencies:
   leak_tracker_flutter_testing: any
   # Pinned by vector_tile_renderer; listed because a test builds a tile with them.
   vector_tile: any
+  # Pinned by flutter_test; listed because a test drives the refresh tick.
+  fake_async: any
   fixnum: any
 
   # The "flutter_lints" package below contains a set of recommended lints to

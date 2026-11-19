@@ -439,6 +439,13 @@ class Api {
 
   Future<void> setFollowAway(bool on) => _keep('followAway', on);
 
+  /// Whether a followed journey is searched again as it goes, so the way and
+  /// its times keep up with delays. Off until asked: with it on, the fix leaves
+  /// the device while following, which the app otherwise does not do.
+  bool get routeRefresh => _setting('refresh', false);
+
+  Future<void> setRouteRefresh(bool on) => _keep('refresh', on);
+
   /// The journey followed, as `Followed` keeps it; null while none is
   String? get followed => _setting<String?>('following', null);
 

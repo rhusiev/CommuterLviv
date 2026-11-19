@@ -51,9 +51,15 @@ Future<HttpServer> _serve({
   Map<String, Object?> shapes = _noShapes,
   Map<String, Object?>? plan,
   bool hasBasemap = true,
+  List<String>? plans,
 }) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   server.listen((req) async {
+    if (plans != null && req.uri.path == '/api/plan') {
+      plans.add(req.uri.toString());
+    }
+    // A tag the held journey can match; the app drops a following of another
+    if (req.uri.path == '/api/catalog') req.response.headers.set('ETag', 't');
     final body = switch (req.uri.path) {
       '/api/catalog' => catalog,
       '/api/shapes' => shapes,
@@ -118,6 +124,7 @@ Future<void> _pumpHome(
   Map<String, Object?>? plan,
   bool hasBasemap = true,
   Map<String, Object> prefs = const {},
+  List<String>? plans,
 }) async {
   tester.view.physicalSize = _phone;
   tester.view.devicePixelRatio = 1;
@@ -131,6 +138,7 @@ Future<void> _pumpHome(
       shapes: shapes,
       plan: plan,
       hasBasemap: hasBasemap,
+      plans: plans,
     ),
   ))!;
   addTearDown(() => server.close(force: true));
@@ -149,6 +157,37 @@ Future<void> _pumpHome(
   );
   // Four tabs are compact: one not picked is named by its tooltip only
   await pumpUntil(tester, () => tester.any(find.byTooltip(txt.plan)));
+}
+
+/// A journey followed now, a ten-minute walk to the door under the catalog
+/// tagged `t`; the map needs no stops for it
+String _following({int arr = 0}) {
+  final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  return jsonEncode({
+    'journey': {
+      'dep': now,
+      'arr': arr == 0 ? now + 3600 : arr,
+      'rides': 0,
+      'live': false,
+      'confidence': 'live',
+      'backup': 0,
+      'legs': [
+        {
+          'kind': 'walk',
+          'dep': now,
+          'arr': now + 600,
+          'a': -1,
+          'b': -1,
+          'pts': [
+            [49.84, 24.03],
+            [49.841, 24.031],
+          ],
+        },
+      ],
+    },
+    'to': {'lat': 49.841, 'lon': 24.031},
+    'tag': 't',
+  });
 }
 
 void main() {
@@ -300,6 +339,163 @@ void main() {
     await pumpQuiet(tester);
     semantics.dispose();
     await _done(tester, reported);
+  });
+
+  testWidgets('with the setting on, the followed way is searched after 30 s', (
+    tester,
+  ) async {
+    useLang(Lang.en);
+    addTearDown(() => useLang(Lang.uk));
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(_here, (_) async => true);
+    addTearDown(() => messenger.setMockMethodCallHandler(_here, null));
+    MockStreamHandlerEventSink? fixes;
+    messenger.setMockStreamHandler(
+      _fixes,
+      MockStreamHandler.inline(
+        onListen: (_, sink) {
+          fixes = sink;
+        },
+      ),
+    );
+    addTearDown(() => messenger.setMockStreamHandler(_fixes, null));
+    final plans = <String>[];
+    await _pumpHome(
+      tester,
+      prefs: {
+        'commuterlviv.catalog.tag': 't',
+        'commuterlviv.following': _following(),
+        'commuterlviv.refresh': true,
+      },
+      plan: {'t': 0, 'options': []},
+      plans: plans,
+    );
+    await pumpUntil(tester, () => fixes != null);
+    fixes!.success({'lat': 49.84, 'lon': 24.03, 'accuracy': 5.0, 't': 0.0});
+    await tester.pump();
+    await pumpUntil(tester, () => tester.any(find.text(txt.walkHome)));
+    expect(plans, isEmpty);
+
+    await tester.pump(const Duration(seconds: 30));
+    await pumpUntil(tester, () => plans.isNotEmpty);
+    expect(plans, hasLength(1));
+
+    // The next tick finds the fake map's trim timer and whatever it left
+    await tester.pump(const Duration(seconds: 31));
+  });
+
+  testWidgets('with the setting off, the followed way is not searched', (
+    tester,
+  ) async {
+    useLang(Lang.en);
+    addTearDown(() => useLang(Lang.uk));
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(_here, (_) async => true);
+    addTearDown(() => messenger.setMockMethodCallHandler(_here, null));
+    MockStreamHandlerEventSink? fixes;
+    messenger.setMockStreamHandler(
+      _fixes,
+      MockStreamHandler.inline(
+        onListen: (_, sink) {
+          fixes = sink;
+        },
+      ),
+    );
+    addTearDown(() => messenger.setMockStreamHandler(_fixes, null));
+    final plans = <String>[];
+    await _pumpHome(
+      tester,
+      prefs: {
+        'commuterlviv.catalog.tag': 't',
+        'commuterlviv.following': _following(),
+      },
+      plan: {'t': 0, 'options': []},
+      plans: plans,
+    );
+    await pumpUntil(tester, () => fixes != null);
+    fixes!.success({'lat': 49.84, 'lon': 24.03, 'accuracy': 5.0, 't': 0.0});
+    await tester.pump();
+    await pumpUntil(tester, () => tester.any(find.text(txt.walkHome)));
+
+    await tester.pump(const Duration(seconds: 30));
+    await pumpQuiet(tester);
+    expect(plans, isEmpty);
+
+    await tester.pump(const Duration(seconds: 31));
+  });
+
+  testWidgets('a plan that is not broken and not sooner is kept', (
+    tester,
+  ) async {
+    useLang(Lang.en);
+    addTearDown(() => useLang(Lang.uk));
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(_here, (_) async => true);
+    addTearDown(() => messenger.setMockMethodCallHandler(_here, null));
+    MockStreamHandlerEventSink? fixes;
+    messenger.setMockStreamHandler(
+      _fixes,
+      MockStreamHandler.inline(
+        onListen: (_, sink) {
+          fixes = sink;
+        },
+      ),
+    );
+    addTearDown(() => messenger.setMockStreamHandler(_fixes, null));
+    final plans = <String>[];
+    final later = DateTime.now().millisecondsSinceEpoch ~/ 1000 + 7200;
+    final held = _following();
+    await _pumpHome(
+      tester,
+      prefs: {
+        'commuterlviv.catalog.tag': 't',
+        'commuterlviv.following': held,
+        'commuterlviv.refresh': true,
+      },
+      plan: {
+        't': 0,
+        'options': [
+          {
+            'dep': later,
+            'arr': later,
+            'rides': 0,
+            'live': false,
+            'confidence': 'live',
+            'backup': 0,
+            'legs': [
+              {
+                'kind': 'walk',
+                'dep': later,
+                'arr': later + 600,
+                'a': -1,
+                'b': -1,
+                'pts': [
+                  [49.84, 24.03],
+                  [49.841, 24.031],
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      plans: plans,
+    );
+    await pumpUntil(tester, () => fixes != null);
+    fixes!.success({'lat': 49.84, 'lon': 24.03, 'accuracy': 5.0, 't': 0.0});
+    await tester.pump();
+    await pumpUntil(tester, () => tester.any(find.text(txt.walkHome)));
+
+    await tester.pump(const Duration(seconds: 30));
+    await pumpUntil(tester, () => plans.isNotEmpty);
+    expect(find.text(txt.routeUpdated), findsNothing);
+    expect(
+      (await SharedPreferences.getInstance()).getString(
+        'commuterlviv.following',
+      ),
+      held,
+    );
+
+    await tester.pump(const Duration(seconds: 31));
   });
 
   testWidgets('the routes watched when the app was left are watched again, '

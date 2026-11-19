@@ -1,0 +1,2 @@
+- A followed journey's times now keep up with the live vehicles, so a step no longer ends at a time already past
+- Turn on Keep the route updated to search the rest of the way again every 30 seconds while you follow it

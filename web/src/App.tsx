@@ -28,8 +28,9 @@ import { takeRenewed, useLive } from "./lib/useLive";
 import { useMapLayers } from "./lib/useMapLayers";
 import { usePlanner } from "./lib/usePlanner";
 import { useSession } from "./lib/useSession";
-import { underWay } from "./lib/legs";
-import { replacing as replacingJourney } from "./lib/follow";
+import { betterPlan, liveRows, samePlan, underWay } from "./lib/legs";
+import { heldRefresh, REFRESH_EVERY_S } from "./lib/refresh";
+import { replacing as replacingJourney, sameStage } from "./lib/follow";
 import { heldHurry, heldSpeed } from "./lib/walking";
 import type { Catalog, Journey, Me, Place } from "./lib/types";
 import { t } from "./lib/i18n";
@@ -253,6 +254,84 @@ export function App() {
     // where a journey followed before the page loaded had got to
     followed?.stage,
   );
+
+  /** The state the refresh reads when its timer fires, never a stale closure */
+  const latest = useRef({ followed, here, progress, caught, live });
+  useEffect(() => {
+    latest.current = { followed, here, progress, caught, live };
+  }, [followed, here, progress, caught, live]);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
+  const refreshing = useRef(false);
+
+  /** Searches the rest of the way again from where the device is, or from on
+   *  board the vehicle ridden, and follows the result when the plan broke or
+   *  another reaches the door `BETTER_S` sooner. Only with the setting on: the
+   *  fix leaves the device while following then. */
+  const refreshRoute = useCallback(async () => {
+    const { followed, here, progress, caught, live } = latest.current;
+    if (!followed || !here || !heldRefresh() || progress === null || progress === "denied") return;
+    const stage = progress.stage;
+    if (stage.kind === "arrived") return;
+    // A fix on a vehicle whose id is not known reads as a point on the street
+    if (stage.kind === "ride" && stage.veh === null) return;
+    if (refreshing.current) return;
+    const now = Date.now() / 1000;
+    const rows = liveRows(followed.journey, {
+      now,
+      stage,
+      left: progress.left,
+      arrivals: live.arrivals,
+    });
+    const arrive = rows[rows.length - 1]?.arr ?? followed.journey.arr;
+    const aboard =
+      stage.kind === "ride" && stage.veh !== null ? { veh: stage.veh } : null;
+    refreshing.current = true;
+    try {
+      const got = await api.plan(
+        aboard ?? [here.lat, here.lon],
+        [followed.to.lat, followed.to.lon],
+        null,
+        heldSpeed(),
+        heldHurry(),
+      );
+      if (latest.current.followed !== followed) return;
+      const nowProgress = latest.current.progress;
+      if (nowProgress === null || nowProgress === "denied") return;
+      if (!sameStage(nowProgress.stage, stage)) return;
+      const next = betterPlan(
+        arrive,
+        got.options,
+        caught.kind === "missed" || progress.passed || progress.astray,
+      );
+      if (next === null || samePlan(next, followed.journey)) return;
+      const held = { journey: next, to: followed.to, tag: followed.tag };
+      holdFollowed(held);
+      setFollowed(held);
+      setUpdatedAt(Date.now());
+    } catch {
+      // Keep what is followed; the next round tries again
+    } finally {
+      refreshing.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!following) return;
+    const timer = setInterval(() => void refreshRoute(), REFRESH_EVERY_S * 1000);
+    return () => clearInterval(timer);
+  }, [following, refreshRoute]);
+
+  const missedLeg = caught.kind === "missed" ? caught.leg : -1;
+  /** The plan and leg the missed word already asked a search for: a fix
+   *  arriving after the word must not ask again and again */
+  const askedMissed = useRef<{ journey: Journey; leg: number } | null>(null);
+  useEffect(() => {
+    if (!following || missedLeg < 0 || !here || progress === null || progress === "denied") return;
+    const asked = askedMissed.current;
+    if (asked?.journey === following && asked.leg === missedLeg) return;
+    askedMissed.current = { journey: following, leg: missedLeg };
+    void refreshRoute();
+  }, [following, missedLeg, here, progress, refreshRoute]);
   // What is left of the journey, a walk under way drawn from where I am
   const onMap = useMemo(
     () =>
@@ -265,6 +344,7 @@ export function App() {
   const follow = (next: Followed | null) => {
     holdFollowed(next);
     setFollowed(next);
+    setUpdatedAt(null);
   };
 
   /** Off the walked line, the way to the next stop is searched again from
@@ -733,6 +813,7 @@ export function App() {
               live={live}
               progress={progress}
               caught={caught}
+              updatedAt={updatedAt}
               onSearch={searchAgain}
               onRebuild={() => void rebuildWay()}
               onEnd={() => follow(null)}

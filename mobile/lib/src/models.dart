@@ -379,6 +379,22 @@ class Leg {
 
   bool get walking => kind == 'walk';
 
+  /// The same leg with only its times moved
+  Leg copyWith({int? dep, int? arr}) => Leg(
+    kind: kind,
+    dep: dep ?? this.dep,
+    arr: arr ?? this.arr,
+    a: a,
+    b: b,
+    route: route,
+    veh: veh,
+    live: live,
+    confidence: confidence,
+    pts: pts,
+    stops: stops,
+    backups: backups,
+  );
+
   /// As [Leg.fromJson] reads it, without the backups
   Map<String, Object?> toJson() => {
     'kind': kind,
