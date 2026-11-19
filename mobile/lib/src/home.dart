@@ -15,8 +15,9 @@ import 'package:vector_map_tiles/vector_map_tiles.dart';
 import 'api.dart';
 import 'eta.dart' show clockTime;
 import 'basemap_style.dart';
-import 'follow.dart' show Progress, Stage, StageKind, replacing;
-import 'legs.dart' show underWay;
+import 'follow.dart'
+    show Catch, CatchKind, Progress, Stage, StageKind, replacing;
+import 'legs.dart' show LivePlan, betterPlan, liveRows, samePlan, underWay;
 import 'follow_card.dart';
 import 'followed.dart';
 import 'haptics.dart';
@@ -58,6 +59,10 @@ const _framePad = 40.0;
 /// s between searching again from a fix that is off the walked line, so a fix
 /// every second does not search every second. Chosen, not derived
 const _repathEveryS = 20;
+
+/// s between searching a followed journey again, with the setting on. Chosen,
+/// not derived: often enough to catch a delay, rare enough to cost little
+const _refreshEveryS = 30;
 
 /// A dot in the planner's A/B ring: a place, but neither end of a journey
 const _placeMark = '•';
@@ -148,6 +153,22 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Only while it is on does anything ask the server how the streets run.
   late bool _traffic = widget.api.showTraffic;
   late bool _followAway = widget.api.followAway;
+  late bool _routeRefresh = widget.api.routeRefresh;
+
+  /// Whether the next ride is still caught, as the card last judged it
+  Catch _caught = const Catch(CatchKind.ok);
+
+  /// When the search above last changed the route, Unix seconds
+  int? _updatedAt;
+
+  /// One search at a time
+  bool _refreshing = false;
+
+  /// A missed ride was said before the progress was known, so the search waits
+  /// for the next fix
+  bool _refreshMissed = false;
+
+  late final Timer _refreshTick;
 
   bool get _planning => _tab == _journeyTab;
 
@@ -211,10 +232,15 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadStyle();
     if (_allLines) unawaited(_geometry());
     _here.addListener(_fixArrived);
+    _refreshTick = Timer.periodic(
+      const Duration(seconds: _refreshEveryS),
+      (_) => unawaited(_refreshRoute()),
+    );
   }
 
   @override
   void dispose() {
+    _refreshTick.cancel();
     _live?.dispose();
     _here.removeListener(_fixArrived);
     _tracking.stop();
@@ -590,6 +616,7 @@ class _HomeScreenState extends State<HomeScreen> {
     unawaited(widget.api.setFollowed(jsonEncode(followed)));
     setState(() {
       _followed = followed;
+      _updatedAt = null;
       _tab = _mapTab;
       _leavePlanner();
     });
@@ -628,8 +655,81 @@ class _HomeScreenState extends State<HomeScreen> {
     _follow(next);
   }
 
+  /// Follows [next] in place of the journey followed now: the destination and
+  /// the catalog stay, and the card starts at the new plan's first leg.
+  void _refollow(Journey next, Followed followed) {
+    final updated = Followed(
+      journey: next,
+      to: followed.to,
+      tag: widget.api.catalogTag ?? '',
+    );
+    unawaited(widget.api.setFollowed(jsonEncode(updated)));
+    setState(() => _followed = updated);
+    _push();
+  }
+
+  /// Searches the rest of a followed way again with the setting on: from the
+  /// vehicle ridden, else from the fix. Follows the result when the plan broke
+  /// or another arrives clearly sooner; the card says so.
+  Future<void> _refreshRoute() async {
+    final followed = _followed;
+    final reached = _reached;
+    final here = _here.fix;
+    if (followed == null || reached == null || !_routeRefresh) return;
+    if (!identical(reached.$1, followed.journey)) return;
+    final progress = reached.$2;
+    final stage = progress.stage;
+    if (stage.kind == StageKind.arrived) return;
+    // A fix on a vehicle whose id is not known reads as a point on the street
+    if (stage.kind == StageKind.ride && stage.veh == null) return;
+    final veh = stage.kind == StageKind.ride ? stage.veh : null;
+    if (veh == null && here == null) return;
+    if (_refreshing) return;
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final arrive =
+        liveRows(
+          followed.journey,
+          LivePlan(
+            now: now,
+            stage: stage,
+            left: progress.left,
+            arrivals: _live?.arrivals ?? const <int, List<Arrival>>{},
+          ),
+        ).lastOrNull?.arr ??
+        followed.journey.arr;
+    _refreshing = true;
+    final ({List<Journey> options, String? report}) answer;
+    try {
+      answer = await widget.api.plan(
+        veh == null ? here!.point : null,
+        followed.to,
+        aboard: veh == null
+            ? null
+            : Aboard(veh, followed.journey.legs[stage.leg].route),
+        speed: widget.api.walkSpeed,
+        hurry: widget.api.hurrySpeed,
+      );
+    } on Exception {
+      _refreshing = false;
+      return;
+    }
+    _refreshing = false;
+    if (!mounted || !identical(_followed?.journey, followed.journey)) return;
+    final next = betterPlan(
+      arrive,
+      answer.options,
+      _caught.kind == CatchKind.missed || progress.passed || progress.astray,
+    );
+    if (next == null || samePlan(next, followed.journey)) return;
+    _updatedAt = now;
+    _refollow(next, followed);
+  }
+
   void _endFollow() {
-    setState(() => _followed = null);
+    setState(() {
+      _followed = null;
+      _updatedAt = null;
+    });
     unawaited(widget.api.setFollowed(null));
     _tracking.stop();
     _push();
@@ -1077,6 +1177,11 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() => _followAway = on);
         unawaited(widget.api.setFollowAway(on));
       },
+      routeRefresh: _routeRefresh,
+      onRouteRefresh: (on) {
+        setState(() => _routeRefresh = on);
+        unawaited(widget.api.setRouteRefresh(on));
+      },
       onLanguage: () {
         Navigator.pop(sheet);
         showFloatingSheet<void>(context, (_) => LanguageSheet(api: widget.api));
@@ -1295,9 +1400,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     return;
                   }
                   setState(() => _reached = (_following!, progress));
+                  if (_refreshMissed) {
+                    _refreshMissed = false;
+                    unawaited(_refreshRoute());
+                  }
                 },
                 onSearch: _searchAgain,
                 onRebuild: (stage) => unawaited(_repath(stage.leg)),
+                onCaught: (caught) {
+                  _caught = caught;
+                  if (caught.kind == CatchKind.missed) _refreshMissed = true;
+                },
+                updatedAt: _updatedAt,
                 onEnd: _endFollow,
               ),
             ),

@@ -21,6 +21,9 @@ export function countdown(at: number, now = Date.now() / 1000): string {
   return t.minutes(Math.round(s / 60));
 }
 
+/** Unix seconds now, as a call rather than a read in the middle of a render */
+export const nowS = () => Date.now() / 1000;
+
 /** `HH:MM`, local time */
 export const clock = (t: number) =>
   new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });

@@ -214,6 +214,10 @@ const en = {
   closeOptions: "Show close options",
   closeOptionsHint:
     "Also offer a way another beats only narrowly - a few minutes later at the door, from another stop or on another route",
+  routeRefresh: "Keep the route updated",
+  routeRefreshHint:
+    "While you follow a journey, searches again every 30 seconds so the way and its times stay current. With this on, your position is sent while following",
+  routeUpdated: "Route updated",
   hurryOn: "Turn on",
   hurryOff: "Turn off",
   hurry: "Hurry",
@@ -478,6 +482,10 @@ const uk: Strings = {
   closeOptions: "Показувати близькі варіанти",
   closeOptionsHint:
     "Пропонувати також шлях, який лише трохи гірший за інший - на кілька хвилин пізніше, з іншої зупинки чи іншим маршрутом",
+  routeRefresh: "Тримати маршрут актуальним",
+  routeRefreshHint:
+    "Під час супроводу шукає знову кожні 30 секунд, щоб маршрут і час були актуальні. Коли це увімкнено, позиція надсилається під час супроводу",
+  routeUpdated: "Маршрут оновлено",
   hurryOn: "Увімкнути",
   hurryOff: "Вимкнути",
   hurry: "Поспішіть",

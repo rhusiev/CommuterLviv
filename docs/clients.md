@@ -98,10 +98,31 @@ looked at, and the locate button takes it back. The map draws only what is
 left (`underWay` in `lib/legs`): the legs already done are dropped once you
 wait or ride, and while you walk, the walk under way is drawn from the dot
 along what is left of its line, so the start moves with you; off the line
-the walk is left as planned, which the card says, and the plan itself is not
-searched again until a ride is missed or you ask. Off the way, the card offers
+the walk is left as planned, which the card says. Off the way, the card offers
 Rebuild the way: one tap searches from where you are and follows the result
 when it still catches the same route, and opens the planner when it does not.
+
+The card's times are not the plan's frozen ones. Every step still to come is
+worked out on the device from the live predictions at the stops each ride is
+boarded and left at and from the metres left on the walk under way (`liveRows`
+in `lib/legs.ts`, ported to `mobile/lib/src/legs.dart`): a walk under way ends
+when its remaining metres take it at the pace it was planned at, a ride keeps
+its boarding time and takes its arrival from the vehicle's prediction, and the
+walk and the arrival after it move with it. A step therefore never claims to
+end at a time already gone by.
+
+The plan itself is searched again when a ride is missed or you ask - and, with
+"Keep the route updated" on under the account, every 30 s as well. That
+search starts from the fix, or from on board the vehicle ridden when one is
+known, and is what sends a position; while it is off, the follower sends
+nothing and a fix leaves the device only when you ask for a search. The result
+is followed when the plan broke (a ride missed, the stop carried past, or a
+fix off the walked way) or reaches the door `BETTER_S` (120 s, chosen) sooner
+than the live plan does;
+otherwise the plan stays, so a jumping prediction does not move the rider. The
+card says "Route updated" for 15 s after it changes. `betterPlan` and
+`samePlan` in both ports hold that rule.
+
 `Follower` in `web/src/lib/follow.ts`, ported line for line to
 `mobile/lib/src/follow.dart`, works it out from the device's own fixes and the
 vehicles as the map draws them, on the device: it sends nothing, and where you
@@ -241,7 +262,9 @@ the language, the walking speeds, the server, the password, signing out - with
 signing out below a rule so it is never the tap next to anything else. Under the
 speeds, "Show close options", off until turned on and kept on the device, asks
 every search for ways another beats only narrowly as well (`&close=1`,
-docs/service.md); they are listed among the others, by arrival. In the
+docs/service.md); they are listed among the others, by arrival. "Keep the route
+updated", off until turned on and kept on the device too, searches a followed
+journey again every 30 s (the follow card above). In the
 app that is a sheet; on the web it takes the lists' place until it is pressed
 again. A pinned stop is listed there once, with its arrivals.
 Nothing that is a toggle and nothing that signs you out sits loose on the map.

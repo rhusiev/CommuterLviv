@@ -915,6 +915,31 @@ def test_a_missed_bus_is_searched_again_from_the_last_fix(page):
     assert (float(lat), float(lon)) == pytest.approx(streets.DOOR)
 
 
+def test_a_missed_ride_is_searched_again_with_the_setting_on(page):
+    _register(page, "renewed")
+    expect = playwright.expect
+    _pick_route(page)
+    expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
+    page.get_by_role("button", name="Map", exact=True).click()
+    journey, tag = _a_ride_from_the_door(page)
+    ride = next(leg for leg in journey["legs"] if leg["kind"] == "ride")
+    ride["dep"] = time.time() - MISSED_S
+    ride.pop("veh", None)
+    held = {"journey": journey, "to": {"lat": END[0], "lon": END[1]}, "tag": tag}
+    page.evaluate("v => localStorage.setItem('commuterlviv.following', v)",
+                  json.dumps(held))
+    page.evaluate("localStorage.setItem('commuterlviv.refresh', '1')")
+    page.context.set_geolocation(
+        {"latitude": streets.DOOR[0], "longitude": streets.DOOR[1]})
+
+    # No tap: the card's word that the ride is missed asks the search itself
+    with page.expect_request(lambda r: "/api/plan?from=" in r.url) as asked:
+        page.reload()
+    lat, lon = asked.value.url.split("from=")[1].split("&")[0].split(",")
+    assert (float(lat), float(lon)) == pytest.approx(streets.DOOR)
+    expect(page.get_by_text("Route updated")).to_be_visible(timeout=SEE_MS)
+
+
 def test_the_step_followed_on_a_phone_is_not_cut_short_by_its_buttons(page):
     _register(page, "reader")
     expect = playwright.expect

@@ -41,6 +41,9 @@ const _headLines = 2;
 /// Room for a step's `HH:MM - HH:MM`
 const _clockWidth = 96.0;
 
+/// How long the card says the route was updated
+const _updatedSaidS = 15;
+
 /// Follows [journey] from [here]'s fixes for as long as it is mounted. The
 /// fixes go nowhere but the follower.
 class FollowCard extends StatefulWidget {
@@ -58,6 +61,8 @@ class FollowCard extends StatefulWidget {
     required this.onSearch,
     required this.onRebuild,
     required this.onEnd,
+    this.onCaught,
+    this.updatedAt,
     this.stage,
   });
 
@@ -89,6 +94,12 @@ class FollowCard extends StatefulWidget {
   /// having strayed from the one walked
   final void Function(Stage) onRebuild;
   final VoidCallback onEnd;
+
+  /// Whether the next ride is still caught, as the card last judged it
+  final ValueChanged<Catch>? onCaught;
+
+  /// When the route was last searched again and changed, Unix seconds
+  final int? updatedAt;
 
   @override
   State<FollowCard> createState() => _FollowCardState();
@@ -164,7 +175,11 @@ class _FollowCardState extends State<FollowCard> {
         widget.live.arrivals[stop]?.where((a) => a.veh == veh).firstOrNull?.t;
     final now = clock.now().millisecondsSinceEpoch / _msPerS;
     final reach = _follower.reach(due, now, mps, hurryMps);
+    final said = _caught;
     _caught = _watch.update(reach, _follower.progress.stage, now);
+    if (_caught.kind != said.kind || _caught.leg != said.leg) {
+      widget.onCaught?.call(_caught);
+    }
   }
 
   void _goAway(bool on) {
@@ -341,6 +356,18 @@ class _FollowCardState extends State<FollowCard> {
                     child: Text(txt.rebuildWay),
                   ),
                 ),
+              if (!done &&
+                  widget.updatedAt != null &&
+                  clock.now().millisecondsSinceEpoch ~/ 1000 -
+                          widget.updatedAt! <
+                      _updatedSaidS)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    txt.routeUpdated,
+                    style: const TextStyle(color: Colors.green, fontSize: 12),
+                  ),
+                ),
               if (!done && _caught.kind != CatchKind.ok)
                 _CatchRow(
                   said: _catchSaid(widget.catalog, widget.journey, _caught)!,
@@ -357,7 +384,8 @@ class _FollowCardState extends State<FollowCard> {
                 _Steps(
                   catalog: widget.catalog,
                   journey: widget.journey,
-                  stage: progress?.stage,
+                  live: widget.live,
+                  progress: progress,
                 ),
             ],
           ),
@@ -457,9 +485,14 @@ _Said _say(Catalog catalog, Journey journey, Live live, Progress progress) {
   ];
   final String head;
   Arrival? when;
+  int? walkArr;
   switch (stage.kind) {
     case StageKind.walk:
       head = leg.b < 0 ? txt.walkHome : txt.walkTo(name(leg.b));
+      // When the metres left get there, at the pace the walk was planned at
+      walkArr =
+          clock.now().millisecondsSinceEpoch ~/ 1000 +
+          walkRest(leg, progress.left).round();
     case StageKind.wait:
       // The planned vehicle, or the route's next one when it is not coming
       final at = due(leg.a);
@@ -477,6 +510,7 @@ _Said _say(Catalog catalog, Journey journey, Live live, Progress progress) {
       ? (when == null ? null : txt.dueIn(countdown(when.t)))
       : [
           txt.toGo(_distance(progress.left)),
+          if (walkArr != null) clockTime(walkArr),
           if (when != null) countdown(when.t),
         ].join(' · ');
   return progress.passed
@@ -533,19 +567,32 @@ class _Steps extends StatelessWidget {
   const _Steps({
     required this.catalog,
     required this.journey,
-    required this.stage,
+    required this.live,
+    required this.progress,
   });
 
   final Catalog catalog;
   final Journey journey;
+  final Live live;
 
   /// Where the journey is, or null while that is not known
-  final Stage? stage;
+  final Progress? progress;
 
   @override
   Widget build(BuildContext context) {
-    final list = rows(journey);
-    final now = stage == null ? -1 : current(list, stage!);
+    final stage = progress?.stage;
+    // Every time still to come is worked out from the predictions and how far
+    // along the device is, so a step never claims to end at a time gone by
+    final list = liveRows(
+      journey,
+      LivePlan(
+        now: clock.now().millisecondsSinceEpoch ~/ 1000,
+        stage: stage,
+        left: progress?.left ?? 0,
+        arrivals: live.arrivals,
+      ),
+    );
+    final now = stage == null ? -1 : current(list, stage);
     final theme = material.Theme.of(context);
     return Container(
       margin: const EdgeInsets.only(top: 8),
