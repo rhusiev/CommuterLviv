@@ -334,7 +334,15 @@ void main() {
     'waiting says the bus that leaves first, not the planned next lap',
     (tester) async {
       final now = clock.now().millisecondsSinceEpoch ~/ 1000;
-      final j = journey;
+      // A copy: the fixture's own legs are shared with the tests below
+      final j = Journey(
+        dep: journey.dep,
+        arr: journey.arr,
+        rides: journey.rides,
+        live: journey.live,
+        confidence: journey.confidence,
+        legs: [...journey.legs],
+      );
       j.legs[1] = Leg(
         kind: 'ride',
         dep: now,
