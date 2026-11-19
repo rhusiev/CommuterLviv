@@ -111,17 +111,16 @@ its boarding time and takes its arrival from the vehicle's prediction, and the
 walk and the arrival after it move with it. A step therefore never claims to
 end at a time already gone by.
 
-The plan itself is searched again when a ride is missed or you ask - and, with
-"Keep the route updated" on under the account, every 30 s as well. That
-search starts from the fix, or from on board the vehicle ridden when one is
-known, and is what sends a position; while it is off, the follower sends
+The plan itself is searched again when you ask, and, with "Keep the route
+updated" on under the account, at once when a ride is missed and every 30 s as
+well. That search starts from the fix, or from on board the vehicle ridden when
+one is known, and is what sends a position; while it is off, the follower sends
 nothing and a fix leaves the device only when you ask for a search. The result
 is followed when the plan broke (a ride missed, the stop carried past, or a
 fix off the walked way) or reaches the door `BETTER_S` (120 s, chosen) sooner
-than the live plan does;
-otherwise the plan stays, so a jumping prediction does not move the rider. The
-card says "Route updated" for 15 s after it changes. `betterPlan` and
-`samePlan` in both ports hold that rule.
+than the live plan does; otherwise the plan stays, so a jumping prediction does
+not move the rider. The card says "Route updated" for 15 s after it changes.
+`betterPlan` and `samePlan` in both ports hold that rule.
 
 `Follower` in `web/src/lib/follow.ts`, ported line for line to
 `mobile/lib/src/follow.dart`, works it out from the device's own fixes and the
