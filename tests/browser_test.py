@@ -898,10 +898,16 @@ def test_a_missed_bus_is_searched_again_from_the_last_fix(page):
                   json.dumps(held))
     page.context.set_geolocation(
         {"latitude": streets.DOOR[0], "longitude": streets.DOOR[1]})
+    plans_seen = []
+    page.on("request",
+            lambda r: plans_seen.append(r.url) if "/api/plan" in r.url else None)
     page.reload()
 
     again = page.get_by_role("button", name="Search again")
     expect(again).to_be_visible(timeout=SEE_MS)
+    # Off, the setting searches nothing of itself
+    page.wait_for_timeout(1500)
+    assert plans_seen == []
     # keeping the screen on is a setting, offered as a switch
     awake = page.get_by_role("switch", name="Keep screen on")
     expect(awake).to_have_attribute("aria-checked", "false")
@@ -938,6 +944,46 @@ def test_a_missed_ride_is_searched_again_with_the_setting_on(page):
     lat, lon = asked.value.url.split("from=")[1].split("&")[0].split(",")
     assert (float(lat), float(lon)) == pytest.approx(streets.DOOR)
     expect(page.get_by_text("Route updated")).to_be_visible(timeout=SEE_MS)
+
+
+def test_the_followed_way_is_searched_again_with_the_setting_on(page):
+    _register(page, "timed")
+    expect = playwright.expect
+    # The account is made on the previous page; wait for the map it opens
+    expect(page.get_by_placeholder("Find a stop or a place")).to_be_visible(
+        timeout=SEE_MS)
+    tag = page.evaluate("fetch('/api/catalog').then(r => r.headers.get('ETag'))")
+    now = time.time()
+    journey = {
+        "dep": now,
+        "arr": now + 1800,
+        "rides": 0,
+        "live": False,
+        "confidence": "live",
+        "backup": 0,
+        "legs": [{
+            "kind": "walk", "dep": now, "arr": now + 1200,
+            "a": -1, "b": -1,
+            "pts": [list(streets.DOOR), list(END)],
+        }],
+    }
+    held = {"journey": journey, "to": {"lat": END[0], "lon": END[1]}, "tag": tag}
+    page.evaluate("v => localStorage.setItem('commuterlviv.following', v)",
+                  json.dumps(held))
+    page.evaluate("localStorage.setItem('commuterlviv.refresh', '1')")
+    page.context.set_geolocation(
+        {"latitude": streets.DOOR[0], "longitude": streets.DOOR[1]})
+    page.reload()
+    expect(page.get_by_text("Walk to the door")).to_be_visible(timeout=SEE_MS)
+
+    # No ride is missed, so only the 30 s tick can ask
+    started = time.monotonic()
+    with page.expect_request(lambda r: "/api/plan?from=" in r.url,
+                             timeout=40_000):
+        pass
+    waited = time.monotonic() - started
+
+    assert 15 <= waited < 40
 
 
 def test_the_step_followed_on_a_phone_is_not_cut_short_by_its_buttons(page):

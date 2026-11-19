@@ -140,6 +140,47 @@ describe("liveRows", () => {
     expect(got[got.length - 1]!.arr).toBe(T0 + 37 * MIN_S);
   });
 
+  test("a ride waited for takes its times from the prediction, and the door moves", () => {
+    const got = liveRows(journey(3 * MIN_S, 0), {
+      now: T0 + 9 * MIN_S,
+      stage: { kind: "wait", leg: 1 },
+      left: 0,
+      arrivals: {
+        1: [arrival(7, 42, T0 + 12 * MIN_S)],
+        2: [arrival(7, 42, T0 + 22 * MIN_S)],
+      },
+    });
+
+    expect(got.find((r) => r.kind === "wait" && r.leg === 1)).toMatchObject({
+      dep: T0 + 5 * MIN_S,
+      arr: T0 + 12 * MIN_S,
+    });
+    expect(got.find((r) => r.kind === "ride" && r.leg === 1)).toMatchObject({
+      dep: T0 + 12 * MIN_S,
+      arr: T0 + 22 * MIN_S,
+    });
+    expect(got[got.length - 1]!.arr).toBe(T0 + 39 * MIN_S);
+  });
+
+  test("a vehicle five seconds before the walk ends is shown at the walk's end", () => {
+    const j = journey(0, 0);
+    j.legs[1] = { ...j.legs[1]!, veh: 42 };
+    const got = liveRows(j, {
+      now: T0 + 4 * MIN_S,
+      stage: { kind: "walk", leg: 0 },
+      left: 0,
+      arrivals: {
+        1: [arrival(7, 42, T0 + 4 * MIN_S - 5)],
+        2: [arrival(7, 42, T0 + 14 * MIN_S)],
+      },
+    });
+
+    expect(got.find((r) => r.kind === "ride" && r.leg === 1)).toMatchObject({
+      dep: T0 + 4 * MIN_S,
+      arr: T0 + 14 * MIN_S,
+    });
+  });
+
   test("a planned vehicle that is gone is replaced by the route's next one", () => {
     const j = journey(0, 0);
     const now = T0 + 4 * MIN_S;

@@ -278,6 +278,64 @@ void main() {
       expect(got.last.arr, t0 + 37 * minS);
     });
 
+    test('a ride waited for takes its times from the prediction', () {
+      final got = liveRows(
+        journey(3 * minS, 0),
+        LivePlan(
+          now: t0 + 9 * minS,
+          stage: const Stage(StageKind.wait, 1),
+          left: 0,
+          arrivals: {
+            1: [arrival(7, 42, t0 + 12 * minS)],
+            2: [arrival(7, 42, t0 + 22 * minS)],
+          },
+        ),
+      );
+
+      final wait = got.firstWhere(
+        (r) => r.kind == PlanRowKind.wait && r.leg == 1,
+      );
+      expect((wait.dep, wait.arr), (t0 + 5 * minS, t0 + 12 * minS));
+      final rideRow = got.firstWhere(
+        (r) => r.kind == PlanRowKind.ride && r.leg == 1,
+      );
+      expect((rideRow.dep, rideRow.arr), (t0 + 12 * minS, t0 + 22 * minS));
+      expect(got.last.arr, t0 + 39 * minS);
+    });
+
+    test(
+      "a vehicle five seconds before the walk ends is shown at the walk's end",
+      () {
+        final j = journey(0, 0);
+        j.legs[1] = Leg(
+          kind: 'ride',
+          dep: j.legs[1].dep,
+          arr: j.legs[1].arr,
+          a: 1,
+          b: 2,
+          route: 7,
+          veh: 42,
+        );
+        final got = liveRows(
+          j,
+          LivePlan(
+            now: t0 + 4 * minS,
+            stage: const Stage(StageKind.walk, 0),
+            left: 0,
+            arrivals: {
+              1: [arrival(7, 42, t0 + 4 * minS - 5)],
+              2: [arrival(7, 42, t0 + 14 * minS)],
+            },
+          ),
+        );
+
+        final rideRow = got.firstWhere(
+          (r) => r.kind == PlanRowKind.ride && r.leg == 1,
+        );
+        expect((rideRow.dep, rideRow.arr), (t0 + 4 * minS, t0 + 14 * minS));
+      },
+    );
+
     test("a planned vehicle that is gone is replaced by the route's next", () {
       final got = liveRows(
         journey(0, 0),
