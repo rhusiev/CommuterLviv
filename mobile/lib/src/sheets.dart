@@ -271,6 +271,8 @@ class AccountSheet extends StatefulWidget {
     required this.hurry,
     required this.followAway,
     required this.onFollowAway,
+    required this.routeRefresh,
+    required this.onRouteRefresh,
     required this.onLanguage,
     required this.onSpeed,
     required this.onServer,
@@ -287,6 +289,8 @@ class AccountSheet extends StatefulWidget {
   final double? hurry;
   final bool followAway;
   final ValueChanged<bool> onFollowAway;
+  final bool routeRefresh;
+  final ValueChanged<bool> onRouteRefresh;
   final VoidCallback onLanguage;
   final VoidCallback onSpeed;
   final VoidCallback onServer;
@@ -301,6 +305,7 @@ class AccountSheet extends StatefulWidget {
 
 class _AccountSheetState extends State<AccountSheet> {
   late bool _followAway = widget.followAway;
+  late bool _routeRefresh = widget.routeRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -331,6 +336,16 @@ class _AccountSheetState extends State<AccountSheet> {
               onChanged: (on) {
                 setState(() => _followAway = on);
                 widget.onFollowAway(on);
+              },
+            ),
+            SwitchListTile(
+              secondary: const Icon(Icons.autorenew),
+              title: Text(txt.routeRefresh),
+              subtitle: Text(txt.routeRefreshHint),
+              value: _routeRefresh,
+              onChanged: (on) {
+                setState(() => _routeRefresh = on);
+                widget.onRouteRefresh(on);
               },
             ),
             ListTile(

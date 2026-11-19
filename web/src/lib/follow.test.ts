@@ -10,6 +10,7 @@ import {
   needKmh,
   plannedKmh,
   replacing,
+  sameStage,
   type Due,
   type Progress,
   type Reach,
@@ -109,6 +110,16 @@ function atStop(j: Journey): Trip {
   for (let n = 0; n <= 200; n += 25) trip.fix(at(0, n));
   return trip;
 }
+
+describe("sameStage", () => {
+  test("is the same place on the journey, and the same vehicle once riding", () => {
+    expect(sameStage({ kind: "walk", leg: 1 }, { kind: "walk", leg: 1 })).toBe(true);
+    expect(sameStage({ kind: "walk", leg: 1 }, { kind: "wait", leg: 1 })).toBe(false);
+    expect(sameStage({ kind: "ride", leg: 2, veh: 7 }, { kind: "ride", leg: 2, veh: 7 })).toBe(true);
+    expect(sameStage({ kind: "ride", leg: 2, veh: 7 }, { kind: "ride", leg: 2, veh: 8 })).toBe(false);
+    expect(sameStage({ kind: "arrived" }, { kind: "arrived" })).toBe(true);
+  });
+});
 
 describe("follow", () => {
   test("walking to the stop waits there for the ride", () => {

@@ -217,6 +217,9 @@ class Strings {
     required this.planAgain,
     required this.followAway,
     required this.followAwayHint,
+    required this.routeRefresh,
+    required this.routeRefreshHint,
+    required this.routeUpdated,
     required this.followChannel,
     required this.alertChannel,
     required this.arrived,
@@ -489,6 +492,13 @@ class Strings {
   final String followAway;
   final String followAwayHint;
 
+  /// The switch that searches a followed journey again as it goes
+  final String routeRefresh;
+  final String routeRefreshHint;
+
+  /// Said on the card when that search changed the route
+  final String routeUpdated;
+
   /// Names of the notification channels, as the phone's settings list them
   final String followChannel;
   final String alertChannel;
@@ -723,6 +733,9 @@ const _en = Strings(
   planAgain: 'Search again',
   followAway: 'Follow with the app closed',
   followAwayHint: 'Follows with the screen off and shows the next step in a notification. Your location stays on this phone.',
+  routeRefresh: 'Keep the route updated',
+  routeRefreshHint: 'While you follow a journey, searches again every 30 seconds so the way and its times stay current. With this on, your position is sent while following.',
+  routeUpdated: 'Route updated',
   followChannel: 'Journey being followed',
   alertChannel: 'When to get off',
   arrived: 'You have arrived',
@@ -1021,6 +1034,9 @@ const _uk = Strings(
   planAgain: 'Шукати знову',
   followAway: 'Супровід із закритим застосунком',
   followAwayHint: 'Супроводжує з вимкненим екраном і показує наступний крок у сповіщенні. Де ви є, лишається на цьому телефоні.',
+  routeRefresh: 'Тримати маршрут актуальним',
+  routeRefreshHint: 'Під час супроводу шукає знову кожні 30 секунд, щоб маршрут і час були актуальні. Коли це увімкнено, позиція надсилається під час супроводу.',
+  routeUpdated: 'Маршрут оновлено',
   followChannel: 'Поїздка, яку супроводжують',
   alertChannel: 'Коли виходити',
   arrived: 'Ви на місці',

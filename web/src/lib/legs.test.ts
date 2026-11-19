@@ -1,7 +1,17 @@
 import { describe, expect, test } from "vitest";
-import { current, riddenBy, rows, underWay, WAIT_MIN_S } from "./legs";
+import {
+  BETTER_S,
+  betterPlan,
+  current,
+  liveRows,
+  riddenBy,
+  rows,
+  samePlan,
+  underWay,
+  WAIT_MIN_S,
+} from "./legs";
 import type { Progress } from "./follow";
-import type { Journey, Leg } from "./types";
+import type { Arrival, Journey, Leg } from "./types";
 
 const T0 = 1_790_000_000;
 const MIN_S = 60;
@@ -76,6 +86,186 @@ describe("rows", () => {
     const j = journey(0, 0);
     const got = rows({ ...j, aboard: true, legs: j.legs.slice(1) });
     expect(got[0]).toMatchObject({ kind: "ride", leg: 0 });
+  });
+});
+
+describe("liveRows", () => {
+  /** A walk north along a meridian, a point every ~111 m */
+  const STEP = 0.001;
+  const walking = (): Journey => {
+    const j = journey(3 * MIN_S, 0);
+    j.legs[0] = {
+      ...j.legs[0]!,
+      pts: [0, 1, 2, 3, 4].map((i) => [49.8 + i * STEP, 24.0]),
+    };
+    return j;
+  };
+  const arrival = (route: number, veh: number, t: number): Arrival => ({ route, veh, t });
+
+  test("the walk under way ends when the metres left take it", () => {
+    const j = walking();
+    const now = T0 + 4 * MIN_S;
+    const got = liveRows(j, {
+      now,
+      stage: { kind: "walk", leg: 0 },
+      left: 222,
+      arrivals: {},
+    });
+
+    // Half the ~445 m line left at the pace it was planned at: half of 5 min
+    expect(got[0]!.kind).toBe("walk");
+    expect(got[0]!.arr).toBeCloseTo(now + 150, 0);
+  });
+
+  test("a ride's arrival and the walk after it follow its prediction", () => {
+    const j = journey(3 * MIN_S, 0);
+    const now = T0 + 6 * MIN_S;
+    const got = liveRows(j, {
+      now,
+      stage: { kind: "ride", leg: 1, veh: 42 },
+      left: 0,
+      arrivals: {
+        1: [arrival(7, 42, T0 + 5 * MIN_S)],
+        2: [arrival(7, 42, T0 + 20 * MIN_S)],
+      },
+    });
+
+    expect(got.find((r) => r.kind === "ride" && r.leg === 1)).toMatchObject({
+      arr: T0 + 20 * MIN_S,
+    });
+    expect(got.find((r) => r.kind === "walk" && r.leg === 2)).toMatchObject({
+      dep: T0 + 20 * MIN_S,
+      arr: T0 + 22 * MIN_S,
+    });
+    expect(got[got.length - 1]!.arr).toBe(T0 + 37 * MIN_S);
+  });
+
+  test("a ride waited for takes its times from the prediction, and the door moves", () => {
+    const got = liveRows(journey(3 * MIN_S, 0), {
+      now: T0 + 9 * MIN_S,
+      stage: { kind: "wait", leg: 1 },
+      left: 0,
+      arrivals: {
+        1: [arrival(7, 42, T0 + 12 * MIN_S)],
+        2: [arrival(7, 42, T0 + 22 * MIN_S)],
+      },
+    });
+
+    expect(got.find((r) => r.kind === "wait" && r.leg === 1)).toMatchObject({
+      dep: T0 + 5 * MIN_S,
+      arr: T0 + 12 * MIN_S,
+    });
+    expect(got.find((r) => r.kind === "ride" && r.leg === 1)).toMatchObject({
+      dep: T0 + 12 * MIN_S,
+      arr: T0 + 22 * MIN_S,
+    });
+    expect(got[got.length - 1]!.arr).toBe(T0 + 39 * MIN_S);
+  });
+
+  test("a waited ride takes the bus that leaves first, not its planned vehicle's next lap", () => {
+    const j = journey(3 * MIN_S, 0);
+    j.legs[1] = { ...j.legs[1]!, veh: 42 };
+    const got = liveRows(j, {
+      now: T0 + 10 * MIN_S,
+      stage: { kind: "wait", leg: 1 },
+      left: 0,
+      arrivals: {
+        // The planned vehicle is between the stops: its next lap is all that
+        // is left at the boarding stop, while it reaches the alight stop now
+        1: [
+          { ...arrival(7, 42, T0 + 15 * MIN_S), planned: true },
+          arrival(7, 8, T0 + 12 * MIN_S),
+        ],
+        2: [arrival(7, 42, T0 + 14 * MIN_S), arrival(7, 8, T0 + 22 * MIN_S)],
+      },
+    });
+
+    expect(got.find((r) => r.kind === "ride" && r.leg === 1)).toMatchObject({
+      dep: T0 + 12 * MIN_S,
+      arr: T0 + 22 * MIN_S,
+    });
+  });
+
+  test("the alight arrival is the trip boarded, not an earlier row of its vehicle", () => {
+    const j = journey(0, 0);
+    j.legs[1] = { ...j.legs[1]!, veh: 42 };
+    const got = liveRows(j, {
+      now: T0 + 4 * MIN_S,
+      stage: { kind: "walk", leg: 0 },
+      left: 0,
+      arrivals: {
+        1: [arrival(7, 42, T0 + 5 * MIN_S)],
+        2: [
+          arrival(7, 42, T0 + 4.5 * MIN_S),
+          arrival(7, 42, T0 + 20 * MIN_S),
+          arrival(7, 8, T0 + 14 * MIN_S),
+        ],
+      },
+    });
+
+    expect(got.find((r) => r.kind === "ride" && r.leg === 1)).toMatchObject({
+      dep: T0 + 5 * MIN_S,
+      arr: T0 + 20 * MIN_S,
+    });
+  });
+
+  test("a vehicle five seconds before the walk ends is shown at the walk's end", () => {
+    const j = journey(0, 0);
+    j.legs[1] = { ...j.legs[1]!, veh: 42 };
+    const got = liveRows(j, {
+      now: T0 + 4 * MIN_S,
+      stage: { kind: "walk", leg: 0 },
+      left: 0,
+      arrivals: {
+        1: [arrival(7, 42, T0 + 4 * MIN_S - 5)],
+        2: [arrival(7, 42, T0 + 14 * MIN_S)],
+      },
+    });
+
+    expect(got.find((r) => r.kind === "ride" && r.leg === 1)).toMatchObject({
+      dep: T0 + 4 * MIN_S,
+      arr: T0 + 14 * MIN_S,
+    });
+  });
+
+  test("a planned vehicle that is gone is replaced by the route's next one", () => {
+    const j = journey(0, 0);
+    const now = T0 + 4 * MIN_S;
+    const got = liveRows(j, {
+      now,
+      stage: { kind: "walk", leg: 0 },
+      left: 0,
+      arrivals: {
+        1: [arrival(7, 8, T0 + 8 * MIN_S)],
+        2: [arrival(7, 8, T0 + 18 * MIN_S)],
+      },
+    });
+
+    expect(got.find((r) => r.kind === "ride" && r.leg === 1)).toMatchObject({
+      dep: T0 + 8 * MIN_S,
+      arr: T0 + 18 * MIN_S,
+    });
+  });
+});
+
+describe("betterPlan", () => {
+  const option = (arr: number): Journey => ({ ...journey(0, 0), arr });
+
+  test("keeps a plan that still works unless another is clearly sooner", () => {
+    expect(betterPlan(1000, [option(1000 - BETTER_S + 1)], false)).toBeNull();
+    expect(betterPlan(1000, [option(1000 - BETTER_S)], false)?.arr).toBe(1000 - BETTER_S);
+  });
+
+  test("takes the best there is when the plan is broken", () => {
+    expect(betterPlan(1000, [option(5000)], true)?.arr).toBe(5000);
+    expect(betterPlan(1000, [], true)).toBeNull();
+  });
+});
+
+describe("samePlan", () => {
+  test("is the same legs with the same times", () => {
+    expect(samePlan(journey(0, 0), journey(0, 0))).toBe(true);
+    expect(samePlan(journey(0, 0), journey(1, 0))).toBe(false);
   });
 });
 

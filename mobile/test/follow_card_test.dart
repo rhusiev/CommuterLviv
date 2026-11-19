@@ -9,7 +9,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:commuterlviv/src/api.dart';
-import 'package:commuterlviv/src/eta.dart';
 import 'package:commuterlviv/src/follow.dart' show Stage, StageKind;
 import 'package:commuterlviv/src/follow_card.dart';
 import 'package:commuterlviv/src/hurry_pill.dart';
@@ -163,10 +162,14 @@ Future<FakeHere> pump(
   double? hurrySpeed,
   void Function(Stage)? onSearch,
   void Function(Stage)? onRebuild,
+  void Function(Live)? withLive,
+  Stage? stage,
 }) async {
   SharedPreferences.setMockInitialValues({});
   FlutterSecureStorage.setMockInitialValues({});
   final api = await Api.open();
+  final live = Live(api, onRenewed: () {});
+  withLive?.call(live);
   final here = FakeHere();
   await tester.pumpWidget(
     MaterialApp(
@@ -174,7 +177,7 @@ Future<FakeHere> pump(
         body: FollowCard(
           catalog: catalog,
           journey: following ?? journey,
-          live: Live(api, onRenewed: () {}),
+          live: live,
           here: here,
           walkSpeed: walkKmh.usual,
           hurrySpeed: hurrySpeed,
@@ -183,6 +186,7 @@ Future<FakeHere> pump(
           onSearch: onSearch ?? (_) {},
           onRebuild: onRebuild ?? (_) {},
           onEnd: () {},
+          stage: stage,
         ),
       ),
     ),
@@ -326,6 +330,45 @@ void main() {
     expect(here.notices, isEmpty);
   });
 
+  testWidgets(
+    'waiting says the bus that leaves first, not the planned next lap',
+    (tester) async {
+      final now = clock.now().millisecondsSinceEpoch ~/ 1000;
+      // A copy: the fixture's own legs are shared with the tests below
+      final j = Journey(
+        dep: journey.dep,
+        arr: journey.arr,
+        rides: journey.rides,
+        live: journey.live,
+        confidence: journey.confidence,
+        legs: [...journey.legs],
+      );
+      j.legs[1] = Leg(
+        kind: 'ride',
+        dep: now,
+        arr: now + 900,
+        a: 0,
+        b: 1,
+        route: 0,
+        veh: 42,
+      );
+      final here = await pump(
+        tester,
+        away: false,
+        following: j,
+        withLive: (live) => live.arrivals[0] = [
+          Arrival(route: 0, veh: 42, t: now + 900, planned: true),
+          Arrival(route: 0, veh: 8, t: now + 700),
+        ],
+        stage: const Stage(StageKind.wait, 1),
+      );
+      here.move(0, 200);
+      await tester.pump();
+
+      expect(find.text(txt.dueIn(txt.minutes(12))), findsOneWidget);
+    },
+  );
+
   testWidgets('a tap on the card lists every step, the one under way marked', (
     tester,
   ) async {
@@ -337,7 +380,11 @@ void main() {
     await tester.tap(find.byTooltip(txt.showSteps));
     await tester.pump();
 
-    expect(find.text('${clockTime(0)} - ${clockTime(0)}'), findsNWidgets(3));
+    // The times come from the live plan, so only their shape is fixed here
+    expect(
+      find.textContaining(RegExp(r'^\d\d:\d\d - \d\d:\d\d$')),
+      findsNWidgets(3),
+    );
     expect(find.text('Stop 0 → Stop 1'), findsOneWidget);
     expect(find.text(txt.walkHome), findsOneWidget);
     final marked = tester.widget<Container>(

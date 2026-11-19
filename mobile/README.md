@@ -431,6 +431,10 @@ over `CoreLocation`, which is part of the system; `AppDelegate.swift` owns it
 and hands it the app's trips in and out of the background. Both stop the
 updates while the app is off screen - no fix is taken while the map is not on
 it - unless a journey is followed with "Follow with the app closed" turned on.
+While the app runs, a journey followed with "Keep the route updated" in the
+account sheet on is searched again every 30 s, from the fix or from on board
+the vehicle ridden; that is the only time a followed journey sends where it
+is.
 Then `away` keeps them running: on Android `FollowService.kt` is a foreground
 service of type `location` behind an ongoing notification, which `notice`
 rewrites and which sounds on the alerts channel when `alert` is set; on iOS

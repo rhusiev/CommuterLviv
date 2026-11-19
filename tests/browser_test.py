@@ -898,10 +898,17 @@ def test_a_missed_bus_is_searched_again_from_the_last_fix(page):
                   json.dumps(held))
     page.context.set_geolocation(
         {"latitude": streets.DOOR[0], "longitude": streets.DOOR[1]})
+    plans_seen = []
+    page.on("request",
+            lambda r: plans_seen.append(r.url) if "/api/plan" in r.url else None)
     page.reload()
 
     again = page.get_by_role("button", name="Search again")
     expect(again).to_be_visible(timeout=SEE_MS)
+    # Off, the setting searches nothing of itself. Long enough for the first
+    # fix, which the refresh needs before it would ask
+    page.wait_for_timeout(5000)
+    assert plans_seen == []
     # keeping the screen on is a setting, offered as a switch
     awake = page.get_by_role("switch", name="Keep screen on")
     expect(awake).to_have_attribute("aria-checked", "false")
@@ -913,6 +920,72 @@ def test_a_missed_bus_is_searched_again_from_the_last_fix(page):
         again.click()
     lat, lon = asked.value.url.split("from=")[1].split("&")[0].split(",")
     assert (float(lat), float(lon)) == pytest.approx(streets.DOOR)
+
+
+def test_a_missed_ride_is_searched_again_with_the_setting_on(page):
+    _register(page, "renewed")
+    expect = playwright.expect
+    _pick_route(page)
+    expect(page.get_by_text("1 vehicles")).to_be_visible(timeout=SEE_MS)
+    page.get_by_role("button", name="Map", exact=True).click()
+    journey, tag = _a_ride_from_the_door(page)
+    ride = next(leg for leg in journey["legs"] if leg["kind"] == "ride")
+    ride["dep"] = time.time() - MISSED_S
+    ride.pop("veh", None)
+    held = {"journey": journey, "to": {"lat": END[0], "lon": END[1]}, "tag": tag}
+    page.evaluate("v => localStorage.setItem('commuterlviv.following', v)",
+                  json.dumps(held))
+    page.evaluate("localStorage.setItem('commuterlviv.refresh', '1')")
+    page.context.set_geolocation(
+        {"latitude": streets.DOOR[0], "longitude": streets.DOOR[1]})
+
+    # No tap: the card's word that the ride is missed asks the search itself
+    with page.expect_request(lambda r: "/api/plan?from=" in r.url) as asked:
+        page.reload()
+    lat, lon = asked.value.url.split("from=")[1].split("&")[0].split(",")
+    assert (float(lat), float(lon)) == pytest.approx(streets.DOOR)
+    expect(page.get_by_text("Route updated")).to_be_visible(timeout=SEE_MS)
+
+
+def test_the_followed_way_is_searched_again_with_the_setting_on(page):
+    _register(page, "timed")
+    expect = playwright.expect
+    # The account is made on the previous page; wait for the map it opens
+    expect(page.get_by_placeholder("Find a stop or a place")).to_be_visible(
+        timeout=SEE_MS)
+    tag = page.evaluate("fetch('/api/catalog').then(r => r.headers.get('ETag'))")
+    now = time.time()
+    journey = {
+        "dep": now,
+        "arr": now + 1800,
+        "rides": 0,
+        "live": False,
+        "confidence": "live",
+        "backup": 0,
+        "legs": [{
+            "kind": "walk", "dep": now, "arr": now + 1200,
+            "a": -1, "b": -1,
+            "pts": [list(streets.DOOR), list(END)],
+        }],
+    }
+    held = {"journey": journey, "to": {"lat": END[0], "lon": END[1]}, "tag": tag}
+    page.evaluate("v => localStorage.setItem('commuterlviv.following', v)",
+                  json.dumps(held))
+    page.evaluate("localStorage.setItem('commuterlviv.refresh', '1')")
+    page.context.set_geolocation(
+        {"latitude": streets.DOOR[0], "longitude": streets.DOOR[1]})
+    # The tick starts with the following, so the wait is measured from the load
+    started = time.monotonic()
+    page.reload()
+    expect(page.get_by_text("Walk to the door")).to_be_visible(timeout=SEE_MS)
+
+    # No ride is missed, so only the 30 s tick can ask
+    with page.expect_request(lambda r: "/api/plan?from=" in r.url,
+                             timeout=40_000):
+        pass
+    waited = time.monotonic() - started
+
+    assert 25 <= waited < 45
 
 
 def test_the_step_followed_on_a_phone_is_not_cut_short_by_its_buttons(page):

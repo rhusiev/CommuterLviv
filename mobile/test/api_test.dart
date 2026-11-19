@@ -20,6 +20,16 @@ void main() {
     expect(api.failure(ApiError('too many places', 400)), 'too many places');
   });
 
+  test('the route refresh is off until asked, and kept once asked', () async {
+    expect(api.routeRefresh, isFalse);
+
+    await api.setRouteRefresh(true);
+    expect(api.routeRefresh, isTrue);
+
+    await api.setRouteRefresh(false);
+    expect(api.routeRefresh, isFalse);
+  });
+
   test('a server that did not answer is told as unreachable', () {
     expect(
       api.failure(const SocketException('refused')),
