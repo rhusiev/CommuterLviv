@@ -186,7 +186,7 @@ describe("liveRows", () => {
     });
   });
 
-  test("the alight arrival is the chosen trip's, not the vehicle's earlier one", () => {
+  test("the alight arrival is the trip boarded, not an earlier row of its vehicle", () => {
     const j = journey(0, 0);
     j.legs[1] = { ...j.legs[1]!, veh: 42 };
     const got = liveRows(j, {
@@ -196,7 +196,7 @@ describe("liveRows", () => {
       arrivals: {
         1: [arrival(7, 42, T0 + 5 * MIN_S)],
         2: [
-          arrival(7, 42, T0 + 6 * MIN_S),
+          arrival(7, 42, T0 + 4.5 * MIN_S),
           arrival(7, 42, T0 + 20 * MIN_S),
           arrival(7, 8, T0 + 14 * MIN_S),
         ],
@@ -205,7 +205,7 @@ describe("liveRows", () => {
 
     expect(got.find((r) => r.kind === "ride" && r.leg === 1)).toMatchObject({
       dep: T0 + 5 * MIN_S,
-      arr: T0 + 6 * MIN_S,
+      arr: T0 + 20 * MIN_S,
     });
   });
 

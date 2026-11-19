@@ -162,10 +162,14 @@ Future<FakeHere> pump(
   double? hurrySpeed,
   void Function(Stage)? onSearch,
   void Function(Stage)? onRebuild,
+  void Function(Live)? withLive,
+  Stage? stage,
 }) async {
   SharedPreferences.setMockInitialValues({});
   FlutterSecureStorage.setMockInitialValues({});
   final api = await Api.open();
+  final live = Live(api, onRenewed: () {});
+  withLive?.call(live);
   final here = FakeHere();
   await tester.pumpWidget(
     MaterialApp(
@@ -173,7 +177,7 @@ Future<FakeHere> pump(
         body: FollowCard(
           catalog: catalog,
           journey: following ?? journey,
-          live: Live(api, onRenewed: () {}),
+          live: live,
           here: here,
           walkSpeed: walkKmh.usual,
           hurrySpeed: hurrySpeed,
@@ -182,6 +186,7 @@ Future<FakeHere> pump(
           onSearch: onSearch ?? (_) {},
           onRebuild: onRebuild ?? (_) {},
           onEnd: () {},
+          stage: stage,
         ),
       ),
     ),
@@ -324,6 +329,37 @@ void main() {
     await travel(tester, here);
     expect(here.notices, isEmpty);
   });
+
+  testWidgets(
+    'waiting says the bus that leaves first, not the planned next lap',
+    (tester) async {
+      final now = clock.now().millisecondsSinceEpoch ~/ 1000;
+      final j = journey;
+      j.legs[1] = Leg(
+        kind: 'ride',
+        dep: now,
+        arr: now + 900,
+        a: 0,
+        b: 1,
+        route: 0,
+        veh: 42,
+      );
+      final here = await pump(
+        tester,
+        away: false,
+        following: j,
+        withLive: (live) => live.arrivals[0] = [
+          Arrival(route: 0, veh: 42, t: now + 900, planned: true),
+          Arrival(route: 0, veh: 8, t: now + 700),
+        ],
+        stage: const Stage(StageKind.wait, 1),
+      );
+      here.move(0, 200);
+      await tester.pump();
+
+      expect(find.text(txt.dueIn(txt.minutes(12))), findsOneWidget);
+    },
+  );
 
   testWidgets('a tap on the card lists every step, the one under way marked', (
     tester,
