@@ -185,7 +185,7 @@ List<Leg> liveLegs(Journey j, LivePlan plan) {
         final dep = waiting == null ? leg.dep : math.max(waiting.t, plan.now);
         final arr = waiting == null
             ? leg.arr
-            : (_arrivalAt(at(leg.b), waiting.veh) ?? dep + _planned(leg));
+            : (_arrivalAt(at(leg.b), waiting.veh, dep) ?? dep + _planned(leg));
         out.add(leg.copyWith(dep: dep, arr: arr));
         inAt = arr;
         continue;
@@ -194,7 +194,7 @@ List<Leg> liveLegs(Journey j, LivePlan plan) {
       final veh = stage.kind == StageKind.ride ? stage.veh : null;
       final arr = veh == null
           ? leg.arr
-          : (_arrivalAt(at(leg.b), veh) ?? leg.arr);
+          : (_arrivalAt(at(leg.b), veh, leg.dep) ?? leg.arr);
       out.add(leg.copyWith(arr: arr));
       inAt = arr;
       continue;
@@ -205,7 +205,7 @@ List<Leg> liveLegs(Journey j, LivePlan plan) {
         : math.max(leaving.t, inAt);
     final arr = leaving == null
         ? dep + _planned(leg)
-        : (_arrivalAt(at(leg.b), leaving.veh) ?? dep + _planned(leg));
+        : (_arrivalAt(at(leg.b), leaving.veh, dep) ?? dep + _planned(leg));
     out.add(leg.copyWith(dep: dep, arr: arr));
     inAt = arr;
   }
@@ -226,17 +226,22 @@ double walkRest(Leg leg, double left) {
 
 int _planned(Leg leg) => math.max(0, leg.arr - leg.dep);
 
-int? _arrivalAt(List<Arrival> list, int veh) =>
-    list.where((a) => a.veh == veh).firstOrNull?.t;
+int? _arrivalAt(List<Arrival> list, int veh, int from) => list
+    .where((a) => a.veh == veh && a.t >= from)
+    .firstOrNull
+    ?.t;
 
 /// The arrival of [route] to leave at or after [from], preferring the planned
 /// vehicle [veh] whenever it is still catchable
 Arrival? _leavingAt(List<Arrival> list, int? route, int? veh, int from) {
   if (route == null) return null;
-  final ofRoute = list.where((a) => a.route == route);
+  final ofRoute = list.where((a) => a.route == route).toList()
+    ..sort((a, b) => a.t.compareTo(b.t));
   if (veh != null) {
+    // The current trip only: a `planned` row is the vehicle's next lap at its
+    // terminus, and another bus of the route may leave sooner
     for (final a in ofRoute) {
-      if (a.veh == veh && a.t >= from - graceS) return a;
+      if (a.veh == veh && !a.planned && a.t >= from - graceS) return a;
     }
   }
   for (final a in ofRoute) {

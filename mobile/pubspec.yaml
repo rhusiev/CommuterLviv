@@ -66,6 +66,8 @@ dev_dependencies:
   leak_tracker_flutter_testing: any
   # Pinned by vector_tile_renderer; listed because a test builds a tile with them.
   vector_tile: any
+  # Pinned by flutter_test; listed because a test drives the refresh tick.
+  fake_async: any
   fixnum: any
 
   # The "flutter_lints" package below contains a set of recommended lints to

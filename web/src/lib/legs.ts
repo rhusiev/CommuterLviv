@@ -108,14 +108,16 @@ export function liveLegs(j: Journey, plan: LivePlan): Leg[] {
         const dep = waiting === undefined ? leg.dep : Math.max(waiting.t, plan.now);
         const arr = waiting === undefined
           ? leg.arr
-          : (arrivalTime(at(leg.b), waiting.veh) ?? dep + rideTime(leg));
+          : (arrivalTime(at(leg.b), waiting.veh, dep) ?? dep + rideTime(leg));
         out.push({ ...leg, dep, arr });
         inAt = arr;
         return;
       }
       // A ride under way keeps when it was boarded; only its arrival moves
       const veh = stage.kind === "ride" ? stage.veh : null;
-      const arr = veh === null ? leg.arr : (arrivalTime(at(leg.b), veh) ?? leg.arr);
+      const arr = veh === null
+        ? leg.arr
+        : (arrivalTime(at(leg.b), veh, leg.dep) ?? leg.arr);
       out.push({ ...leg, arr });
       inAt = arr;
       return;
@@ -126,7 +128,7 @@ export function liveLegs(j: Journey, plan: LivePlan): Leg[] {
       : Math.max(leaving.t, inAt);
     const arr = leaving === undefined
       ? dep + rideTime(leg)
-      : (arrivalTime(at(leg.b), leaving.veh) ?? dep + rideTime(leg));
+      : (arrivalTime(at(leg.b), leaving.veh, dep) ?? dep + rideTime(leg));
     out.push({ ...leg, dep, arr });
     inAt = arr;
   });
@@ -151,8 +153,8 @@ const FLAT_MPS = 1.25;
 const walkTime = (leg: Leg) => Math.max(0, leg.arr - leg.dep);
 const rideTime = walkTime;
 
-const arrivalTime = (list: Arrival[], veh: number) =>
-  list.find((a) => a.veh === veh)?.t;
+const arrivalTime = (list: Arrival[], veh: number, from: number) =>
+  list.find((a) => a.veh === veh && a.t >= from)?.t;
 
 /** The arrival of `route` to leave at or after `from`, preferring the planned
  *  vehicle `veh` whenever it is still catchable */
@@ -162,9 +164,15 @@ function leavingAt(
   veh: number | null,
   from: number,
 ): Arrival | undefined {
-  const ofRoute = route === undefined ? [] : list.filter((a) => a.route === route);
+  const ofRoute = (route === undefined ? [] : list.filter((a) => a.route === route)).sort(
+    (a, b) => a.t - b.t,
+  );
   if (veh !== null) {
-    const held = ofRoute.find((a) => a.veh === veh && a.t >= from - GRACE_S);
+    // The current trip only: a `planned` row is the vehicle's next lap at its
+    // terminus, and another bus of the route may leave sooner
+    const held = ofRoute.find(
+      (a) => a.veh === veh && !a.planned && a.t >= from - GRACE_S,
+    );
     if (held) return held;
   }
   return ofRoute.find((a) => a.t >= from);

@@ -172,7 +172,10 @@ class _HomeScreenState extends State<HomeScreen> {
     _refreshMissed = false;
   }
 
-  late final Timer _refreshTick;
+  late final _refresher = RouteRefresh(
+    enabled: () => _routeRefresh,
+    ask: () => unawaited(_refreshRoute()),
+  );
 
   bool get _planning => _tab == _journeyTab;
 
@@ -236,15 +239,12 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadStyle();
     if (_allLines) unawaited(_geometry());
     _here.addListener(_fixArrived);
-    _refreshTick = Timer.periodic(
-      const Duration(seconds: refreshEveryS),
-      (_) => unawaited(_refreshRoute()),
-    );
+    _refresher.start();
   }
 
   @override
   void dispose() {
-    _refreshTick.cancel();
+    _refresher.stop();
     _live?.dispose();
     _here.removeListener(_fixArrived);
     _tracking.stop();
@@ -1402,11 +1402,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   final stage = progress.stage;
                   // A walk is drawn from the fix, so again on every one; any
                   // other stage only once it is reached
-                  if (stage.kind != StageKind.walk &&
-                      was?.kind == stage.kind &&
-                      was?.leg == stage.leg) {
-                    return;
-                  }
+                  if (stage.kind != StageKind.walk && was == stage) return;
                   setState(() => _reached = (_following!, progress));
                   if (_refreshMissed) {
                     _refreshMissed = false;
