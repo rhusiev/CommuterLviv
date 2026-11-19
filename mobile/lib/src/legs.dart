@@ -141,11 +141,6 @@ class LivePlan {
   final Map<int, List<Arrival>> arrivals;
 }
 
-/// A vehicle is still the planned one this long after the walk was to get in:
-/// the plans keep a margin, and a rider may catch it waving. `graceS` in
-/// `follow.dart`
-const _boardGraceS = 10;
-
 /// The service's walking pace on the level, m/s: `SPEED` in `walk.py`
 const _flatMps = 1.25;
 
@@ -182,8 +177,20 @@ List<Leg> liveLegs(Journey j, LivePlan plan) {
       inAt = arr;
       continue;
     }
-    // A ride under way keeps when it was boarded; only its arrival moves
     if (i == stage.leg) {
+      // Waiting at the stop: the ride is picked from the predictions where the
+      // device is now, not from where the walk was to get in
+      if (stage.kind == StageKind.wait) {
+        final waiting = _leavingAt(at(leg.a), leg.route, leg.veh, plan.now);
+        final dep = waiting == null ? leg.dep : math.max(waiting.t, plan.now);
+        final arr = waiting == null
+            ? leg.arr
+            : (_arrivalAt(at(leg.b), waiting.veh) ?? dep + _planned(leg));
+        out.add(leg.copyWith(dep: dep, arr: arr));
+        inAt = arr;
+        continue;
+      }
+      // A ride under way keeps when it was boarded; only its arrival moves
       final veh = stage.kind == StageKind.ride ? stage.veh : null;
       final arr = veh == null
           ? leg.arr
@@ -193,7 +200,9 @@ List<Leg> liveLegs(Journey j, LivePlan plan) {
       continue;
     }
     final leaving = _leavingAt(at(leg.a), leg.route, leg.veh, inAt);
-    final dep = leaving?.t ?? math.max(leg.dep, inAt);
+    final dep = leaving == null
+        ? math.max(leg.dep, inAt)
+        : math.max(leaving.t, inAt);
     final arr = leaving == null
         ? dep + _planned(leg)
         : (_arrivalAt(at(leg.b), leaving.veh) ?? dep + _planned(leg));
@@ -227,14 +236,11 @@ Arrival? _leavingAt(List<Arrival> list, int? route, int? veh, int from) {
   final ofRoute = list.where((a) => a.route == route);
   if (veh != null) {
     for (final a in ofRoute) {
-      if (a.veh == veh && a.t >= from - _boardGraceS) return a;
+      if (a.veh == veh && a.t >= from - graceS) return a;
     }
   }
   for (final a in ofRoute) {
     if (a.t >= from) return a;
-  }
-  for (final a in ofRoute) {
-    if (a.t >= from - _boardGraceS) return a;
   }
   return null;
 }

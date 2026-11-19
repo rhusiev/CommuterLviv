@@ -1,4 +1,4 @@
-import { along, type Progress, type Stage } from "./follow";
+import { along, GRACE_S, type Progress, type Stage } from "./follow";
 import { metres } from "./geo";
 import type { Arrival, Journey, Leg } from "./types";
 
@@ -72,11 +72,6 @@ export type LivePlan = {
   arrivals: Record<string, Arrival[]>;
 };
 
-/** A vehicle is still the planned one this long after the walk was to get in:
- *  the plans keep a margin, and a rider may catch it waving. `GRACE_S` in
- *  `follow.ts` */
-const BOARD_GRACE_S = 10;
-
 /** The followed journey's rows, every time still to come taken from live
  *  predictions and how far along the device is; the legs done keep the times
  *  they were planned with. Nothing here asks the service. */
@@ -105,8 +100,20 @@ export function liveLegs(j: Journey, plan: LivePlan): Leg[] {
       inAt = arr;
       return;
     }
-    // A ride under way keeps when it was boarded; only its arrival moves
     if (i === stage.leg) {
+      // Waiting at the stop: the ride is picked from the predictions where the
+      // device is now, not from where the walk was to get in
+      if (stage.kind === "wait") {
+        const waiting = leavingAt(at(leg.a), leg.route, leg.veh ?? null, plan.now);
+        const dep = waiting === undefined ? leg.dep : Math.max(waiting.t, plan.now);
+        const arr = waiting === undefined
+          ? leg.arr
+          : (arrivalTime(at(leg.b), waiting.veh) ?? dep + rideTime(leg));
+        out.push({ ...leg, dep, arr });
+        inAt = arr;
+        return;
+      }
+      // A ride under way keeps when it was boarded; only its arrival moves
       const veh = stage.kind === "ride" ? stage.veh : null;
       const arr = veh === null ? leg.arr : (arrivalTime(at(leg.b), veh) ?? leg.arr);
       out.push({ ...leg, arr });
@@ -114,7 +121,9 @@ export function liveLegs(j: Journey, plan: LivePlan): Leg[] {
       return;
     }
     const leaving = leavingAt(at(leg.a), leg.route, leg.veh ?? null, inAt);
-    const dep = leaving?.t ?? Math.max(leg.dep, inAt);
+    const dep = leaving === undefined
+      ? Math.max(leg.dep, inAt)
+      : Math.max(leaving.t, inAt);
     const arr = leaving === undefined
       ? dep + rideTime(leg)
       : (arrivalTime(at(leg.b), leaving.veh) ?? dep + rideTime(leg));
@@ -155,10 +164,10 @@ function leavingAt(
 ): Arrival | undefined {
   const ofRoute = route === undefined ? [] : list.filter((a) => a.route === route);
   if (veh !== null) {
-    const held = ofRoute.find((a) => a.veh === veh && a.t >= from - BOARD_GRACE_S);
+    const held = ofRoute.find((a) => a.veh === veh && a.t >= from - GRACE_S);
     if (held) return held;
   }
-  return ofRoute.find((a) => a.t >= from) ?? ofRoute.find((a) => a.t >= from - BOARD_GRACE_S);
+  return ofRoute.find((a) => a.t >= from);
 }
 
 /** How much sooner a plan that still works must arrive to be followed instead:

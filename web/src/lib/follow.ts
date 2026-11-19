@@ -39,6 +39,20 @@ export type Progress = {
   soon: boolean;
 };
 
+/** Whether two stages are the same place on the journey, a ride's vehicle
+ *  included once it is known */
+export function sameStage(a: Stage, b: Stage): boolean {
+  if (a.kind !== b.kind) return false;
+  switch (a.kind) {
+    case "arrived":
+      return true;
+    case "ride":
+      return b.kind === "ride" && a.leg === b.leg && a.veh === b.veh;
+    default:
+      return b.kind !== "arrived" && a.leg === b.leg;
+  }
+}
+
 /** When a vehicle gets to a stop, Unix seconds, while the predictions say */
 export type Due = (stop: number, veh: number) => number | undefined;
 

@@ -30,7 +30,7 @@ import { usePlanner } from "./lib/usePlanner";
 import { useSession } from "./lib/useSession";
 import { betterPlan, liveRows, samePlan, underWay } from "./lib/legs";
 import { heldRefresh, REFRESH_EVERY_S } from "./lib/refresh";
-import { replacing as replacingJourney } from "./lib/follow";
+import { replacing as replacingJourney, sameStage } from "./lib/follow";
 import { heldHurry, heldSpeed } from "./lib/walking";
 import type { Catalog, Journey, Me, Place } from "./lib/types";
 import { t } from "./lib/i18n";
@@ -295,6 +295,9 @@ export function App() {
         heldHurry(),
       );
       if (latest.current.followed !== followed) return;
+      const nowProgress = latest.current.progress;
+      if (nowProgress === null || nowProgress === "denied") return;
+      if (!sameStage(nowProgress.stage, stage)) return;
       const next = betterPlan(
         arrive,
         got.options,

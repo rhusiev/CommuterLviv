@@ -35,6 +35,7 @@ import 'models.dart';
 import 'password_dialog.dart';
 import 'place_card.dart';
 import 'quiet_banner.dart';
+import 'refresh.dart';
 import 'server_dialog.dart';
 import 'sheets.dart';
 import 'stop_card.dart';
@@ -59,10 +60,6 @@ const _framePad = 40.0;
 /// s between searching again from a fix that is off the walked line, so a fix
 /// every second does not search every second. Chosen, not derived
 const _repathEveryS = 20;
-
-/// s between searching a followed journey again, with the setting on. Chosen,
-/// not derived: often enough to catch a delay, rare enough to cost little
-const _refreshEveryS = 30;
 
 /// A dot in the planner's A/B ring: a place, but neither end of a journey
 const _placeMark = '•';
@@ -168,6 +165,13 @@ class _HomeScreenState extends State<HomeScreen> {
   /// for the next fix
   bool _refreshMissed = false;
 
+  /// Forgets what was judged of the journey being left: the card judges the
+  /// new one from its first fix, and until then nothing is broken
+  void _forgetCaught() {
+    _caught = const Catch(CatchKind.ok);
+    _refreshMissed = false;
+  }
+
   late final Timer _refreshTick;
 
   bool get _planning => _tab == _journeyTab;
@@ -233,7 +237,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_allLines) unawaited(_geometry());
     _here.addListener(_fixArrived);
     _refreshTick = Timer.periodic(
-      const Duration(seconds: _refreshEveryS),
+      const Duration(seconds: refreshEveryS),
       (_) => unawaited(_refreshRoute()),
     );
   }
@@ -614,6 +618,7 @@ class _HomeScreenState extends State<HomeScreen> {
       tag: widget.api.catalogTag ?? '',
     );
     unawaited(widget.api.setFollowed(jsonEncode(followed)));
+    _forgetCaught();
     setState(() {
       _followed = followed;
       _updatedAt = null;
@@ -664,6 +669,7 @@ class _HomeScreenState extends State<HomeScreen> {
       tag: widget.api.catalogTag ?? '',
     );
     unawaited(widget.api.setFollowed(jsonEncode(updated)));
+    _forgetCaught();
     setState(() => _followed = updated);
     _push();
   }
@@ -715,6 +721,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     _refreshing = false;
     if (!mounted || !identical(_followed?.journey, followed.journey)) return;
+    if (_reached?.$2.stage != stage) return;
     final next = betterPlan(
       arrive,
       answer.options,
@@ -726,6 +733,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _endFollow() {
+    _forgetCaught();
     setState(() {
       _followed = null;
       _updatedAt = null;
